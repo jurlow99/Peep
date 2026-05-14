@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, Component } from "react";
 import { supabase } from "./supabase";
 import { AuthModal } from "./components/AuthModal";
 import { LandingPage } from "./pages/LandingPage";
+import { ProfileScreen, avatarForId } from "./components/ProfileScreen";
 
 class PlayerErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null }; }
@@ -40,11 +41,13 @@ export default function App() {
   const [authChecked, setAuthChecked] = useState(false);
   const [myList, setMyList] = useState({});
   const [authOpen, setAuthOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [userAvatarId, setUserAvatarId] = useState(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
-      if (session?.user) loadMyList(session.user.id);
+      if (session?.user) { loadMyList(session.user.id); loadAvatarId(session.user.id); }
       setAuthChecked(true);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -54,6 +57,11 @@ export default function App() {
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  async function loadAvatarId(userId) {
+    const { data } = await supabase.from("profiles").select("avatar_id").eq("id", userId).maybeSingle();
+    if (data?.avatar_id) setUserAvatarId(data.avatar_id);
+  }
 
   async function loadMyList(userId) {
     const { data } = await supabase.from("user_list").select("content_id, content_type").eq("user_id", userId);
@@ -76,16 +84,19 @@ export default function App() {
     }
   }
 
-  const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true) };
+  const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true), onProfileOpen: () => setProfileOpen(true), userAvatarId };
 
   if (!authChecked) return null;
   if (!user) return <LandingPage />;
+
+  const profileScreenEl = profileOpen && <ProfileScreen user={user} onClose={() => { setProfileOpen(false); loadAvatarId(user.id); }} />;
 
   if (page === "player" && selectedVideo) {
     const handleBack = () => { setPage(selectedShow ? "show" : "home"); setSelectedVideo(null); };
     return (
       <>
         {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
+        {profileScreenEl}
         <PlayerErrorBoundary onBack={handleBack}>
           <PlayerView
             key={selectedVideo.id}
@@ -104,6 +115,7 @@ export default function App() {
     return (
       <>
         {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
+        {profileScreenEl}
         <ShowDetail
           show={selectedShow}
           onBack={() => { setSelectedShow(null); setPage("home"); }}
@@ -117,6 +129,7 @@ export default function App() {
   return (
     <>
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
+      {profileScreenEl}
       <Homepage
         onPlay={v => { setSelectedVideo(v); setPage("player"); }}
         onShowSelect={s => { setSelectedShow(s); setPage("show"); }}
@@ -128,7 +141,7 @@ export default function App() {
 
 // ─── Homepage ─────────────────────────────────────────────────────────────────
 
-function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen }) {
+function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId }) {
   const [videos, setVideos] = useState([]);
   const [shows, setShows] = useState([]);
   const [carousels, setCarousels] = useState([]);
@@ -375,14 +388,16 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
               <div style={{ position: "absolute", top: -2, right: -2, width: 7, height: 7, borderRadius: "50%", background: "#facc15", border: "1.5px solid #0a0a0a" }} />
             </div>
           )}
-          {!isMobile && (user ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div title={user.email} style={{ width: 34, height: 34, borderRadius: "50%", background: "linear-gradient(135deg, #6366f1, #8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, cursor: "default", color: "#fff", flexShrink: 0 }}>
-                {(user.user_metadata?.full_name?.[0] || user.email[0]).toUpperCase()}
+          {!isMobile && (user ? (() => {
+            const av = avatarForId(userAvatarId);
+            return (
+              <div onClick={onProfileOpen} title="View profile" style={{ width: 36, height: 36, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg, #6366f1, #8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? 16 : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = "#facc15"}
+                onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}>
+                {av ? av.emoji : (user.user_metadata?.full_name?.[0] || user.email[0]).toUpperCase()}
               </div>
-              <button onClick={() => supabase.auth.signOut()} style={{ background: "transparent", border: "1px solid #2a2a2a", borderRadius: 6, padding: "6px 12px", color: "#666", fontSize: 12, cursor: "pointer" }}>Sign Out</button>
-            </div>
-          ) : (
+            );
+          })() : (
             <button onClick={onAuthOpen} style={{ background: "#facc15", border: "none", borderRadius: 6, padding: "8px 18px", color: "#0a0a0a", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Sign In</button>
           ))}
           {!isMobile && (
