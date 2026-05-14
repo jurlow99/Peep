@@ -106,6 +106,7 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
   const [videos, setVideos] = useState([]);
   const [shows, setShows] = useState([]);
   const [carousels, setCarousels] = useState([]);
+  const [podcasts, setPodcasts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [scrolled, setScrolled] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -126,6 +127,9 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
     const carouselChannel = supabase.channel("carousels-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "carousels" }, fetchAll)
       .subscribe();
+    const podcastChannel = supabase.channel("podcasts-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "podcasts" }, fetchAll)
+      .subscribe();
 
     const handler = () => setScrolled(window.scrollY > 60);
     window.addEventListener("scroll", handler);
@@ -134,19 +138,22 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
       supabase.removeChannel(videoChannel);
       supabase.removeChannel(showChannel);
       supabase.removeChannel(carouselChannel);
+      supabase.removeChannel(podcastChannel);
       window.removeEventListener("scroll", handler);
     };
   }, []);
 
   async function fetchAll() {
-    const [videosRes, showsRes, carouselsRes] = await Promise.all([
+    const [videosRes, showsRes, carouselsRes, podcastsRes] = await Promise.all([
       supabase.from("videos").select("*").order("id", { ascending: true }),
       supabase.from("shows").select("*").order("id", { ascending: true }),
       supabase.from("carousels").select("*").eq("enabled", true).order("position", { ascending: true }),
+      supabase.from("podcasts").select("*").order("id", { ascending: true }),
     ]);
     if (videosRes.data) setVideos(videosRes.data);
     if (showsRes.data) setShows(showsRes.data);
     if (carouselsRes.data) setCarousels(carouselsRes.data);
+    if (podcastsRes.data) setPodcasts(podcastsRes.data.filter(p => p.enabled !== false));
     setLoading(false);
   }
 
@@ -167,6 +174,7 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
   const featuredIsShow = featured !== null && featured === (featuredShow ?? null) && !featuredVideo;
 
   const visibleCarousels = carousels.filter(c => {
+    if (c.type === "podcast") return activeNav === "Home";
     const ct = c.content_type || "all";
     if (ct === "all") return true;
     if (ct === "movies" && (activeNav === "Movies" || activeNav === "Home")) return true;
@@ -181,13 +189,19 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
     : visibleCarousels.length > 0
     ? visibleCarousels.map(c => {
         const filterVal = c.filter_value?.toLowerCase();
+        if (c.type === "podcast") {
+          const podItems = filterVal
+            ? podcasts.filter(p => Array.isArray(p.tags) ? p.tags.some(t => t.toLowerCase() === filterVal) : p.tags?.toLowerCase().includes(filterVal))
+            : podcasts;
+          return { id: String(c.id), title: c.title, videos: [], isPodcast: true, podcastItems: podItems };
+        }
         const items = c.type === "trending"
           ? [...filteredContent].reverse()
           : c.type === "category"
           ? filteredContent.filter(v => v.category?.toLowerCase() === filterVal)
           : filteredContent;
         return { id: String(c.id), title: c.title, videos: items, numbered: c.type === "trending" };
-      }).filter(s => s.videos.length > 0)
+      }).filter(s => s.isPodcast ? s.podcastItems.length > 0 : s.videos.length > 0)
     : visibleCarousels.length === 0 && carousels.length > 0 ? []
     : [
         { id: "trending", title: "Trending Now", videos: [...filteredContent].reverse(), numbered: true },
@@ -366,7 +380,9 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
             <div style={{ padding: "100px 0", textAlign: "center", color: "#444", fontSize: 15 }}>
               No {activeNav.toLowerCase()} yet.
             </div>
-          ) : sections.map(section => section.videos.length > 0 ? (
+          ) : sections.map(section => section.isPodcast ? (
+            <PodcastRow key={section.id} section={section} />
+          ) : section.videos.length > 0 ? (
             <ContentRow key={section.id} section={section} onPlay={onPlay} onShowSelect={onShowSelect} myList={myList} onToggleList={onToggleList} />
           ) : null)}
           {activeNav === "My List" && sections[0]?.videos.length === 0 && (
@@ -508,6 +524,90 @@ function ContentRow({ section, onPlay, onShowSelect, myList, onToggleList }) {
               rank={section.numbered ? i + 1 : null}
               myList={myList} onToggleList={onToggleList} />
           ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Podcast Row ─────────────────────────────────────────────────────────────
+
+const PODCAST_CARD_W = "clamp(150px, 20vw, 210px)";
+
+function PodcastRow({ section }) {
+  const scrollRef = useRef(null);
+  const scroll = dir => scrollRef.current?.scrollBy({ left: dir * scrollRef.current.clientWidth * 0.8, behavior: "smooth" });
+
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: `0 ${PAD}`, marginBottom: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="2.5">
+            <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" y1="19" x2="12" y2="22"/>
+          </svg>
+          <h2 style={{ margin: 0, fontSize: "clamp(16px, 1.4vw, 20px)", fontWeight: 600, color: "#e5e5e5" }}>{section.title}</h2>
+        </div>
+        <span style={{ fontSize: 13, color: "#818cf8", cursor: "pointer", fontWeight: 500 }}>See All →</span>
+      </div>
+      <div style={{ margin: `0 0 18px ${PAD}`, height: 1, background: "linear-gradient(to right, #818cf8, rgba(129,140,248,0.3), transparent)" }} />
+      <div style={{ position: "relative" }}>
+        <button onClick={() => scroll(-1)} style={{ position: "absolute", left: 0, top: 0, bottom: 0, zIndex: 10, background: "linear-gradient(to right, rgba(10,10,10,0.95), transparent)", border: "none", color: "#fff", width: 64, cursor: "pointer", fontSize: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>
+        <button onClick={() => scroll(1)} style={{ position: "absolute", right: 0, top: 0, bottom: 0, zIndex: 10, background: "linear-gradient(to left, rgba(10,10,10,0.95), transparent)", border: "none", color: "#fff", width: 64, cursor: "pointer", fontSize: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>›</button>
+        <div ref={scrollRef} className="scroll-row" style={{ display: "flex", gap: 16, overflowX: "auto", scrollbarWidth: "none", padding: `10px ${PAD} 32px` }}>
+          {section.podcastItems.map(podcast => (
+            <PodcastCard key={podcast.id} podcast={podcast} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PodcastCard({ podcast }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div style={{ flexShrink: 0, width: PODCAST_CARD_W, cursor: podcast.link_url ? "pointer" : "default" }}
+      onClick={() => podcast.link_url && window.open(podcast.link_url, "_blank")}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}>
+      <div style={{
+        borderRadius: 14, overflow: "hidden", background: "#0f0f1a",
+        border: `1px solid ${hovered ? "#818cf8" : "#1a1a2e"}`,
+        transform: hovered ? "scale(1.04) translateY(-4px)" : "scale(1)",
+        transformOrigin: "bottom center",
+        transition: "transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s",
+        boxShadow: hovered ? "0 20px 50px rgba(129,140,248,0.22)" : "0 2px 10px rgba(0,0,0,0.4)",
+      }}>
+        <div style={{ position: "relative", aspectRatio: "1/1", overflow: "hidden" }}>
+          {podcast.artwork_url ? (
+            <img src={podcast.artwork_url} alt={podcast.title}
+              style={{ width: "100%", height: "100%", objectFit: "cover", filter: hovered ? "brightness(0.55)" : "brightness(0.9)", transition: "filter 0.25s" }} />
+          ) : (
+            <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #1e1b4b, #312e81)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="1.5">
+                <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="22"/>
+              </svg>
+            </div>
+          )}
+          <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(129,140,248,0.9)", backdropFilter: "blur(4px)", color: "#fff", fontSize: 9.5, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: 0.5, textTransform: "uppercase" }}>Podcast</div>
+          {podcast.episode_count && (
+            <div style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(4px)", color: "#bbb", fontSize: 10, padding: "3px 7px", borderRadius: 4 }}>{podcast.episode_count} ep</div>
+          )}
+          {hovered && (
+            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ background: "#818cf8", borderRadius: "50%", width: 50, height: 50, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 20px rgba(129,140,248,0.5)" }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><polygon points="5,3 19,12 5,21" /></svg>
+              </div>
+            </div>
+          )}
+        </div>
+        <div style={{ padding: "12px 14px 14px", background: hovered ? "#141428" : "#0f0f1a", transition: "background 0.25s" }}>
+          <p style={{ margin: "0 0 4px", fontSize: 13.5, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{podcast.title}</p>
+          {podcast.host && <p style={{ margin: 0, fontSize: 12, color: "#818cf8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{podcast.host}</p>}
         </div>
       </div>
     </div>
