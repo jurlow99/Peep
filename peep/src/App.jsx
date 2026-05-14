@@ -88,7 +88,8 @@ export default function App() {
 
   if (!authChecked) return null;
   if (!user) return <LandingPage />;
-  if (!user.email_confirmed_at) return <EmailVerificationGate user={user} />;
+  // email verification gate — re-enable once real domain is set up
+  // if (!user.email_confirmed_at) return <EmailVerificationGate user={user} />;
 
   const profileScreenEl = profileOpen && <ProfileScreen user={user} onClose={() => setProfileOpen(false)} onAvatarChange={id => setUserAvatarId(id)} />;
 
