@@ -326,9 +326,39 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
 // ─── Hero Banner ──────────────────────────────────────────────────────────────
 
 function HeroBanner({ video, onPlay, isShow, myList, onToggleList }) {
+  const [trailerOpen, setTrailerOpen] = useState(false);
+  const [bgPlaying, setBgPlaying] = useState(false);
+  const [muted, setMuted] = useState(true);
+  const videoRef = useRef(null);
+
+  const hasBgTrailer = !!video.trailer_url && getTrailerType(video.trailer_url) === "direct";
+
+  useEffect(() => {
+    setBgPlaying(false);
+    setMuted(true);
+    if (!hasBgTrailer) return;
+    const t = setTimeout(() => setBgPlaying(true), 3000);
+    return () => clearTimeout(t);
+  }, [video.id, hasBgTrailer]);
+
+  // React doesn't reliably sync the muted DOM attribute via prop alone
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.muted = muted;
+  }, [muted]);
+
   return (
     <div style={{ position: "relative", height: "85vh", minHeight: 580, overflow: "hidden" }}>
-      <img src={video.thumbnail} alt={video.title} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 20%", filter: "brightness(0.45) saturate(1.15)" }} />
+      {trailerOpen && <TrailerModal url={video.trailer_url} title={video.title} onClose={() => setTrailerOpen(false)} />}
+
+      {/* Thumbnail — fades out when trailer takes over */}
+      <img src={video.thumbnail} alt={video.title} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 20%", filter: "brightness(0.45) saturate(1.15)", transition: "opacity 1.4s ease", opacity: bgPlaying ? 0 : 1 }} />
+
+      {/* Background autoplay trailer */}
+      {hasBgTrailer && (
+        <video ref={videoRef} src={video.trailer_url} autoPlay muted loop playsInline
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 20%", filter: "brightness(0.5)", transition: "opacity 1.4s ease", opacity: bgPlaying ? 1 : 0, pointerEvents: "none" }} />
+      )}
+
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, #0a0a0a 0%, rgba(10,10,10,0.25) 45%, transparent 70%)" }} />
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, rgba(10,10,10,0.92) 0%, rgba(10,10,10,0.45) 50%, transparent 80%)" }} />
 
@@ -355,6 +385,15 @@ function HeroBanner({ video, onPlay, isShow, myList, onToggleList }) {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
             {isShow ? "Watch Now" : "Play"}
           </button>
+          {video.trailer_url && (
+            <button onClick={() => setTrailerOpen(true)}
+              style={{ background: "rgba(109,109,110,0.65)", backdropFilter: "blur(4px)", color: "#fff", border: "none", borderRadius: 7, padding: "14px 28px", fontSize: 15, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}
+              onMouseEnter={e => e.currentTarget.style.background = "rgba(109,109,110,0.85)"}
+              onMouseLeave={e => e.currentTarget.style.background = "rgba(109,109,110,0.65)"}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polygon points="10,8 16,12 10,16" fill="currentColor" stroke="none" /></svg>
+              Trailer
+            </button>
+          )}
           {(() => {
             const type = isShow ? "show" : "movie";
             const inList = myList?.[`${type}_${video.id}`];
@@ -372,6 +411,17 @@ function HeroBanner({ video, onPlay, isShow, myList, onToggleList }) {
           })()}
         </div>
       </div>
+
+      {/* Mute / unmute */}
+      {bgPlaying && hasBgTrailer && (
+        <button onClick={() => setMuted(m => !m)}
+          style={{ position: "absolute", bottom: "16%", right: PAD, background: "rgba(0,0,0,0.45)", border: "1px solid rgba(255,255,255,0.35)", borderRadius: "50%", width: 42, height: 42, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff", zIndex: 10, flexShrink: 0 }}>
+          {muted
+            ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><line x1="23" y1="9" x2="17" y2="15" /><line x1="17" y1="9" x2="23" y2="15" /></svg>
+            : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" /></svg>
+          }
+        </button>
+      )}
     </div>
   );
 }
@@ -448,6 +498,61 @@ function VideoCard({ video, onClick, rank, myList, onToggleList }) {
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Trailer Modal ────────────────────────────────────────────────────────────
+
+function getTrailerType(url) {
+  if (!url) return null;
+  if (url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)/)) return "youtube";
+  if (url.includes("youtube.com/embed/")) return "youtube-embed";
+  if (url.match(/archive\.org\/(download|embed)\//)) return "archive";
+  return "direct";
+}
+
+function getTrailerEmbedUrl(url) {
+  if (!url) return null;
+  const ytMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+  if (ytMatch) return `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1&mute=1&rel=0`;
+  if (url.includes("youtube.com/embed/")) return url.includes("?") ? url : url + "?autoplay=1&mute=1";
+  const archiveMatch = url.match(/archive\.org\/download\/([^/]+)/);
+  if (archiveMatch) return `https://archive.org/embed/${archiveMatch[1]}?autoplay=1`;
+  if (url.includes("archive.org/embed/")) return url;
+  return null;
+}
+
+function TrailerModal({ url, title, onClose }) {
+  const type = getTrailerType(url);
+  const embedUrl = type !== "direct" ? getTrailerEmbedUrl(url) : null;
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.94)", backdropFilter: "blur(14px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: "min(960px, 92vw)", position: "relative" }}>
+        <button onClick={onClose} style={{ position: "absolute", top: -48, right: 0, background: "none", border: "none", color: "#aaa", fontSize: 32, cursor: "pointer", lineHeight: 1, padding: "4px 8px" }}>×</button>
+        <p style={{ margin: "0 0 14px", fontSize: 12, color: "#555", textTransform: "uppercase", letterSpacing: 1.2, fontWeight: 600 }}>Official Trailer — {title}</p>
+        <div style={{ aspectRatio: "16/9", background: "#000", borderRadius: 12, overflow: "hidden", boxShadow: "0 40px 100px rgba(0,0,0,0.9)" }}>
+          {type === "direct" ? (
+            <video
+              src={url}
+              controls
+              autoPlay
+              style={{ width: "100%", height: "100%", display: "block" }}
+            />
+          ) : embedUrl ? (
+            <iframe
+              src={embedUrl}
+              style={{ width: "100%", height: "100%", display: "block", border: "none" }}
+              allowFullScreen
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            />
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#555", fontSize: 14 }}>Unable to play trailer.</div>
+          )}
+        </div>
+        <p style={{ margin: "12px 0 0", textAlign: "center", fontSize: 12, color: "#333" }}>Click anywhere outside to close</p>
       </div>
     </div>
   );
@@ -570,6 +675,7 @@ function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggle
   const [selectedSeason, setSelectedSeason] = useState(null);
   const [loading, setLoading] = useState(true);
   const [related, setRelated] = useState([]);
+  const [trailerOpen, setTrailerOpen] = useState(false);
 
   useEffect(() => {
     supabase.from("episodes").select("*").eq("show_id", show.id)
@@ -601,6 +707,7 @@ function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggle
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'DM Sans', sans-serif", color: "#fff" }}>
+      {trailerOpen && <TrailerModal url={show.trailer_url} title={show.title} onClose={() => setTrailerOpen(false)} />}
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet" />
 
       <div style={{ position: "relative", height: "60vh", minHeight: 420, overflow: "hidden" }}>
@@ -634,6 +741,15 @@ function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggle
                 onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
                 Play S1 E1
+              </button>
+            )}
+            {show.trailer_url && (
+              <button onClick={() => setTrailerOpen(true)}
+                style={{ background: "rgba(109,109,110,0.65)", backdropFilter: "blur(4px)", color: "#fff", border: "none", borderRadius: 7, padding: "13px 24px", fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}
+                onMouseEnter={e => e.currentTarget.style.background = "rgba(109,109,110,0.85)"}
+                onMouseLeave={e => e.currentTarget.style.background = "rgba(109,109,110,0.65)"}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polygon points="10,8 16,12 10,16" fill="currentColor" stroke="none" /></svg>
+                Trailer
               </button>
             )}
             {(() => {

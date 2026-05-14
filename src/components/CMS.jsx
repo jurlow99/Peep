@@ -12,6 +12,7 @@ const EMPTY_ROW = {
   thumbnail: "",
   poster: "",
   url: "",
+  trailer_url: "",
   description: "",
   tags: "",
 };
@@ -26,6 +27,7 @@ const EMPTY_SHOW = {
   poster: "",
   description: "",
   tags: "",
+  trailer_url: "",
 };
 
 const EMPTY_EPISODE = {
@@ -173,6 +175,7 @@ export function CMS({ onExit }) {
       thumbnail: row.thumbnail ?? "",
       poster: row.poster ?? "",
       url: row.url ?? "",
+      trailer_url: row.trailer_url ?? "",
       description: row.description ?? "",
       tags: Array.isArray(row.tags) ? row.tags.join(", ") : (row.tags ?? ""),
     });
@@ -188,6 +191,7 @@ export function CMS({ onExit }) {
       ...form,
       score: form.score !== "" ? Number(form.score) : null,
       year: form.year !== "" ? Number(form.year) : null,
+      trailer_url: form.trailer_url.trim() || null,
       tags: form.tags
         ? form.tags.split(",").map(t => t.trim()).filter(Boolean)
         : [],
@@ -389,7 +393,7 @@ export function CMS({ onExit }) {
 
   function startShowEdit(show) {
     setEditingShowId(show.id);
-    setShowForm({ title: show.title ?? "", category: show.category ?? "Horror", rating: show.rating ?? "NR", year: show.year ?? "", score: show.score ?? "", thumbnail: show.thumbnail ?? "", poster: show.poster ?? "", description: show.description ?? "", tags: Array.isArray(show.tags) ? show.tags.join(", ") : (show.tags ?? "") });
+    setShowForm({ title: show.title ?? "", category: show.category ?? "Horror", rating: show.rating ?? "NR", year: show.year ?? "", score: show.score ?? "", thumbnail: show.thumbnail ?? "", poster: show.poster ?? "", description: show.description ?? "", tags: Array.isArray(show.tags) ? show.tags.join(", ") : (show.tags ?? ""), trailer_url: show.trailer_url ?? "" });
   }
 
   function cancelShowEdit() { setEditingShowId(null); setShowForm(EMPTY_SHOW); }
@@ -397,7 +401,7 @@ export function CMS({ onExit }) {
   async function saveShow() {
     if (!showForm.title.trim()) { showToast("Title is required.", "error"); return; }
     setShowSaving(true);
-    const payload = { ...showForm, year: showForm.year !== "" ? Number(showForm.year) : null, score: showForm.score !== "" ? Number(showForm.score) : null, tags: showForm.tags ? showForm.tags.split(",").map(t => t.trim()).filter(Boolean) : [] };
+    const payload = { ...showForm, year: showForm.year !== "" ? Number(showForm.year) : null, score: showForm.score !== "" ? Number(showForm.score) : null, trailer_url: showForm.trailer_url?.trim() || null, tags: showForm.tags ? showForm.tags.split(",").map(t => t.trim()).filter(Boolean) : [] };
     try {
       if (editingShowId) {
         const { error } = await supabase.from("shows").update(payload).eq("id", editingShowId);
@@ -459,9 +463,9 @@ export function CMS({ onExit }) {
   function cancelEpisodeEdit() { setEditingEpisodeId(null); setEpisodeForm({ ...EMPTY_EPISODE, show_id: selectedShowForEpisodes }); }
 
   async function saveEpisode() {
-    if (!episodeForm.title.trim() || !episodeForm.show_id) { showToast("Show and title are required.", "error"); return; }
+    if (!episodeForm.title.trim() || !selectedShowForEpisodes) { showToast("Show and title are required.", "error"); return; }
     setEpisodeSaving(true);
-    const payload = { ...episodeForm, season: Number(episodeForm.season), episode_number: Number(episodeForm.episode_number) };
+    const payload = { ...episodeForm, show_id: selectedShowForEpisodes, season: Number(episodeForm.season), episode_number: Number(episodeForm.episode_number) };
     try {
       if (editingEpisodeId) {
         const { error } = await supabase.from("episodes").update(payload).eq("id", editingEpisodeId);
@@ -757,6 +761,14 @@ export function CMS({ onExit }) {
               placeholder="https://archive.org/..."
             />
 
+            {/* Trailer URL */}
+            <FieldInput
+              label="Trailer URL"
+              value={form.trailer_url}
+              onChange={v => setForm(f => ({ ...f, trailer_url: v }))}
+              placeholder="https://youtube.com/watch?v=... (optional)"
+            />
+
             {/* Tags */}
             <FieldInput
               label="Tags (comma-separated)"
@@ -1050,6 +1062,7 @@ export function CMS({ onExit }) {
                   <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Description</label>
                   <textarea value={showForm.description} onChange={e => setShowForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Short synopsis..." style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit" }} />
                 </div>
+                <FieldInput label="Trailer URL" value={showForm.trailer_url} onChange={v => setShowForm(f => ({ ...f, trailer_url: v }))} placeholder="https://youtube.com/watch?v=... (optional)" />
               </div>
               <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
                 <button onClick={saveShow} disabled={showSaving} style={{ flex: 1, background: "#ff4d4d", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: showSaving ? "not-allowed" : "pointer", opacity: showSaving ? 0.7 : 1 }}>
