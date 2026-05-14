@@ -1017,9 +1017,13 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
   useEffect(() => () => clearInterval(progressTimerRef.current), []);
 
   useEffect(() => {
-    const handler = () => setIsFullscreen(document.fullscreenElement === playerContainerRef.current);
+    const handler = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", handler);
-    return () => document.removeEventListener("fullscreenchange", handler);
+    document.addEventListener("webkitfullscreenchange", handler);
+    return () => {
+      document.removeEventListener("fullscreenchange", handler);
+      document.removeEventListener("webkitfullscreenchange", handler);
+    };
   }, []);
 
   function toggleFullscreen() {
@@ -1110,13 +1114,13 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
       </nav>
 
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
-        <style>{`video::-webkit-media-controls-fullscreen-button { display: none !important; } video::-webkit-media-controls-overflow-button { display: none !important; }`}</style>
+        <style>{`video::-webkit-media-controls-fullscreen-button { display: none !important; } video::-webkit-media-controls-overflow-button { display: none !important; } video::cue { display: none; }`}</style>
         <div ref={playerContainerRef} style={{ position: "relative", marginBottom: 30, background: "#000", borderRadius: isFullscreen ? 0 : 14, overflow: "hidden" }}>
           <div style={{ background: "#000", overflow: "hidden", ...(isFullscreen ? { position: "absolute", inset: 0 } : { aspectRatio: "16/9", boxShadow: "0 32px 80px rgba(0,0,0,0.8)" }) }}>
             {getEmbedUrl(video.url) ? (
               <iframe src={getEmbedUrl(video.url)} style={{ width: "100%", height: "100%", display: "block", border: "none" }} allowFullScreen allow="autoplay" />
             ) : (
-              <video ref={videoRef} controls autoPlay style={{ width: "100%", height: "100%", display: "block" }} poster={video.thumbnail}
+              <video ref={videoRef} controls controlsList="nofullscreen" autoPlay style={{ width: "100%", height: "100%", display: "block" }} poster={video.thumbnail}
                 onTimeUpdate={handleTimeUpdate} onEnded={handleEnded} onLoadedMetadata={handleLoadedMetadata}>
                 <source src={video.url} type="video/mp4" />
               </video>
@@ -1132,7 +1136,7 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
             </button>
           )}
           {countdownActive && nextEpisode && (
-            <div style={{ position: "absolute", bottom: 20, right: 20, background: "rgba(15,15,15,0.96)", backdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 14, padding: "18px 20px", display: "flex", alignItems: "center", gap: 18, minWidth: 290, zIndex: 20, boxShadow: "0 8px 32px rgba(0,0,0,0.7)" }}>
+            <div style={{ position: "absolute", bottom: isFullscreen ? 80 : 20, right: 20, background: "rgba(15,15,15,0.96)", backdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 14, padding: "18px 20px", display: "flex", alignItems: "center", gap: 18, minWidth: 290, zIndex: 50, boxShadow: "0 8px 32px rgba(0,0,0,0.7)" }}>
               <div style={{ position: "relative", flexShrink: 0, width: 54, height: 54 }}>
                 <svg width="54" height="54" viewBox="0 0 54 54" style={{ transform: "rotate(-90deg)" }}>
                   <circle cx="27" cy="27" r="21" fill="none" stroke="#222" strokeWidth="4" />
