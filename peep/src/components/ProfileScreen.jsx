@@ -44,7 +44,7 @@ export function ProfileScreen({ user, onClose, onAvatarChange }) {
     setSelectedAvatar(avatarId);
     onAvatarChange?.(avatarId);
     setSaving(true);
-    await supabase.from("profiles").update({ avatar_id: avatarId }).eq("id", user.id);
+    await supabase.from("profiles").upsert({ id: user.id, avatar_id: avatarId }, { onConflict: "id" });
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
