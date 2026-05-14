@@ -958,7 +958,7 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
   useEffect(() => {
     if (viewCountedRef.current) return;
     viewCountedRef.current = true;
-    supabase.rpc("increment_view", { p_id: video.id, p_table: isEpisode ? "episodes" : "videos" }).catch(() => {});
+    supabase.rpc("increment_view", { p_id: video.id, p_table: isEpisode ? "episodes" : "videos" }).then(() => {}, () => {});
   }, [video.id]);
 
   useEffect(() => {
