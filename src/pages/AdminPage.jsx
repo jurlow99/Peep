@@ -43,7 +43,7 @@ export function AdminPage() {
         >
           <div style={{ textAlign: "center", marginBottom: 32 }}>
             <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 28 }}>
-              peep<span style={{ color: "#facc15" }}>.</span>
+              <span style={{ color: "#facc15" }}>peep.</span>
             </span>
             <p style={{ color: "#555", fontSize: 13, margin: "8px 0 0" }}>Admin Access</p>
           </div>

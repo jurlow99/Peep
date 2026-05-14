@@ -574,7 +574,7 @@ export function CMS({ onExit }) {
       <div style={{ borderBottom: "1px solid #1a1a1a", padding: `0 ${PAD}`, display: "flex", alignItems: "center", justifyContent: "space-between", height: "auto", minHeight: 68, flexWrap: "wrap", gap: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
           <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22 }}>
-            peep<span style={{ color: "#facc15" }}>.</span>
+            <span style={{ color: "#facc15" }}>peep.</span>
           </span>
           <span style={{ fontSize: 13, color: "#555", borderLeft: "1px solid #2a2a2a", paddingLeft: 24 }}>
             Content Management System

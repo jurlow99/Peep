@@ -40,7 +40,7 @@ export function AuthModal({ onClose }) {
 
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 30 }}>
-            peep<span style={{ color: "#facc15" }}>.</span>
+            <span style={{ color: "#facc15" }}>peep.</span>
           </span>
           <p style={{ margin: "8px 0 0", fontSize: 13, color: "#555" }}>
             {mode === "signin" ? "Welcome back" : "Create your account"}

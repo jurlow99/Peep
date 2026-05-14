@@ -226,7 +226,7 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 36 }}>
           <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 26, letterSpacing: "-0.5px", userSelect: "none" }}>
-            peep<span style={{ color: "#facc15" }}>.</span>
+            <span style={{ color: "#facc15" }}>peep.</span>
           </span>
           {!isMobile && (
             <div style={{ display: "flex", gap: 4 }}>
@@ -659,7 +659,7 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
           Back
         </button>
-        <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22 }}>peep<span style={{ color: "#facc15" }}>.</span></span>
+        <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22 }}><span style={{ color: "#facc15" }}>peep.</span></span>
       </nav>
 
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
@@ -780,7 +780,7 @@ function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggle
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
           Back
         </button>
-        <span style={{ position: "absolute", top: 24, left: "50%", transform: "translateX(-50%)", fontFamily: "'DM Serif Display', serif", fontSize: 22, zIndex: 10 }}>peep<span style={{ color: "#facc15" }}>.</span></span>
+        <span style={{ position: "absolute", top: 24, left: "50%", transform: "translateX(-50%)", fontFamily: "'DM Serif Display', serif", fontSize: 22, zIndex: 10 }}><span style={{ color: "#facc15" }}>peep.</span></span>
 
         <div style={{ position: "absolute", bottom: "10%", left: PAD, right: PAD, maxWidth: isMobile ? "100%" : "clamp(400px, 40vw, 660px)" }}>
           <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
@@ -936,7 +936,7 @@ function Footer() {
         ))}
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 24, borderTop: "1px solid rgba(255,255,255,0.05)" }}>
-        <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, color: "#2e2e2e" }}>peep<span style={{ color: "#facc15" }}>.</span></span>
+        <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, color: "#2e2e2e" }}><span style={{ color: "#facc15" }}>peep.</span></span>
         <div style={{ textAlign: "right" }}>
           <p style={{ margin: "0 0 4px", fontSize: 11, color: "#333" }}>© 2025 Peep Media, Inc. All rights reserved.</p>
           <p style={{ margin: 0, fontSize: 11, color: "#2a2a2a" }}>All content sourced from the public domain. Free to watch, forever.</p>
