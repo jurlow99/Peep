@@ -902,6 +902,7 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
   const [ratingCounts, setRatingCounts] = useState({ up: 0, down: 0 });
   const progressTimerRef = useRef(null);
   const viewCountedRef = useRef(false);
+  const [continueWatching, setContinueWatching] = useState([]);
 
   useEffect(() => {
     Promise.all([
@@ -948,6 +949,31 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
       supabase.from("ratings").select("rating").eq("user_id", user.id).eq("content_id", video.id).eq("content_type", ct).maybeSingle()
         .then(({ data }) => { if (data) setMyRating(data.rating); });
     }
+  }, [video.id, user]);
+
+  useEffect(() => {
+    if (!user) { setContinueWatching([]); return; }
+    (async () => {
+      const { data: progress } = await supabase.from("watch_progress").select("*")
+        .eq("user_id", user.id).eq("completed", false)
+        .order("last_watched_at", { ascending: false }).limit(15);
+      if (!progress || progress.length === 0) return;
+      const movieIds = progress.filter(p => p.content_type === "movie").map(p => p.content_id);
+      const episodeIds = progress.filter(p => p.content_type === "episode").map(p => p.content_id);
+      const [movRes, epRes] = await Promise.all([
+        movieIds.length ? supabase.from("videos").select("*").in("id", movieIds) : { data: [] },
+        episodeIds.length ? supabase.from("episodes").select("*").in("id", episodeIds) : { data: [] },
+      ]);
+      const pMap = {};
+      progress.forEach(p => { pMap[`${p.content_type}_${p.content_id}`] = p; });
+      const items = [
+        ...(movRes.data || []).map(v => ({ ...v, _type: "movie", _progress: pMap[`movie_${v.id}`] })),
+        ...(epRes.data || []).map(e => ({ ...e, _type: "episode", _progress: pMap[`episode_${e.id}`] })),
+      ]
+        .filter(item => !(item._type === (isEpisode ? "episode" : "movie") && item.id === video.id))
+        .sort((a, b) => new Date(b._progress.last_watched_at) - new Date(a._progress.last_watched_at));
+      setContinueWatching(items);
+    })();
   }, [video.id, user]);
 
   useEffect(() => {
@@ -1130,6 +1156,20 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
             <button style={{ background: "#1a1a1a", border: "1px solid #242424", borderRadius: 7, padding: "12px 20px", color: "#777", fontSize: 13, cursor: "pointer" }}>Share</button>
           </div>
         </div>
+
+        {continueWatching.length > 0 && (
+          <div style={{ marginBottom: 48 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#facc15" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600, color: "#e5e5e5" }}>Continue Watching</h2>
+            </div>
+            <div style={{ display: "flex", gap: 14, overflowX: "auto", scrollbarWidth: "none", paddingBottom: 8 }}>
+              {continueWatching.map(item => (
+                <ContinueWatchingCard key={`${item._type}_${item.id}`} item={item} onPlay={onSelect} />
+              ))}
+            </div>
+          </div>
+        )}
 
         {related.length > 0 && (
           <div>
