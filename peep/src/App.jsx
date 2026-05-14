@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Component } from "react";
+import { useState, useEffect, useRef, useMemo, Component } from "react";
 import { supabase } from "./supabase";
 import { AuthModal } from "./components/AuthModal";
 
@@ -133,6 +133,7 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
   const [scrolled, setScrolled] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [activeNav, setActiveNav] = useState("Home");
   const [menuOpen, setMenuOpen] = useState(false);
   const isMobile = useIsMobile();
@@ -171,6 +172,11 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
 
   useEffect(() => { loadContinueWatching(); }, [user]);
 
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(searchQuery), 150);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
   async function fetchAll() {
     const [videosRes, showsRes, carouselsRes, podcastsRes, liveRes] = await Promise.all([
       supabase.from("videos").select("*").order("id", { ascending: true }),
@@ -208,32 +214,33 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
     setContinueWatching(items);
   }
 
-  const allContent = [
+  const allContent = useMemo(() => [
     ...videos.map(v => ({ ...v, _type: "movie" })),
     ...shows.map(s => ({ ...s, _type: "show" })),
-  ];
+  ], [videos, shows]);
 
-  const filteredContent = activeNav === "Movies"
+  const filteredContent = useMemo(() => activeNav === "Movies"
     ? allContent.filter(v => v._type === "movie")
     : activeNav === "Series"
     ? allContent.filter(v => v._type === "show")
-    : allContent;
+    : allContent,
+  [allContent, activeNav]);
 
-  const featuredVideo = videos.find(v => v.featured) ?? null;
-  const featuredShow = shows.find(s => s.featured) ?? null;
+  const featuredVideo = useMemo(() => videos.find(v => v.featured) ?? null, [videos]);
+  const featuredShow = useMemo(() => shows.find(s => s.featured) ?? null, [shows]);
   const featured = featuredVideo ?? featuredShow ?? videos[0] ?? shows[0] ?? null;
   const featuredIsShow = featured !== null && featured === (featuredShow ?? null) && !featuredVideo;
 
-  const visibleCarousels = carousels.filter(c => {
+  const visibleCarousels = useMemo(() => carousels.filter(c => {
     if (c.type === "podcast") return activeNav === "Home";
     const ct = c.content_type || "all";
     if (ct === "all") return true;
     if (ct === "movies" && (activeNav === "Movies" || activeNav === "Home")) return true;
     if (ct === "shows" && (activeNav === "Series" || activeNav === "Home")) return true;
     return false;
-  });
+  }), [carousels, activeNav]);
 
-  const sections = activeNav === "My List"
+  const sections = useMemo(() => activeNav === "My List"
     ? [{ id: "mylist", title: "My List", videos: allContent.filter(v => myList?.[`${v._type}_${v.id}`]) }]
     : activeNav === "New & Popular"
     ? [{ id: "new", title: "New & Popular", videos: [...allContent].sort((a, b) => (b.year || 0) - (a.year || 0)) }]
@@ -262,17 +269,19 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
         ...[...new Set(filteredContent.map(v => v.category).filter(Boolean))].map(cat => ({
           id: cat, title: `${cat} Films`, videos: filteredContent.filter(v => v.category === cat),
         })),
-      ];
+      ],
+  [activeNav, allContent, filteredContent, visibleCarousels, podcasts, carousels, myList]);
 
-  const searchResults = searchQuery
-    ? allContent.filter(v => {
-        const q = searchQuery.toLowerCase();
-        return v.title?.toLowerCase().includes(q) ||
-          v.category?.toLowerCase().includes(q) ||
-          v.description?.toLowerCase().includes(q) ||
-          (Array.isArray(v.tags) ? v.tags.some(t => t.toLowerCase().includes(q)) : v.tags?.toLowerCase().includes(q));
-      })
-    : [];
+  const searchResults = useMemo(() => {
+    if (!debouncedQuery) return [];
+    const q = debouncedQuery.toLowerCase();
+    return allContent.filter(v =>
+      v.title?.toLowerCase().includes(q) ||
+      v.category?.toLowerCase().includes(q) ||
+      v.description?.toLowerCase().includes(q) ||
+      (Array.isArray(v.tags) ? v.tags.some(t => t.toLowerCase().includes(q)) : v.tags?.toLowerCase().includes(q))
+    );
+  }, [debouncedQuery, allContent]);
 
   function handleClick(item) {
     item._type === "show" ? onShowSelect(item) : onPlay(item);
@@ -394,12 +403,12 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
       )}
 
       {/* Search overlay */}
-      {searchQuery && (
+      {debouncedQuery && (
         <div style={{ position: "fixed", top: 68, left: 0, right: 0, zIndex: 99, background: "rgba(10,10,10,0.97)", backdropFilter: "blur(16px)", padding: `24px ${PAD} 32px`, borderBottom: "1px solid #1a1a1a", maxHeight: "70vh", overflowY: "auto" }}>
-          <p style={{ fontSize: 13, color: "#555", marginBottom: 20 }}>{searchResults.length} result{searchResults.length !== 1 ? "s" : ""} for "{searchQuery}"</p>
+          <p style={{ fontSize: 13, color: "#555", marginBottom: 20 }}>{searchResults.length} result{searchResults.length !== 1 ? "s" : ""} for "{debouncedQuery}"</p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 14 }}>
             {searchResults.map(v => (
-              <div key={v.id + v._type} onClick={() => { handleClick(v); setSearchQuery(""); setSearchOpen(false); }}
+              <div key={v.id + v._type} onClick={() => { handleClick(v); setSearchQuery(""); setDebouncedQuery(""); setSearchOpen(false); }}
                 style={{ cursor: "pointer", borderRadius: 8, overflow: "hidden", background: "#141414", border: "1px solid #1e1e1e" }}>
                 <div style={{ aspectRatio: "2/3", position: "relative" }}>
                   <img src={v.poster || v.thumbnail} alt={v.title} style={{ width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.72)" }} />
@@ -416,19 +425,33 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
         </div>
       )}
 
-      {/* Hero */}
-      {loading ? (
-        <div style={{ height: "85vh", display: "flex", alignItems: "center", justifyContent: "center" }}><Spinner /></div>
-      ) : featured ? (
-        <HeroBanner video={featured} onPlay={featuredIsShow ? onShowSelect : onPlay} isShow={featuredIsShow} myList={myList} onToggleList={onToggleList} />
-      ) : (
-        <div style={{ height: "85vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <p style={{ color: "#555", fontSize: 15 }}>No content yet.</p>
-        </div>
+      {/* Hero — hidden on catalog pages */}
+      {activeNav !== "Movies" && activeNav !== "Series" && (
+        loading ? (
+          <div style={{ height: "85vh", display: "flex", alignItems: "center", justifyContent: "center" }}><Spinner /></div>
+        ) : featured ? (
+          <HeroBanner video={featured} onPlay={featuredIsShow ? onShowSelect : onPlay} isShow={featuredIsShow} myList={myList} onToggleList={onToggleList} />
+        ) : (
+          <div style={{ height: "85vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <p style={{ color: "#555", fontSize: 15 }}>No content yet.</p>
+          </div>
+        )
       )}
 
-      {/* Content rows */}
-      {!loading && (allContent.length > 0 || liveStreams.filter(s => s.is_live).length > 0 || continueWatching.length > 0) && (
+      {/* Catalog pages for Movies / Series */}
+      {(activeNav === "Movies" || activeNav === "Series") && !loading && (
+        <CatalogPage
+          type={activeNav}
+          content={filteredContent}
+          onPlay={onPlay}
+          onShowSelect={onShowSelect}
+          myList={myList}
+          onToggleList={onToggleList}
+        />
+      )}
+
+      {/* Content rows (Home / My List / New & Popular) */}
+      {activeNav !== "Movies" && activeNav !== "Series" && !loading && (allContent.length > 0 || liveStreams.filter(s => s.is_live).length > 0 || continueWatching.length > 0) && (
         <div style={{ position: "relative", zIndex: 1, marginTop: -60, paddingBottom: 80 }}>
           {liveStreams.filter(s => s.is_live).length > 0 && (
             <LiveSection streams={liveStreams.filter(s => s.is_live)} onPlay={onPlay} />
@@ -454,6 +477,126 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
       )}
 
       <Footer />
+    </div>
+  );
+}
+
+// ─── Catalog Page (Movies / Series) ──────────────────────────────────────────
+
+function CatalogPage({ type, content, onPlay, onShowSelect, myList, onToggleList }) {
+  const [genreFilter, setGenreFilter] = useState("All");
+  const [sortBy, setSortBy] = useState("default");
+  const isMobile = useIsMobile();
+
+  const genres = useMemo(() => {
+    const cats = [...new Set(content.map(v => v.category).filter(Boolean))].sort();
+    return ["All", ...cats];
+  }, [content]);
+
+  const displayed = useMemo(() => {
+    let items = genreFilter === "All" ? content : content.filter(v => v.category === genreFilter);
+    if (sortBy === "newest") items = [...items].sort((a, b) => (b.year || 0) - (a.year || 0));
+    else if (sortBy === "az") items = [...items].sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+    else if (sortBy === "rating") items = [...items].sort((a, b) => (b.score || 0) - (a.score || 0));
+    return items;
+  }, [content, genreFilter, sortBy]);
+
+  return (
+    <div style={{ paddingTop: 88, minHeight: "100vh" }}>
+      {/* Page header */}
+      <div style={{ padding: `0 ${PAD} 28px` }}>
+        <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(32px, 4vw, 56px)", fontWeight: 400, margin: "0 0 24px", color: "#fff" }}>
+          {type === "Movies" ? "Movies" : "Series"}
+        </h1>
+
+        {/* Filters row */}
+        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          {/* Genre pills */}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", flex: 1 }}>
+            {genres.map(g => (
+              <button key={g} onClick={() => setGenreFilter(g)}
+                style={{ background: genreFilter === g ? "#facc15" : "rgba(255,255,255,0.06)", border: `1px solid ${genreFilter === g ? "#facc15" : "rgba(255,255,255,0.1)"}`, borderRadius: 20, padding: "7px 16px", color: genreFilter === g ? "#0a0a0a" : "rgba(255,255,255,0.6)", fontSize: 13, fontWeight: genreFilter === g ? 700 : 400, cursor: "pointer", transition: "all 0.15s", whiteSpace: "nowrap" }}>
+                {g}
+              </button>
+            ))}
+          </div>
+          {/* Sort */}
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+            style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "8px 14px", color: "rgba(255,255,255,0.7)", fontSize: 13, cursor: "pointer", outline: "none", flexShrink: 0 }}>
+            <option value="default">Default order</option>
+            <option value="newest">Newest first</option>
+            <option value="az">A – Z</option>
+            <option value="rating">Top rated</option>
+          </select>
+        </div>
+
+        {/* Count */}
+        <p style={{ margin: "16px 0 0", fontSize: 12, color: "#444" }}>
+          {displayed.length} title{displayed.length !== 1 ? "s" : ""}
+          {genreFilter !== "All" ? ` in ${genreFilter}` : ""}
+        </p>
+      </div>
+
+      {/* Divider */}
+      <div style={{ height: 1, background: "linear-gradient(to right, rgba(255,255,255,0.06), transparent)", margin: `0 ${PAD} 28px` }} />
+
+      {/* Grid */}
+      {displayed.length === 0 ? (
+        <div style={{ padding: "80px 0", textAlign: "center", color: "#444", fontSize: 15 }}>
+          No {type.toLowerCase()} in this genre yet.
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? "130px" : "160px"}, 1fr))`, gap: isMobile ? 10 : 14, padding: `0 ${PAD} 80px` }}>
+          {displayed.map(item => (
+            <CatalogCard key={item.id + item._type} item={item}
+              onClick={() => item._type === "show" ? onShowSelect(item) : onPlay(item)}
+              myList={myList} onToggleList={onToggleList} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CatalogCard({ item, onClick, myList, onToggleList }) {
+  const [hovered, setHovered] = useState(false);
+  const inList = myList?.[`${item._type}_${item.id}`];
+
+  return (
+    <div onClick={onClick} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
+      style={{ cursor: "pointer", borderRadius: 10, overflow: "hidden", background: "#141414", transform: hovered ? "scale(1.04) translateY(-4px)" : "scale(1)", transition: "transform 0.22s ease, box-shadow 0.22s ease", boxShadow: hovered ? "0 20px 48px rgba(0,0,0,0.8)" : "0 2px 8px rgba(0,0,0,0.3)" }}>
+      <div style={{ position: "relative", aspectRatio: "2/3", overflow: "hidden" }}>
+        <img src={item.poster || item.thumbnail} alt={item.title}
+          style={{ width: "100%", height: "100%", objectFit: "cover", transition: "filter 0.22s", filter: hovered ? "brightness(0.45)" : "brightness(0.75)" }} />
+
+        {/* Badges */}
+        {item._type === "show"
+          ? <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(59,130,246,0.9)", backdropFilter: "blur(4px)", color: "#fff", fontSize: 9.5, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: 0.5, textTransform: "uppercase" }}>Series</div>
+          : item.category && <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(250,204,21,0.85)", backdropFilter: "blur(4px)", color: "#0a0a0a", fontSize: 9.5, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: 0.5, textTransform: "uppercase" }}>{item.category}</div>
+        }
+        {item.duration && <div style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(4px)", color: "#bbb", fontSize: 10.5, padding: "3px 7px", borderRadius: 4 }}>{item.duration}</div>}
+
+        {/* Hover overlay */}
+        {hovered && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
+            <div style={{ width: 48, height: 48, borderRadius: "50%", background: "rgba(255,255,255,0.92)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 16px rgba(0,0,0,0.5)" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="#0a0a0a"><polygon points="5,3 19,12 5,21" /></svg>
+            </div>
+            <button onClick={e => { e.stopPropagation(); onToggleList?.(item.id, item._type); }}
+              style={{ background: inList ? "rgba(250,204,21,0.2)" : "rgba(0,0,0,0.6)", border: `1px solid ${inList ? "rgba(250,204,21,0.6)" : "rgba(255,255,255,0.3)"}`, borderRadius: 20, padding: "5px 14px", color: inList ? "#facc15" : "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", backdropFilter: "blur(4px)" }}>
+              {inList ? "✓ Saved" : "+ My List"}
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div style={{ padding: "10px 12px 12px", background: hovered ? "#1c1c1c" : "#141414", transition: "background 0.22s" }}>
+        <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          {item.score ? <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 600 }}>{item.score}%</span> : <span />}
+          {item.year && <span style={{ fontSize: 11, color: "#555" }}>{item.year}</span>}
+        </div>
+      </div>
     </div>
   );
 }
@@ -782,7 +925,7 @@ function ContinueWatchingRow({ items, onPlay }) {
 
 function ContinueWatchingCard({ item, onPlay }) {
   const [hovered, setHovered] = useState(false);
-  const pct = item._progress ? Math.min(100, (item._progress.progress_seconds / item._progress.duration_seconds) * 100) : 0;
+  const pct = item._progress?.duration_seconds > 0 ? Math.min(100, (item._progress.progress_seconds / item._progress.duration_seconds) * 100) : 0;
   return (
     <div style={{ flexShrink: 0, width: CW_CARD_W, cursor: "pointer" }}
       onClick={() => onPlay(item)} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>

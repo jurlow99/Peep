@@ -1,5 +1,4 @@
 {
   "buildCommand": "cd peep && npm install && npm run build",
-  "outputDirectory": "peep/dist",
-  "installCommand": "echo skip"
+  "outputDirectory": "peep/dist"
 }
