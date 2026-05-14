@@ -2,8 +2,18 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase";
 import { AuthModal } from "./components/AuthModal";
 
-const PAD = "clamp(48px, 5vw, 96px)";
-const CARD_W = "clamp(185px, 13.5vw, 252px)";
+const PAD = "clamp(16px, 5vw, 96px)";
+const CARD_W = "clamp(130px, 38vw, 252px)";
+
+function useIsMobile() {
+  const [is, setIs] = useState(window.innerWidth < 640);
+  useEffect(() => {
+    const h = () => setIs(window.innerWidth < 640);
+    window.addEventListener("resize", h);
+    return () => window.removeEventListener("resize", h);
+  }, []);
+  return is;
+}
 
 export default function App() {
   const [page, setPage] = useState("home");
@@ -100,6 +110,8 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeNav, setActiveNav] = useState("Home");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     fetchAll();
@@ -207,51 +219,55 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
         position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: `0 ${PAD}`, height: 68,
-        background: scrolled ? "rgba(10,10,10,0.96)" : "linear-gradient(to bottom, rgba(0,0,0,0.75) 0%, transparent 100%)",
-        backdropFilter: scrolled ? "blur(12px)" : "none",
-        borderBottom: scrolled ? "1px solid rgba(255,255,255,0.05)" : "none",
+        background: scrolled || menuOpen ? "rgba(10,10,10,0.96)" : "linear-gradient(to bottom, rgba(0,0,0,0.75) 0%, transparent 100%)",
+        backdropFilter: scrolled || menuOpen ? "blur(12px)" : "none",
+        borderBottom: scrolled || menuOpen ? "1px solid rgba(255,255,255,0.05)" : "none",
         transition: "background 0.4s ease",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 36 }}>
           <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 26, letterSpacing: "-0.5px", userSelect: "none" }}>
             peep<span style={{ color: "#ff4d4d" }}>.</span>
           </span>
-          <div style={{ display: "flex", gap: 4 }}>
-            {["Home", "Movies", "Series", "New & Popular"].map(label => {
-              const active = activeNav === label;
-              return (
-                <span key={label} onClick={() => setActiveNav(label)} style={{ fontSize: 13.5, padding: "6px 12px", borderRadius: 6, color: active ? "#fff" : "rgba(255,255,255,0.55)", fontWeight: active ? 600 : 400, cursor: "pointer", background: active ? "rgba(255,77,77,0.12)" : "transparent", transition: "color 0.2s, background 0.2s" }}
-                  onMouseEnter={e => { if (!active) { e.currentTarget.style.color = "#fff"; e.currentTarget.style.background = "rgba(255,255,255,0.06)"; } }}
-                  onMouseLeave={e => { if (!active) { e.currentTarget.style.color = "rgba(255,255,255,0.55)"; e.currentTarget.style.background = "transparent"; } }}
-                >{label}</span>
-              );
-            })}
-            <span onClick={() => { if (!user) { onAuthOpen(); return; } setActiveNav("My List"); }}
-              style={{ fontSize: 13.5, padding: "6px 12px", borderRadius: 6, cursor: "pointer", color: activeNav === "My List" ? "#fff" : "rgba(255,255,255,0.55)", fontWeight: activeNav === "My List" ? 600 : 400, background: activeNav === "My List" ? "rgba(255,77,77,0.12)" : "transparent", transition: "color 0.2s, background 0.2s" }}
-              onMouseEnter={e => { e.currentTarget.style.color = "#fff"; e.currentTarget.style.background = "rgba(255,255,255,0.06)"; }}
-              onMouseLeave={e => { e.currentTarget.style.color = activeNav === "My List" ? "#fff" : "rgba(255,255,255,0.55)"; e.currentTarget.style.background = activeNav === "My List" ? "rgba(255,77,77,0.12)" : "transparent"; }}
-            >My List</span>
-          </div>
+          {!isMobile && (
+            <div style={{ display: "flex", gap: 4 }}>
+              {["Home", "Movies", "Series", "New & Popular"].map(label => {
+                const active = activeNav === label;
+                return (
+                  <span key={label} onClick={() => setActiveNav(label)} style={{ fontSize: 13.5, padding: "6px 12px", borderRadius: 6, color: active ? "#fff" : "rgba(255,255,255,0.55)", fontWeight: active ? 600 : 400, cursor: "pointer", background: active ? "rgba(255,77,77,0.12)" : "transparent", transition: "color 0.2s, background 0.2s" }}
+                    onMouseEnter={e => { if (!active) { e.currentTarget.style.color = "#fff"; e.currentTarget.style.background = "rgba(255,255,255,0.06)"; } }}
+                    onMouseLeave={e => { if (!active) { e.currentTarget.style.color = "rgba(255,255,255,0.55)"; e.currentTarget.style.background = "transparent"; } }}
+                  >{label}</span>
+                );
+              })}
+              <span onClick={() => { if (!user) { onAuthOpen(); return; } setActiveNav("My List"); }}
+                style={{ fontSize: 13.5, padding: "6px 12px", borderRadius: 6, cursor: "pointer", color: activeNav === "My List" ? "#fff" : "rgba(255,255,255,0.55)", fontWeight: activeNav === "My List" ? 600 : 400, background: activeNav === "My List" ? "rgba(255,77,77,0.12)" : "transparent", transition: "color 0.2s, background 0.2s" }}
+                onMouseEnter={e => { e.currentTarget.style.color = "#fff"; e.currentTarget.style.background = "rgba(255,255,255,0.06)"; }}
+                onMouseLeave={e => { e.currentTarget.style.color = activeNav === "My List" ? "#fff" : "rgba(255,255,255,0.55)"; e.currentTarget.style.background = activeNav === "My List" ? "rgba(255,77,77,0.12)" : "transparent"; }}
+              >My List</span>
+            </div>
+          )}
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 14 : 20 }}>
           <div style={{ display: "flex", alignItems: "center", position: "relative" }}>
             {searchOpen && (
               <input autoFocus value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                 onBlur={() => { if (!searchQuery) setSearchOpen(false); }}
                 placeholder="Search titles, genres..."
-                style={{ background: "rgba(15,15,15,0.92)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 6, padding: "8px 14px 8px 38px", color: "#fff", fontSize: 13, width: 240, outline: "none" }}
+                style={{ background: "rgba(15,15,15,0.92)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 6, padding: "8px 14px 8px 38px", color: "#fff", fontSize: 13, width: isMobile ? "calc(100vw - 110px)" : 240, outline: "none" }}
               />
             )}
             <div onClick={() => setSearchOpen(o => !o)} style={{ position: searchOpen ? "absolute" : "relative", left: searchOpen ? 11 : 0, cursor: "pointer", color: "rgba(255,255,255,0.7)", display: "flex", alignItems: "center" }}>
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
             </div>
           </div>
-          <div style={{ position: "relative", cursor: "pointer", color: "rgba(255,255,255,0.7)", display: "flex" }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
-            <div style={{ position: "absolute", top: -2, right: -2, width: 7, height: 7, borderRadius: "50%", background: "#ff4d4d", border: "1.5px solid #0a0a0a" }} />
-          </div>
-          {user ? (
+          {!isMobile && (
+            <div style={{ position: "relative", cursor: "pointer", color: "rgba(255,255,255,0.7)", display: "flex" }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
+              <div style={{ position: "absolute", top: -2, right: -2, width: 7, height: 7, borderRadius: "50%", background: "#ff4d4d", border: "1.5px solid #0a0a0a" }} />
+            </div>
+          )}
+          {!isMobile && (user ? (
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div title={user.email} style={{ width: 34, height: 34, borderRadius: "50%", background: "linear-gradient(135deg, #6366f1, #8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, cursor: "default", color: "#fff", flexShrink: 0 }}>
                 {(user.user_metadata?.full_name?.[0] || user.email[0]).toUpperCase()}
@@ -260,11 +276,53 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
             </div>
           ) : (
             <button onClick={onAuthOpen} style={{ background: "#ff4d4d", border: "none", borderRadius: 6, padding: "8px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Sign In</button>
+          ))}
+          {!isMobile && (
+            <div onClick={() => window.location.href = "/admin"} title="Admin panel"
+              style={{ width: 34, height: 34, borderRadius: 8, background: "linear-gradient(135deg, #ff6b6b, #cc2222)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>P</div>
           )}
-          <div onClick={() => window.location.href = "/admin"} title="Admin panel"
-            style={{ width: 34, height: 34, borderRadius: 8, background: "linear-gradient(135deg, #ff6b6b, #cc2222)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>P</div>
+          {isMobile && (
+            <button onClick={() => setMenuOpen(m => !m)} style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", padding: 4 }}>
+              {menuOpen
+                ? <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                : <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
+              }
+            </button>
+          )}
         </div>
       </nav>
+
+      {/* Mobile nav drawer */}
+      {isMobile && menuOpen && (
+        <div style={{ position: "fixed", top: 68, left: 0, right: 0, bottom: 0, zIndex: 98, background: "rgba(10,10,10,0.98)", backdropFilter: "blur(16px)", display: "flex", flexDirection: "column", overflowY: "auto" }}>
+          <div style={{ padding: "12px 0" }}>
+            {["Home", "Movies", "Series", "New & Popular", "My List"].map(label => {
+              const active = activeNav === label;
+              return (
+                <div key={label} onClick={() => { if (label === "My List" && !user) { onAuthOpen(); setMenuOpen(false); return; } setActiveNav(label); setMenuOpen(false); }}
+                  style={{ padding: "16px 24px", fontSize: 17, fontWeight: active ? 600 : 400, color: active ? "#fff" : "rgba(255,255,255,0.6)", borderLeft: `3px solid ${active ? "#ff4d4d" : "transparent"}`, cursor: "pointer" }}>
+                  {label}
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ marginTop: "auto", padding: 24, borderTop: "1px solid #1a1a1a" }}>
+            {user ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <div style={{ width: 42, height: 42, borderRadius: "50%", background: "linear-gradient(135deg, #6366f1, #8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
+                  {(user.user_metadata?.full_name?.[0] || user.email[0]).toUpperCase()}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: "0 0 4px", fontSize: 14, color: "#fff", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.user_metadata?.full_name || user.email}</p>
+                  <button onClick={() => { supabase.auth.signOut(); setMenuOpen(false); }} style={{ background: "none", border: "none", color: "#f87171", fontSize: 12, cursor: "pointer", padding: 0 }}>Sign Out</button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => { onAuthOpen(); setMenuOpen(false); }} style={{ width: "100%", background: "#ff4d4d", border: "none", borderRadius: 8, padding: "14px", color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>Sign In</button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Search overlay */}
       {searchQuery && (
@@ -331,6 +389,7 @@ function HeroBanner({ video, onPlay, isShow, myList, onToggleList }) {
   const [muted, setMuted] = useState(true);
   const videoRef = useRef(null);
 
+  const isMobile = useIsMobile();
   const hasBgTrailer = !!video.trailer_url && getTrailerType(video.trailer_url) === "direct";
 
   useEffect(() => {
@@ -362,7 +421,7 @@ function HeroBanner({ video, onPlay, isShow, myList, onToggleList }) {
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, #0a0a0a 0%, rgba(10,10,10,0.25) 45%, transparent 70%)" }} />
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, rgba(10,10,10,0.92) 0%, rgba(10,10,10,0.45) 50%, transparent 80%)" }} />
 
-      <div style={{ position: "absolute", bottom: "16%", left: PAD, maxWidth: "clamp(500px, 42vw, 720px)" }}>
+      <div style={{ position: "absolute", bottom: isMobile ? "12%" : "16%", left: PAD, right: PAD, maxWidth: isMobile ? "100%" : "clamp(500px, 42vw, 720px)" }}>
         <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
           {isShow
             ? <span style={{ background: "#3b82f6", color: "#fff", fontSize: 10, fontWeight: 700, padding: "4px 12px", borderRadius: 4, letterSpacing: 1.5, textTransform: "uppercase" }}>Series</span>
@@ -378,8 +437,8 @@ function HeroBanner({ video, onPlay, isShow, myList, onToggleList }) {
           {video.duration && <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>{video.duration}</span>}
         </div>
         {video.description && <p style={{ fontSize: 15.5, color: "rgba(255,255,255,0.76)", lineHeight: 1.75, margin: "0 0 34px", textShadow: "0 1px 8px rgba(0,0,0,0.4)" }}>{video.description}</p>}
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <button onClick={() => onPlay(video)} style={{ background: "#fff", color: "#0a0a0a", border: "none", borderRadius: 7, padding: "14px 32px", fontSize: 15, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <button onClick={() => onPlay(video)} style={{ background: "#fff", color: "#0a0a0a", border: "none", borderRadius: 7, padding: isMobile ? "12px 24px" : "14px 32px", fontSize: isMobile ? 14 : 15, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}
             onMouseEnter={e => e.currentTarget.style.background = "#e5e5e5"}
             onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
@@ -458,6 +517,7 @@ function ContentRow({ section, onPlay, onShowSelect, myList, onToggleList }) {
 
 function VideoCard({ video, onClick, rank, myList, onToggleList }) {
   const [hovered, setHovered] = useState(false);
+  const isMobile = useIsMobile();
   const inList = myList?.[`${video._type}_${video.id}`];
 
   return (
@@ -489,7 +549,7 @@ function VideoCard({ video, onClick, rank, myList, onToggleList }) {
             {video.score ? <span style={{ fontSize: 12, color: "#4ade80", fontWeight: 600 }}>{video.score}%</span> : <span />}
             {video.year && <span style={{ fontSize: 11, color: "#666" }}>{video.year}</span>}
           </div>
-          {hovered && (
+          {(hovered || isMobile) && (
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={e => { e.stopPropagation(); onToggleList?.(video.id, video._type); }}
                 style={{ flex: 1, background: inList ? "rgba(255,77,77,0.15)" : "rgba(255,255,255,0.07)", border: `1px solid ${inList ? "rgba(255,77,77,0.4)" : "rgba(255,255,255,0.14)"}`, borderRadius: 5, color: inList ? "#ff4d4d" : "#ccc", fontSize: 12, padding: "7px 0", cursor: "pointer", fontWeight: inList ? 600 : 400 }}>
@@ -676,6 +736,7 @@ function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggle
   const [loading, setLoading] = useState(true);
   const [related, setRelated] = useState([]);
   const [trailerOpen, setTrailerOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     supabase.from("episodes").select("*").eq("show_id", show.id)
@@ -721,7 +782,7 @@ function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggle
         </button>
         <span style={{ position: "absolute", top: 24, left: "50%", transform: "translateX(-50%)", fontFamily: "'DM Serif Display', serif", fontSize: 22, zIndex: 10 }}>peep<span style={{ color: "#ff4d4d" }}>.</span></span>
 
-        <div style={{ position: "absolute", bottom: "12%", left: PAD, maxWidth: "clamp(400px, 40vw, 660px)" }}>
+        <div style={{ position: "absolute", bottom: "10%", left: PAD, right: PAD, maxWidth: isMobile ? "100%" : "clamp(400px, 40vw, 660px)" }}>
           <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
             <span style={{ background: "#3b82f6", color: "#fff", fontSize: 10, fontWeight: 700, padding: "4px 12px", borderRadius: 4, letterSpacing: 1.5, textTransform: "uppercase" }}>Series</span>
             {show.category && <span style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)", color: "#fff", fontSize: 10, fontWeight: 600, padding: "4px 12px", borderRadius: 4, letterSpacing: 1, textTransform: "uppercase" }}>{show.category}</span>}
@@ -734,7 +795,7 @@ function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggle
             <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>{seasons.length} Season{seasons.length !== 1 ? "s" : ""} · {episodes.length} Episode{episodes.length !== 1 ? "s" : ""}</span>
           </div>
           {show.description && <p style={{ fontSize: 15, color: "rgba(255,255,255,0.72)", lineHeight: 1.75, margin: "0 0 28px" }}>{show.description}</p>}
-          <div style={{ display: "flex", gap: 12 }}>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {episodes.length > 0 && (
               <button onClick={() => onPlay(episodes[0])} style={{ background: "#fff", color: "#0a0a0a", border: "none", borderRadius: 7, padding: "13px 28px", fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}
                 onMouseEnter={e => e.currentTarget.style.background = "#e5e5e5"}
@@ -822,11 +883,12 @@ function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggle
 
 function EpisodeRow({ episode, show, onPlay }) {
   const [hovered, setHovered] = useState(false);
+  const isMobile = useIsMobile();
   return (
     <div onClick={() => onPlay(episode)} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
-      style={{ display: "flex", gap: 20, padding: "16px 20px", borderRadius: 10, cursor: "pointer", background: hovered ? "#141414" : "transparent", transition: "background 0.2s", alignItems: "center" }}>
-      <div style={{ flexShrink: 0, fontSize: 18, color: "#333", fontWeight: 700, width: 28, textAlign: "center" }}>{episode.episode_number}</div>
-      <div style={{ width: 160, aspectRatio: "16/9", flexShrink: 0, borderRadius: 6, overflow: "hidden", background: "#1a1a1a", position: "relative" }}>
+      style={{ display: "flex", gap: isMobile ? 12 : 20, padding: isMobile ? "12px 8px" : "16px 20px", borderRadius: 10, cursor: "pointer", background: hovered ? "#141414" : "transparent", transition: "background 0.2s", alignItems: "center" }}>
+      <div style={{ flexShrink: 0, fontSize: 16, color: "#333", fontWeight: 700, width: 22, textAlign: "center" }}>{episode.episode_number}</div>
+      <div style={{ width: isMobile ? 100 : 160, aspectRatio: "16/9", flexShrink: 0, borderRadius: 6, overflow: "hidden", background: "#1a1a1a", position: "relative" }}>
         <img src={episode.thumbnail || show.thumbnail} alt={episode.title} style={{ width: "100%", height: "100%", objectFit: "cover", filter: hovered ? "brightness(0.6)" : "brightness(0.8)", transition: "filter 0.2s" }} onError={e => { e.target.style.display = "none"; }} />
         {hovered && (
           <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -850,14 +912,15 @@ function EpisodeRow({ episode, show, onPlay }) {
 // ─── Footer ───────────────────────────────────────────────────────────────────
 
 function Footer() {
+  const isMobile = useIsMobile();
   return (
     <footer style={{ borderTop: "1px solid rgba(255,255,255,0.05)", padding: `56px ${PAD} 40px`, fontFamily: "'DM Sans', sans-serif" }}>
-      <div style={{ display: "flex", gap: 28, marginBottom: 40 }}>
+      <div style={{ display: "flex", gap: 28, marginBottom: 40, flexWrap: "wrap" }}>
         {["Twitter / X", "Instagram", "YouTube", "TikTok", "Facebook"].map(s => (
           <span key={s} style={{ fontSize: 13, color: "#666", cursor: "pointer" }} onMouseEnter={e => e.target.style.color = "#ccc"} onMouseLeave={e => e.target.style.color = "#666"}>{s}</span>
         ))}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 32, marginBottom: 44 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 32, marginBottom: 44 }}>
         {[
           { heading: "Company", links: ["About Peep", "Press Room", "Careers", "Contact Us"] },
           { heading: "Browse", links: ["Movies", "Series", "Horror", "Comedy", "Drama"] },

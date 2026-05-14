@@ -35,7 +35,7 @@ export function AuthModal({ onClose }) {
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.88)", backdropFilter: "blur(10px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ background: "#141414", border: "1px solid #242424", borderRadius: 16, padding: "44px 40px", width: 420, position: "relative" }}>
+      <div style={{ background: "#141414", border: "1px solid #242424", borderRadius: 16, padding: "44px clamp(20px, 8vw, 40px)", width: "min(420px, calc(100vw - 32px))", position: "relative" }}>
         <button onClick={onClose} style={{ position: "absolute", top: 18, right: 18, background: "none", border: "none", color: "#555", fontSize: 22, cursor: "pointer", lineHeight: 1, padding: "2px 6px" }}>×</button>
 
         <div style={{ textAlign: "center", marginBottom: 32 }}>
