@@ -43,7 +43,7 @@ export function AdminPage() {
         >
           <div style={{ textAlign: "center", marginBottom: 32 }}>
             <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 28 }}>
-              peep<span style={{ color: "#ff4d4d" }}>.</span>
+              <span style={{ color: "#facc15" }}>peep.</span>
             </span>
             <p style={{ color: "#555", fontSize: 13, margin: "8px 0 0" }}>Admin Access</p>
           </div>
@@ -63,7 +63,7 @@ export function AdminPage() {
             style={{
               width: "100%",
               background: "#0a0a0a",
-              border: `1px solid ${pinError ? "#ff4d4d" : "#2a2a2a"}`,
+              border: `1px solid ${pinError ? "#facc15" : "#2a2a2a"}`,
               borderRadius: 8,
               padding: "12px 16px",
               color: "#fff",
@@ -73,17 +73,17 @@ export function AdminPage() {
             }}
             autoFocus
           />
-          {pinError && <p style={{ color: "#ff4d4d", fontSize: 12, margin: "8px 0 0" }}>Incorrect PIN</p>}
+          {pinError && <p style={{ color: "#facc15", fontSize: 12, margin: "8px 0 0" }}>Incorrect PIN</p>}
           <button
             onClick={checkPin}
             style={{
               width: "100%",
               marginTop: 20,
-              background: "#ff4d4d",
+              background: "#facc15",
               border: "none",
               borderRadius: 8,
               padding: "13px",
-              color: "#fff",
+              color: "#0a0a0a",
               fontSize: 14,
               fontWeight: 600,
               cursor: "pointer",

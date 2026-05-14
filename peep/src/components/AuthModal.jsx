@@ -35,12 +35,12 @@ export function AuthModal({ onClose }) {
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.88)", backdropFilter: "blur(10px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ background: "#141414", border: "1px solid #242424", borderRadius: 16, padding: "44px 40px", width: 420, position: "relative" }}>
+      <div style={{ background: "#141414", border: "1px solid #242424", borderRadius: 16, padding: "44px clamp(20px, 8vw, 40px)", width: "min(420px, calc(100vw - 32px))", position: "relative" }}>
         <button onClick={onClose} style={{ position: "absolute", top: 18, right: 18, background: "none", border: "none", color: "#555", fontSize: 22, cursor: "pointer", lineHeight: 1, padding: "2px 6px" }}>×</button>
 
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 30 }}>
-            peep<span style={{ color: "#ff4d4d" }}>.</span>
+            <span style={{ color: "#facc15" }}>peep.</span>
           </span>
           <p style={{ margin: "8px 0 0", fontSize: 13, color: "#555" }}>
             {mode === "signin" ? "Welcome back" : "Create your account"}
@@ -68,7 +68,7 @@ export function AuthModal({ onClose }) {
           {error && <p style={{ color: "#f87171", fontSize: 12, margin: "14px 0 0" }}>{error}</p>}
           {message && <p style={{ color: "#4ade80", fontSize: 12, margin: "14px 0 0" }}>{message}</p>}
 
-          <button type="submit" disabled={loading} style={{ width: "100%", marginTop: 20, background: "#ff4d4d", border: "none", borderRadius: 8, padding: "13px", color: "#fff", fontSize: 14, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1 }}>
+          <button type="submit" disabled={loading} style={{ width: "100%", marginTop: 20, background: "#facc15", border: "none", borderRadius: 8, padding: "13px", color: "#fff", fontSize: 14, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1 }}>
             {loading ? "…" : mode === "signin" ? "Sign In" : "Create Account"}
           </button>
         </form>
@@ -82,5 +82,5 @@ const input = {
   borderRadius: 8, padding: "12px 14px", color: "#fff", fontSize: 13, outline: "none",
 };
 
-function focusBorder(e) { e.target.style.borderColor = "#ff4d4d"; }
+function focusBorder(e) { e.target.style.borderColor = "#facc15"; }
 function blurBorder(e) { e.target.style.borderColor = "#2a2a2a"; }

@@ -12,6 +12,7 @@ const EMPTY_ROW = {
   thumbnail: "",
   poster: "",
   url: "",
+  trailer_url: "",
   description: "",
   tags: "",
 };
@@ -26,6 +27,7 @@ const EMPTY_SHOW = {
   poster: "",
   description: "",
   tags: "",
+  trailer_url: "",
 };
 
 const EMPTY_EPISODE = {
@@ -46,6 +48,26 @@ const EMPTY_CAROUSEL = {
   content_type: "all",
   enabled: true,
   position: 0,
+};
+
+const EMPTY_LIVE_STREAM = {
+  title: "",
+  description: "",
+  stream_url: "",
+  thumbnail: "",
+  is_live: true,
+  badge_text: "LIVE",
+};
+
+const EMPTY_PODCAST = {
+  title: "",
+  host: "",
+  description: "",
+  artwork_url: "",
+  link_url: "",
+  episode_count: "",
+  tags: "",
+  enabled: true,
 };
 
 export function CMS({ onExit }) {
@@ -87,6 +109,22 @@ export function CMS({ onExit }) {
   const [episodeSaving, setEpisodeSaving] = useState(false);
   const [deleteEpisodeConfirm, setDeleteEpisodeConfirm] = useState(null);
 
+  // Podcasts state
+  const [podcastsList, setPodcastsList] = useState([]);
+  const [podcastsLoading, setPodcastsLoading] = useState(true);
+  const [editingPodcastId, setEditingPodcastId] = useState(null);
+  const [podcastForm, setPodcastForm] = useState(EMPTY_PODCAST);
+  const [podcastSaving, setPodcastSaving] = useState(false);
+  const [deletePodcastConfirm, setDeletePodcastConfirm] = useState(null);
+
+  // Live Streams state
+  const [liveList, setLiveList] = useState([]);
+  const [liveLoading, setLiveLoading] = useState(true);
+  const [editingLiveId, setEditingLiveId] = useState(null);
+  const [liveForm, setLiveForm] = useState(EMPTY_LIVE_STREAM);
+  const [liveSaving, setLiveSaving] = useState(false);
+  const [deleteLiveConfirm, setDeleteLiveConfirm] = useState(null);
+
   const [heroConfirm, setHeroConfirm] = useState(null); // { current, next, type: "video"|"show" }
 
   const subscriptionRef = useRef(null);
@@ -106,6 +144,8 @@ export function CMS({ onExit }) {
     loadCarousels();
     subscribeToCarouselChanges();
     loadShows();
+    loadPodcasts();
+    loadLiveStreams();
 
     return () => {
       if (subscriptionRef.current) subscriptionRef.current.unsubscribe();
@@ -173,6 +213,7 @@ export function CMS({ onExit }) {
       thumbnail: row.thumbnail ?? "",
       poster: row.poster ?? "",
       url: row.url ?? "",
+      trailer_url: row.trailer_url ?? "",
       description: row.description ?? "",
       tags: Array.isArray(row.tags) ? row.tags.join(", ") : (row.tags ?? ""),
     });
@@ -188,6 +229,7 @@ export function CMS({ onExit }) {
       ...form,
       score: form.score !== "" ? Number(form.score) : null,
       year: form.year !== "" ? Number(form.year) : null,
+      trailer_url: form.trailer_url.trim() || null,
       tags: form.tags
         ? form.tags.split(",").map(t => t.trim()).filter(Boolean)
         : [],
@@ -389,7 +431,7 @@ export function CMS({ onExit }) {
 
   function startShowEdit(show) {
     setEditingShowId(show.id);
-    setShowForm({ title: show.title ?? "", category: show.category ?? "Horror", rating: show.rating ?? "NR", year: show.year ?? "", score: show.score ?? "", thumbnail: show.thumbnail ?? "", poster: show.poster ?? "", description: show.description ?? "", tags: Array.isArray(show.tags) ? show.tags.join(", ") : (show.tags ?? "") });
+    setShowForm({ title: show.title ?? "", category: show.category ?? "Horror", rating: show.rating ?? "NR", year: show.year ?? "", score: show.score ?? "", thumbnail: show.thumbnail ?? "", poster: show.poster ?? "", description: show.description ?? "", tags: Array.isArray(show.tags) ? show.tags.join(", ") : (show.tags ?? ""), trailer_url: show.trailer_url ?? "" });
   }
 
   function cancelShowEdit() { setEditingShowId(null); setShowForm(EMPTY_SHOW); }
@@ -397,7 +439,7 @@ export function CMS({ onExit }) {
   async function saveShow() {
     if (!showForm.title.trim()) { showToast("Title is required.", "error"); return; }
     setShowSaving(true);
-    const payload = { ...showForm, year: showForm.year !== "" ? Number(showForm.year) : null, score: showForm.score !== "" ? Number(showForm.score) : null, tags: showForm.tags ? showForm.tags.split(",").map(t => t.trim()).filter(Boolean) : [] };
+    const payload = { ...showForm, year: showForm.year !== "" ? Number(showForm.year) : null, score: showForm.score !== "" ? Number(showForm.score) : null, trailer_url: showForm.trailer_url?.trim() || null, tags: showForm.tags ? showForm.tags.split(",").map(t => t.trim()).filter(Boolean) : [] };
     try {
       if (editingShowId) {
         const { error } = await supabase.from("shows").update(payload).eq("id", editingShowId);
@@ -459,9 +501,9 @@ export function CMS({ onExit }) {
   function cancelEpisodeEdit() { setEditingEpisodeId(null); setEpisodeForm({ ...EMPTY_EPISODE, show_id: selectedShowForEpisodes }); }
 
   async function saveEpisode() {
-    if (!episodeForm.title.trim() || !episodeForm.show_id) { showToast("Show and title are required.", "error"); return; }
+    if (!episodeForm.title.trim() || !selectedShowForEpisodes) { showToast("Show and title are required.", "error"); return; }
     setEpisodeSaving(true);
-    const payload = { ...episodeForm, season: Number(episodeForm.season), episode_number: Number(episodeForm.episode_number) };
+    const payload = { ...episodeForm, show_id: selectedShowForEpisodes, season: Number(episodeForm.season), episode_number: Number(episodeForm.episode_number) };
     try {
       if (editingEpisodeId) {
         const { error } = await supabase.from("episodes").update(payload).eq("id", editingEpisodeId);
@@ -483,6 +525,91 @@ export function CMS({ onExit }) {
     const { error } = await supabase.from("episodes").delete().eq("id", id);
     if (error) showToast("Delete failed: " + error.message, "error");
     else { showToast("Episode deleted"); setDeleteEpisodeConfirm(null); await loadEpisodes(selectedShowForEpisodes); }
+  }
+
+  // ──── PODCASTS ────
+
+  async function loadPodcasts() {
+    setPodcastsLoading(true);
+    const { data, error } = await supabase.from("podcasts").select("*").order("id", { ascending: true });
+    if (error) showToast("Failed to load podcasts: " + error.message, "error");
+    else setPodcastsList(data || []);
+    setPodcastsLoading(false);
+  }
+
+  function startPodcastEdit(p) {
+    setEditingPodcastId(p.id);
+    setPodcastForm({ title: p.title ?? "", host: p.host ?? "", description: p.description ?? "", artwork_url: p.artwork_url ?? "", link_url: p.link_url ?? "", episode_count: p.episode_count ?? "", tags: Array.isArray(p.tags) ? p.tags.join(", ") : (p.tags ?? ""), enabled: p.enabled ?? true });
+  }
+
+  function cancelPodcastEdit() { setEditingPodcastId(null); setPodcastForm(EMPTY_PODCAST); }
+
+  async function savePodcast() {
+    if (!podcastForm.title.trim()) { showToast("Title is required.", "error"); return; }
+    setPodcastSaving(true);
+    const payload = { ...podcastForm, episode_count: podcastForm.episode_count !== "" ? Number(podcastForm.episode_count) : null, tags: podcastForm.tags ? podcastForm.tags.split(",").map(t => t.trim()).filter(Boolean) : [] };
+    try {
+      if (editingPodcastId) {
+        const { error } = await supabase.from("podcasts").update(payload).eq("id", editingPodcastId);
+        if (error) throw error;
+        showToast("Podcast updated");
+        cancelPodcastEdit();
+      } else {
+        const { error } = await supabase.from("podcasts").insert([payload]);
+        if (error) throw error;
+        showToast("Podcast added");
+        setPodcastForm(EMPTY_PODCAST);
+      }
+      await loadPodcasts();
+    } catch (error) { showToast("Save failed: " + error.message, "error"); }
+    setPodcastSaving(false);
+  }
+
+  async function deletePodcast(id) {
+    const { error } = await supabase.from("podcasts").delete().eq("id", id);
+    if (error) showToast("Delete failed: " + error.message, "error");
+    else { showToast("Podcast deleted"); setDeletePodcastConfirm(null); await loadPodcasts(); }
+  }
+
+  // ──── LIVE STREAMS ────
+
+  async function loadLiveStreams() {
+    setLiveLoading(true);
+    const { data, error } = await supabase.from("live_streams").select("*").order("id", { ascending: true });
+    if (error) showToast("Failed to load streams: " + error.message, "error");
+    else setLiveList(data || []);
+    setLiveLoading(false);
+  }
+
+  function startLiveEdit(s) {
+    setEditingLiveId(s.id);
+    setLiveForm({ title: s.title ?? "", description: s.description ?? "", stream_url: s.stream_url ?? "", thumbnail: s.thumbnail ?? "", is_live: s.is_live ?? true, badge_text: s.badge_text ?? "LIVE" });
+  }
+
+  function cancelLiveEdit() { setEditingLiveId(null); setLiveForm(EMPTY_LIVE_STREAM); }
+
+  async function saveLiveStream() {
+    if (!liveForm.title.trim()) { showToast("Title is required.", "error"); return; }
+    setLiveSaving(true);
+    try {
+      if (editingLiveId) {
+        const { error } = await supabase.from("live_streams").update(liveForm).eq("id", editingLiveId);
+        if (error) throw error;
+        showToast("Stream updated"); cancelLiveEdit();
+      } else {
+        const { error } = await supabase.from("live_streams").insert([liveForm]);
+        if (error) throw error;
+        showToast("Stream added"); setLiveForm(EMPTY_LIVE_STREAM);
+      }
+      await loadLiveStreams();
+    } catch (error) { showToast("Save failed: " + error.message, "error"); }
+    setLiveSaving(false);
+  }
+
+  async function deleteLiveStream(id) {
+    const { error } = await supabase.from("live_streams").delete().eq("id", id);
+    if (error) showToast("Delete failed: " + error.message, "error");
+    else { showToast("Stream deleted"); setDeleteLiveConfirm(null); await loadLiveStreams(); }
   }
 
   // Filter rows
@@ -570,7 +697,7 @@ export function CMS({ onExit }) {
       <div style={{ borderBottom: "1px solid #1a1a1a", padding: `0 ${PAD}`, display: "flex", alignItems: "center", justifyContent: "space-between", height: "auto", minHeight: 68, flexWrap: "wrap", gap: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
           <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22 }}>
-            peep<span style={{ color: "#ff4d4d" }}>.</span>
+            <span style={{ color: "#facc15" }}>peep.</span>
           </span>
           <span style={{ fontSize: 13, color: "#555", borderLeft: "1px solid #2a2a2a", paddingLeft: 24 }}>
             Content Management System
@@ -605,7 +732,7 @@ export function CMS({ onExit }) {
           style={{
             background: "transparent",
             border: "none",
-            borderBottom: tab === "videos" ? "2px solid #ff4d4d" : "none",
+            borderBottom: tab === "videos" ? "2px solid #facc15" : "none",
             color: tab === "videos" ? "#fff" : "#666",
             padding: "16px 0",
             fontSize: 14,
@@ -616,14 +743,20 @@ export function CMS({ onExit }) {
         >
           Videos ({rows.length})
         </button>
-        <button onClick={() => setTab("shows")} style={{ background: "transparent", border: "none", borderBottom: tab === "shows" ? "2px solid #ff4d4d" : "none", color: tab === "shows" ? "#fff" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "shows" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
+        <button onClick={() => setTab("shows")} style={{ background: "transparent", border: "none", borderBottom: tab === "shows" ? "2px solid #facc15" : "none", color: tab === "shows" ? "#fff" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "shows" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
           Shows ({showsList.length})
         </button>
-        <button onClick={() => setTab("episodes")} style={{ background: "transparent", border: "none", borderBottom: tab === "episodes" ? "2px solid #ff4d4d" : "none", color: tab === "episodes" ? "#fff" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "episodes" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
+        <button onClick={() => setTab("episodes")} style={{ background: "transparent", border: "none", borderBottom: tab === "episodes" ? "2px solid #facc15" : "none", color: tab === "episodes" ? "#fff" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "episodes" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
           Episodes
         </button>
-        <button onClick={() => setTab("carousels")} style={{ background: "transparent", border: "none", borderBottom: tab === "carousels" ? "2px solid #ff4d4d" : "none", color: tab === "carousels" ? "#fff" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "carousels" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
+        <button onClick={() => setTab("carousels")} style={{ background: "transparent", border: "none", borderBottom: tab === "carousels" ? "2px solid #facc15" : "none", color: tab === "carousels" ? "#fff" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "carousels" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
           Carousels ({carousels.length})
+        </button>
+        <button onClick={() => setTab("podcasts")} style={{ background: "transparent", border: "none", borderBottom: tab === "podcasts" ? "2px solid #818cf8" : "none", color: tab === "podcasts" ? "#818cf8" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "podcasts" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
+          Podcasts ({podcastsList.length})
+        </button>
+        <button onClick={() => setTab("live")} style={{ background: "transparent", border: "none", borderBottom: tab === "live" ? "2px solid #ef4444" : "none", color: tab === "live" ? "#ef4444" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "live" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
+          Live ({liveList.length})
         </button>
       </div>
 
@@ -757,6 +890,14 @@ export function CMS({ onExit }) {
               placeholder="https://archive.org/..."
             />
 
+            {/* Trailer URL */}
+            <FieldInput
+              label="Trailer URL"
+              value={form.trailer_url}
+              onChange={v => setForm(f => ({ ...f, trailer_url: v }))}
+              placeholder="https://youtube.com/watch?v=... (optional)"
+            />
+
             {/* Tags */}
             <FieldInput
               label="Tags (comma-separated)"
@@ -787,7 +928,7 @@ export function CMS({ onExit }) {
                   resize: "vertical",
                   fontFamily: "inherit",
                 }}
-                onFocus={e => (e.target.style.borderColor = "#ff4d4d")}
+                onFocus={e => (e.target.style.borderColor = "#facc15")}
                 onBlur={e => (e.target.style.borderColor = "#2a2a2a")}
               />
             </div>
@@ -800,7 +941,7 @@ export function CMS({ onExit }) {
               disabled={saving}
               style={{
                 flex: 1,
-                background: "#ff4d4d",
+                background: "#facc15",
                 border: "none",
                 borderRadius: 7,
                 padding: "12px",
@@ -860,8 +1001,8 @@ export function CMS({ onExit }) {
                   key={cat}
                   onClick={() => setCategoryFilter(cat)}
                   style={{
-                    background: categoryFilter === cat ? "#ff4d4d" : "#1a1a1a",
-                    border: `1px solid ${categoryFilter === cat ? "#ff4d4d" : "#2a2a2a"}`,
+                    background: categoryFilter === cat ? "#facc15" : "#1a1a1a",
+                    border: `1px solid ${categoryFilter === cat ? "#facc15" : "#2a2a2a"}`,
                     borderRadius: 6,
                     padding: "8px 14px",
                     color: categoryFilter === cat ? "#fff" : "#888",
@@ -939,7 +1080,7 @@ export function CMS({ onExit }) {
                       borderBottom: idx < filteredRows.length - 1 ? "1px solid #0f0f0f" : "none",
                       alignItems: "center",
                       background: editingId === row.id ? "#1a0a0a" : "transparent",
-                      borderLeft: editingId === row.id ? "2px solid #ff4d4d" : "none",
+                      borderLeft: editingId === row.id ? "2px solid #facc15" : "none",
                       paddingLeft: editingId === row.id ? 14 : 16,
                       transition: "background 0.2s",
                     }}
@@ -975,7 +1116,7 @@ export function CMS({ onExit }) {
 
                     {/* Category */}
                     <div>
-                      <span style={{ fontSize: 12, color: "#ff4d4d", fontWeight: 500 }}>
+                      <span style={{ fontSize: 12, color: "#facc15", fontWeight: 500 }}>
                         {row.category}
                       </span>
                     </div>
@@ -1050,9 +1191,10 @@ export function CMS({ onExit }) {
                   <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Description</label>
                   <textarea value={showForm.description} onChange={e => setShowForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Short synopsis..." style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit" }} />
                 </div>
+                <FieldInput label="Trailer URL" value={showForm.trailer_url} onChange={v => setShowForm(f => ({ ...f, trailer_url: v }))} placeholder="https://youtube.com/watch?v=... (optional)" />
               </div>
               <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
-                <button onClick={saveShow} disabled={showSaving} style={{ flex: 1, background: "#ff4d4d", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: showSaving ? "not-allowed" : "pointer", opacity: showSaving ? 0.7 : 1 }}>
+                <button onClick={saveShow} disabled={showSaving} style={{ flex: 1, background: "#facc15", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: showSaving ? "not-allowed" : "pointer", opacity: showSaving ? 0.7 : 1 }}>
                   {showSaving ? "Saving…" : editingShowId ? "Save Changes" : "Add Show"}
                 </button>
                 {editingShowId && <button onClick={cancelShowEdit} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "12px 20px", color: "#888", fontSize: 13, cursor: "pointer" }}>Cancel</button>}
@@ -1130,7 +1272,7 @@ export function CMS({ onExit }) {
                 </div>
               </div>
               <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
-                <button onClick={saveEpisode} disabled={episodeSaving || !selectedShowForEpisodes} style={{ flex: 1, background: "#ff4d4d", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: (episodeSaving || !selectedShowForEpisodes) ? "not-allowed" : "pointer", opacity: (episodeSaving || !selectedShowForEpisodes) ? 0.5 : 1 }}>
+                <button onClick={saveEpisode} disabled={episodeSaving || !selectedShowForEpisodes} style={{ flex: 1, background: "#facc15", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: (episodeSaving || !selectedShowForEpisodes) ? "not-allowed" : "pointer", opacity: (episodeSaving || !selectedShowForEpisodes) ? 0.5 : 1 }}>
                   {episodeSaving ? "Saving…" : editingEpisodeId ? "Save Changes" : "Add Episode"}
                 </button>
                 {editingEpisodeId && <button onClick={cancelEpisodeEdit} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "12px 20px", color: "#888", fontSize: 13, cursor: "pointer" }}>Cancel</button>}
@@ -1204,15 +1346,15 @@ export function CMS({ onExit }) {
                   label="Type"
                   value={carouselForm.type}
                   onChange={v => setCarouselForm(f => ({ ...f, type: v }))}
-                  options={["category", "trending", "custom"]}
+                  options={["category", "trending", "custom", "podcast"]}
                 />
 
                 {/* Filter Value */}
                 <FieldInput
-                  label="Filter Value"
+                  label={carouselForm.type === "podcast" ? "Tag Filter (optional)" : "Filter Value"}
                   value={carouselForm.filter_value}
                   onChange={v => setCarouselForm(f => ({ ...f, filter_value: v }))}
-                  placeholder="e.g. Action (for category type)"
+                  placeholder={carouselForm.type === "podcast" ? "e.g. true-crime (leave empty to show all)" : "e.g. Action (for category type)"}
                 />
 
                 {/* Content Type */}
@@ -1221,7 +1363,7 @@ export function CMS({ onExit }) {
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
                     {[["all", "All Pages"], ["movies", "Movies Only"], ["shows", "Series Only"]].map(([val, label]) => (
                       <button key={val} onClick={() => setCarouselForm(f => ({ ...f, content_type: val }))}
-                        style={{ background: carouselForm.content_type === val ? "rgba(255,77,77,0.15)" : "#0a0a0a", border: `1px solid ${carouselForm.content_type === val ? "#ff4d4d" : "#2a2a2a"}`, borderRadius: 7, padding: "9px 6px", color: carouselForm.content_type === val ? "#ff4d4d" : "#666", fontSize: 12, cursor: "pointer", fontWeight: carouselForm.content_type === val ? 600 : 400, textAlign: "center" }}>
+                        style={{ background: carouselForm.content_type === val ? "rgba(250,204,21,0.15)" : "#0a0a0a", border: `1px solid ${carouselForm.content_type === val ? "#facc15" : "#2a2a2a"}`, borderRadius: 7, padding: "9px 6px", color: carouselForm.content_type === val ? "#facc15" : "#666", fontSize: 12, cursor: "pointer", fontWeight: carouselForm.content_type === val ? 600 : 400, textAlign: "center" }}>
                         {label}
                       </button>
                     ))}
@@ -1260,7 +1402,7 @@ export function CMS({ onExit }) {
                   disabled={carouselSaving}
                   style={{
                     flex: 1,
-                    background: "#ff4d4d",
+                    background: "#facc15",
                     border: "none",
                     borderRadius: 7,
                     padding: "12px",
@@ -1368,6 +1510,183 @@ export function CMS({ onExit }) {
             </div>
           </>
         )}
+        {/* ────── LIVE TAB ────── */}
+        {tab === "live" && (
+          <>
+            <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, padding: 32, position: "sticky", top: 24, maxHeight: "90vh", overflowY: "auto" }}>
+              <h2 style={{ margin: "0 0 28px", fontSize: 17, fontWeight: 600, color: "#e5e5e5" }}>{editingLiveId ? "Edit Stream" : "Add Live Stream"}</h2>
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <FieldInput label="Title *" value={liveForm.title} onChange={v => setLiveForm(f => ({ ...f, title: v }))} placeholder="e.g. Friday Night Live" />
+                <FieldInput label="Description" value={liveForm.description} onChange={v => setLiveForm(f => ({ ...f, description: v }))} placeholder="What's streaming..." />
+                <FieldInput label="Stream URL" value={liveForm.stream_url} onChange={v => setLiveForm(f => ({ ...f, stream_url: v }))} placeholder="https://... (YouTube Live, direct video, etc.)" />
+                <FieldInput label="Badge Text" value={liveForm.badge_text} onChange={v => setLiveForm(f => ({ ...f, badge_text: v }))} placeholder="LIVE" />
+                <div>
+                  <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Thumbnail</label>
+                  <ImageUploader label="Upload Thumbnail" folder="live" onUploadSuccess={url => setLiveForm(f => ({ ...f, thumbnail: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
+                  <input type="text" value={liveForm.thumbnail} onChange={e => setLiveForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none" }} />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.7 }}>Status</label>
+                  <button onClick={() => setLiveForm(f => ({ ...f, is_live: !f.is_live }))}
+                    style={{ width: "100%", background: liveForm.is_live ? "rgba(239,68,68,0.12)" : "rgba(107,114,128,0.1)", border: `1px solid ${liveForm.is_live ? "rgba(239,68,68,0.35)" : "rgba(107,114,128,0.3)"}`, borderRadius: 7, padding: "10px 12px", color: liveForm.is_live ? "#ef4444" : "#888", fontSize: 13, cursor: "pointer", fontWeight: 500 }}>
+                    {liveForm.is_live ? "🔴 Live" : "○ Offline"}
+                  </button>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
+                <button onClick={saveLiveStream} disabled={liveSaving} style={{ flex: 1, background: "#ef4444", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: liveSaving ? "not-allowed" : "pointer", opacity: liveSaving ? 0.7 : 1 }}>
+                  {liveSaving ? "Saving…" : editingLiveId ? "Save Changes" : "Go Live"}
+                </button>
+                {editingLiveId && <button onClick={cancelLiveEdit} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "12px 20px", color: "#888", fontSize: 13, cursor: "pointer" }}>Cancel</button>}
+              </div>
+            </div>
+
+            <div>
+              <h3 style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 600, color: "#e5e5e5" }}>All Streams ({liveList.length})</h3>
+              <p style={{ margin: "0 0 20px", fontSize: 12, color: "#555" }}>Toggle a stream to Live to show it on the homepage "Live Now" section.</p>
+              {liveLoading ? (
+                <div style={{ color: "#555", padding: 40, textAlign: "center" }}>Loading...</div>
+              ) : liveList.length === 0 ? (
+                <div style={{ color: "#555", padding: 40, textAlign: "center", border: "1px dashed #1e1e1e", borderRadius: 10 }}>No streams yet.</div>
+              ) : liveList.map(s => (
+                <div key={s.id} style={{ background: "#111", border: `1px solid ${s.is_live ? "rgba(239,68,68,0.3)" : "#1e1e1e"}`, borderRadius: 10, padding: "16px 20px", marginBottom: 12, display: "flex", gap: 16, alignItems: "center" }}>
+                  {s.thumbnail && <img src={s.thumbnail} alt={s.title} style={{ width: 80, height: 45, objectFit: "cover", borderRadius: 6, flexShrink: 0 }} onError={e => { e.target.style.display = "none"; }} />}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: "0 0 3px", fontSize: 14, fontWeight: 600, color: "#fff" }}>{s.title}</p>
+                    <p style={{ margin: 0, fontSize: 12, color: "#666" }}>
+                      <span style={{ color: s.is_live ? "#ef4444" : "#555", fontWeight: s.is_live ? 600 : 400 }}>{s.is_live ? "🔴 LIVE" : "Offline"}</span>
+                      {s.badge_text && s.badge_text !== "LIVE" && ` · Badge: ${s.badge_text}`}
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => startLiveEdit(s)} style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 5, padding: "5px 10px", color: "#f87171", fontSize: 11, cursor: "pointer" }}>Edit</button>
+                    <button onClick={() => setDeleteLiveConfirm(s)} style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 5, padding: "5px 10px", color: "#f87171", fontSize: 11, cursor: "pointer" }}>Delete</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {deleteLiveConfirm && (
+              <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ background: "#141414", border: "1px solid #2a2a2a", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center" }}>
+                  <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Delete "{deleteLiveConfirm.title}"?</p>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button onClick={() => setDeleteLiveConfirm(null)} style={{ flex: 1, background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "11px", color: "#888", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    <button onClick={() => deleteLiveStream(deleteLiveConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ────── PODCASTS TAB ────── */}
+        {tab === "podcasts" && (
+          <>
+            <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, padding: 32, position: "sticky", top: 24, maxHeight: "90vh", overflowY: "auto" }}>
+              <h2 style={{ margin: "0 0 28px", fontSize: 17, fontWeight: 600, color: "#e5e5e5" }}>{editingPodcastId ? "Edit Podcast" : "Add New Podcast"}</h2>
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <FieldInput label="Title *" value={podcastForm.title} onChange={v => setPodcastForm(f => ({ ...f, title: v }))} placeholder="e.g. The Daily" />
+                <FieldInput label="Host" value={podcastForm.host} onChange={v => setPodcastForm(f => ({ ...f, host: v }))} placeholder="e.g. Michael Barbaro" />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <FieldInput label="Episodes" value={podcastForm.episode_count} onChange={v => setPodcastForm(f => ({ ...f, episode_count: v }))} placeholder="24" type="number" />
+                  <FieldInput label="Tags (comma-sep)" value={podcastForm.tags} onChange={v => setPodcastForm(f => ({ ...f, tags: v }))} placeholder="news, daily" />
+                </div>
+
+                {/* Artwork */}
+                <div>
+                  <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Artwork</label>
+                  <p style={{ fontSize: 11, color: "#3a3a3a", margin: "0 0 8px" }}>Square · 1400×1400px recommended</p>
+                  <ImageUploader label="Upload Artwork (JPG/PNG)" folder="podcasts" onUploadSuccess={url => setPodcastForm(f => ({ ...f, artwork_url: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "8px 0" }}>
+                    <div style={{ flex: 1, height: 1, background: "#1e1e1e" }} />
+                    <span style={{ fontSize: 11, color: "#333" }}>or paste URL</span>
+                    <div style={{ flex: 1, height: 1, background: "#1e1e1e" }} />
+                  </div>
+                  <input type="text" value={podcastForm.artwork_url} onChange={e => setPodcastForm(f => ({ ...f, artwork_url: e.target.value }))} placeholder="https://..." style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none" }} />
+                  {podcastForm.artwork_url && (
+                    <div style={{ marginTop: 10, borderRadius: 8, overflow: "hidden", border: "1px solid #1e1e1e", width: 80, height: 80 }}>
+                      <img src={podcastForm.artwork_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => { e.target.style.display = "none"; }} />
+                    </div>
+                  )}
+                </div>
+
+                <FieldInput label="Link URL" value={podcastForm.link_url} onChange={v => setPodcastForm(f => ({ ...f, link_url: v }))} placeholder="https://open.spotify.com/show/..." />
+
+                <div>
+                  <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Description</label>
+                  <textarea value={podcastForm.description} onChange={e => setPodcastForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Short description..." style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit" }} onFocus={e => (e.target.style.borderColor = "#818cf8")} onBlur={e => (e.target.style.borderColor = "#2a2a2a")} />
+                </div>
+
+                <div>
+                  <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.7 }}>Status</label>
+                  <button onClick={() => setPodcastForm(f => ({ ...f, enabled: !f.enabled }))}
+                    style={{ width: "100%", background: podcastForm.enabled ? "rgba(129,140,248,0.1)" : "rgba(107,114,128,0.1)", border: `1px solid ${podcastForm.enabled ? "rgba(129,140,248,0.3)" : "rgba(107,114,128,0.3)"}`, borderRadius: 7, padding: "10px 12px", color: podcastForm.enabled ? "#818cf8" : "#888", fontSize: 13, cursor: "pointer", fontWeight: 500 }}>
+                    {podcastForm.enabled ? "✓ Enabled" : "○ Disabled"}
+                  </button>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
+                <button onClick={savePodcast} disabled={podcastSaving} style={{ flex: 1, background: "#818cf8", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: podcastSaving ? "not-allowed" : "pointer", opacity: podcastSaving ? 0.7 : 1 }}>
+                  {podcastSaving ? "Saving…" : editingPodcastId ? "Save Changes" : "Add Podcast"}
+                </button>
+                {editingPodcastId && <button onClick={cancelPodcastEdit} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "12px 20px", color: "#888", fontSize: 13, cursor: "pointer" }}>Cancel</button>}
+              </div>
+            </div>
+
+            <div>
+              <h3 style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 600, color: "#e5e5e5" }}>All Podcasts ({podcastsList.length})</h3>
+              <p style={{ margin: "0 0 20px", fontSize: 12, color: "#555" }}>Add a "podcast" type carousel on the Carousels tab to display these on the homepage.</p>
+              {podcastsLoading ? (
+                <div style={{ color: "#555", padding: 40, textAlign: "center" }}>Loading...</div>
+              ) : podcastsList.length === 0 ? (
+                <div style={{ color: "#555", padding: 40, textAlign: "center", border: "1px dashed #1e1e1e", borderRadius: 10 }}>No podcasts yet. Add one using the form.</div>
+              ) : podcastsList.map(pod => (
+                <div key={pod.id} style={{ background: "#111", border: `1px solid ${editingPodcastId === pod.id ? "#818cf8" : "#1e1e1e"}`, borderRadius: 10, padding: "16px 20px", marginBottom: 12, display: "flex", gap: 16, alignItems: "center", borderLeft: editingPodcastId === pod.id ? "3px solid #818cf8" : undefined }}>
+                  {pod.artwork_url ? (
+                    <img src={pod.artwork_url} alt={pod.title} style={{ width: 52, height: 52, objectFit: "cover", borderRadius: 8, flexShrink: 0 }} onError={e => { e.target.style.display = "none"; }} />
+                  ) : (
+                    <div style={{ width: 52, height: 52, borderRadius: 8, background: "linear-gradient(135deg, #1e1b4b, #312e81)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="2">
+                        <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                        <line x1="12" y1="19" x2="12" y2="22"/>
+                      </svg>
+                    </div>
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: "0 0 3px", fontSize: 14, fontWeight: 600, color: "#fff" }}>{pod.title}</p>
+                    <p style={{ margin: 0, fontSize: 12, color: "#666" }}>
+                      {pod.host && <span style={{ color: "#818cf8" }}>{pod.host}</span>}
+                      {pod.host && pod.episode_count && " · "}
+                      {pod.episode_count && `${pod.episode_count} ep`}
+                      {" · "}
+                      <span style={{ color: pod.enabled ? "#818cf8" : "#f87171" }}>{pod.enabled ? "Enabled" : "Disabled"}</span>
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => startPodcastEdit(pod)} style={{ background: "rgba(129,140,248,0.1)", border: "1px solid rgba(129,140,248,0.2)", borderRadius: 5, padding: "5px 10px", color: "#818cf8", fontSize: 11, cursor: "pointer" }}>Edit</button>
+                    <button onClick={() => setDeletePodcastConfirm(pod)} style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 5, padding: "5px 10px", color: "#f87171", fontSize: 11, cursor: "pointer" }}>Delete</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {deletePodcastConfirm && (
+              <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ background: "#141414", border: "1px solid #2a2a2a", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center" }}>
+                  <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Delete "{deletePodcastConfirm.title}"?</p>
+                  <p style={{ fontSize: 13, color: "#666", marginBottom: 28 }}>This podcast will be permanently removed.</p>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button onClick={() => setDeletePodcastConfirm(null)} style={{ flex: 1, background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "11px", color: "#888", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    <button onClick={() => deletePodcast(deletePodcastConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
       </div>
     </div>
   );
@@ -1396,7 +1715,7 @@ function FieldInput({ label, value, onChange, placeholder, type = "text" }) {
           fontSize: 13,
           outline: "none",
         }}
-        onFocus={e => (e.target.style.borderColor = "#ff4d4d")}
+        onFocus={e => (e.target.style.borderColor = "#facc15")}
         onBlur={e => (e.target.style.borderColor = "#2a2a2a")}
       />
     </div>
@@ -1436,7 +1755,7 @@ function FieldSelect({ label, value, onChange, options }) {
 
 function Spinner() {
   return (
-    <div style={{ width: 32, height: 32, border: "3px solid #222", borderTop: "3px solid #ff4d4d", borderRadius: "50%", animation: "spin 0.8s linear infinite" }}>
+    <div style={{ width: 32, height: 32, border: "3px solid #222", borderTop: "3px solid #facc15", borderRadius: "50%", animation: "spin 0.8s linear infinite" }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
