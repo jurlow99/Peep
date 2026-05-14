@@ -256,11 +256,11 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
   const featuredIsShow = featured !== null && featured === (featuredShow ?? null) && !featuredVideo;
 
   const visibleCarousels = useMemo(() => carousels.filter(c => {
-    if (c.type === "podcast") return activeNav === "Home";
-    const ct = c.content_type || "all";
-    if (ct === "all") return true;
-    if (ct === "movies" && (activeNav === "Movies" || activeNav === "Home")) return true;
-    if (ct === "shows" && (activeNav === "Series" || activeNav === "Home")) return true;
+    if (!c.enabled) return false;
+    const pages = (c.pages || "home").split(",").map(p => p.trim());
+    if (activeNav === "Home") return pages.includes("home");
+    if (activeNav === "Movies") return pages.includes("movies");
+    if (activeNav === "Series") return pages.includes("series");
     return false;
   }), [carousels, activeNav]);
 

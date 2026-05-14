@@ -48,6 +48,7 @@ const EMPTY_CAROUSEL = {
   content_type: "all",
   enabled: true,
   position: 0,
+  pages: "home",
 };
 
 const EMPTY_LIVE_STREAM = {
@@ -340,6 +341,7 @@ export function CMS({ onExit }) {
       content_type: carousel.content_type ?? "all",
       enabled: carousel.enabled ?? true,
       position: carousel.position ?? 0,
+      pages: carousel.pages ?? "home",
     });
   }
 
@@ -1324,55 +1326,90 @@ export function CMS({ onExit }) {
         )}
 
         {/* ────── CAROUSELS TAB ────── */}
-        {tab === "carousels" && (
+        {tab === "carousels" && (() => {
+          const pagesArr = (carouselForm.pages || "home").split(",").map(p => p.trim()).filter(Boolean);
+          const togglePage = page => {
+            const s = new Set(pagesArr);
+            s.has(page) ? s.delete(page) : s.add(page);
+            setCarouselForm(f => ({ ...f, pages: [...s].join(",") }));
+          };
+          return (
           <>
             {/* ── Carousel Form Panel ── */}
             <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, padding: 32, position: "sticky", top: 24, maxHeight: "90vh", overflowY: "auto" }}>
-              <h2 style={{ margin: "0 0 6px", fontSize: 17, fontWeight: 600, color: "#e5e5e5" }}>
+              <h2 style={{ margin: "0 0 4px", fontSize: 17, fontWeight: 600, color: "#e5e5e5" }}>
                 {editingCarouselId ? "Edit Row" : "New Content Row"}
               </h2>
-              <p style={{ margin: "0 0 24px", fontSize: 12, color: "#555" }}>A content row is a horizontal scrolling section on the homepage.</p>
+              <p style={{ margin: "0 0 28px", fontSize: 12, color: "#555" }}>A horizontal scrolling row shown on selected pages.</p>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
                 {/* ── Step 1: Title ── */}
                 <div>
-                  <label style={{ display: "block", fontSize: 11, color: "#facc15", fontWeight: 700, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>1 · Row Title</label>
-                  <FieldInput
-                    value={carouselForm.title}
-                    onChange={v => setCarouselForm(f => ({ ...f, title: v }))}
-                    placeholder="e.g. Top Horror Picks, New This Week…"
-                  />
+                  <label style={{ display: "block", fontSize: 11, color: "#facc15", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>1 · Row Title</label>
+                  <FieldInput value={carouselForm.title} onChange={v => setCarouselForm(f => ({ ...f, title: v }))} placeholder="e.g. Top Horror Picks, New This Week…" />
                 </div>
 
-                {/* ── Step 2: What type of content? ── */}
+                {/* ── Divider ── */}
+                <div style={{ height: 1, background: "#1e1e1e" }} />
+
+                {/* ── Step 2: Which pages ── */}
                 <div>
-                  <label style={{ display: "block", fontSize: 11, color: "#facc15", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>2 · What to show</label>
-                  <p style={{ margin: "0 0 10px", fontSize: 11, color: "#555" }}>Pick the kind of content this row displays.</p>
+                  <label style={{ display: "block", fontSize: 11, color: "#facc15", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>2 · Where to show it</label>
+                  <p style={{ margin: "0 0 12px", fontSize: 11, color: "#555" }}>Pick every page this row should appear on.</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {[
+                      { val: "home",   icon: "🏠", label: "Home",        desc: "The main landing page" },
+                      { val: "movies", icon: "🎬", label: "Movies tab",  desc: "The dedicated Movies browse page" },
+                      { val: "series", icon: "📺", label: "Series tab",  desc: "The dedicated Series browse page" },
+                    ].map(({ val, icon, label, desc }) => {
+                      const on = pagesArr.includes(val);
+                      return (
+                        <button key={val} onClick={() => togglePage(val)}
+                          style={{ background: on ? "rgba(250,204,21,0.08)" : "#0a0a0a", border: `1.5px solid ${on ? "#facc15" : "#222"}`, borderRadius: 9, padding: "11px 14px", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 12, transition: "border-color 0.15s, background 0.15s" }}>
+                          <span style={{ fontSize: 18, flexShrink: 0 }}>{icon}</span>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: on ? "#facc15" : "#bbb" }}>{label}</div>
+                            <div style={{ fontSize: 11, color: "#555", marginTop: 1 }}>{desc}</div>
+                          </div>
+                          <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${on ? "#facc15" : "#333"}`, background: on ? "#facc15" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.15s" }}>
+                            {on && <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="#0a0a0a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {pagesArr.length === 0 && (
+                    <p style={{ margin: "8px 0 0", fontSize: 11, color: "#dc2626" }}>Pick at least one page.</p>
+                  )}
+                </div>
+
+                {/* ── Divider ── */}
+                <div style={{ height: 1, background: "#1e1e1e" }} />
+
+                {/* ── Step 3: What to show ── */}
+                <div>
+                  <label style={{ display: "block", fontSize: 11, color: "#facc15", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>3 · What to show</label>
+                  <p style={{ margin: "0 0 10px", fontSize: 11, color: "#555" }}>What kind of content fills this row.</p>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                     {[
-                      { val: "movies-custom",   icon: "🎬", label: "Movies",    desc: "Only movies" },
-                      { val: "shows-custom",    icon: "📺", label: "Series",    desc: "Only TV shows & series" },
-                      { val: "all-custom",      icon: "⭐", label: "Everything", desc: "Movies + series mixed" },
-                      { val: "all-podcast",     icon: "🎙️", label: "Podcasts",  desc: "Podcast episodes" },
-                    ].map(({ val, icon, label, desc }) => {
-                      const [ct, t] = val.split("-");
-                      const active = carouselForm.content_type === ct && carouselForm.type === (t === "custom" ? (["trending","category","custom"].includes(carouselForm.type) ? carouselForm.type : "custom") : t)
-                        && (t === "podcast" ? carouselForm.type === "podcast" : carouselForm.type !== "podcast");
-                      const isActive = t === "podcast"
+                      { ct: "movies", t: null,      icon: "🎬", label: "Movies only",   desc: "Only movies" },
+                      { ct: "shows",  t: null,      icon: "📺", label: "Series only",   desc: "Only TV shows & series" },
+                      { ct: "all",    t: null,      icon: "⭐", label: "Everything",    desc: "Movies + series mixed" },
+                      { ct: "all",    t: "podcast", icon: "🎙️", label: "Podcasts",      desc: "Podcast episodes" },
+                    ].map(({ ct, t, icon, label, desc }) => {
+                      const isPodcast = t === "podcast";
+                      const isActive = isPodcast
                         ? carouselForm.type === "podcast"
                         : carouselForm.content_type === ct && carouselForm.type !== "podcast";
                       return (
-                        <button key={val} onClick={() => {
-                          if (t === "podcast") {
-                            setCarouselForm(f => ({ ...f, type: "podcast", content_type: "all" }));
-                          } else {
-                            setCarouselForm(f => ({ ...f, content_type: ct, type: f.type === "podcast" ? "custom" : f.type }));
-                          }
+                        <button key={label} onClick={() => {
+                          if (isPodcast) setCarouselForm(f => ({ ...f, type: "podcast", content_type: "all" }));
+                          else setCarouselForm(f => ({ ...f, content_type: ct, type: f.type === "podcast" ? "custom" : f.type }));
                         }}
-                          style={{ background: isActive ? "rgba(250,204,21,0.1)" : "#0a0a0a", border: `1.5px solid ${isActive ? "#facc15" : "#222"}`, borderRadius: 10, padding: "14px 12px", cursor: "pointer", textAlign: "left", transition: "border-color 0.15s, background 0.15s" }}>
-                          <div style={{ fontSize: 22, marginBottom: 6 }}>{icon}</div>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: isActive ? "#facc15" : "#ccc", marginBottom: 2 }}>{label}</div>
+                          style={{ background: isActive ? "rgba(250,204,21,0.1)" : "#0a0a0a", border: `1.5px solid ${isActive ? "#facc15" : "#222"}`, borderRadius: 10, padding: "13px 12px", cursor: "pointer", textAlign: "left", transition: "border-color 0.15s, background 0.15s" }}>
+                          <div style={{ fontSize: 20, marginBottom: 5 }}>{icon}</div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: isActive ? "#facc15" : "#ccc", marginBottom: 2 }}>{label}</div>
                           <div style={{ fontSize: 11, color: "#555" }}>{desc}</div>
                         </button>
                       );
@@ -1380,100 +1417,72 @@ export function CMS({ onExit }) {
                   </div>
                 </div>
 
-                {/* ── Step 3: How to order/filter (non-podcast only) ── */}
-                {carouselForm.type !== "podcast" && (
+                {/* ── Divider ── */}
+                <div style={{ height: 1, background: "#1e1e1e" }} />
+
+                {/* ── Step 4: How to order ── */}
+                {carouselForm.type !== "podcast" ? (
                   <div>
-                    <label style={{ display: "block", fontSize: 11, color: "#facc15", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>3 · How to order</label>
-                    <p style={{ margin: "0 0 10px", fontSize: 11, color: "#555" }}>Choose how content is selected and sorted in this row.</p>
+                    <label style={{ display: "block", fontSize: 11, color: "#facc15", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>4 · How to order</label>
+                    <p style={{ margin: "0 0 10px", fontSize: 11, color: "#555" }}>How content is sorted inside this row.</p>
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       {[
-                        { val: "custom",   icon: "📋", label: "Show all",       desc: "All matching content, in default order" },
-                        { val: "trending", icon: "🔥", label: "Trending / New", desc: "All matching content, newest added first" },
-                        { val: "category", icon: "🏷️", label: "By category",    desc: "Only content that matches a specific genre/category" },
+                        { val: "custom",   icon: "📋", label: "Show all",       desc: "All matching content, default order" },
+                        { val: "trending", icon: "🔥", label: "Trending / New", desc: "Newest added first" },
+                        { val: "category", icon: "🏷️", label: "By category",    desc: "Filter to a specific genre" },
                       ].map(({ val, icon, label, desc }) => {
                         const isActive = carouselForm.type === val;
                         return (
                           <button key={val} onClick={() => setCarouselForm(f => ({ ...f, type: val }))}
-                            style={{ background: isActive ? "rgba(250,204,21,0.08)" : "#0a0a0a", border: `1.5px solid ${isActive ? "#facc15" : "#222"}`, borderRadius: 9, padding: "12px 14px", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 12, transition: "border-color 0.15s, background 0.15s" }}>
-                            <span style={{ fontSize: 18, flexShrink: 0 }}>{icon}</span>
-                            <div>
+                            style={{ background: isActive ? "rgba(250,204,21,0.08)" : "#0a0a0a", border: `1.5px solid ${isActive ? "#facc15" : "#222"}`, borderRadius: 9, padding: "11px 14px", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 12, transition: "border-color 0.15s, background 0.15s" }}>
+                            <span style={{ fontSize: 17, flexShrink: 0 }}>{icon}</span>
+                            <div style={{ flex: 1 }}>
                               <div style={{ fontSize: 13, fontWeight: 600, color: isActive ? "#facc15" : "#bbb" }}>{label}</div>
                               <div style={{ fontSize: 11, color: "#555", marginTop: 1 }}>{desc}</div>
                             </div>
-                            {isActive && <div style={{ marginLeft: "auto", width: 8, height: 8, borderRadius: "50%", background: "#facc15", flexShrink: 0 }} />}
+                            {isActive && <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#facc15", flexShrink: 0 }} />}
                           </button>
                         );
                       })}
                     </div>
-
-                    {/* Category input — only when type=category */}
                     {carouselForm.type === "category" && (
-                      <div style={{ marginTop: 12, background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 8, padding: "14px" }}>
+                      <div style={{ marginTop: 10, background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 8, padding: "14px" }}>
                         <label style={{ display: "block", fontSize: 11, color: "#aaa", marginBottom: 6, fontWeight: 600 }}>Category name</label>
-                        <input
-                          value={carouselForm.filter_value}
-                          onChange={e => setCarouselForm(f => ({ ...f, filter_value: e.target.value }))}
+                        <input value={carouselForm.filter_value} onChange={e => setCarouselForm(f => ({ ...f, filter_value: e.target.value }))}
                           placeholder="e.g. Horror, Comedy, Sci-Fi…"
-                          style={{ width: "100%", background: "#141414", border: "1px solid #333", borderRadius: 6, padding: "9px 12px", color: "#fff", fontSize: 13, outline: "none" }}
-                        />
-                        <p style={{ margin: "6px 0 0", fontSize: 11, color: "#555" }}>Must match the category exactly as it's set on your videos (case-insensitive).</p>
+                          style={{ width: "100%", background: "#141414", border: "1px solid #333", borderRadius: 6, padding: "9px 12px", color: "#fff", fontSize: 13, outline: "none" }} />
+                        <p style={{ margin: "6px 0 0", fontSize: 11, color: "#555" }}>Must match exactly as set on your videos (case-insensitive).</p>
                       </div>
                     )}
                   </div>
-                )}
-
-                {/* ── Podcast tag filter ── */}
-                {carouselForm.type === "podcast" && (
+                ) : (
                   <div>
-                    <label style={{ display: "block", fontSize: 11, color: "#facc15", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>3 · Tag filter (optional)</label>
-                    <input
-                      value={carouselForm.filter_value}
-                      onChange={e => setCarouselForm(f => ({ ...f, filter_value: e.target.value }))}
+                    <label style={{ display: "block", fontSize: 11, color: "#facc15", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>4 · Tag filter (optional)</label>
+                    <input value={carouselForm.filter_value} onChange={e => setCarouselForm(f => ({ ...f, filter_value: e.target.value }))}
                       placeholder="e.g. true-crime — leave blank to show all podcasts"
-                      style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none" }}
-                    />
+                      style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none" }} />
                   </div>
                 )}
 
-                {/* ── Summary box ── */}
-                {carouselForm.title && (() => {
-                  const ct = carouselForm.content_type;
-                  const t = carouselForm.type;
-                  const fv = carouselForm.filter_value;
-                  let summary = "";
-                  if (t === "podcast") summary = `Shows ${fv ? `"${fv}" tagged` : "all"} podcast episodes.`;
-                  else if (t === "trending") summary = `Shows ${ct === "movies" ? "movies" : ct === "shows" ? "series" : "movies & series"}, newest added first.`;
-                  else if (t === "category") summary = fv ? `Shows ${ct === "movies" ? "movies" : ct === "shows" ? "series" : "content"} in the "${fv}" category.` : `Shows all ${ct === "movies" ? "movies" : ct === "shows" ? "series" : "content"} (no category set yet).`;
-                  else summary = `Shows all ${ct === "movies" ? "movies" : ct === "shows" ? "series" : "movies & series"}.`;
-                  const tabs = t === "podcast" ? "Home" : ct === "movies" ? "Home + Movies tab" : ct === "shows" ? "Home + Series tab" : "Home + Movies + Series tabs";
-                  return (
-                    <div style={{ background: "rgba(250,204,21,0.06)", border: "1px solid rgba(250,204,21,0.2)", borderRadius: 8, padding: "12px 14px" }}>
-                      <p style={{ margin: "0 0 6px", fontSize: 12, color: "#ccc", lineHeight: 1.5 }}>
-                        <span style={{ color: "#facc15", fontWeight: 700 }}>"{carouselForm.title}"</span> — {summary}
-                      </p>
-                      <p style={{ margin: 0, fontSize: 11, color: "#666" }}>
-                        Appears on: <span style={{ color: "#888", fontWeight: 600 }}>{tabs}</span>
-                      </p>
-                    </div>
-                  );
-                })()}
+                {/* ── Divider ── */}
+                <div style={{ height: 1, background: "#1e1e1e" }} />
 
-                {/* ── Enabled toggle ── */}
+                {/* ── Step 5: Visibility ── */}
                 <div>
-                  <label style={{ display: "block", fontSize: 11, color: "#555", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>Visibility</label>
+                  <label style={{ display: "block", fontSize: 11, color: "#facc15", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>5 · Visibility</label>
                   <button onClick={() => setCarouselForm(f => ({ ...f, enabled: !f.enabled }))}
                     style={{ width: "100%", background: carouselForm.enabled ? "rgba(16,185,129,0.1)" : "rgba(107,114,128,0.08)", border: `1px solid ${carouselForm.enabled ? "rgba(16,185,129,0.35)" : "#222"}`, borderRadius: 8, padding: "11px", color: carouselForm.enabled ? "#10b981" : "#555", fontSize: 13, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                     <span style={{ fontSize: 16 }}>{carouselForm.enabled ? "✓" : "○"}</span>
-                    {carouselForm.enabled ? "Visible on homepage" : "Hidden from homepage"}
+                    {carouselForm.enabled ? "Live — visible to users" : "Hidden — not shown to users"}
                   </button>
                 </div>
 
               </div>
 
               {/* Action buttons */}
-              <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
-                <button onClick={saveCarousel} disabled={carouselSaving}
-                  style={{ flex: 1, background: "#facc15", border: "none", borderRadius: 8, padding: "13px", color: "#0a0a0a", fontSize: 14, fontWeight: 700, cursor: carouselSaving ? "not-allowed" : "pointer", opacity: carouselSaving ? 0.6 : 1 }}>
+              <div style={{ display: "flex", gap: 10, marginTop: 28 }}>
+                <button onClick={saveCarousel} disabled={carouselSaving || pagesArr.length === 0}
+                  style={{ flex: 1, background: "#facc15", border: "none", borderRadius: 8, padding: "13px", color: "#0a0a0a", fontSize: 14, fontWeight: 700, cursor: (carouselSaving || pagesArr.length === 0) ? "not-allowed" : "pointer", opacity: (carouselSaving || pagesArr.length === 0) ? 0.5 : 1 }}>
                   {carouselSaving ? "Saving…" : editingCarouselId ? "Update Row" : "Create Row"}
                 </button>
                 {editingCarouselId && (
@@ -1488,7 +1497,7 @@ export function CMS({ onExit }) {
             {/* ── Carousels List ── */}
             <div>
               <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 600, color: "#e5e5e5" }}>
-                Content Rows <span style={{ color: "#555", fontWeight: 400, fontSize: 13 }}>— drag ▲▼ to reorder</span>
+                Content Rows <span style={{ color: "#555", fontWeight: 400, fontSize: 13 }}>— ▲▼ to reorder</span>
               </h3>
 
               {carouselLoading ? (
@@ -1503,9 +1512,11 @@ export function CMS({ onExit }) {
                   {carousels.map((carousel, idx) => {
                     const t = carousel.type;
                     const ct = carousel.content_type;
-                    const contentLabel = t === "podcast" ? "Podcasts" : ct === "movies" ? "Movies" : ct === "shows" ? "Series" : "All";
-                    const orderLabel = t === "trending" ? "Trending" : t === "category" ? `Category: ${carousel.filter_value || "?"}` : t === "podcast" ? (carousel.filter_value ? `Tag: ${carousel.filter_value}` : "All episodes") : "All";
+                    const rowPages = (carousel.pages || "home").split(",").map(p => p.trim()).filter(Boolean);
+                    const contentLabel = t === "podcast" ? "Podcasts" : ct === "movies" ? "Movies only" : ct === "shows" ? "Series only" : "All content";
+                    const orderLabel = t === "trending" ? "Trending" : t === "category" ? `Genre: ${carousel.filter_value || "?"}` : t === "podcast" ? (carousel.filter_value ? `Tag: ${carousel.filter_value}` : "All podcasts") : "Default order";
                     const contentColor = t === "podcast" ? "#a78bfa" : ct === "movies" ? "#60a5fa" : ct === "shows" ? "#34d399" : "#f59e0b";
+                    const pageLabels = { home: "Home", movies: "Movies", series: "Series" };
                     return (
                       <div key={carousel.id} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
                         <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
@@ -1514,11 +1525,18 @@ export function CMS({ onExit }) {
                         </div>
 
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 600, color: carousel.enabled ? "#fff" : "#555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{carousel.title}</p>
-                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                            <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: `${contentColor}18`, color: contentColor, border: `1px solid ${contentColor}40` }}>{contentLabel}</span>
-                            <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: "rgba(255,255,255,0.05)", color: "#888", border: "1px solid #2a2a2a" }}>{orderLabel}</span>
-                            <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: carousel.enabled ? "rgba(16,185,129,0.1)" : "rgba(255,255,255,0.04)", color: carousel.enabled ? "#10b981" : "#555", border: `1px solid ${carousel.enabled ? "rgba(16,185,129,0.3)" : "#222"}` }}>{carousel.enabled ? "Live" : "Hidden"}</span>
+                          <p style={{ margin: "0 0 7px", fontSize: 14, fontWeight: 600, color: carousel.enabled ? "#fff" : "#555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{carousel.title}</p>
+                          <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                            {/* Pages */}
+                            {rowPages.map(p => (
+                              <span key={p} style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 20, background: "rgba(250,204,21,0.1)", color: "#facc15", border: "1px solid rgba(250,204,21,0.3)" }}>{pageLabels[p] || p}</span>
+                            ))}
+                            {/* Content type */}
+                            <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: `${contentColor}15`, color: contentColor, border: `1px solid ${contentColor}35` }}>{contentLabel}</span>
+                            {/* Order */}
+                            <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: "rgba(255,255,255,0.04)", color: "#666", border: "1px solid #222" }}>{orderLabel}</span>
+                            {/* Live/Hidden */}
+                            <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: carousel.enabled ? "rgba(16,185,129,0.1)" : "rgba(255,255,255,0.04)", color: carousel.enabled ? "#10b981" : "#555", border: `1px solid ${carousel.enabled ? "rgba(16,185,129,0.3)" : "#222"}` }}>{carousel.enabled ? "Live" : "Hidden"}</span>
                           </div>
                         </div>
 
@@ -1537,7 +1555,8 @@ export function CMS({ onExit }) {
               </div>
             </div>
           </>
-        )}
+          );
+        })()}
         {/* ────── LIVE TAB ────── */}
         {tab === "live" && (
           <>
