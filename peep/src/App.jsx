@@ -1016,19 +1016,20 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
 
   useEffect(() => () => clearInterval(progressTimerRef.current), []);
 
+  useEffect(() => () => { document.body.style.overflow = ""; }, []);
+
   useEffect(() => {
-    const handler = () => setIsFullscreen(!!document.fullscreenElement);
-    document.addEventListener("fullscreenchange", handler);
-    document.addEventListener("webkitfullscreenchange", handler);
-    return () => {
-      document.removeEventListener("fullscreenchange", handler);
-      document.removeEventListener("webkitfullscreenchange", handler);
-    };
-  }, []);
+    if (!isFullscreen) return;
+    const handler = (e) => { if (e.key === "Escape") toggleFullscreen(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [isFullscreen]);
 
   function toggleFullscreen() {
-    if (!document.fullscreenElement) playerContainerRef.current?.requestFullscreen?.();
-    else document.exitFullscreen?.();
+    setIsFullscreen(prev => {
+      document.body.style.overflow = prev ? "" : "hidden";
+      return !prev;
+    });
   }
 
   function startCountdown(seconds) {
@@ -1114,9 +1115,9 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
       </nav>
 
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
-        <style>{`video::-webkit-media-controls-fullscreen-button { display: none !important; } video::-webkit-media-controls-overflow-button { display: none !important; } video::cue { display: none; }`}</style>
-        <div ref={playerContainerRef} style={{ position: "relative", marginBottom: 30, background: "#000", borderRadius: isFullscreen ? 0 : 14, overflow: "hidden" }}>
-          <div style={{ background: "#000", overflow: "hidden", ...(isFullscreen ? { position: "absolute", inset: 0 } : { aspectRatio: "16/9", boxShadow: "0 32px 80px rgba(0,0,0,0.8)" }) }}>
+        <style>{`video::-webkit-media-controls-fullscreen-button{display:none!important}`}</style>
+        <div ref={playerContainerRef} style={isFullscreen ? { position: "fixed", inset: 0, zIndex: 999, background: "#000", display: "flex", alignItems: "center", justifyContent: "center" } : { position: "relative", marginBottom: 30 }}>
+          <div style={isFullscreen ? { position: "relative", width: "100%", height: "100%" } : { background: "#000", borderRadius: 14, overflow: "hidden", aspectRatio: "16/9", boxShadow: "0 32px 80px rgba(0,0,0,0.8)" }}>
             {getEmbedUrl(video.url) ? (
               <iframe src={getEmbedUrl(video.url)} style={{ width: "100%", height: "100%", display: "block", border: "none" }} allowFullScreen allow="autoplay" />
             ) : (
@@ -1127,7 +1128,7 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
             )}
           </div>
           {!getEmbedUrl(video.url) && (
-            <button onClick={toggleFullscreen} title={isFullscreen ? "Exit fullscreen" : "Fullscreen"} style={{ position: "absolute", bottom: 12, right: 12, zIndex: 30, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 7, padding: "7px 10px", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600 }}>
+            <button onClick={toggleFullscreen} style={{ position: "absolute", bottom: isFullscreen ? 60 : 12, right: 16, zIndex: 1000, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 7, padding: "7px 12px", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600 }}>
               {isFullscreen
                 ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/></svg>
                 : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
@@ -1136,7 +1137,7 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
             </button>
           )}
           {countdownActive && nextEpisode && (
-            <div style={{ position: "absolute", bottom: isFullscreen ? 80 : 20, right: 20, background: "rgba(15,15,15,0.96)", backdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 14, padding: "18px 20px", display: "flex", alignItems: "center", gap: 18, minWidth: 290, zIndex: 50, boxShadow: "0 8px 32px rgba(0,0,0,0.7)" }}>
+            <div style={{ position: "absolute", bottom: isFullscreen ? 80 : 20, right: 20, background: "rgba(15,15,15,0.96)", backdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 14, padding: "18px 20px", display: "flex", alignItems: "center", gap: 18, minWidth: 290, zIndex: 1000, boxShadow: "0 8px 32px rgba(0,0,0,0.7)" }}>
               <div style={{ position: "relative", flexShrink: 0, width: 54, height: 54 }}>
                 <svg width="54" height="54" viewBox="0 0 54 54" style={{ transform: "rotate(-90deg)" }}>
                   <circle cx="27" cy="27" r="21" fill="none" stroke="#222" strokeWidth="4" />
