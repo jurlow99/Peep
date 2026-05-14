@@ -162,6 +162,12 @@ export function SignupPage() {
     const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
     if (signUpError) { setErrors({ submit: signUpError.message }); setLoading(false); return; }
 
+    if (data.user?.identities?.length === 0) {
+      setErrors({ submit: "An account with that email already exists. Try signing in instead." });
+      setLoading(false);
+      return;
+    }
+
     if (data.user) {
       const { error: profileError } = await supabase.from("profiles").insert({
         id: data.user.id,
