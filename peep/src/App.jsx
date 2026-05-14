@@ -227,47 +227,78 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
 
   async function loadContinueWatching() {
     if (!user) { setContinueWatching([]); return; }
+
+    // Fetch all incomplete progress (movies + episodes)
     const { data: progress } = await supabase.from("watch_progress").select("*")
       .eq("user_id", user.id).eq("completed", false)
-      .order("last_watched_at", { ascending: false }).limit(15);
+      .order("last_watched_at", { ascending: false }).limit(50);
     if (!progress || progress.length === 0) { setContinueWatching([]); return; }
+
     const movieIds = progress.filter(p => p.content_type === "movie").map(p => p.content_id);
-    const episodeIds = progress.filter(p => p.content_type === "episode").map(p => p.content_id);
-    const [movRes, epRes] = await Promise.all([
+    const incompleteEpIds = progress.filter(p => p.content_type === "episode").map(p => p.content_id);
+
+    // Fetch movies and the incomplete episodes (to get show_ids)
+    const [movRes, incompleteEpRes] = await Promise.all([
       movieIds.length ? supabase.from("videos").select("*").in("id", movieIds) : { data: [] },
-      episodeIds.length ? supabase.from("episodes").select("*").in("id", episodeIds) : { data: [] },
+      incompleteEpIds.length ? supabase.from("episodes").select("id,show_id,season,episode_number,title,thumbnail").in("id", incompleteEpIds) : { data: [] },
     ]);
+
     const pMap = {};
     progress.forEach(p => { pMap[`${p.content_type}_${p.content_id}`] = p; });
 
-    // Sort by most recently watched, then deduplicate episodes by show — one card per series
-    let items = [
-      ...(movRes.data || []).map(v => ({ ...v, _type: "movie", _progress: pMap[`movie_${v.id}`] })),
-      ...(epRes.data || []).map(e => ({ ...e, _type: "episode", _progress: pMap[`episode_${e.id}`] })),
-    ].sort((a, b) => new Date(b._progress.last_watched_at) - new Date(a._progress.last_watched_at));
-
-    const seenShows = new Set();
-    items = items.filter(item => {
-      if (item._type !== "episode" || !item.show_id) return true;
-      if (seenShows.has(item.show_id)) return false;
-      seenShows.add(item.show_id);
-      return true;
+    // Track when each show was last touched (for sorting)
+    const showLastWatched = {};
+    (incompleteEpRes.data || []).forEach(e => {
+      if (!e.show_id) return;
+      const t = new Date(pMap[`episode_${e.id}`]?.last_watched_at || 0).getTime();
+      if (!showLastWatched[e.show_id] || t > showLastWatched[e.show_id]) showLastWatched[e.show_id] = t;
     });
 
-    // Fetch show titles so the card can display the show name instead of episode title
-    const showIds = [...new Set(items.filter(i => i._type === "episode" && i.show_id).map(i => i.show_id))];
+    const showIds = Object.keys(showLastWatched);
+
+    // For each show: fetch ALL its episodes + ALL user progress, then pick the first unwatched
+    let showItems = [];
     if (showIds.length) {
-      const { data: showsData } = await supabase.from("shows").select("id,title,thumbnail,poster").in("id", showIds);
-      if (showsData) {
-        const showMap = {};
-        showsData.forEach(s => { showMap[s.id] = s; });
-        items = items.map(item =>
-          item._type === "episode" && item.show_id ? { ...item, _show: showMap[item.show_id] } : item
-        );
+      const [allEpRes, allProgRes, showMetaRes] = await Promise.all([
+        supabase.from("episodes").select("*").in("show_id", showIds)
+          .order("season", { ascending: true }).order("episode_number", { ascending: true }),
+        supabase.from("watch_progress").select("content_id,completed,progress_seconds,duration_seconds,last_watched_at")
+          .eq("user_id", user.id).eq("content_type", "episode"),
+        supabase.from("shows").select("id,title,thumbnail,poster").in("id", showIds),
+      ]);
+
+      const allEps = allEpRes.data || [];
+      const allProgMap = {};
+      (allProgRes.data || []).forEach(p => { allProgMap[p.content_id] = p; });
+      const showMeta = {};
+      (showMetaRes.data || []).forEach(s => { showMeta[s.id] = s; });
+
+      const epsByShow = {};
+      allEps.forEach(e => { (epsByShow[e.show_id] = epsByShow[e.show_id] || []).push(e); });
+
+      for (const showId of showIds) {
+        const eps = epsByShow[showId] || [];
+        // Find first episode that isn't completed (includes never-started)
+        const nextEp = eps.find(e => !allProgMap[e.id]?.completed);
+        if (!nextEp) continue; // all episodes completed — drop from Continue Watching
+        showItems.push({
+          ...nextEp,
+          _type: "episode",
+          _show: showMeta[showId] || null,
+          _progress: allProgMap[nextEp.id] || { progress_seconds: 0, duration_seconds: 0 },
+          _lastWatched: showLastWatched[showId] || 0,
+        });
       }
     }
 
-    setContinueWatching(items);
+    const movieItems = (movRes.data || []).map(v => ({
+      ...v, _type: "movie", _progress: pMap[`movie_${v.id}`],
+      _lastWatched: new Date(pMap[`movie_${v.id}`]?.last_watched_at || 0).getTime(),
+    }));
+
+    setContinueWatching(
+      [...movieItems, ...showItems].sort((a, b) => b._lastWatched - a._lastWatched)
+    );
   }
 
   const allContent = useMemo(() => [
