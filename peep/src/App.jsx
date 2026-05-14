@@ -1299,7 +1299,12 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
       .then(({ data }) => {
         if (!data) return;
         const idx = data.findIndex(e => e.id === video.id);
-        setNextEpisode(idx >= 0 && idx < data.length - 1 ? data[idx + 1] : null);
+        const candidate = idx >= 0 && idx < data.length - 1 ? data[idx + 1] : null;
+        const isForward = candidate && (
+          candidate.season > video.season ||
+          (candidate.season === video.season && candidate.episode_number > video.episode_number)
+        );
+        setNextEpisode(isForward ? candidate : null);
       });
   }, [video.id, video.show_id, isEpisode]);
 
