@@ -1414,6 +1414,7 @@ function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggle
   const [loading, setLoading] = useState(true);
   const [related, setRelated] = useState([]);
   const [trailerOpen, setTrailerOpen] = useState(false);
+  const [watchProgress, setWatchProgress] = useState({});
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -1441,8 +1442,32 @@ function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggle
     }
   }, [show.id]);
 
+  useEffect(() => {
+    if (!user || !episodes.length) { setWatchProgress({}); return; }
+    supabase.from("watch_progress").select("*")
+      .eq("user_id", user.id).eq("content_type", "episode")
+      .in("content_id", episodes.map(e => e.id))
+      .then(({ data }) => {
+        if (data) {
+          const map = {};
+          data.forEach(p => { map[p.content_id] = p; });
+          setWatchProgress(map);
+        }
+      });
+  }, [episodes, user]);
+
   const seasons = [...new Set(episodes.map(e => e.season))].sort((a, b) => a - b);
   const seasonEpisodes = episodes.filter(e => e.season === selectedSeason);
+
+  // Find the most-recently-watched incomplete episode to resume from
+  const resumeEpisode = (() => {
+    if (!user || !episodes.length) return episodes[0] ?? null;
+    const incomplete = episodes
+      .filter(e => watchProgress[e.id] && !watchProgress[e.id].completed && watchProgress[e.id].progress_seconds > 10)
+      .sort((a, b) => new Date(watchProgress[b.id].last_watched_at) - new Date(watchProgress[a.id].last_watched_at));
+    return incomplete[0] ?? episodes[0] ?? null;
+  })();
+  const isResuming = resumeEpisode && watchProgress[resumeEpisode.id]?.progress_seconds > 10 && !watchProgress[resumeEpisode.id]?.completed;
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'DM Sans', sans-serif", color: "#fff" }}>
@@ -1474,12 +1499,12 @@ function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggle
           </div>
           {show.description && <p style={{ fontSize: 15, color: "rgba(255,255,255,0.72)", lineHeight: 1.75, margin: "0 0 28px" }}>{show.description}</p>}
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            {episodes.length > 0 && (
-              <button onClick={() => onPlay(episodes[0])} style={{ background: "#fff", color: "#0a0a0a", border: "none", borderRadius: 7, padding: "13px 28px", fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}
+            {resumeEpisode && (
+              <button onClick={() => onPlay(resumeEpisode)} style={{ background: "#fff", color: "#0a0a0a", border: "none", borderRadius: 7, padding: "13px 28px", fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}
                 onMouseEnter={e => e.currentTarget.style.background = "#e5e5e5"}
                 onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                Play S1 E1
+                {isResuming ? `Continue S${resumeEpisode.season} E${resumeEpisode.episode_number}` : `Play S${resumeEpisode.season} E${resumeEpisode.episode_number}`}
               </button>
             )}
             {show.trailer_url && (
@@ -1525,7 +1550,7 @@ function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggle
           <p style={{ color: "#555", fontSize: 15 }}>No episodes added yet.</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {seasonEpisodes.map(ep => <EpisodeRow key={ep.id} episode={ep} show={show} onPlay={onPlay} />)}
+            {seasonEpisodes.map(ep => <EpisodeRow key={ep.id} episode={ep} show={show} onPlay={onPlay} progress={watchProgress[ep.id]} />)}
           </div>
         )}
 
@@ -1559,20 +1584,29 @@ function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggle
   );
 }
 
-function EpisodeRow({ episode, show, onPlay }) {
+function EpisodeRow({ episode, show, onPlay, progress }) {
   const [hovered, setHovered] = useState(false);
   const isMobile = useIsMobile();
+  const pct = progress?.duration_seconds > 0 ? Math.min(100, (progress.progress_seconds / progress.duration_seconds) * 100) : 0;
   return (
     <div onClick={() => onPlay(episode)} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
       style={{ display: "flex", gap: isMobile ? 12 : 20, padding: isMobile ? "12px 8px" : "16px 20px", borderRadius: 10, cursor: "pointer", background: hovered ? "#141414" : "transparent", transition: "background 0.2s", alignItems: "center" }}>
-      <div style={{ flexShrink: 0, fontSize: 16, color: "#333", fontWeight: 700, width: 22, textAlign: "center" }}>{episode.episode_number}</div>
+      <div style={{ flexShrink: 0, fontSize: 16, color: progress?.completed ? "#4ade80" : "#333", fontWeight: 700, width: 22, textAlign: "center" }}>
+        {progress?.completed ? "✓" : episode.episode_number}
+      </div>
       <div style={{ width: isMobile ? 100 : 160, aspectRatio: "16/9", flexShrink: 0, borderRadius: 6, overflow: "hidden", background: "#1a1a1a", position: "relative" }}>
-        <img src={episode.thumbnail || show.thumbnail} alt={episode.title} style={{ width: "100%", height: "100%", objectFit: "cover", filter: hovered ? "brightness(0.6)" : "brightness(0.8)", transition: "filter 0.2s" }} onError={e => { e.target.style.display = "none"; }} />
+        <img src={episode.thumbnail || show.thumbnail} alt={episode.title} style={{ width: "100%", height: "100%", objectFit: "cover", filter: hovered ? "brightness(0.6)" : progress?.completed ? "brightness(0.5)" : "brightness(0.8)", transition: "filter 0.2s" }} onError={e => { e.target.style.display = "none"; }} />
         {hovered && (
           <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.9)", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="#0a0a0a"><polygon points="5,3 19,12 5,21" /></svg>
             </div>
+          </div>
+        )}
+        {/* Progress bar */}
+        {pct > 0 && !progress?.completed && (
+          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 3, background: "rgba(0,0,0,0.5)" }}>
+            <div style={{ height: "100%", background: "#facc15", width: `${pct}%` }} />
           </div>
         )}
       </div>
