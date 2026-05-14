@@ -155,6 +155,7 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [activeNav, setActiveNav] = useState("Home");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [footerModal, setFooterModal] = useState(null);
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -523,7 +524,18 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
         </div>
       )}
 
-      <Footer />
+      <Footer onNavChange={setActiveNav} onProfileOpen={onProfileOpen} onOpenModal={setFooterModal} />
+      {footerModal && (
+        <div onClick={() => setFooterModal(null)} style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 16, padding: "36px 40px", width: "min(560px, 100%)", maxHeight: "80vh", overflowY: "auto", fontFamily: "'DM Sans', sans-serif" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#fff" }}>{footerModal.title}</h2>
+              <button onClick={() => setFooterModal(null)} style={{ background: "none", border: "none", color: "#555", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>×</button>
+            </div>
+            <div style={{ fontSize: 14, color: "#888", lineHeight: 1.8 }}>{footerModal.content}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1854,13 +1866,138 @@ function EpisodeRow({ episode, show, onPlay, progress }) {
 
 // ─── Footer ───────────────────────────────────────────────────────────────────
 
-function Footer() {
+const FOOTER_MODALS = {
+  "About Peep": {
+    title: "About Peep",
+    content: (
+      <>
+        <p>Peep is an independent streaming platform built for people who actually care about what they watch. We curate movies, series, podcasts, and live streams — no algorithm filler, no bloat.</p>
+        <p style={{ marginTop: 16 }}>We believe great content shouldn't be buried. Peep is designed to surface stories worth your time, from indie films to original series to live events.</p>
+        <p style={{ marginTop: 16 }}>Founded with a simple idea: streaming should feel good again.</p>
+      </>
+    ),
+  },
+  "Press Room": {
+    title: "Press Room",
+    content: (
+      <>
+        <p>For press inquiries, partnership opportunities, or media assets, please reach out to our communications team.</p>
+        <p style={{ marginTop: 16, color: "#facc15" }}>press@peep.tv</p>
+        <p style={{ marginTop: 16 }}>We typically respond within 2 business days.</p>
+      </>
+    ),
+  },
+  "Careers": {
+    title: "Careers at Peep",
+    content: (
+      <>
+        <p>We're building a small, focused team of people who love great storytelling and great software. If that's you, we'd love to hear from you.</p>
+        <p style={{ marginTop: 16 }}>Open roles are posted as we grow. In the meantime, send your resume and a note about what excites you to:</p>
+        <p style={{ marginTop: 12, color: "#facc15" }}>jobs@peep.tv</p>
+      </>
+    ),
+  },
+  "Contact Us": {
+    title: "Contact Us",
+    content: (
+      <>
+        <p>Have a question, a content suggestion, or just want to say hello? We're all ears.</p>
+        <p style={{ marginTop: 16, color: "#facc15" }}>hello@peep.tv</p>
+        <p style={{ marginTop: 16 }}>For technical support, visit the Help Center or email support@peep.tv.</p>
+      </>
+    ),
+  },
+  "FAQ": {
+    title: "Frequently Asked Questions",
+    content: (
+      <>
+        {[
+          ["Is Peep free?", "Yes. Peep is completely free to join and watch. No credit card required."],
+          ["What can I watch?", "Movies, original series, podcasts, and live streams — all in one place."],
+          ["Do I need an account?", "You need an account to save content to your list and track watch progress, but browsing is open to everyone."],
+          ["How do I cancel?", "There's nothing to cancel — Peep is free. You can delete your account at any time from your profile settings."],
+          ["Is content available in my country?", "Peep is available globally. Some live content may be region-restricted."],
+        ].map(([q, a]) => (
+          <div key={q} style={{ marginBottom: 20 }}>
+            <p style={{ margin: "0 0 6px", color: "#e5e5e5", fontWeight: 600, fontSize: 13 }}>{q}</p>
+            <p style={{ margin: 0, color: "#777", fontSize: 13 }}>{a}</p>
+          </div>
+        ))}
+      </>
+    ),
+  },
+  "Contact Support": {
+    title: "Contact Support",
+    content: (
+      <>
+        <p>Running into an issue? We're here to help.</p>
+        <p style={{ marginTop: 16, color: "#facc15" }}>support@peep.tv</p>
+        <p style={{ marginTop: 16 }}>Include your username and a description of the issue and we'll get back to you within 24 hours.</p>
+      </>
+    ),
+  },
+  "Terms of Use": {
+    title: "Terms of Use",
+    content: (
+      <>
+        <p>By using Peep, you agree to use the platform for lawful purposes only. You may not copy, distribute, or reproduce any content without explicit permission.</p>
+        <p style={{ marginTop: 14 }}>Peep reserves the right to suspend accounts that violate these terms. Content availability is subject to change without notice.</p>
+        <p style={{ marginTop: 14 }}>These terms are governed by applicable law. For questions, contact legal@peep.tv.</p>
+        <p style={{ marginTop: 14, color: "#444", fontSize: 12 }}>Last updated: 2025</p>
+      </>
+    ),
+  },
+  "Privacy Policy": {
+    title: "Privacy Policy",
+    content: (
+      <>
+        <p>Peep collects only the information necessary to provide the service: your email address, username, and watch activity.</p>
+        <p style={{ marginTop: 14 }}>We do not sell your data. We do not share your personal information with third parties except as required by law.</p>
+        <p style={{ marginTop: 14 }}>Watch history and list data are stored securely and used solely to improve your experience on Peep.</p>
+        <p style={{ marginTop: 14 }}>You can request deletion of your account and all associated data at any time by contacting privacy@peep.tv.</p>
+        <p style={{ marginTop: 14, color: "#444", fontSize: 12 }}>Last updated: 2025</p>
+      </>
+    ),
+  },
+  "Privacy Settings": {
+    title: "Privacy Settings",
+    content: (
+      <p>Privacy controls are coming soon. For now, to request data deletion or opt out of watch history, email privacy@peep.tv.</p>
+    ),
+  },
+};
+
+const SOCIAL_LINKS = [
+  { label: "Twitter / X", href: "https://x.com" },
+  { label: "Instagram", href: "https://instagram.com" },
+  { label: "YouTube", href: "https://youtube.com" },
+  { label: "TikTok", href: "https://tiktok.com" },
+  { label: "Facebook", href: "https://facebook.com" },
+];
+
+function Footer({ onNavChange, onProfileOpen, onOpenModal }) {
   const isMobile = useIsMobile();
+
+  function handleLink(label) {
+    if (label === "Movies") { onNavChange("Movies"); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+    if (label === "Series") { onNavChange("Series"); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+    if (["Horror", "Comedy", "Drama", "Action", "Sci-Fi", "Documentary"].includes(label)) { onNavChange("Movies"); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+    if (label === "Sign In") { window.location.href = "/signin"; return; }
+    if (label === "Create Profile") { window.location.href = "/signup"; return; }
+    if (label === "Manage Account") { onProfileOpen?.(); return; }
+    if (FOOTER_MODALS[label]) { onOpenModal(FOOTER_MODALS[label]); return; }
+  }
+
   return (
     <footer style={{ borderTop: "1px solid rgba(255,255,255,0.05)", padding: `56px ${PAD} 40px`, fontFamily: "'DM Sans', sans-serif" }}>
       <div style={{ display: "flex", gap: 28, marginBottom: 40, flexWrap: "wrap" }}>
-        {["Twitter / X", "Instagram", "YouTube", "TikTok", "Facebook"].map(s => (
-          <span key={s} style={{ fontSize: 13, color: "#666", cursor: "pointer" }} onMouseEnter={e => e.target.style.color = "#ccc"} onMouseLeave={e => e.target.style.color = "#666"}>{s}</span>
+        {SOCIAL_LINKS.map(s => (
+          <a key={s.label} href={s.href} target="_blank" rel="noopener noreferrer"
+            style={{ fontSize: 13, color: "#666", cursor: "pointer", textDecoration: "none", transition: "color 0.15s" }}
+            onMouseEnter={e => e.currentTarget.style.color = "#ccc"}
+            onMouseLeave={e => e.currentTarget.style.color = "#666"}>
+            {s.label}
+          </a>
         ))}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 32, marginBottom: 44 }}>
@@ -1873,7 +2010,11 @@ function Footer() {
           <div key={col.heading}>
             <p style={{ fontSize: 11.5, fontWeight: 600, color: "#555", margin: "0 0 14px", textTransform: "uppercase", letterSpacing: 0.8 }}>{col.heading}</p>
             {col.links.map(l => (
-              <p key={l} style={{ fontSize: 12.5, color: "#3e3e3e", margin: "0 0 10px", cursor: "pointer" }} onMouseEnter={e => e.target.style.color = "#aaa"} onMouseLeave={e => e.target.style.color = "#3e3e3e"}>{l}</p>
+              <p key={l} onClick={() => handleLink(l)} style={{ fontSize: 12.5, color: "#3e3e3e", margin: "0 0 10px", cursor: "pointer", transition: "color 0.15s" }}
+                onMouseEnter={e => e.currentTarget.style.color = "#aaa"}
+                onMouseLeave={e => e.currentTarget.style.color = "#3e3e3e"}>
+                {l}
+              </p>
             ))}
           </div>
         ))}
@@ -1881,7 +2022,7 @@ function Footer() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 24, borderTop: "1px solid rgba(255,255,255,0.05)" }}>
         <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, color: "#2e2e2e" }}><span style={{ color: "#facc15" }}>peep.</span></span>
         <div style={{ textAlign: "right" }}>
-          <p style={{ margin: "0 0 4px", fontSize: 11, color: "#333" }}>© 2025 Peep Media, Inc. All rights reserved.</p>
+          <p style={{ margin: "0 0 4px", fontSize: 11, color: "#333" }}>© {new Date().getFullYear()} Peep Media, Inc. All rights reserved.</p>
           <p style={{ margin: 0, fontSize: 11, color: "#2a2a2a" }}>All content sourced from the public domain. Free to watch, forever.</p>
         </div>
       </div>
