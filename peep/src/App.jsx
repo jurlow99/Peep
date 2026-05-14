@@ -246,11 +246,14 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
             : podcasts;
           return { id: String(c.id), title: c.title, videos: [], isPodcast: true, podcastItems: podItems };
         }
-        const items = c.type === "trending"
+        const baseItems = c.type === "trending"
           ? [...filteredContent].reverse()
           : c.type === "category"
           ? filteredContent.filter(v => v.category?.toLowerCase() === filterVal)
           : filteredContent;
+        const items = c.content_type === "movies" ? baseItems.filter(v => v._type === "movie")
+          : c.content_type === "shows" ? baseItems.filter(v => v._type === "show")
+          : baseItems;
         return { id: String(c.id), title: c.title, videos: items, numbered: c.type === "trending" };
       }).filter(s => s.isPodcast ? s.podcastItems.length > 0 : s.videos.length > 0)
     : visibleCarousels.length === 0 && carousels.length > 0 ? []
@@ -462,22 +465,47 @@ function HeroBanner({ video, onPlay, isShow, myList, onToggleList }) {
   const [bgPlaying, setBgPlaying] = useState(false);
   const [muted, setMuted] = useState(true);
   const videoRef = useRef(null);
+  const pauseTimerRef = useRef(null);
+  const loopTimerRef = useRef(null);
 
   const isMobile = useIsMobile();
   const hasBgTrailer = !!video.trailer_url && getTrailerType(video.trailer_url) === "direct";
 
+  function startLoop() {
+    clearTimeout(loopTimerRef.current);
+    loopTimerRef.current = setTimeout(doRestartCycle, 25000);
+  }
+
+  function doRestartCycle() {
+    clearTimeout(loopTimerRef.current);
+    clearTimeout(pauseTimerRef.current);
+    setBgPlaying(false);
+    pauseTimerRef.current = setTimeout(() => {
+      if (videoRef.current) {
+        videoRef.current.currentTime = 0;
+        videoRef.current.play().catch(() => {});
+      }
+      setBgPlaying(true);
+      startLoop();
+    }, 25000);
+  }
+
   useEffect(() => {
     setBgPlaying(false);
     setMuted(true);
+    clearTimeout(pauseTimerRef.current);
+    clearTimeout(loopTimerRef.current);
     if (!hasBgTrailer) return;
-    const t = setTimeout(() => setBgPlaying(true), 3000);
-    return () => clearTimeout(t);
+    const t = setTimeout(() => { setBgPlaying(true); startLoop(); }, 3000);
+    return () => { clearTimeout(t); clearTimeout(pauseTimerRef.current); clearTimeout(loopTimerRef.current); };
   }, [video.id, hasBgTrailer]);
 
   // React doesn't reliably sync the muted DOM attribute via prop alone
   useEffect(() => {
     if (videoRef.current) videoRef.current.muted = muted;
   }, [muted]);
+
+  function handleTrailerEnded() { doRestartCycle(); }
 
   return (
     <div style={{ position: "relative", height: "85vh", minHeight: 580, overflow: "hidden" }}>
@@ -488,7 +516,7 @@ function HeroBanner({ video, onPlay, isShow, myList, onToggleList }) {
 
       {/* Background autoplay trailer */}
       {hasBgTrailer && (
-        <video ref={videoRef} src={video.trailer_url} autoPlay muted loop playsInline
+        <video ref={videoRef} src={video.trailer_url} autoPlay muted playsInline onEnded={handleTrailerEnded}
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 20%", filter: "brightness(0.5)", transition: "opacity 1.4s ease", opacity: bgPlaying ? 1 : 0, pointerEvents: "none" }} />
       )}
 
@@ -787,17 +815,80 @@ function ContinueWatchingCard({ item, onPlay }) {
 
 // ─── Video Card ───────────────────────────────────────────────────────────────
 
+const TRAILER_OVERLAY_W = 520;
+const TRAILER_INFO_H = 148;
+
 function VideoCard({ video, onClick, rank, myList, onToggleList }) {
   const [hovered, setHovered] = useState(false);
+  const [trailerMounted, setTrailerMounted] = useState(false);
+  const [trailerExpanded, setTrailerExpanded] = useState(false);
+  const [cardRect, setCardRect] = useState(null);
+  const trailerTimerRef = useRef(null);
+  const closingTimerRef = useRef(null);
+  const cardRef = useRef(null);
   const isMobile = useIsMobile();
   const inList = myList?.[`${video._type}_${video.id}`];
+  const hasDirectTrailer = !isMobile && video.trailer_url && getTrailerType(video.trailer_url) === "direct";
+
+  useEffect(() => () => { clearTimeout(trailerTimerRef.current); clearTimeout(closingTimerRef.current); }, []);
+
+  function startClose() {
+    clearTimeout(trailerTimerRef.current);
+    // Small delay lets the overlay's onMouseEnter cancel before collapse fires
+    closingTimerRef.current = setTimeout(() => {
+      setTrailerExpanded(false);
+      setTimeout(() => { setTrailerMounted(false); setCardRect(null); }, 220);
+    }, 80);
+  }
+
+  function handleMouseEnter() {
+    setHovered(true);
+    clearTimeout(closingTimerRef.current);
+    if (hasDirectTrailer) {
+      trailerTimerRef.current = setTimeout(() => {
+        const rect = cardRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        setCardRect(rect);
+        setTrailerMounted(true);
+        requestAnimationFrame(() => requestAnimationFrame(() => setTrailerExpanded(true)));
+      }, 400);
+    }
+  }
+
+  function handleMouseLeave() {
+    setHovered(false);
+    startClose();
+  }
+
+  const overlayW = TRAILER_OVERLAY_W;
+  const videoH = Math.round(overlayW * 9 / 16);
+  const overlayH = videoH + TRAILER_INFO_H;
+
+  let overlayStyle = null;
+  if (trailerMounted && cardRect) {
+    const endLeft = Math.max(8, Math.min(window.innerWidth - overlayW - 8, cardRect.left + cardRect.width / 2 - overlayW / 2));
+    const endTop  = Math.max(8, Math.min(window.innerHeight - overlayH - 8, cardRect.top + cardRect.height / 2 - overlayH / 2));
+    overlayStyle = {
+      position: "fixed",
+      left:   trailerExpanded ? endLeft      : cardRect.left,
+      top:    trailerExpanded ? endTop       : cardRect.top,
+      width:  trailerExpanded ? overlayW     : cardRect.width,
+      height: trailerExpanded ? overlayH     : cardRect.height,
+      borderRadius: trailerExpanded ? 14 : 8,
+      boxShadow: trailerExpanded ? "0 40px 100px rgba(0,0,0,0.97)" : "none",
+      zIndex: 200,
+      overflow: "hidden",
+      background: "#141414",
+      transition: "left 0.2s ease, top 0.2s ease, width 0.2s ease, height 0.2s ease, border-radius 0.2s ease, box-shadow 0.2s ease",
+    };
+  }
 
   return (
-    <div style={{ position: "relative", flexShrink: 0, width: rank ? `calc(${CARD_W} + 40px)` : CARD_W }}>
+    <div ref={cardRef} style={{ position: "relative", flexShrink: 0, width: rank ? `calc(${CARD_W} + 40px)` : CARD_W }}>
       {rank && (
         <div style={{ position: "absolute", left: -10, bottom: 28, fontFamily: "'DM Serif Display', serif", fontSize: 96, lineHeight: 1, fontWeight: 400, color: "#0a0a0a", WebkitTextStroke: "2px #282828", userSelect: "none", zIndex: 0, pointerEvents: "none" }}>{rank}</div>
       )}
-      <div onClick={onClick} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
+      <div onClick={onClick} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}
         style={{ cursor: "pointer", borderRadius: 8, overflow: "hidden", background: "#141414", transform: hovered ? "scale(1.05) translateY(-4px)" : "scale(1)", transformOrigin: "bottom center", transition: "transform 0.25s ease, box-shadow 0.25s ease", boxShadow: hovered ? "0 24px 50px rgba(0,0,0,0.75)" : "0 2px 8px rgba(0,0,0,0.3)", position: "relative", zIndex: hovered ? 10 : 1, marginLeft: rank ? 34 : 0 }}>
         <div style={{ position: "relative", aspectRatio: "2/3", overflow: "hidden" }}>
           <img src={video.poster || video.thumbnail} alt={video.title}
@@ -839,6 +930,52 @@ function VideoCard({ video, onClick, rank, myList, onToggleList }) {
           )}
         </div>
       </div>
+
+      {/* Morphing trailer overlay */}
+      {overlayStyle && (
+        <div style={overlayStyle}
+          onMouseEnter={() => { clearTimeout(closingTimerRef.current); setHovered(true); }}
+          onMouseLeave={handleMouseLeave}>
+
+          {/* 16:9 video section */}
+          <div style={{ position: "relative", width: "100%", paddingTop: `${9/16*100}%`, flexShrink: 0 }}>
+            <video src={video.trailer_url} autoPlay muted playsInline
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          </div>
+
+          {/* Info panel — fades in after expansion */}
+          <div style={{ padding: "14px 18px 18px", opacity: trailerExpanded ? 1 : 0, transition: "opacity 0.15s ease 0.15s" }}>
+            <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{video.title}</p>
+
+            {/* Metadata row */}
+            <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
+              {video.score && <span style={{ fontSize: 12, color: "#4ade80", fontWeight: 700 }}>{video.score}% Match</span>}
+              {video.category && <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: 0.5 }}>{video.category}</span>}
+              {video.year && <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>{video.year}</span>}
+              {video.rating && <span style={{ fontSize: 10, border: "1px solid rgba(255,255,255,0.3)", color: "rgba(255,255,255,0.5)", padding: "1px 5px", borderRadius: 3 }}>{video.rating}</span>}
+              {video.duration && <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>{video.duration}</span>}
+            </div>
+
+            {/* Description */}
+            {video.description && (
+              <p style={{ margin: "0 0 12px", fontSize: 12, color: "rgba(255,255,255,0.65)", lineHeight: 1.55, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{video.description}</p>
+            )}
+
+            {/* Action buttons */}
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <button onClick={e => { e.stopPropagation(); onClick(); }}
+                style={{ flex: 1, background: "#fff", border: "none", borderRadius: 6, padding: "9px 0", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+                Play
+              </button>
+              <button onClick={e => { e.stopPropagation(); onToggleList?.(video.id, video._type); }}
+                style={{ width: 38, height: 38, borderRadius: "50%", background: "rgba(255,255,255,0.1)", border: `1px solid ${inList ? "rgba(250,204,21,0.6)" : "rgba(255,255,255,0.3)"}`, color: inList ? "#facc15" : "#fff", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                {inList ? "✓" : "+"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
