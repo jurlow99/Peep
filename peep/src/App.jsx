@@ -823,6 +823,8 @@ function VideoCard({ video, onClick, rank, myList, onToggleList }) {
   const [trailerMounted, setTrailerMounted] = useState(false);
   const [trailerExpanded, setTrailerExpanded] = useState(false);
   const [cardRect, setCardRect] = useState(null);
+  const [overlayMuted, setOverlayMuted] = useState(true);
+  const overlayVideoRef = useRef(null);
   const trailerTimerRef = useRef(null);
   const closingTimerRef = useRef(null);
   const cardRef = useRef(null);
@@ -837,7 +839,7 @@ function VideoCard({ video, onClick, rank, myList, onToggleList }) {
     // Small delay lets the overlay's onMouseEnter cancel before collapse fires
     closingTimerRef.current = setTimeout(() => {
       setTrailerExpanded(false);
-      setTimeout(() => { setTrailerMounted(false); setCardRect(null); }, 220);
+      setTimeout(() => { setTrailerMounted(false); setCardRect(null); setOverlayMuted(true); }, 220);
     }, 80);
   }
 
@@ -939,8 +941,17 @@ function VideoCard({ video, onClick, rank, myList, onToggleList }) {
 
           {/* 16:9 video section */}
           <div style={{ position: "relative", width: "100%", paddingTop: `${9/16*100}%`, flexShrink: 0 }}>
-            <video src={video.trailer_url} autoPlay muted playsInline
+            <video ref={overlayVideoRef} src={video.trailer_url} autoPlay muted playsInline
               style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+            {/* Mute toggle */}
+            <button
+              onClick={e => { e.stopPropagation(); const m = !overlayMuted; setOverlayMuted(m); if (overlayVideoRef.current) overlayVideoRef.current.muted = m; }}
+              style={{ position: "absolute", top: 10, right: 10, width: 32, height: 32, borderRadius: "50%", background: "rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.25)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10, backdropFilter: "blur(4px)" }}>
+              {overlayMuted
+                ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+                : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+              }
+            </button>
           </div>
 
           {/* Info panel — fades in after expansion */}
