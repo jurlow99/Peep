@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo, Component } from "react";
 import { supabase } from "./supabase";
 import { AuthModal } from "./components/AuthModal";
+import { LandingPage } from "./pages/LandingPage";
 
 class PlayerErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null }; }
@@ -36,6 +37,7 @@ export default function App() {
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [selectedShow, setSelectedShow] = useState(null);
   const [user, setUser] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [myList, setMyList] = useState({});
   const [authOpen, setAuthOpen] = useState(false);
 
@@ -43,6 +45,7 @@ export default function App() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       if (session?.user) loadMyList(session.user.id);
+      setAuthChecked(true);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
@@ -74,6 +77,9 @@ export default function App() {
   }
 
   const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true) };
+
+  if (!authChecked) return null;
+  if (!user) return <LandingPage />;
 
   if (page === "player" && selectedVideo) {
     const handleBack = () => { setPage(selectedShow ? "show" : "home"); setSelectedVideo(null); };
