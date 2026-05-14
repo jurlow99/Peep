@@ -184,10 +184,10 @@ export function CMS({ onExit }) {
       supabase.from("videos").select("*", { count: "exact", head: true }),
       supabase.from("shows").select("*", { count: "exact", head: true }),
       supabase.from("episodes").select("*", { count: "exact", head: true }),
-      supabase.from("watch_progress").select("content_id, content_type, completed"),
-      supabase.from("ratings").select("content_id, content_type, rating"),
-      supabase.from("user_list").select("content_id, content_type"),
-      supabase.from("profiles").select("created_at").order("created_at", { ascending: true }),
+      supabase.from("watch_progress").select("user_id, content_id, content_type, completed, progress_seconds, duration_seconds, last_watched_at"),
+      supabase.from("ratings").select("user_id, content_id, content_type, rating"),
+      supabase.from("user_list").select("user_id, content_id, content_type"),
+      supabase.from("profiles").select("id, username, email, created_at").order("created_at", { ascending: true }),
     ]);
 
     // Group watch sessions by content
@@ -204,7 +204,7 @@ export function CMS({ onExit }) {
     const movieIds = topWatchedRaw.filter(t => t.type === "movie").map(t => t.id);
     const episodeIds = topWatchedRaw.filter(t => t.type === "episode").map(t => t.id);
     const [movTitles, epTitles] = await Promise.all([
-      movieIds.length ? supabase.from("videos").select("id, title") .in("id", movieIds) : { data: [] },
+      movieIds.length ? supabase.from("videos").select("id, title").in("id", movieIds) : { data: [] },
       episodeIds.length ? supabase.from("episodes").select("id, title").in("id", episodeIds) : { data: [] },
     ]);
     const titleMap = {};
@@ -235,6 +235,65 @@ export function CMS({ onExit }) {
     const topSaved = Object.entries(saveMap).sort((a, b) => b[1] - a[1]).slice(0, 10)
       .map(([key, count]) => { const [type, id] = key.split(":"); return { type, id: parseInt(id), count, title: titleMap[`${type}:${id}`] || "(unknown)" }; });
 
+    // ── User engagement ──
+    const now = Date.now();
+    const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    // Per-user watch stats
+    const userWatchMap = {};
+    (watchData || []).forEach(w => {
+      if (!userWatchMap[w.user_id]) userWatchMap[w.user_id] = { sessions: 0, completed: 0, totalProgress: 0, totalDuration: 0, lastWatched: null };
+      const u = userWatchMap[w.user_id];
+      u.sessions++;
+      if (w.completed) u.completed++;
+      if (w.progress_seconds) u.totalProgress += w.progress_seconds;
+      if (w.duration_seconds) u.totalDuration += w.duration_seconds;
+      if (w.last_watched_at && (!u.lastWatched || w.last_watched_at > u.lastWatched)) u.lastWatched = w.last_watched_at;
+    });
+
+    // Per-user saves
+    const userSaveMap = {};
+    (listData || []).forEach(s => { userSaveMap[s.user_id] = (userSaveMap[s.user_id] || 0) + 1; });
+
+    // Per-user ratings
+    const userRatingMap = {};
+    (ratingsData || []).forEach(r => { userRatingMap[r.user_id] = (userRatingMap[r.user_id] || 0) + 1; });
+
+    // Build per-user table
+    const userEngagement = (profilesData || []).map(p => {
+      const w = userWatchMap[p.id] || { sessions: 0, completed: 0, totalProgress: 0, totalDuration: 0, lastWatched: null };
+      return {
+        id: p.id,
+        display: p.username ? `@${p.username}` : (p.email || p.id.slice(0, 8)),
+        email: p.email || "",
+        joinedAt: p.created_at,
+        sessions: w.sessions,
+        completed: w.completed,
+        avgProgressMin: w.sessions > 0 ? Math.round(w.totalProgress / w.sessions / 60) : 0,
+        saves: userSaveMap[p.id] || 0,
+        ratings: userRatingMap[p.id] || 0,
+        lastWatched: w.lastWatched,
+        active30d: w.lastWatched ? w.lastWatched >= thirtyDaysAgo : false,
+        active7d: w.lastWatched ? w.lastWatched >= sevenDaysAgo : false,
+        neverWatched: w.sessions === 0,
+      };
+    }).sort((a, b) => b.sessions - a.sessions);
+
+    const activeUsers30d = userEngagement.filter(u => u.active30d).length;
+    const activeUsers7d = userEngagement.filter(u => u.active7d).length;
+    const neverWatchedUsers = userEngagement.filter(u => u.neverWatched);
+    const avgSessionsPerUser = userCount > 0 ? (watchData || []).length / userCount : 0;
+
+    // Watch sessions over time (by day, last 30 days)
+    const sessionsByDay = {};
+    (watchData || []).forEach(w => {
+      if (!w.last_watched_at || w.last_watched_at < thirtyDaysAgo) return;
+      const day = w.last_watched_at.slice(0, 10);
+      sessionsByDay[day] = (sessionsByDay[day] || 0) + 1;
+    });
+    const sessionTrend = Object.entries(sessionsByDay).sort((a, b) => a[0].localeCompare(b[0]));
+
     setReportData({
       userCount: userCount ?? 0,
       videoCount: videoCount ?? 0,
@@ -245,6 +304,8 @@ export function CMS({ onExit }) {
       totalSaves: (listData || []).length,
       totalRatings: (ratingsData || []).length,
       topWatched, topRated, topSaved, userGrowth,
+      userEngagement, activeUsers30d, activeUsers7d,
+      neverWatchedUsers, avgSessionsPerUser, sessionTrend,
     });
     setReportLoading(false);
   }
@@ -1952,6 +2013,107 @@ export function CMS({ onExit }) {
                     </div>
                   </div>
                 )}
+
+                {/* ── USER ENGAGEMENT ── */}
+                <div style={{ marginTop: 12 }}>
+                  <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 700, color: "#fff", borderTop: "1px solid #1e1e1e", paddingTop: 28 }}>User Engagement</h3>
+
+                  {/* Engagement stat cards */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16, marginBottom: 24 }}>
+                    {[
+                      { label: "Active (7 days)", value: reportData.activeUsers7d, color: "#34d399" },
+                      { label: "Active (30 days)", value: reportData.activeUsers30d, color: "#34d399" },
+                      { label: "Never Watched", value: reportData.neverWatchedUsers.length, color: "#f87171" },
+                      { label: "Avg Sessions / User", value: reportData.avgSessionsPerUser.toFixed(1), color: "#60a5fa" },
+                    ].map(stat => (
+                      <div key={stat.label} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 20px 16px" }}>
+                        <p style={{ margin: "0 0 6px", fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 0.8 }}>{stat.label}</p>
+                        <p style={{ margin: 0, fontSize: 28, fontWeight: 700, color: stat.color }}>{stat.value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Watch sessions trend (last 30 days) */}
+                  {reportData.sessionTrend.length > 0 && (
+                    <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px", marginBottom: 24 }}>
+                      <p style={{ margin: "0 0 20px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>Watch Sessions — Last 30 Days</p>
+                      <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 72 }}>
+                        {(() => {
+                          const max = Math.max(...reportData.sessionTrend.map(([, c]) => c), 1);
+                          return reportData.sessionTrend.map(([day, count]) => (
+                            <div key={day} title={`${day}: ${count} sessions`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "default" }}>
+                              <div style={{ width: "100%", background: "rgba(96,165,250,0.25)", borderRadius: 3, height: `${Math.round((count / max) * 52) + 4}px`, minHeight: 4 }} />
+                              {reportData.sessionTrend.length <= 14 && (
+                                <span style={{ fontSize: 9, color: "#444" }}>{day.slice(8)}</span>
+                              )}
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                      <p style={{ margin: "10px 0 0", fontSize: 11, color: "#444" }}>{reportData.sessionTrend.length} active days · hover bars for date</p>
+                    </div>
+                  )}
+
+                  {/* Most active users table */}
+                  <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px", marginBottom: 24, overflowX: "auto" }}>
+                    <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>All Users by Activity</p>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ borderBottom: "1px solid #1e1e1e" }}>
+                          {["#", "User", "Sessions", "Completed", "Avg Watch (min)", "Saves", "Ratings", "Last Watched", "Status"].map(h => (
+                            <th key={h} style={{ padding: "0 12px 10px", textAlign: "left", color: "#555", fontWeight: 600, whiteSpace: "nowrap" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reportData.userEngagement.map((u, i) => (
+                          <tr key={u.id} style={{ borderBottom: "1px solid #141414" }}>
+                            <td style={{ padding: "10px 12px", color: "#333" }}>{i + 1}</td>
+                            <td style={{ padding: "10px 12px" }}>
+                              <p style={{ margin: 0, color: "#e5e5e5", fontWeight: 500 }}>{u.display}</p>
+                              {u.email && u.display !== u.email && <p style={{ margin: 0, color: "#444", fontSize: 11 }}>{u.email}</p>}
+                            </td>
+                            <td style={{ padding: "10px 12px", color: "#60a5fa", fontWeight: 600 }}>{u.sessions}</td>
+                            <td style={{ padding: "10px 12px", color: "#34d399" }}>{u.completed}</td>
+                            <td style={{ padding: "10px 12px", color: "#e5e5e5" }}>{u.avgProgressMin > 0 ? u.avgProgressMin : "—"}</td>
+                            <td style={{ padding: "10px 12px", color: "#a78bfa" }}>{u.saves || "—"}</td>
+                            <td style={{ padding: "10px 12px", color: "#f97316" }}>{u.ratings || "—"}</td>
+                            <td style={{ padding: "10px 12px", color: "#555", whiteSpace: "nowrap" }}>
+                              {u.lastWatched ? new Date(u.lastWatched).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
+                            </td>
+                            <td style={{ padding: "10px 12px" }}>
+                              {u.neverWatched
+                                ? <span style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.2)", borderRadius: 4, padding: "2px 7px", color: "#f87171", fontSize: 10 }}>Never watched</span>
+                                : u.active7d
+                                ? <span style={{ background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)", borderRadius: 4, padding: "2px 7px", color: "#34d399", fontSize: 10 }}>Active</span>
+                                : u.active30d
+                                ? <span style={{ background: "rgba(250,204,21,0.1)", border: "1px solid rgba(250,204,21,0.2)", borderRadius: 4, padding: "2px 7px", color: "#facc15", fontSize: 10 }}>Recent</span>
+                                : <span style={{ background: "rgba(100,116,139,0.1)", border: "1px solid rgba(100,116,139,0.2)", borderRadius: 4, padding: "2px 7px", color: "#64748b", fontSize: 10 }}>Inactive</span>
+                              }
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Never watched users */}
+                  {reportData.neverWatchedUsers.length > 0 && (
+                    <div style={{ background: "#111", border: "1px solid rgba(248,113,113,0.15)", borderRadius: 12, padding: "20px 24px" }}>
+                      <p style={{ margin: "0 0 14px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>
+                        Never Watched <span style={{ color: "#f87171", fontSize: 12 }}>({reportData.neverWatchedUsers.length})</span>
+                      </p>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        {reportData.neverWatchedUsers.map(u => (
+                          <div key={u.id} style={{ background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: "6px 12px" }}>
+                            <p style={{ margin: 0, fontSize: 12, color: "#e5e5e5" }}>{u.display}</p>
+                            <p style={{ margin: 0, fontSize: 11, color: "#444" }}>Joined {new Date(u.joinedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </>
             )}
 
