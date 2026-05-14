@@ -101,12 +101,14 @@ export function SignupPage() {
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [usernameStatus, setUsernameStatus] = useState(null); // null | checking | available | taken | invalid
+  const [emailStatus, setEmailStatus] = useState(null); // null | checking | taken
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const usernameTimer = useRef(null);
+  const emailTimer = useRef(null);
 
   useEffect(() => {
     if (!username) { setUsernameStatus(null); return; }
@@ -120,6 +122,17 @@ export function SignupPage() {
     return () => clearTimeout(usernameTimer.current);
   }, [username]);
 
+  useEffect(() => {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setEmailStatus(null); return; }
+    setEmailStatus("checking");
+    clearTimeout(emailTimer.current);
+    emailTimer.current = setTimeout(async () => {
+      const { data } = await supabase.from("profiles").select("email").eq("email", email.toLowerCase()).maybeSingle();
+      setEmailStatus(data ? "taken" : null);
+    }, 400);
+    return () => clearTimeout(emailTimer.current);
+  }, [email]);
+
   const pwScore = [
     password.length >= 8,
     /[A-Z]/.test(password),
@@ -132,6 +145,8 @@ export function SignupPage() {
     const e = {};
     if (!email) e.email = "Email is required.";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) e.email = "Enter a valid email.";
+    else if (emailStatus === "checking") e.email = "Checking email…";
+    else if (emailStatus === "taken") e.email = "An account with that email already exists.";
     if (!username) e.username = "Username is required.";
     else if (usernameStatus === "invalid") e.username = "3–20 chars, letters/numbers/underscores only.";
     else if (usernameStatus === "taken") e.username = "Username already taken.";
@@ -162,7 +177,7 @@ export function SignupPage() {
     const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
     if (signUpError) { setErrors({ submit: signUpError.message }); setLoading(false); return; }
 
-    if (data.user?.identities?.length === 0) {
+    if (!data.user || data.user.identities?.length === 0) {
       setErrors({ submit: "An account with that email already exists. Try signing in instead." });
       setLoading(false);
       return;
@@ -172,6 +187,7 @@ export function SignupPage() {
       const { error: profileError } = await supabase.from("profiles").insert({
         id: data.user.id,
         username: username.toLowerCase(),
+        email: email.toLowerCase(),
         full_name: "",
       });
       if (profileError) { setErrors({ submit: profileError.message }); setLoading(false); return; }
@@ -245,7 +261,11 @@ export function SignupPage() {
                   onChange={e => { setEmail(e.target.value); setErrors(prev => ({ ...prev, email: null })); }}
                   placeholder="you@example.com"
                   autoComplete="email"
-                  error={errors.email}
+                  error={errors.email || (emailStatus === "taken" ? "An account with that email already exists." : null)}
+                  rightSlot={
+                    emailStatus === "checking" ? <span style={{ color: "#555", fontSize: 13 }}>⋯</span> :
+                    emailStatus === "taken" ? <span style={{ color: "#f87171", fontSize: 13 }}>✗</span> : null
+                  }
                 />
               </div>
               <button onClick={nextStep} style={btnStyle}>Continue →</button>
