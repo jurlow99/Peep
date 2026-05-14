@@ -215,6 +215,16 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
     setLoading(false);
   }
 
+  async function handleRemoveCW(item) {
+    if (!user) return;
+    const ct = item._type === "episode" ? "episode" : "movie";
+    await supabase.from("watch_progress").upsert(
+      { user_id: user.id, content_id: item.id, content_type: ct, completed: true, last_watched_at: new Date().toISOString() },
+      { onConflict: "user_id,content_id,content_type" }
+    );
+    setContinueWatching(prev => prev.filter(i => !(i._type === item._type && i.id === item.id)));
+  }
+
   async function loadContinueWatching() {
     if (!user) { setContinueWatching([]); return; }
     const { data: progress } = await supabase.from("watch_progress").select("*")
@@ -507,7 +517,7 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
             <LiveSection streams={liveStreams.filter(s => s.is_live)} onPlay={onPlay} />
           )}
           {continueWatching.length > 0 && activeNav === "Home" && (
-            <ContinueWatchingRow items={continueWatching} onPlay={onPlay} />
+            <ContinueWatchingRow items={continueWatching} onPlay={onPlay} onRemove={handleRemoveCW} />
           )}
           {filteredContent.length === 0 && activeNav !== "My List" ? (
             <div style={{ padding: "100px 0", textAlign: "center", color: "#444", fontSize: 15 }}>
@@ -989,7 +999,7 @@ function LiveCard({ stream, onPlay }) {
 
 const CW_CARD_W = "clamp(200px, 26vw, 300px)";
 
-function ContinueWatchingRow({ items, onPlay }) {
+function ContinueWatchingRow({ items, onPlay, onRemove }) {
   const scrollRef = useRef(null);
   const scroll = dir => scrollRef.current?.scrollBy({ left: dir * scrollRef.current.clientWidth * 0.85, behavior: "smooth" });
   return (
@@ -1002,18 +1012,17 @@ function ContinueWatchingRow({ items, onPlay }) {
         <button onClick={() => scroll(-1)} style={{ position: "absolute", left: 0, top: 0, bottom: 0, zIndex: 10, background: "linear-gradient(to right, rgba(10,10,10,0.95), transparent)", border: "none", color: "#fff", width: 64, cursor: "pointer", fontSize: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>
         <button onClick={() => scroll(1)} style={{ position: "absolute", right: 0, top: 0, bottom: 0, zIndex: 10, background: "linear-gradient(to left, rgba(10,10,10,0.95), transparent)", border: "none", color: "#fff", width: 64, cursor: "pointer", fontSize: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>›</button>
         <div ref={scrollRef} className="scroll-row" style={{ display: "flex", gap: 14, overflowX: "auto", scrollbarWidth: "none", padding: `10px ${PAD} 28px` }}>
-          {items.map(item => <ContinueWatchingCard key={`${item._type}_${item.id}`} item={item} onPlay={onPlay} />)}
+          {items.map(item => <ContinueWatchingCard key={`${item._type}_${item.id}`} item={item} onPlay={onPlay} onRemove={onRemove} />)}
         </div>
       </div>
     </div>
   );
 }
 
-function ContinueWatchingCard({ item, onPlay }) {
+function ContinueWatchingCard({ item, onPlay, onRemove }) {
   const [hovered, setHovered] = useState(false);
   const pct = item._progress?.duration_seconds > 0 ? Math.min(100, (item._progress.progress_seconds / item._progress.duration_seconds) * 100) : 0;
 
-  // For episodes, show the series name as the primary title
   const isEpisode = item._type === "episode";
   const displayTitle = isEpisode && item._show ? item._show.title : item.title;
   const displayThumb = isEpisode && item._show
@@ -1024,8 +1033,16 @@ function ContinueWatchingCard({ item, onPlay }) {
     : `${Math.round(pct)}% watched`;
 
   return (
-    <div style={{ flexShrink: 0, width: CW_CARD_W, cursor: "pointer" }}
+    <div style={{ flexShrink: 0, width: CW_CARD_W, cursor: "pointer", position: "relative" }}
       onClick={() => onPlay(item)} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+      {hovered && onRemove && (
+        <button
+          onClick={e => { e.stopPropagation(); onRemove(item); }}
+          title="Mark as watched"
+          style={{ position: "absolute", top: 8, right: 8, zIndex: 20, width: 26, height: 26, borderRadius: "50%", background: "rgba(0,0,0,0.75)", border: "1px solid rgba(255,255,255,0.15)", color: "#aaa", fontSize: 14, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          ×
+        </button>
+      )}
       <div style={{ borderRadius: 10, overflow: "hidden", background: "#141414", transform: hovered ? "scale(1.03) translateY(-3px)" : "scale(1)", transition: "transform 0.25s, box-shadow 0.25s", boxShadow: hovered ? "0 16px 40px rgba(0,0,0,0.65)" : "0 2px 8px rgba(0,0,0,0.3)" }}>
         <div style={{ position: "relative", aspectRatio: "16/9", overflow: "hidden" }}>
           <img src={displayThumb} alt={displayTitle}
@@ -1310,6 +1327,7 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
   const [ratingCounts, setRatingCounts] = useState({ up: 0, down: 0 });
   const progressTimerRef = useRef(null);
   const viewCountedRef = useRef(false);
+  const saveProgressRef = useRef(null);
   const [continueWatching, setContinueWatching] = useState([]);
   const playerContainerRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -1396,20 +1414,22 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
   useEffect(() => {
     if (!user || getEmbedUrl(video.url)) return;
     const ct = isEpisode ? "episode" : "movie";
-    progressTimerRef.current = setInterval(async () => {
+    saveProgressRef.current = async () => {
       if (!videoRef.current) return;
       const { currentTime, duration } = videoRef.current;
       if (currentTime < 5 || !duration) return;
       await supabase.from("watch_progress").upsert({
         user_id: user.id, content_id: video.id, content_type: ct,
         progress_seconds: currentTime, duration_seconds: duration,
-        completed: duration - currentTime < 60, last_watched_at: new Date().toISOString(),
+        completed: currentTime / duration > 0.9 || duration - currentTime < 60,
+        last_watched_at: new Date().toISOString(),
       }, { onConflict: "user_id,content_id,content_type" });
-    }, 15000);
+    };
+    progressTimerRef.current = setInterval(() => { saveProgressRef.current?.(); }, 15000);
     return () => clearInterval(progressTimerRef.current);
   }, [video.id, user]);
 
-  useEffect(() => () => clearInterval(progressTimerRef.current), []);
+  useEffect(() => () => { clearInterval(progressTimerRef.current); saveProgressRef.current?.(); }, []);
 
   useEffect(() => () => { document.body.style.overflow = ""; }, []);
 
@@ -1471,6 +1491,16 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
     countdownGuardRef.current = false;
     setCountdownActive(false);
     clearInterval(countdownTimerRef.current);
+  }
+
+  async function handleRemoveCW(item) {
+    if (!user) return;
+    const ct = item._type === "episode" ? "episode" : "movie";
+    await supabase.from("watch_progress").upsert(
+      { user_id: user.id, content_id: item.id, content_type: ct, completed: true, last_watched_at: new Date().toISOString() },
+      { onConflict: "user_id,content_id,content_type" }
+    );
+    setContinueWatching(prev => prev.filter(i => !(i._type === item._type && i.id === item.id)));
   }
 
   async function rate(val) {
@@ -1617,7 +1647,7 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
             </div>
             <div style={{ display: "flex", gap: 14, overflowX: "auto", scrollbarWidth: "none", paddingBottom: 8 }}>
               {continueWatching.map(item => (
-                <ContinueWatchingCard key={`${item._type}_${item.id}`} item={item} onPlay={onSelect} />
+                <ContinueWatchingCard key={`${item._type}_${item.id}`} item={item} onPlay={onSelect} onRemove={handleRemoveCW} />
               ))}
             </div>
           </div>
