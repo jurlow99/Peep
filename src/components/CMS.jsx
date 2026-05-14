@@ -48,6 +48,16 @@ const EMPTY_CAROUSEL = {
   content_type: "all",
   enabled: true,
   position: 0,
+  pages: "home",
+};
+
+const EMPTY_LIVE_STREAM = {
+  title: "",
+  description: "",
+  stream_url: "",
+  thumbnail: "",
+  is_live: true,
+  badge_text: "LIVE",
 };
 
 const EMPTY_PODCAST = {
@@ -108,7 +118,19 @@ export function CMS({ onExit }) {
   const [podcastSaving, setPodcastSaving] = useState(false);
   const [deletePodcastConfirm, setDeletePodcastConfirm] = useState(null);
 
+  // Live Streams state
+  const [liveList, setLiveList] = useState([]);
+  const [liveLoading, setLiveLoading] = useState(true);
+  const [editingLiveId, setEditingLiveId] = useState(null);
+  const [liveForm, setLiveForm] = useState(EMPTY_LIVE_STREAM);
+  const [liveSaving, setLiveSaving] = useState(false);
+  const [deleteLiveConfirm, setDeleteLiveConfirm] = useState(null);
+
   const [heroConfirm, setHeroConfirm] = useState(null); // { current, next, type: "video"|"show" }
+
+  // Reports state
+  const [reportData, setReportData] = useState(null);
+  const [reportLoading, setReportLoading] = useState(false);
 
   const subscriptionRef = useRef(null);
   const carouselSubRef = useRef(null);
@@ -128,6 +150,7 @@ export function CMS({ onExit }) {
     subscribeToCarouselChanges();
     loadShows();
     loadPodcasts();
+    loadLiveStreams();
 
     return () => {
       if (subscriptionRef.current) subscriptionRef.current.unsubscribe();
@@ -139,6 +162,152 @@ export function CMS({ onExit }) {
   function showToast(msg, type = "success") {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
+  }
+
+  useEffect(() => {
+    if (tab === "reports") loadReports();
+  }, [tab]);
+
+  async function loadReports() {
+    setReportLoading(true);
+    const [
+      { count: userCount },
+      { count: videoCount },
+      { count: showCount },
+      { count: episodeCount },
+      { data: watchData },
+      { data: ratingsData },
+      { data: listData },
+      { data: profilesData },
+    ] = await Promise.all([
+      supabase.from("profiles").select("*", { count: "exact", head: true }),
+      supabase.from("videos").select("*", { count: "exact", head: true }),
+      supabase.from("shows").select("*", { count: "exact", head: true }),
+      supabase.from("episodes").select("*", { count: "exact", head: true }),
+      supabase.from("watch_progress").select("user_id, content_id, content_type, completed, progress_seconds, duration_seconds, last_watched_at"),
+      supabase.from("ratings").select("user_id, content_id, content_type, rating"),
+      supabase.from("user_list").select("user_id, content_id, content_type"),
+      supabase.from("profiles").select("id, username, email, created_at").order("created_at", { ascending: true }),
+    ]);
+
+    // Group watch sessions by content
+    const watchMap = {};
+    (watchData || []).forEach(w => {
+      const key = `${w.content_type}:${w.content_id}`;
+      watchMap[key] = (watchMap[key] || 0) + 1;
+    });
+    const topWatchedRaw = Object.entries(watchMap)
+      .sort((a, b) => b[1] - a[1]).slice(0, 10)
+      .map(([key, count]) => { const [type, id] = key.split(":"); return { type, id: parseInt(id), count }; });
+
+    // Fetch titles for top watched
+    const movieIds = topWatchedRaw.filter(t => t.type === "movie").map(t => t.id);
+    const episodeIds = topWatchedRaw.filter(t => t.type === "episode").map(t => t.id);
+    const [movTitles, epTitles] = await Promise.all([
+      movieIds.length ? supabase.from("videos").select("id, title").in("id", movieIds) : { data: [] },
+      episodeIds.length ? supabase.from("episodes").select("id, title").in("id", episodeIds) : { data: [] },
+    ]);
+    const titleMap = {};
+    (movTitles.data || []).forEach(v => { titleMap[`movie:${v.id}`] = v.title; });
+    (epTitles.data || []).forEach(e => { titleMap[`episode:${e.id}`] = e.title; });
+    const topWatched = topWatchedRaw.map(t => ({ ...t, title: titleMap[`${t.type}:${t.id}`] || "(unknown)" }));
+
+    // Group ratings (thumbs up)
+    const ratingMap = {};
+    (ratingsData || []).forEach(r => {
+      if (r.rating === 1) { const key = `${r.content_type}:${r.content_id}`; ratingMap[key] = (ratingMap[key] || 0) + 1; }
+    });
+    const topRated = Object.entries(ratingMap)
+      .sort((a, b) => b[1] - a[1]).slice(0, 10)
+      .map(([key, count]) => { const [type, id] = key.split(":"); return { type, id: parseInt(id), count, title: titleMap[`${type}:${id}`] || "(unknown)" }; });
+
+    // User growth by month
+    const monthMap = {};
+    (profilesData || []).forEach(p => {
+      const month = p.created_at?.slice(0, 7);
+      if (month) monthMap[month] = (monthMap[month] || 0) + 1;
+    });
+    const userGrowth = Object.entries(monthMap).sort((a, b) => a[0].localeCompare(b[0]));
+
+    // Most saved
+    const saveMap = {};
+    (listData || []).forEach(s => { const key = `${s.content_type}:${s.content_id}`; saveMap[key] = (saveMap[key] || 0) + 1; });
+    const topSaved = Object.entries(saveMap).sort((a, b) => b[1] - a[1]).slice(0, 10)
+      .map(([key, count]) => { const [type, id] = key.split(":"); return { type, id: parseInt(id), count, title: titleMap[`${type}:${id}`] || "(unknown)" }; });
+
+    // ── User engagement ──
+    const now = Date.now();
+    const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    // Per-user watch stats
+    const userWatchMap = {};
+    (watchData || []).forEach(w => {
+      if (!userWatchMap[w.user_id]) userWatchMap[w.user_id] = { sessions: 0, completed: 0, totalProgress: 0, totalDuration: 0, lastWatched: null };
+      const u = userWatchMap[w.user_id];
+      u.sessions++;
+      if (w.completed) u.completed++;
+      if (w.progress_seconds) u.totalProgress += w.progress_seconds;
+      if (w.duration_seconds) u.totalDuration += w.duration_seconds;
+      if (w.last_watched_at && (!u.lastWatched || w.last_watched_at > u.lastWatched)) u.lastWatched = w.last_watched_at;
+    });
+
+    // Per-user saves
+    const userSaveMap = {};
+    (listData || []).forEach(s => { userSaveMap[s.user_id] = (userSaveMap[s.user_id] || 0) + 1; });
+
+    // Per-user ratings
+    const userRatingMap = {};
+    (ratingsData || []).forEach(r => { userRatingMap[r.user_id] = (userRatingMap[r.user_id] || 0) + 1; });
+
+    // Build per-user table
+    const userEngagement = (profilesData || []).map(p => {
+      const w = userWatchMap[p.id] || { sessions: 0, completed: 0, totalProgress: 0, totalDuration: 0, lastWatched: null };
+      return {
+        id: p.id,
+        display: p.username ? `@${p.username}` : (p.email || p.id.slice(0, 8)),
+        email: p.email || "",
+        joinedAt: p.created_at,
+        sessions: w.sessions,
+        completed: w.completed,
+        avgProgressMin: w.sessions > 0 ? Math.round(w.totalProgress / w.sessions / 60) : 0,
+        saves: userSaveMap[p.id] || 0,
+        ratings: userRatingMap[p.id] || 0,
+        lastWatched: w.lastWatched,
+        active30d: w.lastWatched ? w.lastWatched >= thirtyDaysAgo : false,
+        active7d: w.lastWatched ? w.lastWatched >= sevenDaysAgo : false,
+        neverWatched: w.sessions === 0,
+      };
+    }).sort((a, b) => b.sessions - a.sessions);
+
+    const activeUsers30d = userEngagement.filter(u => u.active30d).length;
+    const activeUsers7d = userEngagement.filter(u => u.active7d).length;
+    const neverWatchedUsers = userEngagement.filter(u => u.neverWatched);
+    const avgSessionsPerUser = userCount > 0 ? (watchData || []).length / userCount : 0;
+
+    // Watch sessions over time (by day, last 30 days)
+    const sessionsByDay = {};
+    (watchData || []).forEach(w => {
+      if (!w.last_watched_at || w.last_watched_at < thirtyDaysAgo) return;
+      const day = w.last_watched_at.slice(0, 10);
+      sessionsByDay[day] = (sessionsByDay[day] || 0) + 1;
+    });
+    const sessionTrend = Object.entries(sessionsByDay).sort((a, b) => a[0].localeCompare(b[0]));
+
+    setReportData({
+      userCount: userCount ?? 0,
+      videoCount: videoCount ?? 0,
+      showCount: showCount ?? 0,
+      episodeCount: episodeCount ?? 0,
+      watchSessions: (watchData || []).length,
+      completedSessions: (watchData || []).filter(w => w.completed).length,
+      totalSaves: (listData || []).length,
+      totalRatings: (ratingsData || []).length,
+      topWatched, topRated, topSaved, userGrowth,
+      userEngagement, activeUsers30d, activeUsers7d,
+      neverWatchedUsers, avgSessionsPerUser, sessionTrend,
+    });
+    setReportLoading(false);
   }
 
   // ──── VIDEOS ────
@@ -322,6 +491,7 @@ export function CMS({ onExit }) {
       content_type: carousel.content_type ?? "all",
       enabled: carousel.enabled ?? true,
       position: carousel.position ?? 0,
+      pages: carousel.pages ?? "home",
     });
   }
 
@@ -553,6 +723,47 @@ export function CMS({ onExit }) {
     else { showToast("Podcast deleted"); setDeletePodcastConfirm(null); await loadPodcasts(); }
   }
 
+  // ──── LIVE STREAMS ────
+
+  async function loadLiveStreams() {
+    setLiveLoading(true);
+    const { data, error } = await supabase.from("live_streams").select("*").order("id", { ascending: true });
+    if (error) showToast("Failed to load streams: " + error.message, "error");
+    else setLiveList(data || []);
+    setLiveLoading(false);
+  }
+
+  function startLiveEdit(s) {
+    setEditingLiveId(s.id);
+    setLiveForm({ title: s.title ?? "", description: s.description ?? "", stream_url: s.stream_url ?? "", thumbnail: s.thumbnail ?? "", is_live: s.is_live ?? true, badge_text: s.badge_text ?? "LIVE" });
+  }
+
+  function cancelLiveEdit() { setEditingLiveId(null); setLiveForm(EMPTY_LIVE_STREAM); }
+
+  async function saveLiveStream() {
+    if (!liveForm.title.trim()) { showToast("Title is required.", "error"); return; }
+    setLiveSaving(true);
+    try {
+      if (editingLiveId) {
+        const { error } = await supabase.from("live_streams").update(liveForm).eq("id", editingLiveId);
+        if (error) throw error;
+        showToast("Stream updated"); cancelLiveEdit();
+      } else {
+        const { error } = await supabase.from("live_streams").insert([liveForm]);
+        if (error) throw error;
+        showToast("Stream added"); setLiveForm(EMPTY_LIVE_STREAM);
+      }
+      await loadLiveStreams();
+    } catch (error) { showToast("Save failed: " + error.message, "error"); }
+    setLiveSaving(false);
+  }
+
+  async function deleteLiveStream(id) {
+    const { error } = await supabase.from("live_streams").delete().eq("id", id);
+    if (error) showToast("Delete failed: " + error.message, "error");
+    else { showToast("Stream deleted"); setDeleteLiveConfirm(null); await loadLiveStreams(); }
+  }
+
   // Filter rows
   const filteredRows = rows.filter(row => {
     const matchesSearch =
@@ -695,6 +906,12 @@ export function CMS({ onExit }) {
         </button>
         <button onClick={() => setTab("podcasts")} style={{ background: "transparent", border: "none", borderBottom: tab === "podcasts" ? "2px solid #818cf8" : "none", color: tab === "podcasts" ? "#818cf8" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "podcasts" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
           Podcasts ({podcastsList.length})
+        </button>
+        <button onClick={() => setTab("live")} style={{ background: "transparent", border: "none", borderBottom: tab === "live" ? "2px solid #ef4444" : "none", color: tab === "live" ? "#ef4444" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "live" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
+          Live ({liveList.length})
+        </button>
+        <button onClick={() => setTab("reports")} style={{ background: "transparent", border: "none", borderBottom: tab === "reports" ? "2px solid #34d399" : "none", color: tab === "reports" ? "#34d399" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "reports" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
+          Reports
         </button>
       </div>
 
@@ -1262,192 +1479,307 @@ export function CMS({ onExit }) {
         )}
 
         {/* ────── CAROUSELS TAB ────── */}
-        {tab === "carousels" && (
+        {tab === "carousels" && (() => {
+          const pagesArr = (carouselForm.pages || "home").split(",").map(p => p.trim()).filter(Boolean);
+          const togglePage = page => {
+            const s = new Set(pagesArr);
+            s.has(page) ? s.delete(page) : s.add(page);
+            setCarouselForm(f => ({ ...f, pages: [...s].join(",") }));
+          };
+          return (
           <>
-            {/* ── Carousel Edit Panel ── */}
+            {/* ── Carousel Form Panel ── */}
             <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, padding: 32, position: "sticky", top: 24, maxHeight: "90vh", overflowY: "auto" }}>
-              <h2 style={{ margin: "0 0 28px", fontSize: 17, fontWeight: 600, color: "#e5e5e5" }}>
-                {editingCarouselId ? "Edit Carousel" : "Add New Carousel"}
+              <h2 style={{ margin: "0 0 4px", fontSize: 17, fontWeight: 600, color: "#e5e5e5" }}>
+                {editingCarouselId ? "Edit Row" : "New Content Row"}
               </h2>
+              <p style={{ margin: "0 0 28px", fontSize: 12, color: "#555" }}>A horizontal scrolling row shown on selected pages.</p>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                {/* Title */}
-                <FieldInput
-                  label="Title *"
-                  value={carouselForm.title}
-                  onChange={v => setCarouselForm(f => ({ ...f, title: v }))}
-                  placeholder="e.g. Action Movies"
-                />
+              <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
-                {/* Type */}
-                <FieldSelect
-                  label="Type"
-                  value={carouselForm.type}
-                  onChange={v => setCarouselForm(f => ({ ...f, type: v }))}
-                  options={["category", "trending", "custom", "podcast"]}
-                />
-
-                {/* Filter Value */}
-                <FieldInput
-                  label={carouselForm.type === "podcast" ? "Tag Filter (optional)" : "Filter Value"}
-                  value={carouselForm.filter_value}
-                  onChange={v => setCarouselForm(f => ({ ...f, filter_value: v }))}
-                  placeholder={carouselForm.type === "podcast" ? "e.g. true-crime (leave empty to show all)" : "e.g. Action (for category type)"}
-                />
-
-                {/* Content Type */}
+                {/* ── Step 1: Title ── */}
                 <div>
-                  <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Show On Page</label>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-                    {[["all", "All Pages"], ["movies", "Movies Only"], ["shows", "Series Only"]].map(([val, label]) => (
-                      <button key={val} onClick={() => setCarouselForm(f => ({ ...f, content_type: val }))}
-                        style={{ background: carouselForm.content_type === val ? "rgba(250,204,21,0.15)" : "#0a0a0a", border: `1px solid ${carouselForm.content_type === val ? "#facc15" : "#2a2a2a"}`, borderRadius: 7, padding: "9px 6px", color: carouselForm.content_type === val ? "#facc15" : "#666", fontSize: 12, cursor: "pointer", fontWeight: carouselForm.content_type === val ? 600 : 400, textAlign: "center" }}>
-                        {label}
-                      </button>
-                    ))}
+                  <label style={{ display: "block", fontSize: 11, color: "#facc15", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>1 · Row Title</label>
+                  <FieldInput value={carouselForm.title} onChange={v => setCarouselForm(f => ({ ...f, title: v }))} placeholder="e.g. Top Horror Picks, New This Week…" />
+                </div>
+
+                {/* ── Divider ── */}
+                <div style={{ height: 1, background: "#1e1e1e" }} />
+
+                {/* ── Step 2: Which pages ── */}
+                <div>
+                  <label style={{ display: "block", fontSize: 11, color: "#facc15", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>2 · Where to show it</label>
+                  <p style={{ margin: "0 0 12px", fontSize: 11, color: "#555" }}>Pick every page this row should appear on.</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {[
+                      { val: "home",   icon: "🏠", label: "Home",        desc: "The main landing page" },
+                      { val: "movies", icon: "🎬", label: "Movies tab",  desc: "The dedicated Movies browse page" },
+                      { val: "series", icon: "📺", label: "Series tab",  desc: "The dedicated Series browse page" },
+                    ].map(({ val, icon, label, desc }) => {
+                      const on = pagesArr.includes(val);
+                      return (
+                        <button key={val} onClick={() => togglePage(val)}
+                          style={{ background: on ? "rgba(250,204,21,0.08)" : "#0a0a0a", border: `1.5px solid ${on ? "#facc15" : "#222"}`, borderRadius: 9, padding: "11px 14px", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 12, transition: "border-color 0.15s, background 0.15s" }}>
+                          <span style={{ fontSize: 18, flexShrink: 0 }}>{icon}</span>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: on ? "#facc15" : "#bbb" }}>{label}</div>
+                            <div style={{ fontSize: 11, color: "#555", marginTop: 1 }}>{desc}</div>
+                          </div>
+                          <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${on ? "#facc15" : "#333"}`, background: on ? "#facc15" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.15s" }}>
+                            {on && <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="#0a0a0a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {pagesArr.length === 0 && (
+                    <p style={{ margin: "8px 0 0", fontSize: 11, color: "#dc2626" }}>Pick at least one page.</p>
+                  )}
+                </div>
+
+                {/* ── Divider ── */}
+                <div style={{ height: 1, background: "#1e1e1e" }} />
+
+                {/* ── Step 3: What to show ── */}
+                <div>
+                  <label style={{ display: "block", fontSize: 11, color: "#facc15", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>3 · What to show</label>
+                  <p style={{ margin: "0 0 10px", fontSize: 11, color: "#555" }}>What kind of content fills this row.</p>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    {[
+                      { ct: "movies", t: null,      icon: "🎬", label: "Movies only",   desc: "Only movies" },
+                      { ct: "shows",  t: null,      icon: "📺", label: "Series only",   desc: "Only TV shows & series" },
+                      { ct: "all",    t: null,      icon: "⭐", label: "Everything",    desc: "Movies + series mixed" },
+                      { ct: "all",    t: "podcast", icon: "🎙️", label: "Podcasts",      desc: "Podcast episodes" },
+                    ].map(({ ct, t, icon, label, desc }) => {
+                      const isPodcast = t === "podcast";
+                      const isActive = isPodcast
+                        ? carouselForm.type === "podcast"
+                        : carouselForm.content_type === ct && carouselForm.type !== "podcast";
+                      return (
+                        <button key={label} onClick={() => {
+                          if (isPodcast) setCarouselForm(f => ({ ...f, type: "podcast", content_type: "all" }));
+                          else setCarouselForm(f => ({ ...f, content_type: ct, type: f.type === "podcast" ? "custom" : f.type }));
+                        }}
+                          style={{ background: isActive ? "rgba(250,204,21,0.1)" : "#0a0a0a", border: `1.5px solid ${isActive ? "#facc15" : "#222"}`, borderRadius: 10, padding: "13px 12px", cursor: "pointer", textAlign: "left", transition: "border-color 0.15s, background 0.15s" }}>
+                          <div style={{ fontSize: 20, marginBottom: 5 }}>{icon}</div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: isActive ? "#facc15" : "#ccc", marginBottom: 2 }}>{label}</div>
+                          <div style={{ fontSize: 11, color: "#555" }}>{desc}</div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
-                {/* Enabled */}
+                {/* ── Divider ── */}
+                <div style={{ height: 1, background: "#1e1e1e" }} />
+
+                {/* ── Step 4: How to order ── */}
+                {carouselForm.type !== "podcast" ? (
+                  <div>
+                    <label style={{ display: "block", fontSize: 11, color: "#facc15", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>4 · How to order</label>
+                    <p style={{ margin: "0 0 10px", fontSize: 11, color: "#555" }}>How content is sorted inside this row.</p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {[
+                        { val: "custom",   icon: "📋", label: "Show all",       desc: "All matching content, default order" },
+                        { val: "trending", icon: "🔥", label: "Trending / New", desc: "Newest added first" },
+                        { val: "category", icon: "🏷️", label: "By category",    desc: "Filter to a specific genre" },
+                      ].map(({ val, icon, label, desc }) => {
+                        const isActive = carouselForm.type === val;
+                        return (
+                          <button key={val} onClick={() => setCarouselForm(f => ({ ...f, type: val }))}
+                            style={{ background: isActive ? "rgba(250,204,21,0.08)" : "#0a0a0a", border: `1.5px solid ${isActive ? "#facc15" : "#222"}`, borderRadius: 9, padding: "11px 14px", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 12, transition: "border-color 0.15s, background 0.15s" }}>
+                            <span style={{ fontSize: 17, flexShrink: 0 }}>{icon}</span>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: isActive ? "#facc15" : "#bbb" }}>{label}</div>
+                              <div style={{ fontSize: 11, color: "#555", marginTop: 1 }}>{desc}</div>
+                            </div>
+                            {isActive && <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#facc15", flexShrink: 0 }} />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {carouselForm.type === "category" && (
+                      <div style={{ marginTop: 10, background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 8, padding: "14px" }}>
+                        <label style={{ display: "block", fontSize: 11, color: "#aaa", marginBottom: 6, fontWeight: 600 }}>Category name</label>
+                        <input value={carouselForm.filter_value} onChange={e => setCarouselForm(f => ({ ...f, filter_value: e.target.value }))}
+                          placeholder="e.g. Horror, Comedy, Sci-Fi…"
+                          style={{ width: "100%", background: "#141414", border: "1px solid #333", borderRadius: 6, padding: "9px 12px", color: "#fff", fontSize: 13, outline: "none" }} />
+                        <p style={{ margin: "6px 0 0", fontSize: 11, color: "#555" }}>Must match exactly as set on your videos (case-insensitive).</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <label style={{ display: "block", fontSize: 11, color: "#facc15", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>4 · Tag filter (optional)</label>
+                    <input value={carouselForm.filter_value} onChange={e => setCarouselForm(f => ({ ...f, filter_value: e.target.value }))}
+                      placeholder="e.g. true-crime — leave blank to show all podcasts"
+                      style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none" }} />
+                  </div>
+                )}
+
+                {/* ── Divider ── */}
+                <div style={{ height: 1, background: "#1e1e1e" }} />
+
+                {/* ── Step 5: Visibility ── */}
                 <div>
-                  <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.7 }}>
-                    Enabled
-                  </label>
-                  <button
-                    onClick={() => setCarouselForm(f => ({ ...f, enabled: !f.enabled }))}
-                    style={{
-                      width: "100%",
-                      background: carouselForm.enabled ? "rgba(16, 185, 129, 0.1)" : "rgba(107, 114, 128, 0.1)",
-                      border: `1px solid ${carouselForm.enabled ? "rgba(16, 185, 129, 0.3)" : "rgba(107, 114, 128, 0.3)"}`,
-                      borderRadius: 7,
-                      padding: "10px 12px",
-                      color: carouselForm.enabled ? "#10b981" : "#888",
-                      fontSize: 13,
-                      cursor: "pointer",
-                      fontWeight: 500,
-                    }}
-                  >
-                    {carouselForm.enabled ? "✓ Enabled" : "○ Disabled"}
+                  <label style={{ display: "block", fontSize: 11, color: "#facc15", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>5 · Visibility</label>
+                  <button onClick={() => setCarouselForm(f => ({ ...f, enabled: !f.enabled }))}
+                    style={{ width: "100%", background: carouselForm.enabled ? "rgba(16,185,129,0.1)" : "rgba(107,114,128,0.08)", border: `1px solid ${carouselForm.enabled ? "rgba(16,185,129,0.35)" : "#222"}`, borderRadius: 8, padding: "11px", color: carouselForm.enabled ? "#10b981" : "#555", fontSize: 13, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                    <span style={{ fontSize: 16 }}>{carouselForm.enabled ? "✓" : "○"}</span>
+                    {carouselForm.enabled ? "Live — visible to users" : "Hidden — not shown to users"}
                   </button>
                 </div>
 
               </div>
 
-              {/* Buttons */}
-              <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
-                <button
-                  onClick={saveCarousel}
-                  disabled={carouselSaving}
-                  style={{
-                    flex: 1,
-                    background: "#facc15",
-                    border: "none",
-                    borderRadius: 7,
-                    padding: "12px",
-                    color: "#fff",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    cursor: carouselSaving ? "not-allowed" : "pointer",
-                    opacity: carouselSaving ? 0.6 : 1,
-                  }}
-                >
-                  {carouselSaving ? "Saving..." : editingCarouselId ? "Update" : "Create"}
+              {/* Action buttons */}
+              <div style={{ display: "flex", gap: 10, marginTop: 28 }}>
+                <button onClick={saveCarousel} disabled={carouselSaving || pagesArr.length === 0}
+                  style={{ flex: 1, background: "#facc15", border: "none", borderRadius: 8, padding: "13px", color: "#0a0a0a", fontSize: 14, fontWeight: 700, cursor: (carouselSaving || pagesArr.length === 0) ? "not-allowed" : "pointer", opacity: (carouselSaving || pagesArr.length === 0) ? 0.5 : 1 }}>
+                  {carouselSaving ? "Saving…" : editingCarouselId ? "Update Row" : "Create Row"}
                 </button>
                 {editingCarouselId && (
-                  <button
-                    onClick={cancelCarouselEdit}
-                    style={{
-                      flex: 1,
-                      background: "#1a1a1a",
-                      border: "1px solid #2a2a2a",
-                      borderRadius: 7,
-                      padding: "12px",
-                      color: "#888",
-                      fontSize: 13,
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
-                  >
+                  <button onClick={cancelCarouselEdit}
+                    style={{ flex: 1, background: "transparent", border: "1px solid #2a2a2a", borderRadius: 8, padding: "13px", color: "#666", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
                     Cancel
                   </button>
                 )}
               </div>
             </div>
 
-            {/* ── Carousels Table ── */}
+            {/* ── Carousels List ── */}
             <div>
-              <h3 style={{ margin: "0 0 20px", fontSize: 15, fontWeight: 600, color: "#e5e5e5" }}>
-                All Carousels
+              <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 600, color: "#e5e5e5" }}>
+                Content Rows <span style={{ color: "#555", fontWeight: 400, fontSize: 13 }}>— ▲▼ to reorder</span>
               </h3>
 
               {carouselLoading ? (
-                <div style={{ padding: 40, textAlign: "center", color: "#666" }}>Loading carousels...</div>
+                <div style={{ padding: 40, textAlign: "center", color: "#666" }}>Loading…</div>
               ) : carousels.length === 0 ? (
-                <div style={{ padding: 40, textAlign: "center", color: "#666" }}>No carousels yet. Create one to get started.</div>
+                <div style={{ padding: 40, textAlign: "center", color: "#555", background: "#111", border: "1px solid #1e1e1e", borderRadius: 12 }}>
+                  <div style={{ fontSize: 32, marginBottom: 10 }}>📋</div>
+                  <p style={{ margin: 0, fontSize: 14 }}>No rows yet. Create your first one.</p>
+                </div>
               ) : (
-                <div>
-                  {carousels.map((carousel, idx) => (
-                    <div
-                      key={carousel.id}
-                      style={{
-                        background: "#111",
-                        border: "1px solid #1e1e1e",
-                        borderRadius: 10,
-                        padding: "16px 20px",
-                        marginBottom: 12,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 12,
-                      }}
-                    >
-                      {/* Reorder arrows */}
-                      <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
-                        <button onClick={() => moveCarousel(idx, -1)} disabled={idx === 0} style={{ background: "transparent", border: "none", color: idx === 0 ? "#333" : "#666", cursor: idx === 0 ? "default" : "pointer", fontSize: 12, padding: "2px 4px", lineHeight: 1 }}>▲</button>
-                        <button onClick={() => moveCarousel(idx, 1)} disabled={idx === carousels.length - 1} style={{ background: "transparent", border: "none", color: idx === carousels.length - 1 ? "#333" : "#666", cursor: idx === carousels.length - 1 ? "default" : "pointer", fontSize: 12, padding: "2px 4px", lineHeight: 1 }}>▼</button>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {carousels.map((carousel, idx) => {
+                    const t = carousel.type;
+                    const ct = carousel.content_type;
+                    const rowPages = (carousel.pages || "home").split(",").map(p => p.trim()).filter(Boolean);
+                    const contentLabel = t === "podcast" ? "Podcasts" : ct === "movies" ? "Movies only" : ct === "shows" ? "Series only" : "All content";
+                    const orderLabel = t === "trending" ? "Trending" : t === "category" ? `Genre: ${carousel.filter_value || "?"}` : t === "podcast" ? (carousel.filter_value ? `Tag: ${carousel.filter_value}` : "All podcasts") : "Default order";
+                    const contentColor = t === "podcast" ? "#a78bfa" : ct === "movies" ? "#60a5fa" : ct === "shows" ? "#34d399" : "#f59e0b";
+                    const pageLabels = { home: "Home", movies: "Movies", series: "Series" };
+                    return (
+                      <div key={carousel.id} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
+                          <button onClick={() => moveCarousel(idx, -1)} disabled={idx === 0} style={{ background: "transparent", border: "none", color: idx === 0 ? "#2a2a2a" : "#555", cursor: idx === 0 ? "default" : "pointer", fontSize: 11, padding: "2px 5px", lineHeight: 1 }}>▲</button>
+                          <button onClick={() => moveCarousel(idx, 1)} disabled={idx === carousels.length - 1} style={{ background: "transparent", border: "none", color: idx === carousels.length - 1 ? "#2a2a2a" : "#555", cursor: idx === carousels.length - 1 ? "default" : "pointer", fontSize: 11, padding: "2px 5px", lineHeight: 1 }}>▼</button>
+                        </div>
+
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: "0 0 7px", fontSize: 14, fontWeight: 600, color: carousel.enabled ? "#fff" : "#555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{carousel.title}</p>
+                          <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                            {/* Pages */}
+                            {rowPages.map(p => (
+                              <span key={p} style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 20, background: "rgba(250,204,21,0.1)", color: "#facc15", border: "1px solid rgba(250,204,21,0.3)" }}>{pageLabels[p] || p}</span>
+                            ))}
+                            {/* Content type */}
+                            <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: `${contentColor}15`, color: contentColor, border: `1px solid ${contentColor}35` }}>{contentLabel}</span>
+                            {/* Order */}
+                            <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: "rgba(255,255,255,0.04)", color: "#666", border: "1px solid #222" }}>{orderLabel}</span>
+                            {/* Live/Hidden */}
+                            <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: carousel.enabled ? "rgba(16,185,129,0.1)" : "rgba(255,255,255,0.04)", color: carousel.enabled ? "#10b981" : "#555", border: `1px solid ${carousel.enabled ? "rgba(16,185,129,0.3)" : "#222"}` }}>{carousel.enabled ? "Live" : "Hidden"}</span>
+                          </div>
+                        </div>
+
+                        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                          <button onClick={() => startCarouselEdit(carousel)} style={{ background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.2)", borderRadius: 6, padding: "6px 12px", color: "#60a5fa", fontSize: 12, cursor: "pointer", fontWeight: 500 }}>Edit</button>
+                          <button onClick={() => setDeleteCarouselConfirm(carousel)} style={{ background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 6, padding: "6px 12px", color: "#f87171", fontSize: 12, cursor: "pointer", fontWeight: 500 }}>Delete</button>
+                        </div>
                       </div>
-                      <div style={{ flex: 1 }}>
-                        <p style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 600, color: "#fff" }}>
-                          {carousel.title}
-                        </p>
-                        <p style={{ margin: 0, fontSize: 12, color: "#666" }}>
-                          Type: <span style={{ color: "#aaa" }}>{carousel.type}</span>
-                          {carousel.filter_value && ` • Filter: ${carousel.filter_value}`}
-                          {" • "}
-                          <span style={{ color: "#888" }}>
-                            {carousel.content_type === "movies" ? "Movies only" : carousel.content_type === "shows" ? "Series only" : "All pages"}
-                          </span>
-                          {" • "}
-                          <span style={{ color: carousel.enabled ? "#10b981" : "#f87171" }}>
-                            {carousel.enabled ? "Enabled" : "Disabled"}
-                          </span>
-                        </p>
-                      </div>
-                      <div style={{ display: "flex", gap: 10 }}>
-                        <button
-                          onClick={() => startCarouselEdit(carousel)}
-                          style={{ background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.2)", borderRadius: 5, padding: "5px 10px", color: "#60a5fa", fontSize: 11, cursor: "pointer", fontWeight: 500 }}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => setDeleteCarouselConfirm(carousel)}
-                          style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 5, padding: "5px 10px", color: "#f87171", fontSize: 11, cursor: "pointer", fontWeight: 500 }}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
-              {/* Stats */}
-              <div style={{ marginTop: 16, padding: "12px 16px", background: "#111", border: "1px solid #1e1e1e", borderRadius: 8, fontSize: 12, color: "#666" }}>
-                Total: {carousels.length} carousel{carousels.length !== 1 ? "s" : ""}
+              <div style={{ marginTop: 12, fontSize: 12, color: "#444", textAlign: "right" }}>
+                {carousels.length} row{carousels.length !== 1 ? "s" : ""} total
               </div>
             </div>
           </>
+          );
+        })()}
+        {/* ────── LIVE TAB ────── */}
+        {tab === "live" && (
+          <>
+            <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, padding: 32, position: "sticky", top: 24, maxHeight: "90vh", overflowY: "auto" }}>
+              <h2 style={{ margin: "0 0 28px", fontSize: 17, fontWeight: 600, color: "#e5e5e5" }}>{editingLiveId ? "Edit Stream" : "Add Live Stream"}</h2>
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <FieldInput label="Title *" value={liveForm.title} onChange={v => setLiveForm(f => ({ ...f, title: v }))} placeholder="e.g. Friday Night Live" />
+                <FieldInput label="Description" value={liveForm.description} onChange={v => setLiveForm(f => ({ ...f, description: v }))} placeholder="What's streaming..." />
+                <FieldInput label="Stream URL" value={liveForm.stream_url} onChange={v => setLiveForm(f => ({ ...f, stream_url: v }))} placeholder="https://... (YouTube Live, direct video, etc.)" />
+                <FieldInput label="Badge Text" value={liveForm.badge_text} onChange={v => setLiveForm(f => ({ ...f, badge_text: v }))} placeholder="LIVE" />
+                <div>
+                  <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Thumbnail</label>
+                  <ImageUploader label="Upload Thumbnail" folder="live" onUploadSuccess={url => setLiveForm(f => ({ ...f, thumbnail: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
+                  <input type="text" value={liveForm.thumbnail} onChange={e => setLiveForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none" }} />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.7 }}>Status</label>
+                  <button onClick={() => setLiveForm(f => ({ ...f, is_live: !f.is_live }))}
+                    style={{ width: "100%", background: liveForm.is_live ? "rgba(239,68,68,0.12)" : "rgba(107,114,128,0.1)", border: `1px solid ${liveForm.is_live ? "rgba(239,68,68,0.35)" : "rgba(107,114,128,0.3)"}`, borderRadius: 7, padding: "10px 12px", color: liveForm.is_live ? "#ef4444" : "#888", fontSize: 13, cursor: "pointer", fontWeight: 500 }}>
+                    {liveForm.is_live ? "🔴 Live" : "○ Offline"}
+                  </button>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
+                <button onClick={saveLiveStream} disabled={liveSaving} style={{ flex: 1, background: "#ef4444", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: liveSaving ? "not-allowed" : "pointer", opacity: liveSaving ? 0.7 : 1 }}>
+                  {liveSaving ? "Saving…" : editingLiveId ? "Save Changes" : "Go Live"}
+                </button>
+                {editingLiveId && <button onClick={cancelLiveEdit} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "12px 20px", color: "#888", fontSize: 13, cursor: "pointer" }}>Cancel</button>}
+              </div>
+            </div>
+
+            <div>
+              <h3 style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 600, color: "#e5e5e5" }}>All Streams ({liveList.length})</h3>
+              <p style={{ margin: "0 0 20px", fontSize: 12, color: "#555" }}>Toggle a stream to Live to show it on the homepage "Live Now" section.</p>
+              {liveLoading ? (
+                <div style={{ color: "#555", padding: 40, textAlign: "center" }}>Loading...</div>
+              ) : liveList.length === 0 ? (
+                <div style={{ color: "#555", padding: 40, textAlign: "center", border: "1px dashed #1e1e1e", borderRadius: 10 }}>No streams yet.</div>
+              ) : liveList.map(s => (
+                <div key={s.id} style={{ background: "#111", border: `1px solid ${s.is_live ? "rgba(239,68,68,0.3)" : "#1e1e1e"}`, borderRadius: 10, padding: "16px 20px", marginBottom: 12, display: "flex", gap: 16, alignItems: "center" }}>
+                  {s.thumbnail && <img src={s.thumbnail} alt={s.title} style={{ width: 80, height: 45, objectFit: "cover", borderRadius: 6, flexShrink: 0 }} onError={e => { e.target.style.display = "none"; }} />}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: "0 0 3px", fontSize: 14, fontWeight: 600, color: "#fff" }}>{s.title}</p>
+                    <p style={{ margin: 0, fontSize: 12, color: "#666" }}>
+                      <span style={{ color: s.is_live ? "#ef4444" : "#555", fontWeight: s.is_live ? 600 : 400 }}>{s.is_live ? "🔴 LIVE" : "Offline"}</span>
+                      {s.badge_text && s.badge_text !== "LIVE" && ` · Badge: ${s.badge_text}`}
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => startLiveEdit(s)} style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 5, padding: "5px 10px", color: "#f87171", fontSize: 11, cursor: "pointer" }}>Edit</button>
+                    <button onClick={() => setDeleteLiveConfirm(s)} style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 5, padding: "5px 10px", color: "#f87171", fontSize: 11, cursor: "pointer" }}>Delete</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {deleteLiveConfirm && (
+              <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ background: "#141414", border: "1px solid #2a2a2a", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center" }}>
+                  <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Delete "{deleteLiveConfirm.title}"?</p>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button onClick={() => setDeleteLiveConfirm(null)} style={{ flex: 1, background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "11px", color: "#888", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    <button onClick={() => deleteLiveStream(deleteLiveConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
+
         {/* ────── PODCASTS TAB ────── */}
         {tab === "podcasts" && (
           <>
@@ -1553,6 +1885,242 @@ export function CMS({ onExit }) {
               </div>
             )}
           </>
+        )}
+
+        {/* ────── REPORTS TAB ────── */}
+        {tab === "reports" && (
+          <div style={{ gridColumn: "1 / -1" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#fff" }}>Analytics</h2>
+              <button onClick={loadReports} style={{ background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)", borderRadius: 7, padding: "8px 16px", color: "#34d399", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                Refresh
+              </button>
+            </div>
+
+            {reportLoading && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 80 }}>
+                <Spinner />
+              </div>
+            )}
+
+            {!reportLoading && reportData && (
+              <>
+                {/* Stat cards */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16, marginBottom: 36 }}>
+                  {[
+                    { label: "Total Users", value: reportData.userCount, color: "#34d399" },
+                    { label: "Videos", value: reportData.videoCount, color: "#facc15" },
+                    { label: "Shows", value: reportData.showCount, color: "#facc15" },
+                    { label: "Episodes", value: reportData.episodeCount, color: "#facc15" },
+                    { label: "Watch Sessions", value: reportData.watchSessions, color: "#60a5fa" },
+                    { label: "Completed", value: reportData.completedSessions, color: "#60a5fa" },
+                    { label: "List Saves", value: reportData.totalSaves, color: "#a78bfa" },
+                    { label: "Ratings Given", value: reportData.totalRatings, color: "#f97316" },
+                  ].map(stat => (
+                    <div key={stat.label} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 20px 16px" }}>
+                      <p style={{ margin: "0 0 6px", fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 0.8 }}>{stat.label}</p>
+                      <p style={{ margin: 0, fontSize: 28, fontWeight: 700, color: stat.color }}>{stat.value.toLocaleString()}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Completion rate bar */}
+                {reportData.watchSessions > 0 && (() => {
+                  const pct = Math.round((reportData.completedSessions / reportData.watchSessions) * 100);
+                  return (
+                    <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px", marginBottom: 24 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>Completion Rate</p>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "#34d399" }}>{pct}%</span>
+                      </div>
+                      <div style={{ background: "#1e1e1e", borderRadius: 6, height: 8, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${pct}%`, background: "linear-gradient(90deg, #34d399, #059669)", borderRadius: 6, transition: "width 0.6s ease" }} />
+                      </div>
+                      <p style={{ margin: "8px 0 0", fontSize: 11, color: "#555" }}>{reportData.completedSessions.toLocaleString()} of {reportData.watchSessions.toLocaleString()} sessions completed</p>
+                    </div>
+                  );
+                })()}
+
+                {/* Top tables */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 24, marginBottom: 24 }}>
+                  {/* Top Watched */}
+                  <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px" }}>
+                    <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>Top Watched</p>
+                    {reportData.topWatched.length === 0 ? (
+                      <p style={{ fontSize: 13, color: "#444", textAlign: "center", padding: "20px 0" }}>No watch data yet</p>
+                    ) : reportData.topWatched.map((item, i) => (
+                      <div key={`${item.type}:${item.id}`} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 0", borderBottom: i < reportData.topWatched.length - 1 ? "1px solid #1a1a1a" : "none" }}>
+                        <span style={{ fontSize: 11, color: "#333", width: 18, textAlign: "right", flexShrink: 0 }}>{i + 1}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: 0, fontSize: 13, color: "#e5e5e5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
+                          <span style={{ fontSize: 11, color: item.type === "movie" ? "#facc15" : "#60a5fa" }}>{item.type}</span>
+                        </div>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "#60a5fa", flexShrink: 0 }}>{item.count}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Top Rated */}
+                  <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px" }}>
+                    <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>Top Rated (👍)</p>
+                    {reportData.topRated.length === 0 ? (
+                      <p style={{ fontSize: 13, color: "#444", textAlign: "center", padding: "20px 0" }}>No ratings yet</p>
+                    ) : reportData.topRated.map((item, i) => (
+                      <div key={`${item.type}:${item.id}`} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 0", borderBottom: i < reportData.topRated.length - 1 ? "1px solid #1a1a1a" : "none" }}>
+                        <span style={{ fontSize: 11, color: "#333", width: 18, textAlign: "right", flexShrink: 0 }}>{i + 1}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: 0, fontSize: 13, color: "#e5e5e5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
+                          <span style={{ fontSize: 11, color: item.type === "movie" ? "#facc15" : "#60a5fa" }}>{item.type}</span>
+                        </div>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "#f97316", flexShrink: 0 }}>{item.count}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Most Saved */}
+                  <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px" }}>
+                    <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>Most Saved to List</p>
+                    {reportData.topSaved.length === 0 ? (
+                      <p style={{ fontSize: 13, color: "#444", textAlign: "center", padding: "20px 0" }}>No saves yet</p>
+                    ) : reportData.topSaved.map((item, i) => (
+                      <div key={`${item.type}:${item.id}`} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 0", borderBottom: i < reportData.topSaved.length - 1 ? "1px solid #1a1a1a" : "none" }}>
+                        <span style={{ fontSize: 11, color: "#333", width: 18, textAlign: "right", flexShrink: 0 }}>{i + 1}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: 0, fontSize: 13, color: "#e5e5e5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
+                          <span style={{ fontSize: 11, color: item.type === "movie" ? "#facc15" : "#60a5fa" }}>{item.type}</span>
+                        </div>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "#a78bfa", flexShrink: 0 }}>{item.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* User growth by month */}
+                {reportData.userGrowth.length > 0 && (
+                  <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px" }}>
+                    <p style={{ margin: "0 0 20px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>User Signups by Month</p>
+                    <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 80 }}>
+                      {(() => {
+                        const max = Math.max(...reportData.userGrowth.map(([, c]) => c));
+                        return reportData.userGrowth.map(([month, count]) => (
+                          <div key={month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                            <span style={{ fontSize: 10, color: "#34d399", fontWeight: 600 }}>{count}</span>
+                            <div style={{ width: "100%", background: "rgba(52,211,153,0.2)", borderRadius: 4, height: `${Math.round((count / max) * 52) + 4}px`, minHeight: 4, transition: "height 0.4s ease" }} />
+                            <span style={{ fontSize: 9, color: "#444", whiteSpace: "nowrap" }}>{month.slice(5)}</span>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── USER ENGAGEMENT ── */}
+                <div style={{ marginTop: 12 }}>
+                  <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 700, color: "#fff", borderTop: "1px solid #1e1e1e", paddingTop: 28 }}>User Engagement</h3>
+
+                  {/* Engagement stat cards */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16, marginBottom: 24 }}>
+                    {[
+                      { label: "Active (7 days)", value: reportData.activeUsers7d, color: "#34d399" },
+                      { label: "Active (30 days)", value: reportData.activeUsers30d, color: "#34d399" },
+                      { label: "Never Watched", value: reportData.neverWatchedUsers.length, color: "#f87171" },
+                      { label: "Avg Sessions / User", value: reportData.avgSessionsPerUser.toFixed(1), color: "#60a5fa" },
+                    ].map(stat => (
+                      <div key={stat.label} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 20px 16px" }}>
+                        <p style={{ margin: "0 0 6px", fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 0.8 }}>{stat.label}</p>
+                        <p style={{ margin: 0, fontSize: 28, fontWeight: 700, color: stat.color }}>{stat.value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Watch sessions trend (last 30 days) */}
+                  {reportData.sessionTrend.length > 0 && (
+                    <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px", marginBottom: 24 }}>
+                      <p style={{ margin: "0 0 20px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>Watch Sessions — Last 30 Days</p>
+                      <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 72 }}>
+                        {(() => {
+                          const max = Math.max(...reportData.sessionTrend.map(([, c]) => c), 1);
+                          return reportData.sessionTrend.map(([day, count]) => (
+                            <div key={day} title={`${day}: ${count} sessions`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "default" }}>
+                              <div style={{ width: "100%", background: "rgba(96,165,250,0.25)", borderRadius: 3, height: `${Math.round((count / max) * 52) + 4}px`, minHeight: 4 }} />
+                              {reportData.sessionTrend.length <= 14 && (
+                                <span style={{ fontSize: 9, color: "#444" }}>{day.slice(8)}</span>
+                              )}
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                      <p style={{ margin: "10px 0 0", fontSize: 11, color: "#444" }}>{reportData.sessionTrend.length} active days · hover bars for date</p>
+                    </div>
+                  )}
+
+                  {/* Most active users table */}
+                  <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px", marginBottom: 24, overflowX: "auto" }}>
+                    <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>All Users by Activity</p>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ borderBottom: "1px solid #1e1e1e" }}>
+                          {["#", "User", "Sessions", "Completed", "Avg Watch (min)", "Saves", "Ratings", "Last Watched", "Status"].map(h => (
+                            <th key={h} style={{ padding: "0 12px 10px", textAlign: "left", color: "#555", fontWeight: 600, whiteSpace: "nowrap" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reportData.userEngagement.map((u, i) => (
+                          <tr key={u.id} style={{ borderBottom: "1px solid #141414" }}>
+                            <td style={{ padding: "10px 12px", color: "#333" }}>{i + 1}</td>
+                            <td style={{ padding: "10px 12px" }}>
+                              <p style={{ margin: 0, color: "#e5e5e5", fontWeight: 500 }}>{u.display}</p>
+                              {u.email && u.display !== u.email && <p style={{ margin: 0, color: "#444", fontSize: 11 }}>{u.email}</p>}
+                            </td>
+                            <td style={{ padding: "10px 12px", color: "#60a5fa", fontWeight: 600 }}>{u.sessions}</td>
+                            <td style={{ padding: "10px 12px", color: "#34d399" }}>{u.completed}</td>
+                            <td style={{ padding: "10px 12px", color: "#e5e5e5" }}>{u.avgProgressMin > 0 ? u.avgProgressMin : "—"}</td>
+                            <td style={{ padding: "10px 12px", color: "#a78bfa" }}>{u.saves || "—"}</td>
+                            <td style={{ padding: "10px 12px", color: "#f97316" }}>{u.ratings || "—"}</td>
+                            <td style={{ padding: "10px 12px", color: "#555", whiteSpace: "nowrap" }}>
+                              {u.lastWatched ? new Date(u.lastWatched).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
+                            </td>
+                            <td style={{ padding: "10px 12px" }}>
+                              {u.neverWatched
+                                ? <span style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.2)", borderRadius: 4, padding: "2px 7px", color: "#f87171", fontSize: 10 }}>Never watched</span>
+                                : u.active7d
+                                ? <span style={{ background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)", borderRadius: 4, padding: "2px 7px", color: "#34d399", fontSize: 10 }}>Active</span>
+                                : u.active30d
+                                ? <span style={{ background: "rgba(250,204,21,0.1)", border: "1px solid rgba(250,204,21,0.2)", borderRadius: 4, padding: "2px 7px", color: "#facc15", fontSize: 10 }}>Recent</span>
+                                : <span style={{ background: "rgba(100,116,139,0.1)", border: "1px solid rgba(100,116,139,0.2)", borderRadius: 4, padding: "2px 7px", color: "#64748b", fontSize: 10 }}>Inactive</span>
+                              }
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Never watched users */}
+                  {reportData.neverWatchedUsers.length > 0 && (
+                    <div style={{ background: "#111", border: "1px solid rgba(248,113,113,0.15)", borderRadius: 12, padding: "20px 24px" }}>
+                      <p style={{ margin: "0 0 14px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>
+                        Never Watched <span style={{ color: "#f87171", fontSize: 12 }}>({reportData.neverWatchedUsers.length})</span>
+                      </p>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        {reportData.neverWatchedUsers.map(u => (
+                          <div key={u.id} style={{ background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: "6px 12px" }}>
+                            <p style={{ margin: 0, fontSize: 12, color: "#e5e5e5" }}>{u.display}</p>
+                            <p style={{ margin: 0, fontSize: 11, color: "#444" }}>Joined {new Date(u.joinedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {!reportLoading && !reportData && (
+              <div style={{ textAlign: "center", padding: 80, color: "#444" }}>Click Refresh to load reports</div>
+            )}
+          </div>
         )}
 
       </div>
