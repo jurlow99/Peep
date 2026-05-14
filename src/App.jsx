@@ -631,6 +631,13 @@ function getEmbedUrl(url) {
 function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onToggleList, onAuthOpen }) {
   const [allVideos, setAllVideos] = useState([]);
   const [allShows, setAllShows] = useState([]);
+  const [nextEpisode, setNextEpisode] = useState(null);
+  const [countdownActive, setCountdownActive] = useState(false);
+  const [countdown, setCountdown] = useState(10);
+  const videoRef = useRef(null);
+  const countdownTimerRef = useRef(null);
+
+  const isEpisode = !!video.show_id;
 
   useEffect(() => {
     Promise.all([
@@ -642,7 +649,56 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
     });
   }, []);
 
-  const isEpisode = !!video.show_id;
+  useEffect(() => {
+    setNextEpisode(null);
+    if (!isEpisode) return;
+    supabase.from("episodes").select("*").eq("show_id", video.show_id)
+      .order("season", { ascending: true })
+      .order("episode_number", { ascending: true })
+      .then(({ data }) => {
+        if (!data) return;
+        const idx = data.findIndex(e => e.id === video.id);
+        setNextEpisode(idx >= 0 && idx < data.length - 1 ? data[idx + 1] : null);
+      });
+  }, [video.id, video.show_id, isEpisode]);
+
+  useEffect(() => {
+    setCountdownActive(false);
+    setCountdown(10);
+    clearInterval(countdownTimerRef.current);
+  }, [video.id]);
+
+  useEffect(() => () => clearInterval(countdownTimerRef.current), []);
+
+  function startCountdown(seconds) {
+    const ep = nextEpisode;
+    setCountdownActive(true);
+    setCountdown(Math.min(10, Math.ceil(seconds)));
+    clearInterval(countdownTimerRef.current);
+    countdownTimerRef.current = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) { clearInterval(countdownTimerRef.current); onSelect(ep); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+  }
+
+  function handleTimeUpdate(e) {
+    if (!nextEpisode || countdownActive) return;
+    const { currentTime, duration } = e.currentTarget;
+    if (!duration || isNaN(duration)) return;
+    if (duration - currentTime <= 10) startCountdown(duration - currentTime);
+  }
+
+  function handleEnded() {
+    if (nextEpisode) { clearInterval(countdownTimerRef.current); onSelect(nextEpisode); }
+  }
+
+  function cancelCountdown() {
+    setCountdownActive(false);
+    clearInterval(countdownTimerRef.current);
+  }
+
   const allRelatable = [
     ...allVideos.map(v => ({ ...v, _type: "movie" })),
     ...allShows.map(s => ({ ...s, _type: "show" })),
@@ -663,13 +719,48 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
       </nav>
 
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
-        <div style={{ background: "#000", borderRadius: 14, overflow: "hidden", marginBottom: 30, aspectRatio: "16/9", boxShadow: "0 32px 80px rgba(0,0,0,0.8)" }}>
-          {getEmbedUrl(video.url) ? (
-            <iframe src={getEmbedUrl(video.url)} style={{ width: "100%", height: "100%", display: "block", border: "none" }} allowFullScreen allow="autoplay" />
-          ) : (
-            <video controls autoPlay style={{ width: "100%", height: "100%", display: "block" }} poster={video.thumbnail}>
-              <source src={video.url} type="video/mp4" />
-            </video>
+        <div style={{ position: "relative", marginBottom: 30 }}>
+          <div style={{ background: "#000", borderRadius: 14, overflow: "hidden", aspectRatio: "16/9", boxShadow: "0 32px 80px rgba(0,0,0,0.8)" }}>
+            {getEmbedUrl(video.url) ? (
+              <iframe src={getEmbedUrl(video.url)} style={{ width: "100%", height: "100%", display: "block", border: "none" }} allowFullScreen allow="autoplay" />
+            ) : (
+              <video ref={videoRef} controls autoPlay style={{ width: "100%", height: "100%", display: "block" }} poster={video.thumbnail}
+                onTimeUpdate={handleTimeUpdate} onEnded={handleEnded}>
+                <source src={video.url} type="video/mp4" />
+              </video>
+            )}
+          </div>
+          {countdownActive && nextEpisode && (
+            <div style={{ position: "absolute", bottom: 20, right: 20, background: "rgba(15,15,15,0.96)", backdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 14, padding: "18px 20px", display: "flex", alignItems: "center", gap: 18, minWidth: 290, zIndex: 20, boxShadow: "0 8px 32px rgba(0,0,0,0.7)" }}>
+              <div style={{ position: "relative", flexShrink: 0, width: 54, height: 54 }}>
+                <svg width="54" height="54" viewBox="0 0 54 54" style={{ transform: "rotate(-90deg)" }}>
+                  <circle cx="27" cy="27" r="21" fill="none" stroke="#222" strokeWidth="4" />
+                  <circle cx="27" cy="27" r="21" fill="none" stroke="#facc15" strokeWidth="4"
+                    strokeDasharray={2 * Math.PI * 21}
+                    strokeDashoffset={2 * Math.PI * 21 * (1 - countdown / 10)}
+                    strokeLinecap="round"
+                    style={{ transition: "stroke-dashoffset 0.9s linear" }}
+                  />
+                </svg>
+                <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 700, color: "#fff" }}>{countdown}</span>
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ margin: "0 0 2px", fontSize: 10, color: "#666", textTransform: "uppercase", letterSpacing: 1 }}>Next Episode</p>
+                <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "#e5e5e5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  S{nextEpisode.season} E{nextEpisode.episode_number} · {nextEpisode.title}
+                </p>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => { clearInterval(countdownTimerRef.current); onSelect(nextEpisode); }}
+                    style={{ background: "#facc15", border: "none", borderRadius: 6, padding: "6px 14px", color: "#0a0a0a", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                    Play Now
+                  </button>
+                  <button onClick={cancelCountdown}
+                    style={{ background: "transparent", border: "1px solid #2a2a2a", borderRadius: 6, padding: "6px 12px", color: "#666", fontSize: 12, cursor: "pointer" }}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
 
