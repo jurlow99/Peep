@@ -131,6 +131,7 @@ export function CMS({ onExit }) {
   // Reports state
   const [reportData, setReportData] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
+  const [reportSection, setReportSection] = useState("overview");
 
   const subscriptionRef = useRef(null);
   const carouselSubRef = useRef(null);
@@ -1890,9 +1891,19 @@ export function CMS({ onExit }) {
         {/* ────── REPORTS TAB ────── */}
         {tab === "reports" && (
           <div style={{ gridColumn: "1 / -1" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
+            {/* Header row */}
+            <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28, flexWrap: "wrap" }}>
               <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#fff" }}>Analytics</h2>
-              <button onClick={loadReports} style={{ background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)", borderRadius: 7, padding: "8px 16px", color: "#34d399", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              <select
+                value={reportSection}
+                onChange={e => setReportSection(e.target.value)}
+                style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 8, padding: "8px 14px", color: "#e5e5e5", fontSize: 13, cursor: "pointer", outline: "none" }}
+              >
+                <option value="overview">Overview</option>
+                <option value="content">Content Performance</option>
+                <option value="users">User Engagement</option>
+              </select>
+              <button onClick={loadReports} style={{ marginLeft: "auto", background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)", borderRadius: 7, padding: "8px 16px", color: "#34d399", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                 Refresh
               </button>
             </div>
@@ -1905,215 +1916,184 @@ export function CMS({ onExit }) {
 
             {!reportLoading && reportData && (
               <>
-                {/* Stat cards */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16, marginBottom: 36 }}>
-                  {[
-                    { label: "Total Users", value: reportData.userCount, color: "#34d399" },
-                    { label: "Videos", value: reportData.videoCount, color: "#facc15" },
-                    { label: "Shows", value: reportData.showCount, color: "#facc15" },
-                    { label: "Episodes", value: reportData.episodeCount, color: "#facc15" },
-                    { label: "Watch Sessions", value: reportData.watchSessions, color: "#60a5fa" },
-                    { label: "Completed", value: reportData.completedSessions, color: "#60a5fa" },
-                    { label: "List Saves", value: reportData.totalSaves, color: "#a78bfa" },
-                    { label: "Ratings Given", value: reportData.totalRatings, color: "#f97316" },
-                  ].map(stat => (
-                    <div key={stat.label} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 20px 16px" }}>
-                      <p style={{ margin: "0 0 6px", fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 0.8 }}>{stat.label}</p>
-                      <p style={{ margin: 0, fontSize: 28, fontWeight: 700, color: stat.color }}>{stat.value.toLocaleString()}</p>
+                {/* ── OVERVIEW ── */}
+                {reportSection === "overview" && (
+                  <>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16, marginBottom: 24 }}>
+                      {[
+                        { label: "Total Users", value: reportData.userCount, color: "#34d399" },
+                        { label: "Videos", value: reportData.videoCount, color: "#facc15" },
+                        { label: "Shows", value: reportData.showCount, color: "#facc15" },
+                        { label: "Episodes", value: reportData.episodeCount, color: "#facc15" },
+                        { label: "Watch Sessions", value: reportData.watchSessions, color: "#60a5fa" },
+                        { label: "Completed", value: reportData.completedSessions, color: "#60a5fa" },
+                        { label: "List Saves", value: reportData.totalSaves, color: "#a78bfa" },
+                        { label: "Ratings Given", value: reportData.totalRatings, color: "#f97316" },
+                      ].map(stat => (
+                        <div key={stat.label} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 20px 16px" }}>
+                          <p style={{ margin: "0 0 6px", fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 0.8 }}>{stat.label}</p>
+                          <p style={{ margin: 0, fontSize: 28, fontWeight: 700, color: stat.color }}>{stat.value.toLocaleString()}</p>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
 
-                {/* Completion rate bar */}
-                {reportData.watchSessions > 0 && (() => {
-                  const pct = Math.round((reportData.completedSessions / reportData.watchSessions) * 100);
-                  return (
-                    <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px", marginBottom: 24 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>Completion Rate</p>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: "#34d399" }}>{pct}%</span>
-                      </div>
-                      <div style={{ background: "#1e1e1e", borderRadius: 6, height: 8, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${pct}%`, background: "linear-gradient(90deg, #34d399, #059669)", borderRadius: 6, transition: "width 0.6s ease" }} />
-                      </div>
-                      <p style={{ margin: "8px 0 0", fontSize: 11, color: "#555" }}>{reportData.completedSessions.toLocaleString()} of {reportData.watchSessions.toLocaleString()} sessions completed</p>
-                    </div>
-                  );
-                })()}
-
-                {/* Top tables */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 24, marginBottom: 24 }}>
-                  {/* Top Watched */}
-                  <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px" }}>
-                    <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>Top Watched</p>
-                    {reportData.topWatched.length === 0 ? (
-                      <p style={{ fontSize: 13, color: "#444", textAlign: "center", padding: "20px 0" }}>No watch data yet</p>
-                    ) : reportData.topWatched.map((item, i) => (
-                      <div key={`${item.type}:${item.id}`} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 0", borderBottom: i < reportData.topWatched.length - 1 ? "1px solid #1a1a1a" : "none" }}>
-                        <span style={{ fontSize: 11, color: "#333", width: 18, textAlign: "right", flexShrink: 0 }}>{i + 1}</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ margin: 0, fontSize: 13, color: "#e5e5e5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
-                          <span style={{ fontSize: 11, color: item.type === "movie" ? "#facc15" : "#60a5fa" }}>{item.type}</span>
-                        </div>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: "#60a5fa", flexShrink: 0 }}>{item.count}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Top Rated */}
-                  <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px" }}>
-                    <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>Top Rated (👍)</p>
-                    {reportData.topRated.length === 0 ? (
-                      <p style={{ fontSize: 13, color: "#444", textAlign: "center", padding: "20px 0" }}>No ratings yet</p>
-                    ) : reportData.topRated.map((item, i) => (
-                      <div key={`${item.type}:${item.id}`} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 0", borderBottom: i < reportData.topRated.length - 1 ? "1px solid #1a1a1a" : "none" }}>
-                        <span style={{ fontSize: 11, color: "#333", width: 18, textAlign: "right", flexShrink: 0 }}>{i + 1}</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ margin: 0, fontSize: 13, color: "#e5e5e5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
-                          <span style={{ fontSize: 11, color: item.type === "movie" ? "#facc15" : "#60a5fa" }}>{item.type}</span>
-                        </div>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: "#f97316", flexShrink: 0 }}>{item.count}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Most Saved */}
-                  <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px" }}>
-                    <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>Most Saved to List</p>
-                    {reportData.topSaved.length === 0 ? (
-                      <p style={{ fontSize: 13, color: "#444", textAlign: "center", padding: "20px 0" }}>No saves yet</p>
-                    ) : reportData.topSaved.map((item, i) => (
-                      <div key={`${item.type}:${item.id}`} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 0", borderBottom: i < reportData.topSaved.length - 1 ? "1px solid #1a1a1a" : "none" }}>
-                        <span style={{ fontSize: 11, color: "#333", width: 18, textAlign: "right", flexShrink: 0 }}>{i + 1}</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ margin: 0, fontSize: 13, color: "#e5e5e5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
-                          <span style={{ fontSize: 11, color: item.type === "movie" ? "#facc15" : "#60a5fa" }}>{item.type}</span>
-                        </div>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: "#a78bfa", flexShrink: 0 }}>{item.count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* User growth by month */}
-                {reportData.userGrowth.length > 0 && (
-                  <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px" }}>
-                    <p style={{ margin: "0 0 20px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>User Signups by Month</p>
-                    <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 80 }}>
-                      {(() => {
-                        const max = Math.max(...reportData.userGrowth.map(([, c]) => c));
-                        return reportData.userGrowth.map(([month, count]) => (
-                          <div key={month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                            <span style={{ fontSize: 10, color: "#34d399", fontWeight: 600 }}>{count}</span>
-                            <div style={{ width: "100%", background: "rgba(52,211,153,0.2)", borderRadius: 4, height: `${Math.round((count / max) * 52) + 4}px`, minHeight: 4, transition: "height 0.4s ease" }} />
-                            <span style={{ fontSize: 9, color: "#444", whiteSpace: "nowrap" }}>{month.slice(5)}</span>
+                    {reportData.watchSessions > 0 && (() => {
+                      const pct = Math.round((reportData.completedSessions / reportData.watchSessions) * 100);
+                      return (
+                        <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px", marginBottom: 24 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>Completion Rate</p>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: "#34d399" }}>{pct}%</span>
                           </div>
-                        ));
-                      })()}
-                    </div>
+                          <div style={{ background: "#1e1e1e", borderRadius: 6, height: 8, overflow: "hidden" }}>
+                            <div style={{ height: "100%", width: `${pct}%`, background: "linear-gradient(90deg, #34d399, #059669)", borderRadius: 6, transition: "width 0.6s ease" }} />
+                          </div>
+                          <p style={{ margin: "8px 0 0", fontSize: 11, color: "#555" }}>{reportData.completedSessions.toLocaleString()} of {reportData.watchSessions.toLocaleString()} sessions completed</p>
+                        </div>
+                      );
+                    })()}
+
+                    {reportData.userGrowth.length > 0 && (
+                      <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px" }}>
+                        <p style={{ margin: "0 0 20px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>User Signups by Month</p>
+                        <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 80 }}>
+                          {(() => {
+                            const max = Math.max(...reportData.userGrowth.map(([, c]) => c));
+                            return reportData.userGrowth.map(([month, count]) => (
+                              <div key={month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                                <span style={{ fontSize: 10, color: "#34d399", fontWeight: 600 }}>{count}</span>
+                                <div style={{ width: "100%", background: "rgba(52,211,153,0.2)", borderRadius: 4, height: `${Math.round((count / max) * 52) + 4}px`, minHeight: 4, transition: "height 0.4s ease" }} />
+                                <span style={{ fontSize: 9, color: "#444", whiteSpace: "nowrap" }}>{month.slice(5)}</span>
+                              </div>
+                            ));
+                          })()}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* ── CONTENT PERFORMANCE ── */}
+                {reportSection === "content" && (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 24 }}>
+                    {[
+                      { title: "Top Watched", items: reportData.topWatched, valueColor: "#60a5fa", emptyMsg: "No watch data yet" },
+                      { title: "Top Rated (👍)", items: reportData.topRated, valueColor: "#f97316", emptyMsg: "No ratings yet" },
+                      { title: "Most Saved to List", items: reportData.topSaved, valueColor: "#a78bfa", emptyMsg: "No saves yet" },
+                    ].map(({ title, items, valueColor, emptyMsg }) => (
+                      <div key={title} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px" }}>
+                        <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>{title}</p>
+                        {items.length === 0 ? (
+                          <p style={{ fontSize: 13, color: "#444", textAlign: "center", padding: "20px 0" }}>{emptyMsg}</p>
+                        ) : items.map((item, i) => (
+                          <div key={`${item.type}:${item.id}`} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 0", borderBottom: i < items.length - 1 ? "1px solid #1a1a1a" : "none" }}>
+                            <span style={{ fontSize: 11, color: "#333", width: 18, textAlign: "right", flexShrink: 0 }}>{i + 1}</span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <p style={{ margin: 0, fontSize: 13, color: "#e5e5e5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
+                              <span style={{ fontSize: 11, color: item.type === "movie" ? "#facc15" : "#60a5fa" }}>{item.type}</span>
+                            </div>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: valueColor, flexShrink: 0 }}>{item.count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
                   </div>
                 )}
 
                 {/* ── USER ENGAGEMENT ── */}
-                <div style={{ marginTop: 12 }}>
-                  <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 700, color: "#fff", borderTop: "1px solid #1e1e1e", paddingTop: 28 }}>User Engagement</h3>
-
-                  {/* Engagement stat cards */}
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16, marginBottom: 24 }}>
-                    {[
-                      { label: "Active (7 days)", value: reportData.activeUsers7d, color: "#34d399" },
-                      { label: "Active (30 days)", value: reportData.activeUsers30d, color: "#34d399" },
-                      { label: "Never Watched", value: reportData.neverWatchedUsers.length, color: "#f87171" },
-                      { label: "Avg Sessions / User", value: reportData.avgSessionsPerUser.toFixed(1), color: "#60a5fa" },
-                    ].map(stat => (
-                      <div key={stat.label} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 20px 16px" }}>
-                        <p style={{ margin: "0 0 6px", fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 0.8 }}>{stat.label}</p>
-                        <p style={{ margin: 0, fontSize: 28, fontWeight: 700, color: stat.color }}>{stat.value}</p>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Watch sessions trend (last 30 days) */}
-                  {reportData.sessionTrend.length > 0 && (
-                    <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px", marginBottom: 24 }}>
-                      <p style={{ margin: "0 0 20px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>Watch Sessions — Last 30 Days</p>
-                      <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 72 }}>
-                        {(() => {
-                          const max = Math.max(...reportData.sessionTrend.map(([, c]) => c), 1);
-                          return reportData.sessionTrend.map(([day, count]) => (
-                            <div key={day} title={`${day}: ${count} sessions`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "default" }}>
-                              <div style={{ width: "100%", background: "rgba(96,165,250,0.25)", borderRadius: 3, height: `${Math.round((count / max) * 52) + 4}px`, minHeight: 4 }} />
-                              {reportData.sessionTrend.length <= 14 && (
-                                <span style={{ fontSize: 9, color: "#444" }}>{day.slice(8)}</span>
-                              )}
-                            </div>
-                          ));
-                        })()}
-                      </div>
-                      <p style={{ margin: "10px 0 0", fontSize: 11, color: "#444" }}>{reportData.sessionTrend.length} active days · hover bars for date</p>
+                {reportSection === "users" && (
+                  <>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16, marginBottom: 24 }}>
+                      {[
+                        { label: "Active (7 days)", value: reportData.activeUsers7d, color: "#34d399" },
+                        { label: "Active (30 days)", value: reportData.activeUsers30d, color: "#34d399" },
+                        { label: "Never Watched", value: reportData.neverWatchedUsers.length, color: "#f87171" },
+                        { label: "Avg Sessions / User", value: reportData.avgSessionsPerUser.toFixed(1), color: "#60a5fa" },
+                      ].map(stat => (
+                        <div key={stat.label} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 20px 16px" }}>
+                          <p style={{ margin: "0 0 6px", fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 0.8 }}>{stat.label}</p>
+                          <p style={{ margin: 0, fontSize: 28, fontWeight: 700, color: stat.color }}>{stat.value}</p>
+                        </div>
+                      ))}
                     </div>
-                  )}
 
-                  {/* Most active users table */}
-                  <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px", marginBottom: 24, overflowX: "auto" }}>
-                    <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>All Users by Activity</p>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                      <thead>
-                        <tr style={{ borderBottom: "1px solid #1e1e1e" }}>
-                          {["#", "User", "Sessions", "Completed", "Avg Watch (min)", "Saves", "Ratings", "Last Watched", "Status"].map(h => (
-                            <th key={h} style={{ padding: "0 12px 10px", textAlign: "left", color: "#555", fontWeight: 600, whiteSpace: "nowrap" }}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {reportData.userEngagement.map((u, i) => (
-                          <tr key={u.id} style={{ borderBottom: "1px solid #141414" }}>
-                            <td style={{ padding: "10px 12px", color: "#333" }}>{i + 1}</td>
-                            <td style={{ padding: "10px 12px" }}>
-                              <p style={{ margin: 0, color: "#e5e5e5", fontWeight: 500 }}>{u.display}</p>
-                              {u.email && u.display !== u.email && <p style={{ margin: 0, color: "#444", fontSize: 11 }}>{u.email}</p>}
-                            </td>
-                            <td style={{ padding: "10px 12px", color: "#60a5fa", fontWeight: 600 }}>{u.sessions}</td>
-                            <td style={{ padding: "10px 12px", color: "#34d399" }}>{u.completed}</td>
-                            <td style={{ padding: "10px 12px", color: "#e5e5e5" }}>{u.avgProgressMin > 0 ? u.avgProgressMin : "—"}</td>
-                            <td style={{ padding: "10px 12px", color: "#a78bfa" }}>{u.saves || "—"}</td>
-                            <td style={{ padding: "10px 12px", color: "#f97316" }}>{u.ratings || "—"}</td>
-                            <td style={{ padding: "10px 12px", color: "#555", whiteSpace: "nowrap" }}>
-                              {u.lastWatched ? new Date(u.lastWatched).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
-                            </td>
-                            <td style={{ padding: "10px 12px" }}>
-                              {u.neverWatched
-                                ? <span style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.2)", borderRadius: 4, padding: "2px 7px", color: "#f87171", fontSize: 10 }}>Never watched</span>
-                                : u.active7d
-                                ? <span style={{ background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)", borderRadius: 4, padding: "2px 7px", color: "#34d399", fontSize: 10 }}>Active</span>
-                                : u.active30d
-                                ? <span style={{ background: "rgba(250,204,21,0.1)", border: "1px solid rgba(250,204,21,0.2)", borderRadius: 4, padding: "2px 7px", color: "#facc15", fontSize: 10 }}>Recent</span>
-                                : <span style={{ background: "rgba(100,116,139,0.1)", border: "1px solid rgba(100,116,139,0.2)", borderRadius: 4, padding: "2px 7px", color: "#64748b", fontSize: 10 }}>Inactive</span>
-                              }
-                            </td>
+                    {reportData.sessionTrend.length > 0 && (
+                      <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px", marginBottom: 24 }}>
+                        <p style={{ margin: "0 0 20px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>Watch Sessions — Last 30 Days</p>
+                        <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 72 }}>
+                          {(() => {
+                            const max = Math.max(...reportData.sessionTrend.map(([, c]) => c), 1);
+                            return reportData.sessionTrend.map(([day, count]) => (
+                              <div key={day} title={`${day}: ${count} sessions`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "default" }}>
+                                <div style={{ width: "100%", background: "rgba(96,165,250,0.25)", borderRadius: 3, height: `${Math.round((count / max) * 52) + 4}px`, minHeight: 4 }} />
+                                {reportData.sessionTrend.length <= 14 && <span style={{ fontSize: 9, color: "#444" }}>{day.slice(8)}</span>}
+                              </div>
+                            ));
+                          })()}
+                        </div>
+                        <p style={{ margin: "10px 0 0", fontSize: 11, color: "#444" }}>{reportData.sessionTrend.length} active days · hover bars for date</p>
+                      </div>
+                    )}
+
+                    <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px", marginBottom: 24, overflowX: "auto" }}>
+                      <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>All Users by Activity</p>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                        <thead>
+                          <tr style={{ borderBottom: "1px solid #1e1e1e" }}>
+                            {["#", "User", "Sessions", "Completed", "Avg Watch (min)", "Saves", "Ratings", "Last Watched", "Status"].map(h => (
+                              <th key={h} style={{ padding: "0 12px 10px", textAlign: "left", color: "#555", fontWeight: 600, whiteSpace: "nowrap" }}>{h}</th>
+                            ))}
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Never watched users */}
-                  {reportData.neverWatchedUsers.length > 0 && (
-                    <div style={{ background: "#111", border: "1px solid rgba(248,113,113,0.15)", borderRadius: 12, padding: "20px 24px" }}>
-                      <p style={{ margin: "0 0 14px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>
-                        Never Watched <span style={{ color: "#f87171", fontSize: 12 }}>({reportData.neverWatchedUsers.length})</span>
-                      </p>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                        {reportData.neverWatchedUsers.map(u => (
-                          <div key={u.id} style={{ background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: "6px 12px" }}>
-                            <p style={{ margin: 0, fontSize: 12, color: "#e5e5e5" }}>{u.display}</p>
-                            <p style={{ margin: 0, fontSize: 11, color: "#444" }}>Joined {new Date(u.joinedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
-                          </div>
-                        ))}
-                      </div>
+                        </thead>
+                        <tbody>
+                          {reportData.userEngagement.map((u, i) => (
+                            <tr key={u.id} style={{ borderBottom: "1px solid #141414" }}>
+                              <td style={{ padding: "10px 12px", color: "#333" }}>{i + 1}</td>
+                              <td style={{ padding: "10px 12px" }}>
+                                <p style={{ margin: 0, color: "#e5e5e5", fontWeight: 500 }}>{u.display}</p>
+                                {u.email && u.display !== u.email && <p style={{ margin: 0, color: "#444", fontSize: 11 }}>{u.email}</p>}
+                              </td>
+                              <td style={{ padding: "10px 12px", color: "#60a5fa", fontWeight: 600 }}>{u.sessions}</td>
+                              <td style={{ padding: "10px 12px", color: "#34d399" }}>{u.completed}</td>
+                              <td style={{ padding: "10px 12px", color: "#e5e5e5" }}>{u.avgProgressMin > 0 ? u.avgProgressMin : "—"}</td>
+                              <td style={{ padding: "10px 12px", color: "#a78bfa" }}>{u.saves || "—"}</td>
+                              <td style={{ padding: "10px 12px", color: "#f97316" }}>{u.ratings || "—"}</td>
+                              <td style={{ padding: "10px 12px", color: "#555", whiteSpace: "nowrap" }}>
+                                {u.lastWatched ? new Date(u.lastWatched).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
+                              </td>
+                              <td style={{ padding: "10px 12px" }}>
+                                {u.neverWatched
+                                  ? <span style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.2)", borderRadius: 4, padding: "2px 7px", color: "#f87171", fontSize: 10 }}>Never watched</span>
+                                  : u.active7d
+                                  ? <span style={{ background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)", borderRadius: 4, padding: "2px 7px", color: "#34d399", fontSize: 10 }}>Active</span>
+                                  : u.active30d
+                                  ? <span style={{ background: "rgba(250,204,21,0.1)", border: "1px solid rgba(250,204,21,0.2)", borderRadius: 4, padding: "2px 7px", color: "#facc15", fontSize: 10 }}>Recent</span>
+                                  : <span style={{ background: "rgba(100,116,139,0.1)", border: "1px solid rgba(100,116,139,0.2)", borderRadius: 4, padding: "2px 7px", color: "#64748b", fontSize: 10 }}>Inactive</span>
+                                }
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-                  )}
-                </div>
+
+                    {reportData.neverWatchedUsers.length > 0 && (
+                      <div style={{ background: "#111", border: "1px solid rgba(248,113,113,0.15)", borderRadius: 12, padding: "20px 24px" }}>
+                        <p style={{ margin: "0 0 14px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>
+                          Never Watched <span style={{ color: "#f87171", fontSize: 12 }}>({reportData.neverWatchedUsers.length})</span>
+                        </p>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                          {reportData.neverWatchedUsers.map(u => (
+                            <div key={u.id} style={{ background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: "6px 12px" }}>
+                              <p style={{ margin: 0, fontSize: 12, color: "#e5e5e5" }}>{u.display}</p>
+                              <p style={{ margin: 0, fontSize: 11, color: "#444" }}>Joined {new Date(u.joinedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
               </>
             )}
 
