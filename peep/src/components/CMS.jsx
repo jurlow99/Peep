@@ -1445,10 +1445,14 @@ export function CMS({ onExit }) {
                   else if (t === "trending") summary = `Shows ${ct === "movies" ? "movies" : ct === "shows" ? "series" : "movies & series"}, newest added first.`;
                   else if (t === "category") summary = fv ? `Shows ${ct === "movies" ? "movies" : ct === "shows" ? "series" : "content"} in the "${fv}" category.` : `Shows all ${ct === "movies" ? "movies" : ct === "shows" ? "series" : "content"} (no category set yet).`;
                   else summary = `Shows all ${ct === "movies" ? "movies" : ct === "shows" ? "series" : "movies & series"}.`;
+                  const tabs = t === "podcast" ? "Home" : ct === "movies" ? "Home + Movies tab" : ct === "shows" ? "Home + Series tab" : "Home + Movies + Series tabs";
                   return (
                     <div style={{ background: "rgba(250,204,21,0.06)", border: "1px solid rgba(250,204,21,0.2)", borderRadius: 8, padding: "12px 14px" }}>
-                      <p style={{ margin: 0, fontSize: 12, color: "#ccc", lineHeight: 1.5 }}>
+                      <p style={{ margin: "0 0 6px", fontSize: 12, color: "#ccc", lineHeight: 1.5 }}>
                         <span style={{ color: "#facc15", fontWeight: 700 }}>"{carouselForm.title}"</span> — {summary}
+                      </p>
+                      <p style={{ margin: 0, fontSize: 11, color: "#666" }}>
+                        Appears on: <span style={{ color: "#888", fontWeight: 600 }}>{tabs}</span>
                       </p>
                     </div>
                   );

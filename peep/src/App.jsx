@@ -467,6 +467,8 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
         <CatalogPage
           type={activeNav}
           content={filteredContent}
+          carousels={visibleCarousels}
+          podcasts={podcasts}
           onPlay={onPlay}
           onShowSelect={onShowSelect}
           myList={myList}
@@ -507,7 +509,7 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
 
 // ─── Catalog Page (Movies / Series) ──────────────────────────────────────────
 
-function CatalogPage({ type, content, onPlay, onShowSelect, myList, onToggleList }) {
+function CatalogPage({ type, content, carousels = [], podcasts = [], onPlay, onShowSelect, myList, onToggleList }) {
   const [genreFilter, setGenreFilter] = useState("All");
   const [sortBy, setSortBy] = useState("default");
   const isMobile = useIsMobile();
@@ -525,6 +527,20 @@ function CatalogPage({ type, content, onPlay, onShowSelect, myList, onToggleList
     return items;
   }, [content, genreFilter, sortBy]);
 
+  // Build carousel sections for this tab — same logic as homepage
+  const catalogSections = useMemo(() => carousels.map(c => {
+    const filterVal = c.filter_value?.toLowerCase();
+    const baseItems = c.type === "trending"
+      ? [...content].reverse()
+      : c.type === "category"
+      ? content.filter(v => v.category?.toLowerCase() === filterVal)
+      : content;
+    const items = c.content_type === "movies" ? baseItems.filter(v => v._type === "movie")
+      : c.content_type === "shows" ? baseItems.filter(v => v._type === "show")
+      : baseItems;
+    return { id: String(c.id), title: c.title, videos: items, numbered: c.type === "trending" };
+  }).filter(s => s.videos.length > 0), [carousels, content]);
+
   return (
     <div style={{ paddingTop: 88, minHeight: "100vh" }}>
       {/* Page header */}
@@ -535,7 +551,6 @@ function CatalogPage({ type, content, onPlay, onShowSelect, myList, onToggleList
 
         {/* Filters row */}
         <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          {/* Genre pills */}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", flex: 1 }}>
             {genres.map(g => (
               <button key={g} onClick={() => setGenreFilter(g)}
@@ -544,7 +559,6 @@ function CatalogPage({ type, content, onPlay, onShowSelect, myList, onToggleList
               </button>
             ))}
           </div>
-          {/* Sort */}
           <select value={sortBy} onChange={e => setSortBy(e.target.value)}
             style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "8px 14px", color: "rgba(255,255,255,0.7)", fontSize: 13, cursor: "pointer", outline: "none", flexShrink: 0 }}>
             <option value="default">Default order</option>
@@ -554,17 +568,30 @@ function CatalogPage({ type, content, onPlay, onShowSelect, myList, onToggleList
           </select>
         </div>
 
-        {/* Count */}
         <p style={{ margin: "16px 0 0", fontSize: 12, color: "#444" }}>
           {displayed.length} title{displayed.length !== 1 ? "s" : ""}
           {genreFilter !== "All" ? ` in ${genreFilter}` : ""}
         </p>
       </div>
 
-      {/* Divider */}
-      <div style={{ height: 1, background: "linear-gradient(to right, rgba(255,255,255,0.06), transparent)", margin: `0 ${PAD} 28px` }} />
+      <div style={{ height: 1, background: "linear-gradient(to right, rgba(255,255,255,0.06), transparent)", margin: `0 ${PAD} 8px` }} />
 
-      {/* Grid */}
+      {/* Carousel rows for this tab */}
+      {catalogSections.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          {catalogSections.map(section => (
+            <ContentRow key={section.id} section={section} onPlay={onPlay} onShowSelect={onShowSelect} myList={myList} onToggleList={onToggleList} />
+          ))}
+        </div>
+      )}
+
+      {/* Browse all grid */}
+      <div style={{ padding: `0 ${PAD}`, marginBottom: 12 }}>
+        <h2 style={{ margin: 0, fontSize: "clamp(16px, 1.4vw, 20px)", fontWeight: 600, color: "#e5e5e5" }}>
+          Browse All
+        </h2>
+      </div>
+
       {displayed.length === 0 ? (
         <div style={{ padding: "80px 0", textAlign: "center", color: "#444", fontSize: 15 }}>
           No {type.toLowerCase()} in this genre yet.
