@@ -925,6 +925,7 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
   const [continueWatching, setContinueWatching] = useState([]);
   const playerContainerRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const countdownGuardRef = useRef(false);
 
   useEffect(() => {
     Promise.all([
@@ -953,6 +954,7 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
     setCountdownActive(false);
     setCountdown(10);
     clearInterval(countdownTimerRef.current);
+    countdownGuardRef.current = false;
   }, [video.id]);
 
   useEffect(() => () => clearInterval(countdownTimerRef.current), []);
@@ -1052,10 +1054,13 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
   }
 
   function handleTimeUpdate(e) {
-    if (!nextEpisode || countdownActive) return;
+    if (!nextEpisode || countdownGuardRef.current) return;
     const { currentTime, duration } = e.currentTarget;
     if (!duration || isNaN(duration)) return;
-    if (duration - currentTime <= 10) startCountdown(duration - currentTime);
+    if (duration - currentTime <= 10) {
+      countdownGuardRef.current = true;
+      startCountdown(duration - currentTime);
+    }
   }
 
   async function handleEnded() {
@@ -1070,6 +1075,7 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
   }
 
   function cancelCountdown() {
+    countdownGuardRef.current = false;
     setCountdownActive(false);
     clearInterval(countdownTimerRef.current);
   }
@@ -1091,8 +1097,13 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
   function handleLoadedMetadata() {
     if (!user || !videoRef.current || getEmbedUrl(video.url)) return;
     const ct = isEpisode ? "episode" : "movie";
-    supabase.from("watch_progress").select("progress_seconds").eq("user_id", user.id).eq("content_id", video.id).eq("content_type", ct).maybeSingle()
-      .then(({ data }) => { if (data && data.progress_seconds > 10 && videoRef.current) videoRef.current.currentTime = data.progress_seconds; });
+    supabase.from("watch_progress").select("progress_seconds, duration_seconds, completed")
+      .eq("user_id", user.id).eq("content_id", video.id).eq("content_type", ct).maybeSingle()
+      .then(({ data }) => {
+        if (!data || data.completed || !videoRef.current) return;
+        const pct = data.duration_seconds > 0 ? data.progress_seconds / data.duration_seconds : 0;
+        if (data.progress_seconds > 10 && pct < 0.9) videoRef.current.currentTime = data.progress_seconds;
+      });
   }
 
   const allRelatable = [
