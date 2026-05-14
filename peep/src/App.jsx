@@ -89,7 +89,7 @@ export default function App() {
   if (!authChecked) return null;
   if (!user) return <LandingPage />;
 
-  const profileScreenEl = profileOpen && <ProfileScreen user={user} onClose={() => { setProfileOpen(false); loadAvatarId(user.id); }} />;
+  const profileScreenEl = profileOpen && <ProfileScreen user={user} onClose={() => setProfileOpen(false)} onAvatarChange={id => setUserAvatarId(id)} />;
 
   if (page === "player" && selectedVideo) {
     const handleBack = () => { setPage(selectedShow ? "show" : "home"); setSelectedVideo(null); };

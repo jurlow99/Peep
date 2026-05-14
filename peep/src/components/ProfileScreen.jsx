@@ -23,7 +23,7 @@ export function avatarForId(id) {
   return PRESET_AVATARS.find(a => a.id === id) ?? null;
 }
 
-export function ProfileScreen({ user, onClose }) {
+export function ProfileScreen({ user, onClose, onAvatarChange }) {
   const [profile, setProfile] = useState(null);
   const [selectedAvatar, setSelectedAvatar] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -42,6 +42,7 @@ export function ProfileScreen({ user, onClose }) {
 
   async function saveAvatar(avatarId) {
     setSelectedAvatar(avatarId);
+    onAvatarChange?.(avatarId);
     setSaving(true);
     await supabase.from("profiles").update({ avatar_id: avatarId }).eq("id", user.id);
     setSaving(false);
