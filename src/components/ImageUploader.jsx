@@ -47,7 +47,7 @@ export function ImageUploader({ onUploadSuccess, onError, label = "Upload Image"
         }}
         onMouseEnter={e => {
           if (!uploading) {
-            e.currentTarget.style.borderColor = "#ff4d4d";
+            e.currentTarget.style.borderColor = "#facc15";
             e.currentTarget.style.background = "#1a0a0a";
           }
         }}

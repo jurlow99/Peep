@@ -226,23 +226,23 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 36 }}>
           <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 26, letterSpacing: "-0.5px", userSelect: "none" }}>
-            peep<span style={{ color: "#ff4d4d" }}>.</span>
+            peep<span style={{ color: "#facc15" }}>.</span>
           </span>
           {!isMobile && (
             <div style={{ display: "flex", gap: 4 }}>
               {["Home", "Movies", "Series", "New & Popular"].map(label => {
                 const active = activeNav === label;
                 return (
-                  <span key={label} onClick={() => setActiveNav(label)} style={{ fontSize: 13.5, padding: "6px 12px", borderRadius: 6, color: active ? "#fff" : "rgba(255,255,255,0.55)", fontWeight: active ? 600 : 400, cursor: "pointer", background: active ? "rgba(255,77,77,0.12)" : "transparent", transition: "color 0.2s, background 0.2s" }}
+                  <span key={label} onClick={() => setActiveNav(label)} style={{ fontSize: 13.5, padding: "6px 12px", borderRadius: 6, color: active ? "#fff" : "rgba(255,255,255,0.55)", fontWeight: active ? 600 : 400, cursor: "pointer", background: active ? "rgba(250,204,21,0.12)" : "transparent", transition: "color 0.2s, background 0.2s" }}
                     onMouseEnter={e => { if (!active) { e.currentTarget.style.color = "#fff"; e.currentTarget.style.background = "rgba(255,255,255,0.06)"; } }}
                     onMouseLeave={e => { if (!active) { e.currentTarget.style.color = "rgba(255,255,255,0.55)"; e.currentTarget.style.background = "transparent"; } }}
                   >{label}</span>
                 );
               })}
               <span onClick={() => { if (!user) { onAuthOpen(); return; } setActiveNav("My List"); }}
-                style={{ fontSize: 13.5, padding: "6px 12px", borderRadius: 6, cursor: "pointer", color: activeNav === "My List" ? "#fff" : "rgba(255,255,255,0.55)", fontWeight: activeNav === "My List" ? 600 : 400, background: activeNav === "My List" ? "rgba(255,77,77,0.12)" : "transparent", transition: "color 0.2s, background 0.2s" }}
+                style={{ fontSize: 13.5, padding: "6px 12px", borderRadius: 6, cursor: "pointer", color: activeNav === "My List" ? "#fff" : "rgba(255,255,255,0.55)", fontWeight: activeNav === "My List" ? 600 : 400, background: activeNav === "My List" ? "rgba(250,204,21,0.12)" : "transparent", transition: "color 0.2s, background 0.2s" }}
                 onMouseEnter={e => { e.currentTarget.style.color = "#fff"; e.currentTarget.style.background = "rgba(255,255,255,0.06)"; }}
-                onMouseLeave={e => { e.currentTarget.style.color = activeNav === "My List" ? "#fff" : "rgba(255,255,255,0.55)"; e.currentTarget.style.background = activeNav === "My List" ? "rgba(255,77,77,0.12)" : "transparent"; }}
+                onMouseLeave={e => { e.currentTarget.style.color = activeNav === "My List" ? "#fff" : "rgba(255,255,255,0.55)"; e.currentTarget.style.background = activeNav === "My List" ? "rgba(250,204,21,0.12)" : "transparent"; }}
               >My List</span>
             </div>
           )}
@@ -264,7 +264,7 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
           {!isMobile && (
             <div style={{ position: "relative", cursor: "pointer", color: "rgba(255,255,255,0.7)", display: "flex" }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
-              <div style={{ position: "absolute", top: -2, right: -2, width: 7, height: 7, borderRadius: "50%", background: "#ff4d4d", border: "1.5px solid #0a0a0a" }} />
+              <div style={{ position: "absolute", top: -2, right: -2, width: 7, height: 7, borderRadius: "50%", background: "#facc15", border: "1.5px solid #0a0a0a" }} />
             </div>
           )}
           {!isMobile && (user ? (
@@ -275,11 +275,11 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
               <button onClick={() => supabase.auth.signOut()} style={{ background: "transparent", border: "1px solid #2a2a2a", borderRadius: 6, padding: "6px 12px", color: "#666", fontSize: 12, cursor: "pointer" }}>Sign Out</button>
             </div>
           ) : (
-            <button onClick={onAuthOpen} style={{ background: "#ff4d4d", border: "none", borderRadius: 6, padding: "8px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Sign In</button>
+            <button onClick={onAuthOpen} style={{ background: "#facc15", border: "none", borderRadius: 6, padding: "8px 18px", color: "#0a0a0a", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Sign In</button>
           ))}
           {!isMobile && (
             <div onClick={() => window.location.href = "/admin"} title="Admin panel"
-              style={{ width: 34, height: 34, borderRadius: 8, background: "linear-gradient(135deg, #ff6b6b, #cc2222)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>P</div>
+              style={{ width: 34, height: 34, borderRadius: 8, background: "linear-gradient(135deg, #fde68a, #b45309)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>P</div>
           )}
           {isMobile && (
             <button onClick={() => setMenuOpen(m => !m)} style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", padding: 4 }}>
@@ -300,7 +300,7 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
               const active = activeNav === label;
               return (
                 <div key={label} onClick={() => { if (label === "My List" && !user) { onAuthOpen(); setMenuOpen(false); return; } setActiveNav(label); setMenuOpen(false); }}
-                  style={{ padding: "16px 24px", fontSize: 17, fontWeight: active ? 600 : 400, color: active ? "#fff" : "rgba(255,255,255,0.6)", borderLeft: `3px solid ${active ? "#ff4d4d" : "transparent"}`, cursor: "pointer" }}>
+                  style={{ padding: "16px 24px", fontSize: 17, fontWeight: active ? 600 : 400, color: active ? "#fff" : "rgba(255,255,255,0.6)", borderLeft: `3px solid ${active ? "#facc15" : "transparent"}`, cursor: "pointer" }}>
                   {label}
                 </div>
               );
@@ -318,7 +318,7 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
                 </div>
               </div>
             ) : (
-              <button onClick={() => { onAuthOpen(); setMenuOpen(false); }} style={{ width: "100%", background: "#ff4d4d", border: "none", borderRadius: 8, padding: "14px", color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>Sign In</button>
+              <button onClick={() => { onAuthOpen(); setMenuOpen(false); }} style={{ width: "100%", background: "#facc15", border: "none", borderRadius: 8, padding: "14px", color: "#0a0a0a", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>Sign In</button>
             )}
           </div>
         </div>
@@ -425,7 +425,7 @@ function HeroBanner({ video, onPlay, isShow, myList, onToggleList }) {
         <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
           {isShow
             ? <span style={{ background: "#3b82f6", color: "#fff", fontSize: 10, fontWeight: 700, padding: "4px 12px", borderRadius: 4, letterSpacing: 1.5, textTransform: "uppercase" }}>Series</span>
-            : <span style={{ background: "#ff4d4d", color: "#fff", fontSize: 10, fontWeight: 700, padding: "4px 12px", borderRadius: 4, letterSpacing: 1.5, textTransform: "uppercase" }}>Peep Original</span>
+            : <span style={{ background: "#facc15", color: "#0a0a0a", fontSize: 10, fontWeight: 700, padding: "4px 12px", borderRadius: 4, letterSpacing: 1.5, textTransform: "uppercase" }}>Peep Original</span>
           }
           {video.category && <span style={{ background: "rgba(255,255,255,0.08)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.14)", color: "#fff", fontSize: 10, fontWeight: 600, padding: "4px 12px", borderRadius: 4, letterSpacing: 1, textTransform: "uppercase" }}>#1 in {video.category}</span>}
         </div>
@@ -458,7 +458,7 @@ function HeroBanner({ video, onPlay, isShow, myList, onToggleList }) {
             const inList = myList?.[`${type}_${video.id}`];
             return (
               <button onClick={() => onToggleList?.(video.id, type)}
-                style={{ background: "rgba(109,109,110,0.65)", backdropFilter: "blur(4px)", color: "#fff", border: inList ? "1px solid rgba(255,77,77,0.6)" : "none", borderRadius: 7, padding: "14px 28px", fontSize: 15, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
+                style={{ background: "rgba(109,109,110,0.65)", backdropFilter: "blur(4px)", color: "#fff", border: inList ? "1px solid rgba(250,204,21,0.6)" : "none", borderRadius: 7, padding: "14px 28px", fontSize: 15, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
                 {inList ? "✓ My List" : (
                   <>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
@@ -495,7 +495,7 @@ function ContentRow({ section, onPlay, onShowSelect, myList, onToggleList }) {
     <div style={{ marginBottom: 8 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: `0 ${PAD}`, marginBottom: 12 }}>
         <h2 style={{ margin: 0, fontSize: "clamp(16px, 1.4vw, 20px)", fontWeight: 600, color: "#e5e5e5" }}>{section.title}</h2>
-        <span style={{ fontSize: 13, color: "#ff4d4d", cursor: "pointer", fontWeight: 500 }}>Explore All →</span>
+        <span style={{ fontSize: 13, color: "#facc15", cursor: "pointer", fontWeight: 500 }}>Explore All →</span>
       </div>
       <div style={{ position: "relative" }}>
         <button onClick={() => scroll(-1)} style={{ position: "absolute", left: 0, top: 0, bottom: 0, zIndex: 10, background: "linear-gradient(to right, rgba(10,10,10,0.95), transparent)", border: "none", color: "#fff", width: 64, cursor: "pointer", fontSize: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>
@@ -539,7 +539,7 @@ function VideoCard({ video, onClick, rank, myList, onToggleList }) {
           )}
           {video._type === "show"
             ? <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(59,130,246,0.85)", backdropFilter: "blur(4px)", color: "#fff", fontSize: 9.5, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: 0.5, textTransform: "uppercase" }}>Series</div>
-            : video.category && <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(255,77,77,0.85)", backdropFilter: "blur(4px)", color: "#fff", fontSize: 9.5, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: 0.5, textTransform: "uppercase" }}>{video.category}</div>
+            : video.category && <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(250,204,21,0.85)", backdropFilter: "blur(4px)", color: "#0a0a0a", fontSize: 9.5, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: 0.5, textTransform: "uppercase" }}>{video.category}</div>
           }
           {video.duration && <div style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(4px)", color: "#bbb", fontSize: 10.5, padding: "3px 7px", borderRadius: 4 }}>{video.duration}</div>}
         </div>
@@ -552,7 +552,7 @@ function VideoCard({ video, onClick, rank, myList, onToggleList }) {
           {(hovered || isMobile) && (
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={e => { e.stopPropagation(); onToggleList?.(video.id, video._type); }}
-                style={{ flex: 1, background: inList ? "rgba(255,77,77,0.15)" : "rgba(255,255,255,0.07)", border: `1px solid ${inList ? "rgba(255,77,77,0.4)" : "rgba(255,255,255,0.14)"}`, borderRadius: 5, color: inList ? "#ff4d4d" : "#ccc", fontSize: 12, padding: "7px 0", cursor: "pointer", fontWeight: inList ? 600 : 400 }}>
+                style={{ flex: 1, background: inList ? "rgba(250,204,21,0.15)" : "rgba(255,255,255,0.07)", border: `1px solid ${inList ? "rgba(250,204,21,0.4)" : "rgba(255,255,255,0.14)"}`, borderRadius: 5, color: inList ? "#facc15" : "#ccc", fontSize: 12, padding: "7px 0", cursor: "pointer", fontWeight: inList ? 600 : 400 }}>
                 {inList ? "✓ Saved" : "+ List"}
               </button>
             </div>
@@ -659,7 +659,7 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
           Back
         </button>
-        <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22 }}>peep<span style={{ color: "#ff4d4d" }}>.</span></span>
+        <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22 }}>peep<span style={{ color: "#facc15" }}>.</span></span>
       </nav>
 
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
@@ -691,7 +691,7 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
               const inList = type !== "episode" && myList?.[`${type}_${video.id}`];
               return (
                 <button onClick={() => type !== "episode" && onToggleList?.(video.id, type)}
-                  style={{ background: inList ? "rgba(255,77,77,0.15)" : "#ff4d4d", border: inList ? "1px solid rgba(255,77,77,0.4)" : "none", borderRadius: 7, padding: "12px 20px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: type === "episode" ? "default" : "pointer", opacity: type === "episode" ? 0.4 : 1 }}>
+                  style={{ background: inList ? "rgba(250,204,21,0.15)" : "#facc15", border: inList ? "1px solid rgba(250,204,21,0.4)" : "none", borderRadius: 7, padding: "12px 20px", color: inList ? "#facc15" : "#0a0a0a", fontSize: 13, fontWeight: 600, cursor: type === "episode" ? "default" : "pointer", opacity: type === "episode" ? 0.4 : 1 }}>
                   {inList ? "✓ In My List" : "+ My List"}
                 </button>
               );
@@ -780,7 +780,7 @@ function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggle
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
           Back
         </button>
-        <span style={{ position: "absolute", top: 24, left: "50%", transform: "translateX(-50%)", fontFamily: "'DM Serif Display', serif", fontSize: 22, zIndex: 10 }}>peep<span style={{ color: "#ff4d4d" }}>.</span></span>
+        <span style={{ position: "absolute", top: 24, left: "50%", transform: "translateX(-50%)", fontFamily: "'DM Serif Display', serif", fontSize: 22, zIndex: 10 }}>peep<span style={{ color: "#facc15" }}>.</span></span>
 
         <div style={{ position: "absolute", bottom: "10%", left: PAD, right: PAD, maxWidth: isMobile ? "100%" : "clamp(400px, 40vw, 660px)" }}>
           <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
@@ -817,7 +817,7 @@ function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggle
               const inList = myList?.[`show_${show.id}`];
               return (
                 <button onClick={() => onToggleList?.(show.id, "show")}
-                  style={{ background: inList ? "rgba(255,77,77,0.2)" : "rgba(109,109,110,0.65)", backdropFilter: "blur(4px)", color: "#fff", border: inList ? "1px solid rgba(255,77,77,0.5)" : "none", borderRadius: 7, padding: "13px 24px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                  style={{ background: inList ? "rgba(250,204,21,0.2)" : "rgba(109,109,110,0.65)", backdropFilter: "blur(4px)", color: "#fff", border: inList ? "1px solid rgba(250,204,21,0.5)" : "none", borderRadius: 7, padding: "13px 24px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
                   {inList ? "✓ In My List" : "+ My List"}
                 </button>
               );
@@ -833,7 +833,7 @@ function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggle
             <div style={{ display: "flex", gap: 8 }}>
               {seasons.map(s => (
                 <button key={s} onClick={() => setSelectedSeason(s)}
-                  style={{ background: selectedSeason === s ? "#ff4d4d" : "#1a1a1a", border: `1px solid ${selectedSeason === s ? "#ff4d4d" : "#2a2a2a"}`, borderRadius: 6, padding: "8px 18px", color: selectedSeason === s ? "#fff" : "#888", fontSize: 13, fontWeight: selectedSeason === s ? 600 : 400, cursor: "pointer" }}>
+                  style={{ background: selectedSeason === s ? "#facc15" : "#1a1a1a", border: `1px solid ${selectedSeason === s ? "#facc15" : "#2a2a2a"}`, borderRadius: 6, padding: "8px 18px", color: selectedSeason === s ? "#0a0a0a" : "#888", fontSize: 13, fontWeight: selectedSeason === s ? 600 : 400, cursor: "pointer" }}>
                   Season {s}
                 </button>
               ))}
@@ -936,7 +936,7 @@ function Footer() {
         ))}
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 24, borderTop: "1px solid rgba(255,255,255,0.05)" }}>
-        <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, color: "#2e2e2e" }}>peep<span style={{ color: "#ff4d4d" }}>.</span></span>
+        <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, color: "#2e2e2e" }}>peep<span style={{ color: "#facc15" }}>.</span></span>
         <div style={{ textAlign: "right" }}>
           <p style={{ margin: "0 0 4px", fontSize: 11, color: "#333" }}>© 2025 Peep Media, Inc. All rights reserved.</p>
           <p style={{ margin: 0, fontSize: 11, color: "#2a2a2a" }}>All content sourced from the public domain. Free to watch, forever.</p>
@@ -950,7 +950,7 @@ function Footer() {
 
 function Spinner() {
   return (
-    <div style={{ width: 32, height: 32, border: "3px solid #222", borderTop: "3px solid #ff4d4d", borderRadius: "50%", animation: "spin 0.8s linear infinite" }}>
+    <div style={{ width: 32, height: 32, border: "3px solid #222", borderTop: "3px solid #facc15", borderRadius: "50%", animation: "spin 0.8s linear infinite" }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );

@@ -40,7 +40,7 @@ export function AuthModal({ onClose }) {
 
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 30 }}>
-            peep<span style={{ color: "#ff4d4d" }}>.</span>
+            peep<span style={{ color: "#facc15" }}>.</span>
           </span>
           <p style={{ margin: "8px 0 0", fontSize: 13, color: "#555" }}>
             {mode === "signin" ? "Welcome back" : "Create your account"}
@@ -68,7 +68,7 @@ export function AuthModal({ onClose }) {
           {error && <p style={{ color: "#f87171", fontSize: 12, margin: "14px 0 0" }}>{error}</p>}
           {message && <p style={{ color: "#4ade80", fontSize: 12, margin: "14px 0 0" }}>{message}</p>}
 
-          <button type="submit" disabled={loading} style={{ width: "100%", marginTop: 20, background: "#ff4d4d", border: "none", borderRadius: 8, padding: "13px", color: "#fff", fontSize: 14, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1 }}>
+          <button type="submit" disabled={loading} style={{ width: "100%", marginTop: 20, background: "#facc15", border: "none", borderRadius: 8, padding: "13px", color: "#fff", fontSize: 14, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1 }}>
             {loading ? "…" : mode === "signin" ? "Sign In" : "Create Account"}
           </button>
         </form>
@@ -82,5 +82,5 @@ const input = {
   borderRadius: 8, padding: "12px 14px", color: "#fff", fontSize: 13, outline: "none",
 };
 
-function focusBorder(e) { e.target.style.borderColor = "#ff4d4d"; }
+function focusBorder(e) { e.target.style.borderColor = "#facc15"; }
 function blurBorder(e) { e.target.style.borderColor = "#2a2a2a"; }

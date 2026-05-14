@@ -574,7 +574,7 @@ export function CMS({ onExit }) {
       <div style={{ borderBottom: "1px solid #1a1a1a", padding: `0 ${PAD}`, display: "flex", alignItems: "center", justifyContent: "space-between", height: "auto", minHeight: 68, flexWrap: "wrap", gap: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
           <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22 }}>
-            peep<span style={{ color: "#ff4d4d" }}>.</span>
+            peep<span style={{ color: "#facc15" }}>.</span>
           </span>
           <span style={{ fontSize: 13, color: "#555", borderLeft: "1px solid #2a2a2a", paddingLeft: 24 }}>
             Content Management System
@@ -609,7 +609,7 @@ export function CMS({ onExit }) {
           style={{
             background: "transparent",
             border: "none",
-            borderBottom: tab === "videos" ? "2px solid #ff4d4d" : "none",
+            borderBottom: tab === "videos" ? "2px solid #facc15" : "none",
             color: tab === "videos" ? "#fff" : "#666",
             padding: "16px 0",
             fontSize: 14,
@@ -620,13 +620,13 @@ export function CMS({ onExit }) {
         >
           Videos ({rows.length})
         </button>
-        <button onClick={() => setTab("shows")} style={{ background: "transparent", border: "none", borderBottom: tab === "shows" ? "2px solid #ff4d4d" : "none", color: tab === "shows" ? "#fff" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "shows" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
+        <button onClick={() => setTab("shows")} style={{ background: "transparent", border: "none", borderBottom: tab === "shows" ? "2px solid #facc15" : "none", color: tab === "shows" ? "#fff" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "shows" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
           Shows ({showsList.length})
         </button>
-        <button onClick={() => setTab("episodes")} style={{ background: "transparent", border: "none", borderBottom: tab === "episodes" ? "2px solid #ff4d4d" : "none", color: tab === "episodes" ? "#fff" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "episodes" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
+        <button onClick={() => setTab("episodes")} style={{ background: "transparent", border: "none", borderBottom: tab === "episodes" ? "2px solid #facc15" : "none", color: tab === "episodes" ? "#fff" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "episodes" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
           Episodes
         </button>
-        <button onClick={() => setTab("carousels")} style={{ background: "transparent", border: "none", borderBottom: tab === "carousels" ? "2px solid #ff4d4d" : "none", color: tab === "carousels" ? "#fff" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "carousels" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
+        <button onClick={() => setTab("carousels")} style={{ background: "transparent", border: "none", borderBottom: tab === "carousels" ? "2px solid #facc15" : "none", color: tab === "carousels" ? "#fff" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "carousels" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
           Carousels ({carousels.length})
         </button>
       </div>
@@ -799,7 +799,7 @@ export function CMS({ onExit }) {
                   resize: "vertical",
                   fontFamily: "inherit",
                 }}
-                onFocus={e => (e.target.style.borderColor = "#ff4d4d")}
+                onFocus={e => (e.target.style.borderColor = "#facc15")}
                 onBlur={e => (e.target.style.borderColor = "#2a2a2a")}
               />
             </div>
@@ -812,7 +812,7 @@ export function CMS({ onExit }) {
               disabled={saving}
               style={{
                 flex: 1,
-                background: "#ff4d4d",
+                background: "#facc15",
                 border: "none",
                 borderRadius: 7,
                 padding: "12px",
@@ -872,8 +872,8 @@ export function CMS({ onExit }) {
                   key={cat}
                   onClick={() => setCategoryFilter(cat)}
                   style={{
-                    background: categoryFilter === cat ? "#ff4d4d" : "#1a1a1a",
-                    border: `1px solid ${categoryFilter === cat ? "#ff4d4d" : "#2a2a2a"}`,
+                    background: categoryFilter === cat ? "#facc15" : "#1a1a1a",
+                    border: `1px solid ${categoryFilter === cat ? "#facc15" : "#2a2a2a"}`,
                     borderRadius: 6,
                     padding: "8px 14px",
                     color: categoryFilter === cat ? "#fff" : "#888",
@@ -951,7 +951,7 @@ export function CMS({ onExit }) {
                       borderBottom: idx < filteredRows.length - 1 ? "1px solid #0f0f0f" : "none",
                       alignItems: "center",
                       background: editingId === row.id ? "#1a0a0a" : "transparent",
-                      borderLeft: editingId === row.id ? "2px solid #ff4d4d" : "none",
+                      borderLeft: editingId === row.id ? "2px solid #facc15" : "none",
                       paddingLeft: editingId === row.id ? 14 : 16,
                       transition: "background 0.2s",
                     }}
@@ -987,7 +987,7 @@ export function CMS({ onExit }) {
 
                     {/* Category */}
                     <div>
-                      <span style={{ fontSize: 12, color: "#ff4d4d", fontWeight: 500 }}>
+                      <span style={{ fontSize: 12, color: "#facc15", fontWeight: 500 }}>
                         {row.category}
                       </span>
                     </div>
@@ -1065,7 +1065,7 @@ export function CMS({ onExit }) {
                 <FieldInput label="Trailer URL" value={showForm.trailer_url} onChange={v => setShowForm(f => ({ ...f, trailer_url: v }))} placeholder="https://youtube.com/watch?v=... (optional)" />
               </div>
               <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
-                <button onClick={saveShow} disabled={showSaving} style={{ flex: 1, background: "#ff4d4d", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: showSaving ? "not-allowed" : "pointer", opacity: showSaving ? 0.7 : 1 }}>
+                <button onClick={saveShow} disabled={showSaving} style={{ flex: 1, background: "#facc15", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: showSaving ? "not-allowed" : "pointer", opacity: showSaving ? 0.7 : 1 }}>
                   {showSaving ? "Saving…" : editingShowId ? "Save Changes" : "Add Show"}
                 </button>
                 {editingShowId && <button onClick={cancelShowEdit} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "12px 20px", color: "#888", fontSize: 13, cursor: "pointer" }}>Cancel</button>}
@@ -1143,7 +1143,7 @@ export function CMS({ onExit }) {
                 </div>
               </div>
               <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
-                <button onClick={saveEpisode} disabled={episodeSaving || !selectedShowForEpisodes} style={{ flex: 1, background: "#ff4d4d", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: (episodeSaving || !selectedShowForEpisodes) ? "not-allowed" : "pointer", opacity: (episodeSaving || !selectedShowForEpisodes) ? 0.5 : 1 }}>
+                <button onClick={saveEpisode} disabled={episodeSaving || !selectedShowForEpisodes} style={{ flex: 1, background: "#facc15", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: (episodeSaving || !selectedShowForEpisodes) ? "not-allowed" : "pointer", opacity: (episodeSaving || !selectedShowForEpisodes) ? 0.5 : 1 }}>
                   {episodeSaving ? "Saving…" : editingEpisodeId ? "Save Changes" : "Add Episode"}
                 </button>
                 {editingEpisodeId && <button onClick={cancelEpisodeEdit} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "12px 20px", color: "#888", fontSize: 13, cursor: "pointer" }}>Cancel</button>}
@@ -1234,7 +1234,7 @@ export function CMS({ onExit }) {
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
                     {[["all", "All Pages"], ["movies", "Movies Only"], ["shows", "Series Only"]].map(([val, label]) => (
                       <button key={val} onClick={() => setCarouselForm(f => ({ ...f, content_type: val }))}
-                        style={{ background: carouselForm.content_type === val ? "rgba(255,77,77,0.15)" : "#0a0a0a", border: `1px solid ${carouselForm.content_type === val ? "#ff4d4d" : "#2a2a2a"}`, borderRadius: 7, padding: "9px 6px", color: carouselForm.content_type === val ? "#ff4d4d" : "#666", fontSize: 12, cursor: "pointer", fontWeight: carouselForm.content_type === val ? 600 : 400, textAlign: "center" }}>
+                        style={{ background: carouselForm.content_type === val ? "rgba(250,204,21,0.15)" : "#0a0a0a", border: `1px solid ${carouselForm.content_type === val ? "#facc15" : "#2a2a2a"}`, borderRadius: 7, padding: "9px 6px", color: carouselForm.content_type === val ? "#facc15" : "#666", fontSize: 12, cursor: "pointer", fontWeight: carouselForm.content_type === val ? 600 : 400, textAlign: "center" }}>
                         {label}
                       </button>
                     ))}
@@ -1273,7 +1273,7 @@ export function CMS({ onExit }) {
                   disabled={carouselSaving}
                   style={{
                     flex: 1,
-                    background: "#ff4d4d",
+                    background: "#facc15",
                     border: "none",
                     borderRadius: 7,
                     padding: "12px",
@@ -1409,7 +1409,7 @@ function FieldInput({ label, value, onChange, placeholder, type = "text" }) {
           fontSize: 13,
           outline: "none",
         }}
-        onFocus={e => (e.target.style.borderColor = "#ff4d4d")}
+        onFocus={e => (e.target.style.borderColor = "#facc15")}
         onBlur={e => (e.target.style.borderColor = "#2a2a2a")}
       />
     </div>
@@ -1449,7 +1449,7 @@ function FieldSelect({ label, value, onChange, options }) {
 
 function Spinner() {
   return (
-    <div style={{ width: 32, height: 32, border: "3px solid #222", borderTop: "3px solid #ff4d4d", borderRadius: "50%", animation: "spin 0.8s linear infinite" }}>
+    <div style={{ width: 32, height: 32, border: "3px solid #222", borderTop: "3px solid #facc15", borderRadius: "50%", animation: "spin 0.8s linear infinite" }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
