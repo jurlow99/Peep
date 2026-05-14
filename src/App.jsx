@@ -64,6 +64,7 @@ export default function App() {
       <>
         {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
         <PlayerView
+          key={selectedVideo.id}
           video={selectedVideo}
           onBack={() => { setPage(selectedShow ? "show" : "home"); setSelectedVideo(null); }}
           onSelect={v => setSelectedVideo(v)}
@@ -672,14 +673,20 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
 
   function startCountdown(seconds) {
     const ep = nextEpisode;
+    const total = Math.min(10, Math.ceil(seconds));
     setCountdownActive(true);
-    setCountdown(Math.min(10, Math.ceil(seconds)));
+    setCountdown(total);
     clearInterval(countdownTimerRef.current);
+    let remaining = total;
     countdownTimerRef.current = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) { clearInterval(countdownTimerRef.current); onSelect(ep); return 0; }
-        return prev - 1;
-      });
+      remaining -= 1;
+      if (remaining <= 0) {
+        clearInterval(countdownTimerRef.current);
+        setCountdownActive(false);
+        onSelect(ep);
+      } else {
+        setCountdown(remaining);
+      }
     }, 1000);
   }
 
