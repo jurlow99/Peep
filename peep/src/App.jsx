@@ -88,6 +88,7 @@ export default function App() {
 
   if (!authChecked) return null;
   if (!user) return <LandingPage />;
+  if (!user.email_confirmed_at) return <EmailVerificationGate user={user} />;
 
   const profileScreenEl = profileOpen && <ProfileScreen user={user} onClose={() => setProfileOpen(false)} onAvatarChange={id => setUserAvatarId(id)} />;
 
@@ -2027,6 +2028,70 @@ function Footer({ onNavChange, onProfileOpen, onOpenModal }) {
         </div>
       </div>
     </footer>
+  );
+}
+
+// ─── Email Verification Gate ──────────────────────────────────────────────────
+
+function EmailVerificationGate({ user }) {
+  const [resent, setResent] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function handleResend() {
+    setResending(true);
+    setError(null);
+    const { error } = await supabase.auth.resend({ type: "signup", email: user.email });
+    setResending(false);
+    if (error) setError(error.message);
+    else setResent(true);
+  }
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    window.location.href = "/";
+  }
+
+  return (
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', sans-serif", padding: 24 }}>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
+      <div style={{ width: "min(420px, 100%)", textAlign: "center" }}>
+        <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 32, color: "#facc15", display: "block", marginBottom: 36 }}>peep.</span>
+
+        <div style={{ fontSize: 48, marginBottom: 20 }}>✉️</div>
+        <h1 style={{ margin: "0 0 12px", fontSize: 22, fontWeight: 700, color: "#fff" }}>Check your inbox</h1>
+        <p style={{ margin: "0 0 8px", fontSize: 14, color: "#666", lineHeight: 1.6 }}>
+          We sent a confirmation link to
+        </p>
+        <p style={{ margin: "0 0 32px", fontSize: 14, fontWeight: 600, color: "#facc15" }}>{user.email}</p>
+        <p style={{ margin: "0 0 32px", fontSize: 13, color: "#444", lineHeight: 1.6 }}>
+          Click the link in that email to verify your account and start watching.
+        </p>
+
+        {resent ? (
+          <p style={{ fontSize: 13, color: "#22c55e", marginBottom: 24 }}>Email resent — check your inbox.</p>
+        ) : (
+          <button
+            onClick={handleResend}
+            disabled={resending}
+            style={{ width: "100%", background: "#facc15", border: "none", borderRadius: 10, padding: "13px", color: "#0a0a0a", fontSize: 14, fontWeight: 700, cursor: resending ? "default" : "pointer", marginBottom: 12, opacity: resending ? 0.7 : 1 }}>
+            {resending ? "Sending…" : "Resend verification email"}
+          </button>
+        )}
+
+        {error && <p style={{ fontSize: 13, color: "#f87171", marginBottom: 12 }}>{error}</p>}
+
+        <button
+          onClick={handleSignOut}
+          style={{ background: "transparent", border: "none", color: "#444", fontSize: 13, cursor: "pointer", textDecoration: "underline" }}>
+          Sign out and use a different account
+        </button>
+
+        <p style={{ marginTop: 28, fontSize: 12, color: "#2a2a2a" }}>
+          Didn't get it? Check your spam folder or resend above.
+        </p>
+      </div>
+    </div>
   );
 }
 
