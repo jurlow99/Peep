@@ -128,6 +128,10 @@ export function CMS({ onExit }) {
 
   const [heroConfirm, setHeroConfirm] = useState(null); // { current, next, type: "video"|"show" }
 
+  // Reports state
+  const [reportData, setReportData] = useState(null);
+  const [reportLoading, setReportLoading] = useState(false);
+
   const subscriptionRef = useRef(null);
   const carouselSubRef = useRef(null);
   const showSubRef = useRef(null);
@@ -158,6 +162,91 @@ export function CMS({ onExit }) {
   function showToast(msg, type = "success") {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
+  }
+
+  useEffect(() => {
+    if (tab === "reports") loadReports();
+  }, [tab]);
+
+  async function loadReports() {
+    setReportLoading(true);
+    const [
+      { count: userCount },
+      { count: videoCount },
+      { count: showCount },
+      { count: episodeCount },
+      { data: watchData },
+      { data: ratingsData },
+      { data: listData },
+      { data: profilesData },
+    ] = await Promise.all([
+      supabase.from("profiles").select("*", { count: "exact", head: true }),
+      supabase.from("videos").select("*", { count: "exact", head: true }),
+      supabase.from("shows").select("*", { count: "exact", head: true }),
+      supabase.from("episodes").select("*", { count: "exact", head: true }),
+      supabase.from("watch_progress").select("content_id, content_type, completed"),
+      supabase.from("ratings").select("content_id, content_type, rating"),
+      supabase.from("user_list").select("content_id, content_type"),
+      supabase.from("profiles").select("created_at").order("created_at", { ascending: true }),
+    ]);
+
+    // Group watch sessions by content
+    const watchMap = {};
+    (watchData || []).forEach(w => {
+      const key = `${w.content_type}:${w.content_id}`;
+      watchMap[key] = (watchMap[key] || 0) + 1;
+    });
+    const topWatchedRaw = Object.entries(watchMap)
+      .sort((a, b) => b[1] - a[1]).slice(0, 10)
+      .map(([key, count]) => { const [type, id] = key.split(":"); return { type, id: parseInt(id), count }; });
+
+    // Fetch titles for top watched
+    const movieIds = topWatchedRaw.filter(t => t.type === "movie").map(t => t.id);
+    const episodeIds = topWatchedRaw.filter(t => t.type === "episode").map(t => t.id);
+    const [movTitles, epTitles] = await Promise.all([
+      movieIds.length ? supabase.from("videos").select("id, title") .in("id", movieIds) : { data: [] },
+      episodeIds.length ? supabase.from("episodes").select("id, title").in("id", episodeIds) : { data: [] },
+    ]);
+    const titleMap = {};
+    (movTitles.data || []).forEach(v => { titleMap[`movie:${v.id}`] = v.title; });
+    (epTitles.data || []).forEach(e => { titleMap[`episode:${e.id}`] = e.title; });
+    const topWatched = topWatchedRaw.map(t => ({ ...t, title: titleMap[`${t.type}:${t.id}`] || "(unknown)" }));
+
+    // Group ratings (thumbs up)
+    const ratingMap = {};
+    (ratingsData || []).forEach(r => {
+      if (r.rating === 1) { const key = `${r.content_type}:${r.content_id}`; ratingMap[key] = (ratingMap[key] || 0) + 1; }
+    });
+    const topRated = Object.entries(ratingMap)
+      .sort((a, b) => b[1] - a[1]).slice(0, 10)
+      .map(([key, count]) => { const [type, id] = key.split(":"); return { type, id: parseInt(id), count, title: titleMap[`${type}:${id}`] || "(unknown)" }; });
+
+    // User growth by month
+    const monthMap = {};
+    (profilesData || []).forEach(p => {
+      const month = p.created_at?.slice(0, 7);
+      if (month) monthMap[month] = (monthMap[month] || 0) + 1;
+    });
+    const userGrowth = Object.entries(monthMap).sort((a, b) => a[0].localeCompare(b[0]));
+
+    // Most saved
+    const saveMap = {};
+    (listData || []).forEach(s => { const key = `${s.content_type}:${s.content_id}`; saveMap[key] = (saveMap[key] || 0) + 1; });
+    const topSaved = Object.entries(saveMap).sort((a, b) => b[1] - a[1]).slice(0, 10)
+      .map(([key, count]) => { const [type, id] = key.split(":"); return { type, id: parseInt(id), count, title: titleMap[`${type}:${id}`] || "(unknown)" }; });
+
+    setReportData({
+      userCount: userCount ?? 0,
+      videoCount: videoCount ?? 0,
+      showCount: showCount ?? 0,
+      episodeCount: episodeCount ?? 0,
+      watchSessions: (watchData || []).length,
+      completedSessions: (watchData || []).filter(w => w.completed).length,
+      totalSaves: (listData || []).length,
+      totalRatings: (ratingsData || []).length,
+      topWatched, topRated, topSaved, userGrowth,
+    });
+    setReportLoading(false);
   }
 
   // ──── VIDEOS ────
@@ -759,6 +848,9 @@ export function CMS({ onExit }) {
         </button>
         <button onClick={() => setTab("live")} style={{ background: "transparent", border: "none", borderBottom: tab === "live" ? "2px solid #ef4444" : "none", color: tab === "live" ? "#ef4444" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "live" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
           Live ({liveList.length})
+        </button>
+        <button onClick={() => setTab("reports")} style={{ background: "transparent", border: "none", borderBottom: tab === "reports" ? "2px solid #34d399" : "none", color: tab === "reports" ? "#34d399" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "reports" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
+          Reports
         </button>
       </div>
 
@@ -1732,6 +1824,141 @@ export function CMS({ onExit }) {
               </div>
             )}
           </>
+        )}
+
+        {/* ────── REPORTS TAB ────── */}
+        {tab === "reports" && (
+          <div style={{ gridColumn: "1 / -1" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#fff" }}>Analytics</h2>
+              <button onClick={loadReports} style={{ background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)", borderRadius: 7, padding: "8px 16px", color: "#34d399", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                Refresh
+              </button>
+            </div>
+
+            {reportLoading && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 80 }}>
+                <Spinner />
+              </div>
+            )}
+
+            {!reportLoading && reportData && (
+              <>
+                {/* Stat cards */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16, marginBottom: 36 }}>
+                  {[
+                    { label: "Total Users", value: reportData.userCount, color: "#34d399" },
+                    { label: "Videos", value: reportData.videoCount, color: "#facc15" },
+                    { label: "Shows", value: reportData.showCount, color: "#facc15" },
+                    { label: "Episodes", value: reportData.episodeCount, color: "#facc15" },
+                    { label: "Watch Sessions", value: reportData.watchSessions, color: "#60a5fa" },
+                    { label: "Completed", value: reportData.completedSessions, color: "#60a5fa" },
+                    { label: "List Saves", value: reportData.totalSaves, color: "#a78bfa" },
+                    { label: "Ratings Given", value: reportData.totalRatings, color: "#f97316" },
+                  ].map(stat => (
+                    <div key={stat.label} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 20px 16px" }}>
+                      <p style={{ margin: "0 0 6px", fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 0.8 }}>{stat.label}</p>
+                      <p style={{ margin: 0, fontSize: 28, fontWeight: 700, color: stat.color }}>{stat.value.toLocaleString()}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Completion rate bar */}
+                {reportData.watchSessions > 0 && (() => {
+                  const pct = Math.round((reportData.completedSessions / reportData.watchSessions) * 100);
+                  return (
+                    <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px", marginBottom: 24 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>Completion Rate</p>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "#34d399" }}>{pct}%</span>
+                      </div>
+                      <div style={{ background: "#1e1e1e", borderRadius: 6, height: 8, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${pct}%`, background: "linear-gradient(90deg, #34d399, #059669)", borderRadius: 6, transition: "width 0.6s ease" }} />
+                      </div>
+                      <p style={{ margin: "8px 0 0", fontSize: 11, color: "#555" }}>{reportData.completedSessions.toLocaleString()} of {reportData.watchSessions.toLocaleString()} sessions completed</p>
+                    </div>
+                  );
+                })()}
+
+                {/* Top tables */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 24, marginBottom: 24 }}>
+                  {/* Top Watched */}
+                  <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px" }}>
+                    <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>Top Watched</p>
+                    {reportData.topWatched.length === 0 ? (
+                      <p style={{ fontSize: 13, color: "#444", textAlign: "center", padding: "20px 0" }}>No watch data yet</p>
+                    ) : reportData.topWatched.map((item, i) => (
+                      <div key={`${item.type}:${item.id}`} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 0", borderBottom: i < reportData.topWatched.length - 1 ? "1px solid #1a1a1a" : "none" }}>
+                        <span style={{ fontSize: 11, color: "#333", width: 18, textAlign: "right", flexShrink: 0 }}>{i + 1}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: 0, fontSize: 13, color: "#e5e5e5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
+                          <span style={{ fontSize: 11, color: item.type === "movie" ? "#facc15" : "#60a5fa" }}>{item.type}</span>
+                        </div>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "#60a5fa", flexShrink: 0 }}>{item.count}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Top Rated */}
+                  <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px" }}>
+                    <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>Top Rated (👍)</p>
+                    {reportData.topRated.length === 0 ? (
+                      <p style={{ fontSize: 13, color: "#444", textAlign: "center", padding: "20px 0" }}>No ratings yet</p>
+                    ) : reportData.topRated.map((item, i) => (
+                      <div key={`${item.type}:${item.id}`} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 0", borderBottom: i < reportData.topRated.length - 1 ? "1px solid #1a1a1a" : "none" }}>
+                        <span style={{ fontSize: 11, color: "#333", width: 18, textAlign: "right", flexShrink: 0 }}>{i + 1}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: 0, fontSize: 13, color: "#e5e5e5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
+                          <span style={{ fontSize: 11, color: item.type === "movie" ? "#facc15" : "#60a5fa" }}>{item.type}</span>
+                        </div>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "#f97316", flexShrink: 0 }}>{item.count}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Most Saved */}
+                  <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px" }}>
+                    <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>Most Saved to List</p>
+                    {reportData.topSaved.length === 0 ? (
+                      <p style={{ fontSize: 13, color: "#444", textAlign: "center", padding: "20px 0" }}>No saves yet</p>
+                    ) : reportData.topSaved.map((item, i) => (
+                      <div key={`${item.type}:${item.id}`} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 0", borderBottom: i < reportData.topSaved.length - 1 ? "1px solid #1a1a1a" : "none" }}>
+                        <span style={{ fontSize: 11, color: "#333", width: 18, textAlign: "right", flexShrink: 0 }}>{i + 1}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: 0, fontSize: 13, color: "#e5e5e5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
+                          <span style={{ fontSize: 11, color: item.type === "movie" ? "#facc15" : "#60a5fa" }}>{item.type}</span>
+                        </div>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "#a78bfa", flexShrink: 0 }}>{item.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* User growth by month */}
+                {reportData.userGrowth.length > 0 && (
+                  <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px" }}>
+                    <p style={{ margin: "0 0 20px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>User Signups by Month</p>
+                    <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 80 }}>
+                      {(() => {
+                        const max = Math.max(...reportData.userGrowth.map(([, c]) => c));
+                        return reportData.userGrowth.map(([month, count]) => (
+                          <div key={month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                            <span style={{ fontSize: 10, color: "#34d399", fontWeight: 600 }}>{count}</span>
+                            <div style={{ width: "100%", background: "rgba(52,211,153,0.2)", borderRadius: 4, height: `${Math.round((count / max) * 52) + 4}px`, minHeight: 4, transition: "height 0.4s ease" }} />
+                            <span style={{ fontSize: 9, color: "#444", whiteSpace: "nowrap" }}>{month.slice(5)}</span>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {!reportLoading && !reportData && (
+              <div style={{ textAlign: "center", padding: 80, color: "#444" }}>Click Refresh to load reports</div>
+            )}
+          </div>
         )}
 
       </div>
