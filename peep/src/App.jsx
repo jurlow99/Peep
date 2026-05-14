@@ -1,6 +1,22 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Component } from "react";
 import { supabase } from "./supabase";
 import { AuthModal } from "./components/AuthModal";
+
+class PlayerErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "sans-serif", color: "#fff", gap: 16, padding: 32 }}>
+          <p style={{ color: "#f87171", fontSize: 14, maxWidth: 600, textAlign: "center" }}>Player error: {this.state.error.message}</p>
+          <button onClick={() => { this.setState({ error: null }); this.props.onBack?.(); }} style={{ background: "#facc15", border: "none", borderRadius: 8, padding: "10px 24px", color: "#0a0a0a", fontWeight: 700, cursor: "pointer" }}>← Go Back</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const PAD = "clamp(16px, 5vw, 96px)";
 const CARD_W = "clamp(130px, 38vw, 252px)";
@@ -59,20 +75,24 @@ export default function App() {
 
   const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true) };
 
-  if (page === "player" && selectedVideo)
+  if (page === "player" && selectedVideo) {
+    const handleBack = () => { setPage(selectedShow ? "show" : "home"); setSelectedVideo(null); };
     return (
       <>
         {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
-        <PlayerView
-          key={selectedVideo.id}
-          video={selectedVideo}
-          onBack={() => { setPage(selectedShow ? "show" : "home"); setSelectedVideo(null); }}
-          onSelect={v => setSelectedVideo(v)}
-          onShowSelect={s => { setSelectedShow(s); setPage("show"); setSelectedVideo(null); }}
-          {...listProps}
-        />
+        <PlayerErrorBoundary onBack={handleBack}>
+          <PlayerView
+            key={selectedVideo.id}
+            video={selectedVideo}
+            onBack={handleBack}
+            onSelect={v => setSelectedVideo(v)}
+            onShowSelect={s => { setSelectedShow(s); setPage("show"); setSelectedVideo(null); }}
+            {...listProps}
+          />
+        </PlayerErrorBoundary>
       </>
     );
+  }
 
   if (page === "show" && selectedShow)
     return (
