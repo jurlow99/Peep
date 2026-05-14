@@ -207,10 +207,34 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
     ]);
     const pMap = {};
     progress.forEach(p => { pMap[`${p.content_type}_${p.content_id}`] = p; });
-    const items = [
+
+    // Sort by most recently watched, then deduplicate episodes by show — one card per series
+    let items = [
       ...(movRes.data || []).map(v => ({ ...v, _type: "movie", _progress: pMap[`movie_${v.id}`] })),
       ...(epRes.data || []).map(e => ({ ...e, _type: "episode", _progress: pMap[`episode_${e.id}`] })),
     ].sort((a, b) => new Date(b._progress.last_watched_at) - new Date(a._progress.last_watched_at));
+
+    const seenShows = new Set();
+    items = items.filter(item => {
+      if (item._type !== "episode" || !item.show_id) return true;
+      if (seenShows.has(item.show_id)) return false;
+      seenShows.add(item.show_id);
+      return true;
+    });
+
+    // Fetch show titles so the card can display the show name instead of episode title
+    const showIds = [...new Set(items.filter(i => i._type === "episode" && i.show_id).map(i => i.show_id))];
+    if (showIds.length) {
+      const { data: showsData } = await supabase.from("shows").select("id,title,thumbnail,poster").in("id", showIds);
+      if (showsData) {
+        const showMap = {};
+        showsData.forEach(s => { showMap[s.id] = s; });
+        items = items.map(item =>
+          item._type === "episode" && item.show_id ? { ...item, _show: showMap[item.show_id] } : item
+        );
+      }
+    }
+
     setContinueWatching(items);
   }
 
@@ -926,12 +950,23 @@ function ContinueWatchingRow({ items, onPlay }) {
 function ContinueWatchingCard({ item, onPlay }) {
   const [hovered, setHovered] = useState(false);
   const pct = item._progress?.duration_seconds > 0 ? Math.min(100, (item._progress.progress_seconds / item._progress.duration_seconds) * 100) : 0;
+
+  // For episodes, show the series name as the primary title
+  const isEpisode = item._type === "episode";
+  const displayTitle = isEpisode && item._show ? item._show.title : item.title;
+  const displayThumb = isEpisode && item._show
+    ? (item.thumbnail || item._show.thumbnail || item._show.poster)
+    : (item.thumbnail || item.poster);
+  const subtitle = isEpisode && item.season != null
+    ? `S${item.season} E${item.episode_number} · ${Math.round(pct)}% watched`
+    : `${Math.round(pct)}% watched`;
+
   return (
     <div style={{ flexShrink: 0, width: CW_CARD_W, cursor: "pointer" }}
       onClick={() => onPlay(item)} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
       <div style={{ borderRadius: 10, overflow: "hidden", background: "#141414", transform: hovered ? "scale(1.03) translateY(-3px)" : "scale(1)", transition: "transform 0.25s, box-shadow 0.25s", boxShadow: hovered ? "0 16px 40px rgba(0,0,0,0.65)" : "0 2px 8px rgba(0,0,0,0.3)" }}>
         <div style={{ position: "relative", aspectRatio: "16/9", overflow: "hidden" }}>
-          <img src={item.thumbnail || item.poster} alt={item.title}
+          <img src={displayThumb} alt={displayTitle}
             style={{ width: "100%", height: "100%", objectFit: "cover", filter: hovered ? "brightness(0.5)" : "brightness(0.75)", transition: "filter 0.25s" }} />
           {hovered && (
             <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -940,7 +975,7 @@ function ContinueWatchingCard({ item, onPlay }) {
               </div>
             </div>
           )}
-          {item._type === "episode" && item.season != null && (
+          {isEpisode && item.season != null && (
             <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(4px)", color: "#bbb", fontSize: 10, padding: "3px 7px", borderRadius: 4 }}>S{item.season} E{item.episode_number}</div>
           )}
           <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 3, background: "rgba(0,0,0,0.5)" }}>
@@ -948,8 +983,8 @@ function ContinueWatchingCard({ item, onPlay }) {
           </div>
         </div>
         <div style={{ padding: "10px 14px 12px", background: hovered ? "#1c1c1c" : "#141414", transition: "background 0.25s" }}>
-          <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
-          <p style={{ margin: 0, fontSize: 11, color: "#555" }}>{Math.round(pct)}% watched</p>
+          <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{displayTitle}</p>
+          <p style={{ margin: 0, fontSize: 11, color: "#555" }}>{subtitle}</p>
         </div>
       </div>
     </div>
