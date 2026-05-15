@@ -403,6 +403,8 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     ? [{ id: "mylist", title: "My List", videos: allContent.filter(v => myList?.[`${v._type}_${v.id}`]) }]
     : activeNav === "New & Popular"
     ? [{ id: "new", title: "New & Popular", videos: [...allContent].sort((a, b) => (b.year || 0) - (a.year || 0)) }]
+    : activeNav === "Podcasts"
+    ? [{ id: "all-podcasts", title: "All Podcasts", isPodcast: true, videos: [], podcastItems: podcasts }]
     : visibleCarousels.length > 0
     ? visibleCarousels.map(c => {
         const filterVal = c.filter_value?.toLowerCase();
@@ -467,7 +469,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           </span>
           {!isMobile && (
             <div style={{ display: "flex", gap: 4 }}>
-              {["Home", "Movies", "Series", "New & Popular"].map(label => {
+              {["Home", "Movies", "Series", "Podcasts", "New & Popular"].map(label => {
                 const active = activeNav === label;
                 return (
                   <span key={label} onClick={() => setActiveNav(label)} style={{ fontSize: 13.5, padding: "6px 12px", borderRadius: 6, color: active ? "#fff" : "rgba(255,255,255,0.55)", fontWeight: active ? 600 : 400, cursor: "pointer", background: active ? "rgba(250,204,21,0.12)" : "transparent", transition: "color 0.2s, background 0.2s" }}
@@ -535,7 +537,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       {isMobile && menuOpen && (
         <div style={{ position: "fixed", top: 68, left: 0, right: 0, bottom: 0, zIndex: 98, background: "rgba(10,10,10,0.98)", backdropFilter: "blur(16px)", display: "flex", flexDirection: "column", overflowY: "auto" }}>
           <div style={{ padding: "12px 0" }}>
-            {["Home", "Movies", "Series", "New & Popular", "My List"].map(label => {
+            {["Home", "Movies", "Series", "Podcasts", "New & Popular", "My List"].map(label => {
               const active = activeNav === label;
               return (
                 <div key={label} onClick={() => { if (label === "My List" && !user) { onAuthOpen(); setMenuOpen(false); return; } setActiveNav(label); setMenuOpen(false); }}
@@ -586,8 +588,8 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         </div>
       )}
 
-      {/* Hero — hidden on catalog pages */}
-      {activeNav !== "Movies" && activeNav !== "Series" && (
+      {/* Hero — hidden on catalog pages and Podcasts */}
+      {activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "Podcasts" && (
         loading ? (
           <div style={{ height: "85vh", display: "flex", alignItems: "center", justifyContent: "center" }}><Spinner /></div>
         ) : featured ? (
@@ -613,16 +615,22 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         />
       )}
 
-      {/* Content rows (Home / My List / New & Popular) */}
-      {activeNav !== "Movies" && activeNav !== "Series" && !loading && (allContent.length > 0 || liveStreams.filter(s => s.is_live).length > 0 || continueWatching.length > 0) && (
-        <div style={{ position: "relative", zIndex: 1, marginTop: -60, paddingBottom: 80 }}>
-          {liveStreams.filter(s => s.is_live).length > 0 && (
+      {/* Content rows (Home / My List / New & Popular / Podcasts) */}
+      {activeNav !== "Movies" && activeNav !== "Series" && !loading && (allContent.length > 0 || podcasts.length > 0 || liveStreams.filter(s => s.is_live).length > 0 || continueWatching.length > 0) && (
+        <div style={{ position: "relative", zIndex: 1, marginTop: activeNav === "Podcasts" ? 0 : -60, paddingBottom: 80 }}>
+          {activeNav === "Podcasts" && (
+            <div style={{ padding: `48px ${PAD} 0` }}>
+              <h1 style={{ margin: 0, fontFamily: "'DM Serif Display', serif", fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 400, color: "#fff" }}>Podcasts</h1>
+              <p style={{ margin: "8px 0 0", fontSize: 14, color: "#555" }}>{podcasts.length} show{podcasts.length !== 1 ? "s" : ""}</p>
+            </div>
+          )}
+          {liveStreams.filter(s => s.is_live).length > 0 && activeNav === "Home" && (
             <LiveSection streams={liveStreams.filter(s => s.is_live)} onPlay={onPlay} />
           )}
           {continueWatching.length > 0 && activeNav === "Home" && (
             <ContinueWatchingRow items={continueWatching} onPlay={onPlay} onRemove={handleRemoveCW} />
           )}
-          {filteredContent.length === 0 && activeNav !== "My List" ? (
+          {filteredContent.length === 0 && activeNav !== "My List" && activeNav !== "Podcasts" ? (
             <div style={{ padding: "100px 0", textAlign: "center", color: "#444", fontSize: 15 }}>
               No {activeNav.toLowerCase()} yet.
             </div>
@@ -634,6 +642,11 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           {activeNav === "My List" && sections[0]?.videos.length === 0 && (
             <div style={{ padding: "100px 0", textAlign: "center", color: "#444", fontSize: 15 }}>
               Your list is empty — browse content and hit + List to save titles.
+            </div>
+          )}
+          {activeNav === "Podcasts" && podcasts.length === 0 && (
+            <div style={{ padding: "100px 0", textAlign: "center", color: "#444", fontSize: 15 }}>
+              No podcasts yet — add one from the admin panel.
             </div>
           )}
         </div>
@@ -2356,30 +2369,46 @@ function PodcastPlayerView({ episode, podcast, onBack, onSelect, user, activePro
         </nav>
 
         {/* Player content */}
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: `40px ${PAD}` }}>
-          <div style={{ width: "100%", maxWidth: 520, display: "flex", flexDirection: "column", alignItems: "center", gap: 32 }}>
-            {/* Artwork */}
-            <div style={{ width: isMobile ? 220 : 280, height: isMobile ? 220 : 280, borderRadius: 20, overflow: "hidden", background: "linear-gradient(135deg, #1e1b4b, #312e81)", boxShadow: "0 40px 100px rgba(0,0,0,0.8)", flexShrink: 0 }}>
-              {podcast.artwork_url
-                ? <img src={podcast.artwork_url} alt={podcast.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="1.2"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
-                  </div>
-              }
-            </div>
+        {(() => {
+          const isVideo = /\.(mp4|mov|webm|m4v)(\?|$)/i.test(episode.audio_url || "");
+          return (
+        <div style={{ flex: 1, display: "flex", alignItems: isVideo ? "flex-start" : "center", justifyContent: "center", padding: isVideo ? 0 : `40px ${PAD}` }}>
+          <div style={{ width: "100%", maxWidth: isVideo ? "none" : 520, display: "flex", flexDirection: "column", alignItems: "center", gap: isVideo ? 0 : 32 }}>
+
+            {/* Video player — full width */}
+            {isVideo && (
+              <video ref={audioRef} src={episode.audio_url} controls autoPlay
+                onLoadedMetadata={handleLoadedMetadata}
+                onEnded={handleEnded}
+                style={{ width: "100%", maxHeight: "75vh", background: "#000", display: "block" }} />
+            )}
+
+            {/* Artwork — audio only */}
+            {!isVideo && (
+              <div style={{ width: isMobile ? 220 : 280, height: isMobile ? 220 : 280, borderRadius: 20, overflow: "hidden", background: "linear-gradient(135deg, #1e1b4b, #312e81)", boxShadow: "0 40px 100px rgba(0,0,0,0.8)", flexShrink: 0 }}>
+                {podcast.artwork_url
+                  ? <img src={podcast.artwork_url} alt={podcast.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="1.2"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+                    </div>
+                }
+              </div>
+            )}
 
             {/* Episode info */}
-            <div style={{ textAlign: "center", width: "100%" }}>
+            <div style={{ textAlign: "center", width: "100%", padding: isVideo ? `24px ${PAD}` : 0 }}>
               <p style={{ margin: "0 0 6px", fontSize: 12, color: "#818cf8", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>{podcast.title} · Ep. {episode.episode_number}</p>
               <h2 style={{ margin: "0 0 6px", fontSize: isMobile ? 20 : 24, fontWeight: 700, color: "#fff", lineHeight: 1.2 }}>{episode.title}</h2>
               {podcast.host && <p style={{ margin: 0, fontSize: 13, color: "#555" }}>{podcast.host}</p>}
             </div>
 
-            {/* Audio player */}
-            <audio ref={audioRef} src={episode.audio_url} controls autoPlay
-              onLoadedMetadata={handleLoadedMetadata}
-              onEnded={handleEnded}
-              style={{ width: "100%", borderRadius: 12, outline: "none", accentColor: "#818cf8" }} />
+            {/* Audio player — audio only */}
+            {!isVideo && (
+              <audio ref={audioRef} src={episode.audio_url} controls autoPlay
+                onLoadedMetadata={handleLoadedMetadata}
+                onEnded={handleEnded}
+                style={{ width: "100%", borderRadius: 12, outline: "none", accentColor: "#818cf8" }} />
+            )}
 
             {/* Next episode */}
             {nextEpisode && (
@@ -2393,6 +2422,8 @@ function PodcastPlayerView({ episode, podcast, onBack, onSelect, user, activePro
             )}
           </div>
         </div>
+          );
+        })()}
       </div>
     </div>
   );

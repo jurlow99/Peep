@@ -738,9 +738,15 @@ export function CMS({ onExit }) {
   }
 
   async function deletePodcast(id) {
+    await supabase.from("podcast_episodes").delete().eq("podcast_id", id);
     const { error } = await supabase.from("podcasts").delete().eq("id", id);
     if (error) showToast("Delete failed: " + error.message, "error");
-    else { showToast("Podcast deleted"); setDeletePodcastConfirm(null); await loadPodcasts(); }
+    else {
+      showToast("Podcast deleted");
+      setDeletePodcastConfirm(null);
+      if (selectedPodcastForEp?.id === id) { setSelectedPodcastForEp(null); setPodEpList([]); cancelPodEpEdit(); }
+      await loadPodcasts();
+    }
   }
 
   // ──── PODCAST EPISODES ────
@@ -1903,20 +1909,26 @@ export function CMS({ onExit }) {
               </div>
             </div>
 
+            {/* Right column — podcast list + episode panel in ONE grid cell */}
             <div>
-              <h3 style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 600, color: "#e5e5e5" }}>All Podcasts ({podcastsList.length})</h3>
-              <p style={{ margin: "0 0 20px", fontSize: 12, color: "#555" }}>Add a "podcast" type carousel on the Carousels tab to display these on the homepage.</p>
+              <div style={{ marginBottom: 28 }}>
+                <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#e5e5e5" }}>All Podcasts ({podcastsList.length})</h3>
+                <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Click <strong style={{ color: "#818cf8", fontWeight: 600 }}>Episodes</strong> on any podcast to manage its audio episodes.</p>
+              </div>
               {podcastsLoading ? (
                 <div style={{ color: "#555", padding: 40, textAlign: "center" }}>Loading...</div>
               ) : podcastsList.length === 0 ? (
-                <div style={{ color: "#555", padding: 40, textAlign: "center", border: "1px dashed #1e1e1e", borderRadius: 10 }}>No podcasts yet. Add one using the form.</div>
+                <div style={{ padding: 32, textAlign: "center", border: "1px dashed #1e1e1e", borderRadius: 10 }}>
+                  <p style={{ color: "#555", margin: "0 0 8px", fontSize: 14 }}>No podcasts yet. Add one using the form.</p>
+                  <p style={{ color: "#333", margin: 0, fontSize: 12 }}>Once added, click <strong style={{ color: "#818cf8" }}>Episodes</strong> on a podcast to add its audio episodes.</p>
+                </div>
               ) : podcastsList.map(pod => (
-                <div key={pod.id} style={{ background: "#111", border: `1px solid ${editingPodcastId === pod.id ? "#818cf8" : "#1e1e1e"}`, borderRadius: 10, padding: "16px 20px", marginBottom: 12, display: "flex", gap: 16, alignItems: "center", borderLeft: editingPodcastId === pod.id ? "3px solid #818cf8" : undefined }}>
+                <div key={pod.id} style={{ background: "#111", border: `1px solid ${editingPodcastId === pod.id ? "#818cf8" : selectedPodcastForEp?.id === pod.id ? "#818cf8" : "#1e1e1e"}`, borderRadius: 10, padding: "14px 16px", marginBottom: 10, display: "flex", gap: 14, alignItems: "center", borderLeft: `3px solid ${editingPodcastId === pod.id || selectedPodcastForEp?.id === pod.id ? "#818cf8" : "transparent"}` }}>
                   {pod.artwork_url ? (
-                    <img src={pod.artwork_url} alt={pod.title} style={{ width: 52, height: 52, objectFit: "cover", borderRadius: 8, flexShrink: 0 }} onError={e => { e.target.style.display = "none"; }} />
+                    <img src={pod.artwork_url} alt={pod.title} style={{ width: 46, height: 46, objectFit: "cover", borderRadius: 7, flexShrink: 0 }} onError={e => { e.target.style.display = "none"; }} />
                   ) : (
-                    <div style={{ width: 52, height: 52, borderRadius: 8, background: "linear-gradient(135deg, #1e1b4b, #312e81)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="2">
+                    <div style={{ width: 46, height: 46, borderRadius: 7, background: "linear-gradient(135deg, #1e1b4b, #312e81)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="2">
                         <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
                         <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
                         <line x1="12" y1="19" x2="12" y2="22"/>
@@ -1924,102 +1936,96 @@ export function CMS({ onExit }) {
                     </div>
                   )}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: "0 0 3px", fontSize: 14, fontWeight: 600, color: "#fff" }}>{pod.title}</p>
+                    <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{pod.title}</p>
                     <p style={{ margin: 0, fontSize: 12, color: "#666" }}>
                       {pod.host && <span style={{ color: "#818cf8" }}>{pod.host}</span>}
-                      {pod.host && pod.episode_count && " · "}
-                      {pod.episode_count && `${pod.episode_count} ep`}
-                      {" · "}
-                      <span style={{ color: pod.enabled ? "#818cf8" : "#f87171" }}>{pod.enabled ? "Enabled" : "Disabled"}</span>
+                      {pod.host && " · "}
+                      <span style={{ color: pod.enabled ? "#4ade80" : "#f87171" }}>{pod.enabled ? "Enabled" : "Disabled"}</span>
                     </p>
                   </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={() => { setSelectedPodcastForEp(pod); loadPodEpisodes(pod.id); setPodEpForm({ ...EMPTY_PODCAST_EPISODE, podcast_id: pod.id }); cancelPodEpEdit(); }}
-                      style={{ background: selectedPodcastForEp?.id === pod.id ? "rgba(129,140,248,0.2)" : "rgba(129,140,248,0.08)", border: `1px solid ${selectedPodcastForEp?.id === pod.id ? "#818cf8" : "rgba(129,140,248,0.2)"}`, borderRadius: 5, padding: "5px 10px", color: "#818cf8", fontSize: 11, cursor: "pointer", fontWeight: selectedPodcastForEp?.id === pod.id ? 700 : 400 }}>
-                      Episodes
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                    <button onClick={() => {
+                      if (selectedPodcastForEp?.id === pod.id) { setSelectedPodcastForEp(null); setPodEpList([]); cancelPodEpEdit(); }
+                      else { setSelectedPodcastForEp(pod); loadPodEpisodes(pod.id); setPodEpForm({ ...EMPTY_PODCAST_EPISODE, podcast_id: pod.id }); cancelPodEpEdit(); }
+                    }} style={{ background: selectedPodcastForEp?.id === pod.id ? "rgba(129,140,248,0.25)" : "rgba(129,140,248,0.08)", border: `1px solid ${selectedPodcastForEp?.id === pod.id ? "#818cf8" : "rgba(129,140,248,0.25)"}`, borderRadius: 5, padding: "5px 10px", color: "#818cf8", fontSize: 11, cursor: "pointer", fontWeight: selectedPodcastForEp?.id === pod.id ? 700 : 400 }}>
+                      {selectedPodcastForEp?.id === pod.id ? "Close" : "Episodes"}
                     </button>
-                    <button onClick={() => startPodcastEdit(pod)} style={{ background: "rgba(129,140,248,0.08)", border: "1px solid rgba(129,140,248,0.2)", borderRadius: 5, padding: "5px 10px", color: "#818cf8", fontSize: 11, cursor: "pointer" }}>Edit</button>
+                    <button onClick={() => startPodcastEdit(pod)} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid #2a2a2a", borderRadius: 5, padding: "5px 10px", color: "#aaa", fontSize: 11, cursor: "pointer" }}>Edit</button>
                     <button onClick={() => setDeletePodcastConfirm(pod)} style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 5, padding: "5px 10px", color: "#f87171", fontSize: 11, cursor: "pointer" }}>Delete</button>
                   </div>
                 </div>
               ))}
-            </div>
 
-            {/* ── Podcast Episode Management ── */}
-            {selectedPodcastForEp && (
-              <div style={{ marginTop: 32, borderTop: "1px solid #1e1e1e", paddingTop: 28 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-                  <div>
-                    <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#818cf8" }}>
-                      Episodes — {selectedPodcastForEp.title}
-                    </h3>
-                    <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Audio files from your Supabase bucket</p>
+              {/* ── Episode panel — inline below the selected podcast ── */}
+              {selectedPodcastForEp && (
+                <div style={{ marginTop: 24, background: "#0d0d0d", border: "1px solid #1e1e1e", borderRadius: 12, padding: 24 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+                    <div>
+                      <h3 style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 700, color: "#818cf8" }}>Episodes — {selectedPodcastForEp.title}</h3>
+                      <p style={{ margin: 0, fontSize: 11, color: "#444" }}>Audio files · upload or paste a URL</p>
+                    </div>
+                    <button onClick={() => { setSelectedPodcastForEp(null); setPodEpList([]); cancelPodEpEdit(); }}
+                      style={{ background: "none", border: "none", color: "#444", fontSize: 20, cursor: "pointer", lineHeight: 1, padding: "2px 4px" }}>×</button>
                   </div>
-                  <button onClick={() => { setSelectedPodcastForEp(null); setPodEpList([]); cancelPodEpEdit(); }}
-                    style={{ background: "none", border: "none", color: "#555", fontSize: 18, cursor: "pointer", lineHeight: 1 }}>×</button>
-                </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, alignItems: "start" }}>
-                  {/* Episode form */}
-                  <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: 24 }}>
-                    <h4 style={{ margin: "0 0 20px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>
+                  {/* Add / Edit episode form */}
+                  <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 20, marginBottom: 20 }}>
+                    <p style={{ margin: "0 0 16px", fontSize: 12, fontWeight: 600, color: "#e5e5e5", textTransform: "uppercase", letterSpacing: 0.6 }}>
                       {editingPodEpId ? "Edit Episode" : "Add Episode"}
-                    </h4>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                        <FieldInput label="Episode #" value={podEpForm.episode_number} onChange={v => setPodEpForm(f => ({ ...f, episode_number: v }))} placeholder="1" type="number" />
+                    </p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "100px 1fr", gap: 10 }}>
+                        <FieldInput label="Ep #" value={podEpForm.episode_number} onChange={v => setPodEpForm(f => ({ ...f, episode_number: v }))} placeholder="1" type="number" />
                         <FieldInput label="Duration" value={podEpForm.duration} onChange={v => setPodEpForm(f => ({ ...f, duration: v }))} placeholder="42:30" />
                       </div>
                       <FieldInput label="Title *" value={podEpForm.title} onChange={v => setPodEpForm(f => ({ ...f, title: v }))} placeholder="Episode title" />
                       <div>
-                        <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Audio File</label>
-                        <ImageUploader label="Upload MP3 / Audio" folder="podcast-audio" onUploadSuccess={url => setPodEpForm(f => ({ ...f, audio_url: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
-                        <input type="text" value={podEpForm.audio_url} onChange={e => setPodEpForm(f => ({ ...f, audio_url: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none" }} />
+                        <label style={{ display: "block", fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Audio File</label>
+                        <ImageUploader label="Upload MP4 / MP3 / Audio" folder="podcast-audio" accept="video/mp4,video/mov,video/webm,audio/*" onUploadSuccess={url => setPodEpForm(f => ({ ...f, audio_url: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
+                        <input type="text" value={podEpForm.audio_url} onChange={e => setPodEpForm(f => ({ ...f, audio_url: e.target.value }))} placeholder="or paste audio URL..." style={{ width: "100%", marginTop: 6, background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "9px 12px", color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
                       </div>
                       <div>
-                        <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Thumbnail (optional)</label>
+                        <label style={{ display: "block", fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Thumbnail (optional)</label>
                         <ImageUploader label="Upload Thumbnail" folder="podcast-thumbs" onUploadSuccess={url => setPodEpForm(f => ({ ...f, thumbnail: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
-                        <input type="text" value={podEpForm.thumbnail} onChange={e => setPodEpForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none" }} />
+                        <input type="text" value={podEpForm.thumbnail} onChange={e => setPodEpForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="or paste image URL..." style={{ width: "100%", marginTop: 6, background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "9px 12px", color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
                       </div>
                       <div>
-                        <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Description</label>
-                        <textarea value={podEpForm.description} onChange={e => setPodEpForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Episode description..." style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit" }} />
+                        <label style={{ display: "block", fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Description</label>
+                        <textarea value={podEpForm.description} onChange={e => setPodEpForm(f => ({ ...f, description: e.target.value }))} rows={2} placeholder="Episode description..." style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "9px 12px", color: "#fff", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }} />
                       </div>
                     </div>
-                    <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+                    <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
                       <button onClick={savePodEp} disabled={podEpSaving}
-                        style={{ flex: 1, background: "#818cf8", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: podEpSaving ? "not-allowed" : "pointer", opacity: podEpSaving ? 0.7 : 1 }}>
+                        style={{ flex: 1, background: "#818cf8", border: "none", borderRadius: 7, padding: "10px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: podEpSaving ? "not-allowed" : "pointer", opacity: podEpSaving ? 0.7 : 1 }}>
                         {podEpSaving ? "Saving…" : editingPodEpId ? "Save Changes" : "Add Episode"}
                       </button>
-                      {editingPodEpId && <button onClick={cancelPodEpEdit} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "11px 16px", color: "#888", fontSize: 13, cursor: "pointer" }}>Cancel</button>}
+                      {editingPodEpId && <button onClick={cancelPodEpEdit} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "10px 16px", color: "#888", fontSize: 13, cursor: "pointer" }}>Cancel</button>}
                     </div>
                   </div>
 
                   {/* Episode list */}
-                  <div>
-                    {podEpLoading ? (
-                      <div style={{ color: "#555", padding: 40, textAlign: "center" }}>Loading...</div>
-                    ) : podEpList.length === 0 ? (
-                      <div style={{ color: "#555", padding: 40, textAlign: "center", border: "1px dashed #1e1e1e", borderRadius: 10 }}>No episodes yet.</div>
-                    ) : podEpList.map(ep => (
-                      <div key={ep.id} style={{ background: "#111", border: `1px solid ${editingPodEpId === ep.id ? "#818cf8" : "#1e1e1e"}`, borderRadius: 10, padding: "12px 16px", marginBottom: 10, display: "flex", alignItems: "center", gap: 14 }}>
-                        <div style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(129,140,248,0.15)", border: "1px solid rgba(129,140,248,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: "#818cf8" }}>{ep.episode_number}</span>
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: "#e5e5e5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{ep.title}</p>
-                          <p style={{ margin: 0, fontSize: 11, color: "#555" }}>{ep.duration || "No duration"} {ep.audio_url ? "· Audio ✓" : "· No audio"}</p>
-                        </div>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <button onClick={() => startPodEpEdit(ep)} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid #2a2a2a", borderRadius: 5, padding: "5px 10px", color: "#aaa", fontSize: 11, cursor: "pointer" }}>Edit</button>
-                          <button onClick={() => setDeletePodEpConfirm(ep)} style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 5, padding: "5px 10px", color: "#f87171", fontSize: 11, cursor: "pointer" }}>Delete</button>
-                        </div>
+                  {podEpLoading ? (
+                    <div style={{ color: "#555", padding: 32, textAlign: "center" }}>Loading...</div>
+                  ) : podEpList.length === 0 ? (
+                    <div style={{ color: "#444", padding: "24px 0", textAlign: "center", fontSize: 13 }}>No episodes yet — add one above.</div>
+                  ) : podEpList.map(ep => (
+                    <div key={ep.id} style={{ background: "#111", border: `1px solid ${editingPodEpId === ep.id ? "#818cf8" : "#1e1e1e"}`, borderRadius: 9, padding: "11px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ width: 30, height: 30, borderRadius: "50%", background: "rgba(129,140,248,0.15)", border: "1px solid rgba(129,140,248,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "#818cf8" }}>{ep.episode_number}</span>
                       </div>
-                    ))}
-                  </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: "#e5e5e5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{ep.title}</p>
+                        <p style={{ margin: 0, fontSize: 11, color: "#555" }}>{ep.duration || "—"}{ep.audio_url ? " · Audio ✓" : " · No audio"}</p>
+                      </div>
+                      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                        <button onClick={() => startPodEpEdit(ep)} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid #2a2a2a", borderRadius: 5, padding: "4px 9px", color: "#aaa", fontSize: 11, cursor: "pointer" }}>Edit</button>
+                        <button onClick={() => setDeletePodEpConfirm(ep)} style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 5, padding: "4px 9px", color: "#f87171", fontSize: 11, cursor: "pointer" }}>Delete</button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             {deletePodEpConfirm && (
               <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
