@@ -210,36 +210,61 @@ export function CMS({ onExit }) {
       supabase.from("profiles").select("id, username, email, created_at").order("created_at", { ascending: true }),
     ]);
 
-    // Group watch sessions by content
+    // Group watch sessions by content, also accumulate watch time
     const watchMap = {};
+    const watchTimeMap = {};
+    let totalWatchSeconds = 0;
     (watchData || []).forEach(w => {
       const key = `${w.content_type}:${w.content_id}`;
       watchMap[key] = (watchMap[key] || 0) + 1;
+      const secs = w.progress_seconds || 0;
+      watchTimeMap[key] = (watchTimeMap[key] || 0) + secs;
+      totalWatchSeconds += secs;
     });
     const topWatchedRaw = Object.entries(watchMap)
       .sort((a, b) => b[1] - a[1]).slice(0, 10)
       .map(([key, count]) => { const [type, id] = key.split(":"); return { type, id: parseInt(id), count }; });
+    const topByTimeRaw = Object.entries(watchTimeMap)
+      .sort((a, b) => b[1] - a[1]).slice(0, 10)
+      .map(([key, secs]) => { const [type, id] = key.split(":"); return { type, id: parseInt(id), secs }; });
 
-    // Fetch titles for top watched
-    const movieIds = topWatchedRaw.filter(t => t.type === "movie").map(t => t.id);
-    const episodeIds = topWatchedRaw.filter(t => t.type === "episode").map(t => t.id);
-    const [movTitles, epTitles] = await Promise.all([
-      movieIds.length ? supabase.from("videos").select("id, title").in("id", movieIds) : { data: [] },
-      episodeIds.length ? supabase.from("episodes").select("id, title").in("id", episodeIds) : { data: [] },
-    ]);
-    const titleMap = {};
-    (movTitles.data || []).forEach(v => { titleMap[`movie:${v.id}`] = v.title; });
-    (epTitles.data || []).forEach(e => { titleMap[`episode:${e.id}`] = e.title; });
-    const topWatched = topWatchedRaw.map(t => ({ ...t, title: titleMap[`${t.type}:${t.id}`] || "(unknown)" }));
-
-    // Group ratings (thumbs up)
+    // Build raw rated + saved before title fetch so all IDs are included
     const ratingMap = {};
     (ratingsData || []).forEach(r => {
       if (r.rating === 1) { const key = `${r.content_type}:${r.content_id}`; ratingMap[key] = (ratingMap[key] || 0) + 1; }
     });
-    const topRated = Object.entries(ratingMap)
+    const topRatedRaw = Object.entries(ratingMap)
       .sort((a, b) => b[1] - a[1]).slice(0, 10)
-      .map(([key, count]) => { const [type, id] = key.split(":"); return { type, id: parseInt(id), count, title: titleMap[`${type}:${id}`] || "(unknown)" }; });
+      .map(([key, count]) => { const [type, id] = key.split(":"); return { type, id: parseInt(id), count }; });
+
+    const saveMap = {};
+    (listData || []).forEach(s => { const key = `${s.content_type}:${s.content_id}`; saveMap[key] = (saveMap[key] || 0) + 1; });
+    const topSavedRaw = Object.entries(saveMap).sort((a, b) => b[1] - a[1]).slice(0, 10)
+      .map(([key, count]) => { const [type, id] = key.split(":"); return { type, id: parseInt(id), count }; });
+
+    // Unified title fetch — covers all four panels and all content types
+    const allItems = [...topWatchedRaw, ...topByTimeRaw, ...topRatedRaw, ...topSavedRaw];
+    const allKeys = [...new Set(allItems.map(t => `${t.type}:${t.id}`))];
+    const idsFor = (prefix) => allKeys.filter(k => k.startsWith(prefix + ":")).map(k => parseInt(k.split(":")[1]));
+    const [movTitles, epTitles, podEpTitles, showTitles] = await Promise.all([
+      idsFor("movie").length ? supabase.from("videos").select("id, title").in("id", idsFor("movie")) : { data: [] },
+      idsFor("episode").length ? supabase.from("episodes").select("id, title").in("id", idsFor("episode")) : { data: [] },
+      idsFor("podcast_episode").length ? supabase.from("podcast_episodes").select("id, title").in("id", idsFor("podcast_episode")) : { data: [] },
+      idsFor("show").length ? supabase.from("shows").select("id, title").in("id", idsFor("show")) : { data: [] },
+    ]);
+    const titleMap = {};
+    (movTitles.data || []).forEach(v => { titleMap[`movie:${v.id}`] = v.title; });
+    (epTitles.data || []).forEach(e => { titleMap[`episode:${e.id}`] = e.title; });
+    (podEpTitles.data || []).forEach(e => { titleMap[`podcast_episode:${e.id}`] = e.title; });
+    (showTitles.data || []).forEach(s => { titleMap[`show:${s.id}`] = s.title; });
+
+    const applyTitles = (arr) => arr
+      .map(t => ({ ...t, title: titleMap[`${t.type}:${t.id}`] || null }))
+      .filter(t => t.title !== null);
+    const topWatched = applyTitles(topWatchedRaw);
+    const topByTime = applyTitles(topByTimeRaw).map(t => ({ ...t, minutes: Math.round(t.secs / 60) }));
+    const topRated = applyTitles(topRatedRaw);
+    const topSaved = applyTitles(topSavedRaw);
 
     // User growth by month
     const monthMap = {};
@@ -248,12 +273,6 @@ export function CMS({ onExit }) {
       if (month) monthMap[month] = (monthMap[month] || 0) + 1;
     });
     const userGrowth = Object.entries(monthMap).sort((a, b) => a[0].localeCompare(b[0]));
-
-    // Most saved
-    const saveMap = {};
-    (listData || []).forEach(s => { const key = `${s.content_type}:${s.content_id}`; saveMap[key] = (saveMap[key] || 0) + 1; });
-    const topSaved = Object.entries(saveMap).sort((a, b) => b[1] - a[1]).slice(0, 10)
-      .map(([key, count]) => { const [type, id] = key.split(":"); return { type, id: parseInt(id), count, title: titleMap[`${type}:${id}`] || "(unknown)" }; });
 
     // ── User engagement ──
     const now = Date.now();
@@ -291,6 +310,7 @@ export function CMS({ onExit }) {
         sessions: w.sessions,
         completed: w.completed,
         avgProgressMin: w.sessions > 0 ? Math.round(w.totalProgress / w.sessions / 60) : 0,
+        totalHours: +(w.totalProgress / 3600).toFixed(1),
         saves: userSaveMap[p.id] || 0,
         ratings: userRatingMap[p.id] || 0,
         lastWatched: w.lastWatched,
@@ -323,7 +343,8 @@ export function CMS({ onExit }) {
       completedSessions: (watchData || []).filter(w => w.completed).length,
       totalSaves: (listData || []).length,
       totalRatings: (ratingsData || []).length,
-      topWatched, topRated, topSaved, userGrowth,
+      totalWatchHours: Math.round(totalWatchSeconds / 3600),
+      topWatched, topRated, topSaved, topByTime, userGrowth,
       userEngagement, activeUsers30d, activeUsers7d,
       neverWatchedUsers, avgSessionsPerUser, sessionTrend,
     });
@@ -2094,6 +2115,7 @@ export function CMS({ onExit }) {
                         { label: "Episodes", value: reportData.episodeCount, color: "#facc15" },
                         { label: "Watch Sessions", value: reportData.watchSessions, color: "#60a5fa" },
                         { label: "Completed", value: reportData.completedSessions, color: "#60a5fa" },
+                        { label: "Hours Watched", value: reportData.totalWatchHours.toLocaleString() + " h", color: "#f472b6" },
                         { label: "List Saves", value: reportData.totalSaves, color: "#a78bfa" },
                         { label: "Ratings Given", value: reportData.totalRatings, color: "#f97316" },
                       ].map(stat => (
@@ -2144,10 +2166,11 @@ export function CMS({ onExit }) {
                 {reportSection === "content" && (
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 24 }}>
                     {[
-                      { title: "Top Watched", items: reportData.topWatched, valueColor: "#60a5fa", emptyMsg: "No watch data yet" },
-                      { title: "Top Rated (👍)", items: reportData.topRated, valueColor: "#f97316", emptyMsg: "No ratings yet" },
-                      { title: "Most Saved to List", items: reportData.topSaved, valueColor: "#a78bfa", emptyMsg: "No saves yet" },
-                    ].map(({ title, items, valueColor, emptyMsg }) => (
+                      { title: "Top by Sessions", items: reportData.topWatched, valueKey: "count", valueSuffix: " plays", valueColor: "#60a5fa", emptyMsg: "No watch data yet" },
+                      { title: "Top by Watch Time", items: reportData.topByTime, valueKey: "minutes", valueSuffix: " min", valueColor: "#f472b6", emptyMsg: "No watch time data yet" },
+                      { title: "Top Rated (👍)", items: reportData.topRated, valueKey: "count", valueSuffix: "", valueColor: "#f97316", emptyMsg: "No ratings yet" },
+                      { title: "Most Saved to List", items: reportData.topSaved, valueKey: "count", valueSuffix: "", valueColor: "#a78bfa", emptyMsg: "No saves yet" },
+                    ].map(({ title, items, valueKey, valueSuffix, valueColor, emptyMsg }) => (
                       <div key={title} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px" }}>
                         <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>{title}</p>
                         {items.length === 0 ? (
@@ -2157,9 +2180,9 @@ export function CMS({ onExit }) {
                             <span style={{ fontSize: 11, color: "#333", width: 18, textAlign: "right", flexShrink: 0 }}>{i + 1}</span>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <p style={{ margin: 0, fontSize: 13, color: "#e5e5e5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
-                              <span style={{ fontSize: 11, color: item.type === "movie" ? "#facc15" : "#60a5fa" }}>{item.type}</span>
+                              <span style={{ fontSize: 11, color: item.type === "movie" ? "#facc15" : item.type === "podcast_episode" ? "#a78bfa" : "#60a5fa" }}>{item.type}</span>
                             </div>
-                            <span style={{ fontSize: 13, fontWeight: 600, color: valueColor, flexShrink: 0 }}>{item.count}</span>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: valueColor, flexShrink: 0 }}>{item[valueKey].toLocaleString()}{valueSuffix}</span>
                           </div>
                         ))}
                       </div>
@@ -2207,7 +2230,7 @@ export function CMS({ onExit }) {
                       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                         <thead>
                           <tr style={{ borderBottom: "1px solid #1e1e1e" }}>
-                            {["#", "User", "Sessions", "Completed", "Avg Watch (min)", "Saves", "Ratings", "Last Watched", "Status"].map(h => (
+                            {["#", "User", "Sessions", "Completed", "Total Hours", "Avg Watch (min)", "Saves", "Ratings", "Last Watched", "Status"].map(h => (
                               <th key={h} style={{ padding: "0 12px 10px", textAlign: "left", color: "#555", fontWeight: 600, whiteSpace: "nowrap" }}>{h}</th>
                             ))}
                           </tr>
@@ -2222,6 +2245,7 @@ export function CMS({ onExit }) {
                               </td>
                               <td style={{ padding: "10px 12px", color: "#60a5fa", fontWeight: 600 }}>{u.sessions}</td>
                               <td style={{ padding: "10px 12px", color: "#34d399" }}>{u.completed}</td>
+                              <td style={{ padding: "10px 12px", color: "#f472b6", fontWeight: 600 }}>{u.totalHours > 0 ? u.totalHours + " h" : "—"}</td>
                               <td style={{ padding: "10px 12px", color: "#e5e5e5" }}>{u.avgProgressMin > 0 ? u.avgProgressMin : "—"}</td>
                               <td style={{ padding: "10px 12px", color: "#a78bfa" }}>{u.saves || "—"}</td>
                               <td style={{ padding: "10px 12px", color: "#f97316" }}>{u.ratings || "—"}</td>

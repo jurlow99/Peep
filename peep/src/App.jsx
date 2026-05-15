@@ -243,6 +243,8 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [searchTypeFilter, setSearchTypeFilter] = useState("all");
+  const [recentSearches, setRecentSearches] = useState(() => { try { return JSON.parse(localStorage.getItem("peep_recent_searches") || "[]"); } catch { return []; } });
   const [activeNav, setActiveNav] = useState("Home");
   const [menuOpen, setMenuOpen] = useState(false);
   const [footerModal, setFooterModal] = useState(null);
@@ -449,16 +451,50 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       ],
   [activeNav, allContent, filteredContent, visibleCarousels, podcasts, carousels, myList]);
 
+  const searchPool = useMemo(() => {
+    const tagsStr = (tags) => Array.isArray(tags) ? tags.join(" ") : (tags || "");
+    return [
+      ...videos.map(v => ({ ...v, _type: "movie", _tagsStr: tagsStr(v.tags) })),
+      ...shows.map(s => ({ ...s, _type: "show", _tagsStr: tagsStr(s.tags) })),
+      ...podcasts.map(p => ({ ...p, _type: "podcast", _tagsStr: tagsStr(p.tags) })),
+    ];
+  }, [videos, shows, podcasts]);
+
   const searchResults = useMemo(() => {
     if (!debouncedQuery) return [];
     const q = debouncedQuery.toLowerCase();
-    return allContent.filter(v =>
-      v.title?.toLowerCase().includes(q) ||
-      v.category?.toLowerCase().includes(q) ||
-      v.description?.toLowerCase().includes(q) ||
-      (Array.isArray(v.tags) ? v.tags.some(t => t.toLowerCase().includes(q)) : v.tags?.toLowerCase().includes(q))
-    );
-  }, [debouncedQuery, allContent]);
+    return searchPool.filter(v => {
+      if (searchTypeFilter !== "all" && v._type !== searchTypeFilter) return false;
+      return (
+        v.title?.toLowerCase().includes(q) ||
+        v.category?.toLowerCase().includes(q) ||
+        v.description?.toLowerCase().includes(q) ||
+        v._tagsStr.toLowerCase().includes(q)
+      );
+    });
+  }, [debouncedQuery, searchPool, searchTypeFilter]);
+
+  function closeSearch() {
+    setSearchQuery("");
+    setDebouncedQuery("");
+    setSearchOpen(false);
+    setSearchTypeFilter("all");
+  }
+
+  function saveRecentSearch(q) {
+    if (!q.trim()) return;
+    const updated = [q, ...recentSearches.filter(s => s !== q)].slice(0, 6);
+    setRecentSearches(updated);
+    localStorage.setItem("peep_recent_searches", JSON.stringify(updated));
+  }
+
+  function handleSearchResultClick(item) {
+    saveRecentSearch(searchQuery);
+    closeSearch();
+    if (item._type === "show") onShowSelect(item);
+    else if (item._type === "podcast") { setSelectedPodcast(item); setPage("podcast"); }
+    else onPlay(item);
+  }
 
   function handleClick(item) {
     item._type === "show" ? onShowSelect(item) : onPlay(item);
@@ -507,9 +543,10 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           <div style={{ display: "flex", alignItems: "center", position: "relative" }}>
             {searchOpen && (
               <input autoFocus value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                onBlur={() => { if (!searchQuery) setSearchOpen(false); }}
-                placeholder="Search titles, genres..."
-                style={{ background: "rgba(15,15,15,0.92)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 6, padding: "8px 14px 8px 38px", color: "#fff", fontSize: 13, width: isMobile ? "calc(100vw - 110px)" : 240, outline: "none" }}
+                onKeyDown={e => { if (e.key === "Escape") closeSearch(); if (e.key === "Enter" && searchResults[0]) handleSearchResultClick(searchResults[0]); }}
+                onBlur={() => { if (!searchQuery) closeSearch(); }}
+                placeholder="Search titles, genres, podcasts..."
+                style={{ background: "rgba(15,15,15,0.92)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 6, padding: "8px 14px 8px 38px", color: "#fff", fontSize: 13, width: isMobile ? "calc(100vw - 110px)" : 260, outline: "none" }}
               />
             )}
             <div onClick={() => setSearchOpen(o => !o)} style={{ position: searchOpen ? "absolute" : "relative", left: searchOpen ? 11 : 0, cursor: "pointer", color: "rgba(255,255,255,0.7)", display: "flex", alignItems: "center" }}>
@@ -582,24 +619,83 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       )}
 
       {/* Search overlay */}
-      {debouncedQuery && (
-        <div style={{ position: "fixed", top: 68, left: 0, right: 0, zIndex: 99, background: "rgba(10,10,10,0.97)", backdropFilter: "blur(16px)", padding: `24px ${PAD} 32px`, borderBottom: "1px solid #1a1a1a", maxHeight: "70vh", overflowY: "auto" }}>
-          <p style={{ fontSize: 13, color: "#555", marginBottom: 20 }}>{searchResults.length} result{searchResults.length !== 1 ? "s" : ""} for "{debouncedQuery}"</p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 14 }}>
-            {searchResults.map(v => (
-              <div key={v.id + v._type} onClick={() => { handleClick(v); setSearchQuery(""); setDebouncedQuery(""); setSearchOpen(false); }}
-                style={{ cursor: "pointer", borderRadius: 8, overflow: "hidden", background: "#141414", border: "1px solid #1e1e1e" }}>
-                <div style={{ aspectRatio: "2/3", position: "relative" }}>
-                  <img src={v.poster || v.thumbnail} alt={v.title} style={{ width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.72)" }} />
-                  {v._type === "show" && <div style={{ position: "absolute", top: 6, left: 6, background: "rgba(59,130,246,0.9)", color: "#fff", fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 3, textTransform: "uppercase", letterSpacing: 0.5 }}>Series</div>}
+      {searchOpen && (
+        <div style={{ position: "fixed", top: 68, left: 0, right: 0, zIndex: 99, background: "rgba(8,8,8,0.98)", backdropFilter: "blur(20px)", borderBottom: "1px solid #1a1a1a", maxHeight: "calc(100vh - 68px)", overflowY: "auto" }}>
+          <div style={{ padding: `20px ${PAD} 32px` }}>
+            {/* Type filter chips */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+              {[{ id: "all", label: "All" }, { id: "movie", label: "Movies" }, { id: "show", label: "Series" }, { id: "podcast", label: "Podcasts" }].map(f => (
+                <button key={f.id}
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => setSearchTypeFilter(f.id)}
+                  style={{ background: searchTypeFilter === f.id ? "#facc15" : "rgba(255,255,255,0.07)", border: "none", borderRadius: 20, padding: "6px 16px", color: searchTypeFilter === f.id ? "#0a0a0a" : "#aaa", fontSize: 13, fontWeight: searchTypeFilter === f.id ? 700 : 400, cursor: "pointer", transition: "background 0.15s, color 0.15s" }}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Recent searches — shown when no query */}
+            {!debouncedQuery && recentSearches.length > 0 && (
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                  <p style={{ margin: 0, fontSize: 12, color: "#555", textTransform: "uppercase", letterSpacing: 0.7, fontWeight: 600 }}>Recent</p>
+                  <button onMouseDown={e => e.preventDefault()} onClick={() => { setRecentSearches([]); localStorage.removeItem("peep_recent_searches"); }} style={{ background: "none", border: "none", color: "#444", fontSize: 12, cursor: "pointer" }}>Clear</button>
                 </div>
-                <div style={{ padding: "10px 12px" }}>
-                  <p style={{ margin: "0 0 3px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>{v.title}</p>
-                  <span style={{ fontSize: 11, color: "#555" }}>{v.category} · {v.year}</span>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {recentSearches.map(s => (
+                    <button key={s} onMouseDown={e => e.preventDefault()} onClick={() => setSearchQuery(s)} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid #2a2a2a", borderRadius: 20, padding: "6px 14px", color: "#ccc", fontSize: 13, cursor: "pointer" }}>{s}</button>
+                  ))}
                 </div>
               </div>
-            ))}
-            {searchResults.length === 0 && <p style={{ color: "#444", fontSize: 14 }}>No titles match.</p>}
+            )}
+
+            {/* Results */}
+            {debouncedQuery && (
+              <>
+                <p style={{ fontSize: 13, color: "#555", marginBottom: 16 }}>
+                  {searchResults.length} result{searchResults.length !== 1 ? "s" : ""} for <span style={{ color: "#888" }}>"{debouncedQuery}"</span>
+                </p>
+                {searchResults.length === 0 ? (
+                  <p style={{ color: "#333", fontSize: 14, padding: "20px 0" }}>No titles match. Try a different search or filter.</p>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    {searchResults.map(v => {
+                      const typeColor = v._type === "movie" ? "#facc15" : v._type === "show" ? "#60a5fa" : "#a78bfa";
+                      const typeLabel = v._type === "movie" ? "Movie" : v._type === "show" ? "Series" : "Podcast";
+                      const thumb = v.poster || v.thumbnail || v.artwork_url;
+                      const meta = v._type === "podcast" ? v._tagsStr : v.category;
+                      return (
+                        <div key={v.id + v._type}
+                          onMouseDown={e => e.preventDefault()}
+                          onClick={() => handleSearchResultClick(v)}
+                          style={{ display: "flex", alignItems: "center", gap: 14, padding: "10px 12px", borderRadius: 10, cursor: "pointer", transition: "background 0.12s" }}
+                          onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
+                          onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                          <div style={{ width: 52, height: 52, borderRadius: 8, overflow: "hidden", flexShrink: 0, background: "#1a1a1a" }}>
+                            {thumb ? <img src={thumb} alt={v.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#1e1e2e,#2a2a3e)" }} />}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ margin: "0 0 3px", fontSize: 14, fontWeight: 600, color: "#e5e5e5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{v.title}</p>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: typeColor }}>{typeLabel}</span>
+                              {meta && <span style={{ fontSize: 11, color: "#444" }}>·</span>}
+                              {meta && <span style={{ fontSize: 11, color: "#555", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 160 }}>{meta}</span>}
+                              {v.year && <span style={{ fontSize: 11, color: "#444" }}>·</span>}
+                              {v.year && <span style={{ fontSize: 11, color: "#555", flexShrink: 0 }}>{v.year}</span>}
+                            </div>
+                          </div>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="2"><polyline points="9 18 15 12 9 6" /></svg>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+
+            {!debouncedQuery && recentSearches.length === 0 && (
+              <p style={{ color: "#333", fontSize: 14, padding: "20px 0" }}>Start typing to search movies, series, and podcasts.</p>
+            )}
           </div>
         </div>
       )}
