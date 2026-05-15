@@ -461,11 +461,15 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
   }, [videos, shows, podcasts]);
 
   const searchResults = useMemo(() => {
-    if (!debouncedQuery) return [];
-    const q = debouncedQuery.toLowerCase();
+    if (!debouncedQuery || !debouncedQuery.trim()) return [];
+    const q = debouncedQuery.toLowerCase().trim();
     return searchPool.filter(v => {
       if (searchTypeFilter !== "all" && v._type !== searchTypeFilter) return false;
+      const titleWords = v.title?.toLowerCase().split(/\s+/) || [];
+      const titleMatch = titleWords.some(w => w.startsWith(q));
+      if (q.length < 2) return titleMatch;
       return (
+        titleMatch ||
         v.title?.toLowerCase().includes(q) ||
         v.category?.toLowerCase().includes(q) ||
         v.description?.toLowerCase().includes(q) ||
