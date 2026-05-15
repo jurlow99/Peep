@@ -126,7 +126,7 @@ export default function App() {
     }
   }
 
-  const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true), onProfileOpen: () => setProfileOpen(true), userAvatarId, activeProfile, onSwitchProfile: switchProfile, onPodcastSelect: pod => { setSelectedPodcast(pod); setPage("podcast"); } };
+  const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true), onProfileOpen: () => setProfileOpen(true), userAvatarId, activeProfile, onSwitchProfile: switchProfile, onPodcastSelect: pod => { setSelectedPodcast(pod); setPage("podcast"); }, onViewProfile: () => setPage("profile") };
 
   if (!authChecked) return null;
   if (!user) return <LandingPage />;
@@ -134,7 +134,7 @@ export default function App() {
   // if (!user.email_confirmed_at) return <EmailVerificationGate user={user} />;
   if (!activeProfile) return <ProfileSelect user={user} onSelect={selectProfile} />;
 
-  const profileScreenEl = profileOpen && <ProfileScreen user={user} onClose={() => setProfileOpen(false)} onAvatarChange={id => setUserAvatarId(id)} onSwitchProfile={switchProfile} />;
+  const profileScreenEl = profileOpen && <ProfileScreen user={user} onClose={() => setProfileOpen(false)} onAvatarChange={id => setUserAvatarId(id)} onSwitchProfile={switchProfile} onViewProfile={() => { setProfileOpen(false); setPage("profile"); }} />;
 
   if (page === "player" && selectedVideo) {
     const handleBack = () => { setPage(selectedShow ? "show" : "home"); setSelectedVideo(null); };
@@ -196,6 +196,22 @@ export default function App() {
           onBack={() => setPage("podcast")}
           onSelect={ep => setSelectedPodcastEp(ep)}
           {...listProps}
+        />
+      </>
+    );
+
+  if (page === "profile")
+    return (
+      <>
+        {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
+        <ProfilePage
+          user={user}
+          activeProfile={activeProfile}
+          onBack={() => setPage("home")}
+          onProfileUpdate={updated => {
+            setActiveProfile(updated);
+            localStorage.setItem(`peep_profile_${user.id}`, JSON.stringify(updated));
+          }}
         />
       </>
     );
@@ -2424,6 +2440,208 @@ function PodcastPlayerView({ episode, podcast, onBack, onSelect, user, activePro
         </div>
           );
         })()}
+      </div>
+    </div>
+  );
+}
+
+// ─── Profile Page ─────────────────────────────────────────────────────────────
+
+function timeAgo(dateStr) {
+  if (!dateStr) return "";
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d ago`;
+  return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function ProfilePage({ user, activeProfile, onBack, onProfileUpdate }) {
+  const [history, setHistory] = useState([]);
+  const [contentMap, setContentMap] = useState({});
+  const [showsMap, setShowsMap] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [bio, setBio] = useState(activeProfile?.bio || "");
+  const [bannerUrl, setBannerUrl] = useState(activeProfile?.banner_url || "");
+  const [saving, setSaving] = useState(false);
+  const isMobile = useIsMobile();
+  const av = avatarForId(activeProfile?.avatar_id);
+
+  useEffect(() => { fetchData(); }, [activeProfile?.id]);
+
+  async function fetchData() {
+    setLoading(true);
+    const [progressRes, videosRes, showsRes, episodesRes, podEpRes, podRes] = await Promise.all([
+      supabase.from("watch_progress").select("*").eq("user_id", user.id).eq("profile_id", activeProfile.id).order("last_watched_at", { ascending: false }),
+      supabase.from("videos").select("id, title, thumbnail_url, category, year"),
+      supabase.from("shows").select("id, title, thumbnail_url, category"),
+      supabase.from("episodes").select("id, title, thumbnail_url, show_id, season, episode_number"),
+      supabase.from("podcast_episodes").select("id, title, thumbnail, podcast_id, episode_number"),
+      supabase.from("podcasts").select("id, title, artwork_url"),
+    ]);
+    const map = {};
+    const sMap = {};
+    const pMap = {};
+    (videosRes.data || []).forEach(v => { map[v.id] = { ...v, _type: "movie" }; });
+    (showsRes.data || []).forEach(s => { map[s.id] = { ...s, _type: "show" }; sMap[s.id] = s; });
+    (episodesRes.data || []).forEach(e => { map[e.id] = { ...e, _type: "episode" }; });
+    (podRes.data || []).forEach(p => { pMap[p.id] = p; });
+    (podEpRes.data || []).forEach(e => { map[e.id] = { ...e, _type: "podcast_episode", thumbnail_url: e.thumbnail, title: e.title, category: pMap[e.podcast_id]?.title }; });
+    setContentMap(map);
+    setShowsMap(sMap);
+    setHistory(progressRes.data || []);
+    setLoading(false);
+  }
+
+  async function saveProfile() {
+    setSaving(true);
+    await supabase.from("viewer_profiles").update({ bio: bio.trim(), banner_url: bannerUrl.trim() }).eq("id", activeProfile.id);
+    setSaving(false);
+    setEditing(false);
+    onProfileUpdate?.({ ...activeProfile, bio: bio.trim(), banner_url: bannerUrl.trim() });
+  }
+
+  const enriched = history.map(h => ({ ...h, content: contentMap[h.content_id] || null })).filter(h => h.content);
+
+  const totalSeconds = history.reduce((acc, h) => acc + (h.progress_seconds || 0), 0);
+  const totalHours = Math.floor(totalSeconds / 3600);
+  const totalMinutes = Math.floor((totalSeconds % 3600) / 60);
+
+  const genreCounts = {};
+  enriched.forEach(h => { const g = h.content?.category; if (g) genreCounts[g] = (genreCounts[g] || 0) + 1; });
+  const favoriteGenre = Object.entries(genreCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+
+  const showCounts = {};
+  enriched.forEach(h => { if (h.content?._type === "episode" && h.content.show_id) showCounts[h.content.show_id] = (showCounts[h.content.show_id] || 0) + 1; });
+  const topShowId = Object.entries(showCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
+  const topShow = topShowId ? showsMap[topShowId] : null;
+
+  const banner = bannerUrl || activeProfile?.banner_url;
+
+  return (
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
+      <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
+
+      {/* Nav */}
+      <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 50, display: "flex", alignItems: "center", padding: `0 ${PAD}`, height: 68, gap: 24, background: "rgba(10,10,10,0.85)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+        <button onClick={onBack} style={{ background: "rgba(255,255,255,0.07)", border: "none", color: "#ccc", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
+          Back
+        </button>
+        <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22 }}><span style={{ color: "#facc15" }}>peep.</span></span>
+      </nav>
+
+      {/* Banner */}
+      <div style={{ marginTop: 68, position: "relative", height: isMobile ? 160 : 240, overflow: "hidden", background: banner ? "transparent" : "linear-gradient(135deg, #0f0f1a, #1a1a2e)" }}>
+        {banner && <img src={banner} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.55 }} />}
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, transparent 30%, #0a0a0a 100%)" }} />
+      </div>
+
+      {/* Profile header */}
+      <div style={{ padding: `0 ${PAD}`, marginTop: -52, position: "relative", zIndex: 1 }}>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 20, marginBottom: 16, flexWrap: "wrap" }}>
+          <div style={{ width: isMobile ? 80 : 100, height: isMobile ? 80 : 100, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: isMobile ? 32 : 40, border: "4px solid #0a0a0a", flexShrink: 0 }}>
+            {av?.emoji ?? "?"}
+          </div>
+          <div style={{ flex: 1, minWidth: 0, paddingBottom: 6 }}>
+            <h1 style={{ margin: "0 0 3px", fontSize: isMobile ? 22 : 28, fontWeight: 700, color: "#fff" }}>{activeProfile?.name}</h1>
+            <p style={{ margin: 0, fontSize: 13, color: "#444" }}>{user?.email}</p>
+          </div>
+          <button onClick={() => { setEditing(e => !e); setBio(activeProfile?.bio || ""); setBannerUrl(activeProfile?.banner_url || ""); }}
+            style={{ background: editing ? "rgba(250,204,21,0.12)" : "rgba(255,255,255,0.06)", border: `1px solid ${editing ? "rgba(250,204,21,0.3)" : "#2a2a2a"}`, borderRadius: 8, padding: "8px 18px", color: editing ? "#facc15" : "#aaa", fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0, alignSelf: "center" }}>
+            {editing ? "Cancel" : "Edit Profile"}
+          </button>
+        </div>
+
+        {/* Bio display */}
+        {!editing && activeProfile?.bio && (
+          <p style={{ margin: "0 0 24px", fontSize: 14, color: "#888", maxWidth: 600, lineHeight: 1.7 }}>{activeProfile.bio}</p>
+        )}
+
+        {/* Edit form */}
+        {editing && (
+          <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: 20, maxWidth: 600, marginBottom: 28 }}>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Bio</label>
+              <textarea value={bio} onChange={e => setBio(e.target.value)} rows={3} maxLength={200} placeholder="Write something about yourself..." style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 8, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }} />
+              <p style={{ margin: "4px 0 0", fontSize: 11, color: "#333", textAlign: "right" }}>{bio.length}/200</p>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Banner Image URL</label>
+              <input type="text" value={bannerUrl} onChange={e => setBannerUrl(e.target.value)} placeholder="https://..." style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 8, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+            </div>
+            <button onClick={saveProfile} disabled={saving} style={{ background: "#facc15", border: "none", borderRadius: 8, padding: "10px 24px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Stats */}
+      <div style={{ padding: `8px ${PAD} 32px` }}>
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${isMobile ? 2 : 3}, 1fr)`, gap: 12, maxWidth: 640 }}>
+          {[
+            { label: "Hours Watched", value: totalHours > 0 ? `${totalHours}h ${totalMinutes}m` : totalMinutes > 0 ? `${totalMinutes}m` : "0m" },
+            { label: "Favorite Genre", value: favoriteGenre || "—" },
+            { label: "Most Watched", value: topShow?.title || "—" },
+          ].map(({ label, value }) => (
+            <div key={label} style={{ background: "#111", border: "1px solid #1a1a1a", borderRadius: 12, padding: "18px 20px" }}>
+              <p style={{ margin: "0 0 6px", fontSize: 11, color: "#444", textTransform: "uppercase", letterSpacing: 0.8 }}>{label}</p>
+              <p style={{ margin: 0, fontSize: isMobile ? 16 : 20, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Watch History */}
+      <div style={{ padding: `0 ${PAD} 80px`, maxWidth: 860 }}>
+        <h2 style={{ margin: "0 0 20px", fontSize: 18, fontWeight: 600, color: "#e5e5e5" }}>Watch History</h2>
+        {loading ? (
+          <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Spinner /></div>
+        ) : enriched.length === 0 ? (
+          <p style={{ color: "#444", fontSize: 14 }}>Nothing watched yet.</p>
+        ) : enriched.map(h => {
+          const c = h.content;
+          const pct = h.duration_seconds > 0 ? Math.min(100, Math.round((h.progress_seconds / h.duration_seconds) * 100)) : 0;
+          const thumb = c.thumbnail_url || c.thumbnail;
+          const subtitle = c._type === "episode"
+            ? `S${c.season} E${c.episode_number}`
+            : c._type === "podcast_episode"
+            ? `Podcast · ${c.category || ""}`
+            : c._type === "movie" ? `${c.year || ""} · ${c.category || ""}` : "";
+          return (
+            <div key={h.id} style={{ display: "flex", gap: isMobile ? 12 : 16, padding: "14px 0", borderBottom: "1px solid #111", alignItems: "center" }}>
+              <div style={{ flexShrink: 0, width: isMobile ? 80 : 112, aspectRatio: "16/9", borderRadius: 7, overflow: "hidden", background: "#1a1a1a" }}>
+                {thumb
+                  ? <img src={thumb} alt={c.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  : <div style={{ width: "100%", height: "100%", background: "#1a1a1a" }} />
+                }
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ margin: "0 0 3px", fontSize: isMobile ? 13 : 15, fontWeight: 600, color: h.completed ? "#555" : "#e5e5e5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.title}</p>
+                <p style={{ margin: "0 0 8px", fontSize: 12, color: "#444" }}>{subtitle}</p>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  {h.completed ? (
+                    <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 600 }}>✓ Watched</span>
+                  ) : pct > 0 ? (
+                    <>
+                      <div style={{ width: 80, height: 3, background: "#1a1a1a", borderRadius: 2, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${pct}%`, background: "#facc15" }} />
+                      </div>
+                      <span style={{ fontSize: 11, color: "#555" }}>{pct}%</span>
+                    </>
+                  ) : null}
+                  <span style={{ fontSize: 11, color: "#333", marginLeft: "auto" }}>{timeAgo(h.last_watched_at)}</span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

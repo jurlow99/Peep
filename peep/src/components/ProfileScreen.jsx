@@ -23,7 +23,7 @@ export function avatarForId(id) {
   return PRESET_AVATARS.find(a => a.id === id) ?? null;
 }
 
-export function ProfileScreen({ user, onClose, onAvatarChange, onSwitchProfile }) {
+export function ProfileScreen({ user, onClose, onAvatarChange, onSwitchProfile, onViewProfile }) {
   const [profile, setProfile] = useState(null);
   const [selectedAvatar, setSelectedAvatar] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -112,6 +112,14 @@ export function ProfileScreen({ user, onClose, onAvatarChange, onSwitchProfile }
 
         {/* Switch / Sign out */}
         <div style={{ padding: "24px", borderTop: "1px solid #1a1a1a", flexShrink: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+          {onViewProfile && (
+            <button onClick={() => { onClose(); onViewProfile(); }}
+              style={{ width: "100%", background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.2)", borderRadius: 10, padding: "12px", color: "#facc15", fontSize: 14, fontWeight: 600, cursor: "pointer", transition: "background 0.15s" }}
+              onMouseEnter={e => e.currentTarget.style.background = "rgba(250,204,21,0.14)"}
+              onMouseLeave={e => e.currentTarget.style.background = "rgba(250,204,21,0.08)"}>
+              My Profile
+            </button>
+          )}
           {onSwitchProfile && (
             <button onClick={() => { onClose(); onSwitchProfile(); }}
               style={{ width: "100%", background: "transparent", border: "1px solid #2a2a2a", borderRadius: 10, padding: "12px", color: "#e5e5e5", fontSize: 14, fontWeight: 600, cursor: "pointer", transition: "background 0.15s" }}
