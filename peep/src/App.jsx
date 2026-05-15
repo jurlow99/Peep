@@ -45,16 +45,24 @@ export default function App() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [userAvatarId, setUserAvatarId] = useState(null);
   const [activeProfile, setActiveProfile] = useState(null);
+  const userIdRef = useRef(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
-      if (session?.user) loadAvatarId(session.user.id);
+      if (session?.user) { loadAvatarId(session.user.id); userIdRef.current = session.user.id; }
       setAuthChecked(true);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
-      if (!session?.user) { setMyList({}); setActiveProfile(null); }
+      if (!session?.user) {
+        setMyList({});
+        setActiveProfile(null);
+        if (userIdRef.current) localStorage.removeItem(`peep_profile_${userIdRef.current}`);
+        userIdRef.current = null;
+      } else {
+        userIdRef.current = session.user.id;
+      }
     });
     return () => subscription.unsubscribe();
   }, []);

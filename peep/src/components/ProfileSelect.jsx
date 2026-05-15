@@ -54,7 +54,6 @@ export function ProfileSelect({ user, onSelect }) {
 
     setProfiles(list);
     setLoading(false);
-    if (list.length === 1) onSelect(list[0]);
   }
 
   async function createProfile() {
