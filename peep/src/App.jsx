@@ -1605,9 +1605,10 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
     ...allVideos.map(v => ({ ...v, _type: "movie" })),
     ...allShows.map(s => ({ ...s, _type: "show" })),
   ];
-  const related = !isEpisode && video.category
-    ? allRelatable.filter(v => v.category === video.category && !(v._type === "movie" && v.id === video.id))
-    : [];
+  const related = isEpisode ? [] : rankRelated(
+    video,
+    allRelatable.filter(v => !(v._type === "movie" && v.id === video.id)),
+  );
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
@@ -1753,6 +1754,53 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
   );
 }
 
+// ─── Similarity scoring ───────────────────────────────────────────────────────
+
+function normalizeTags(tags) {
+  if (!tags) return [];
+  if (Array.isArray(tags)) return tags.map(t => t.toLowerCase().trim()).filter(Boolean);
+  return String(tags).split(",").map(t => t.toLowerCase().trim()).filter(Boolean);
+}
+
+function computeSimilarity(source, candidate) {
+  let pts = 0;
+
+  if (source.category && candidate.category && source.category === candidate.category) pts += 40;
+
+  const srcTags = normalizeTags(source.tags);
+  const candTags = normalizeTags(candidate.tags);
+  if (srcTags.length && candTags.length) {
+    const shared = srcTags.filter(t => candTags.includes(t)).length;
+    pts += shared * 15;
+  }
+
+  if (source.year && candidate.year) {
+    const diff = Math.abs(Number(source.year) - Number(candidate.year));
+    if (diff <= 5) pts += 10;
+    else if (diff <= 15) pts += 6;
+    else if (diff <= 30) pts += 2;
+  }
+
+  if (source.rating && candidate.rating && source.rating === candidate.rating) pts += 8;
+
+  if (source.score && candidate.score) {
+    const diff = Math.abs(Number(source.score) - Number(candidate.score));
+    if (diff <= 5) pts += 5;
+    else if (diff <= 15) pts += 3;
+  }
+
+  return pts;
+}
+
+function rankRelated(source, pool, limit = 12) {
+  return pool
+    .map(item => ({ item, pts: computeSimilarity(source, item) }))
+    .filter(({ pts }) => pts > 0)
+    .sort((a, b) => b.pts - a.pts)
+    .slice(0, limit)
+    .map(({ item }) => item);
+}
+
 // ─── Show Detail ──────────────────────────────────────────────────────────────
 
 function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen, activeProfile }) {
@@ -1783,17 +1831,16 @@ function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggle
         setLoading(false);
       });
 
-    if (show.category) {
-      Promise.all([
-        supabase.from("shows").select("*").eq("category", show.category).neq("id", show.id).limit(8),
-        supabase.from("videos").select("*").eq("category", show.category).limit(8),
-      ]).then(([sRes, vRes]) => {
-        setRelated([
-          ...(sRes.data || []).map(s => ({ ...s, _type: "show" })),
-          ...(vRes.data || []).map(v => ({ ...v, _type: "movie" })),
-        ]);
-      });
-    }
+    Promise.all([
+      supabase.from("shows").select("id,title,category,tags,year,score,rating,thumbnail,poster").neq("id", show.id),
+      supabase.from("videos").select("id,title,category,tags,year,score,rating,thumbnail,poster,duration"),
+    ]).then(([sRes, vRes]) => {
+      const pool = [
+        ...(sRes.data || []).map(s => ({ ...s, _type: "show" })),
+        ...(vRes.data || []).map(v => ({ ...v, _type: "movie" })),
+      ];
+      setRelated(rankRelated(show, pool));
+    });
   }, [show.id]);
 
   useEffect(() => {
