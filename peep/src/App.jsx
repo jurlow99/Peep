@@ -38,6 +38,8 @@ export default function App() {
   const [page, setPage] = useState("home");
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [selectedShow, setSelectedShow] = useState(null);
+  const [selectedPodcast, setSelectedPodcast] = useState(null);
+  const [selectedPodcastEp, setSelectedPodcastEp] = useState(null);
   const [user, setUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [myList, setMyList] = useState({});
@@ -124,7 +126,7 @@ export default function App() {
     }
   }
 
-  const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true), onProfileOpen: () => setProfileOpen(true), userAvatarId, activeProfile, onSwitchProfile: switchProfile };
+  const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true), onProfileOpen: () => setProfileOpen(true), userAvatarId, activeProfile, onSwitchProfile: switchProfile, onPodcastSelect: pod => { setSelectedPodcast(pod); setPage("podcast"); } };
 
   if (!authChecked) return null;
   if (!user) return <LandingPage />;
@@ -169,6 +171,35 @@ export default function App() {
       </>
     );
 
+  if (page === "podcast" && selectedPodcast)
+    return (
+      <>
+        {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
+        {profileScreenEl}
+        <PodcastDetail
+          podcast={selectedPodcast}
+          onBack={() => { setSelectedPodcast(null); setPage("home"); }}
+          onPlay={ep => { setSelectedPodcastEp(ep); setPage("podcast_player"); }}
+          {...listProps}
+        />
+      </>
+    );
+
+  if (page === "podcast_player" && selectedPodcastEp)
+    return (
+      <>
+        {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
+        {profileScreenEl}
+        <PodcastPlayerView
+          episode={selectedPodcastEp}
+          podcast={selectedPodcast}
+          onBack={() => setPage("podcast")}
+          onSelect={ep => setSelectedPodcastEp(ep)}
+          {...listProps}
+        />
+      </>
+    );
+
   return (
     <>
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
@@ -184,7 +215,7 @@ export default function App() {
 
 // ─── Homepage ─────────────────────────────────────────────────────────────────
 
-function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, activeProfile, onSwitchProfile }) {
+function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, activeProfile, onSwitchProfile }) {
   const [videos, setVideos] = useState([]);
   const [shows, setShows] = useState([]);
   const [carousels, setCarousels] = useState([]);
@@ -596,7 +627,7 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
               No {activeNav.toLowerCase()} yet.
             </div>
           ) : sections.map(section => section.isPodcast ? (
-            <PodcastRow key={section.id} section={section} />
+            <PodcastRow key={section.id} section={section} onPodcastSelect={onPodcastSelect} />
           ) : section.videos.length > 0 ? (
             <ContentRow key={section.id} section={section} onPlay={onPlay} onShowSelect={onShowSelect} myList={myList} onToggleList={onToggleList} />
           ) : null)}
@@ -930,7 +961,7 @@ function ContentRow({ section, onPlay, onShowSelect, myList, onToggleList }) {
 
 const PODCAST_CARD_W = "clamp(150px, 20vw, 210px)";
 
-function PodcastRow({ section }) {
+function PodcastRow({ section, onPodcastSelect }) {
   const scrollRef = useRef(null);
   const scroll = dir => scrollRef.current?.scrollBy({ left: dir * scrollRef.current.clientWidth * 0.8, behavior: "smooth" });
 
@@ -953,7 +984,7 @@ function PodcastRow({ section }) {
         <button onClick={() => scroll(1)} style={{ position: "absolute", right: 0, top: 0, bottom: 0, zIndex: 10, background: "linear-gradient(to left, rgba(10,10,10,0.95), transparent)", border: "none", color: "#fff", width: 64, cursor: "pointer", fontSize: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>›</button>
         <div ref={scrollRef} className="scroll-row" style={{ display: "flex", gap: 16, overflowX: "auto", scrollbarWidth: "none", padding: `28px ${PAD} 32px` }}>
           {section.podcastItems.map(podcast => (
-            <PodcastCard key={podcast.id} podcast={podcast} />
+            <PodcastCard key={podcast.id} podcast={podcast} onPodcastSelect={onPodcastSelect} />
           ))}
         </div>
       </div>
@@ -961,11 +992,11 @@ function PodcastRow({ section }) {
   );
 }
 
-function PodcastCard({ podcast }) {
+function PodcastCard({ podcast, onPodcastSelect }) {
   const [hovered, setHovered] = useState(false);
   return (
-    <div style={{ flexShrink: 0, width: PODCAST_CARD_W, cursor: podcast.link_url ? "pointer" : "default" }}
-      onClick={() => podcast.link_url && window.open(podcast.link_url, "_blank")}
+    <div style={{ flexShrink: 0, width: PODCAST_CARD_W, cursor: "pointer" }}
+      onClick={() => onPodcastSelect?.(podcast)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}>
       <div style={{
@@ -2084,6 +2115,284 @@ function EpisodeCard({ episode, show, onPlay, progress }) {
         {pct > 0 && !isCompleted && (
           <p style={{ margin: "6px 0 0", fontSize: 11, color: "#facc15", fontWeight: 600 }}>{Math.round(pct)}% watched</p>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Podcast Detail ───────────────────────────────────────────────────────────
+
+function PodcastDetail({ podcast, onBack, onPlay, user, activeProfile }) {
+  const [episodes, setEpisodes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [watchProgress, setWatchProgress] = useState({});
+  const isMobile = useIsMobile();
+
+  useEffect(() => {
+    setEpisodes([]);
+    setLoading(true);
+    supabase.from("podcast_episodes").select("*")
+      .eq("podcast_id", podcast.id)
+      .order("episode_number", { ascending: true })
+      .then(({ data }) => { setEpisodes(data || []); setLoading(false); });
+  }, [podcast.id]);
+
+  useEffect(() => {
+    if (!user || !activeProfile || !episodes.length) { setWatchProgress({}); return; }
+    supabase.from("watch_progress").select("*")
+      .eq("user_id", user.id).eq("profile_id", activeProfile.id).eq("content_type", "podcast_episode")
+      .in("content_id", episodes.map(e => e.id))
+      .then(({ data }) => {
+        if (data) { const m = {}; data.forEach(p => { m[p.content_id] = p; }); setWatchProgress(m); }
+      });
+  }, [episodes, user, activeProfile?.id]);
+
+  const resumeEp = (() => {
+    if (!episodes.length) return null;
+    if (user) {
+      const incomplete = episodes
+        .filter(e => watchProgress[e.id] && !watchProgress[e.id].completed && watchProgress[e.id].progress_seconds > 5)
+        .sort((a, b) => new Date(watchProgress[b.id].last_watched_at) - new Date(watchProgress[a.id].last_watched_at));
+      if (incomplete[0]) return incomplete[0];
+    }
+    return episodes[0];
+  })();
+  const isResuming = resumeEp && watchProgress[resumeEp.id]?.progress_seconds > 5 && !watchProgress[resumeEp.id]?.completed;
+
+  return (
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
+      <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
+
+      {/* ── Hero ── */}
+      <div style={{ position: "relative", overflow: "hidden" }}>
+        {/* Blurred background */}
+        {podcast.artwork_url && (
+          <div style={{ position: "absolute", inset: 0, backgroundImage: `url(${podcast.artwork_url})`, backgroundSize: "cover", backgroundPosition: "center", filter: "blur(40px) brightness(0.25) saturate(1.4)", transform: "scale(1.1)" }} />
+        )}
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(10,10,10,0.4) 0%, #0a0a0a 100%)" }} />
+
+        {/* Nav */}
+        <div style={{ position: "relative", display: "flex", alignItems: "center", padding: `20px ${PAD}`, gap: 24, zIndex: 10 }}>
+          <button onClick={onBack} style={{ background: "rgba(255,255,255,0.07)", border: "none", color: "#ccc", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
+            Back
+          </button>
+          <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22 }}><span style={{ color: "#facc15" }}>peep.</span></span>
+        </div>
+
+        {/* Artwork + info */}
+        <div style={{ position: "relative", display: "flex", gap: isMobile ? 20 : 40, padding: `20px ${PAD} 48px`, alignItems: "flex-end", flexWrap: isMobile ? "wrap" : "nowrap", zIndex: 10 }}>
+          <div style={{ flexShrink: 0, width: isMobile ? 120 : 180, height: isMobile ? 120 : 180, borderRadius: 14, overflow: "hidden", background: "linear-gradient(135deg, #1e1b4b, #312e81)", boxShadow: "0 24px 60px rgba(0,0,0,0.7)" }}>
+            {podcast.artwork_url
+              ? <img src={podcast.artwork_url} alt={podcast.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="1.5"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+                </div>
+            }
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <span style={{ background: "rgba(129,140,248,0.2)", border: "1px solid rgba(129,140,248,0.3)", color: "#818cf8", fontSize: 10, fontWeight: 700, padding: "4px 12px", borderRadius: 4, letterSpacing: 1.5, textTransform: "uppercase" }}>Podcast</span>
+            </div>
+            <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(28px, 4vw, 56px)", lineHeight: 1.05, margin: "0 0 10px", fontWeight: 400 }}>{podcast.title}</h1>
+            {podcast.host && <p style={{ margin: "0 0 12px", fontSize: 15, color: "#818cf8", fontWeight: 500 }}>{podcast.host}</p>}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+              <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 13 }}>{episodes.length} Episode{episodes.length !== 1 ? "s" : ""}</span>
+            </div>
+            {podcast.description && <p style={{ fontSize: 14, color: "rgba(255,255,255,0.6)", lineHeight: 1.7, margin: "0 0 24px", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{podcast.description}</p>}
+            {resumeEp && (
+              <button onClick={() => onPlay(resumeEp)}
+                style={{ background: "#fff", color: "#0a0a0a", border: "none", borderRadius: 7, padding: "12px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 10 }}
+                onMouseEnter={e => e.currentTarget.style.background = "#e5e5e5"}
+                onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+                {isResuming ? `Resume Ep. ${resumeEp.episode_number}` : `Play Ep. ${resumeEp.episode_number}`}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Episode list ── */}
+      <div style={{ padding: `8px ${PAD} 80px`, maxWidth: 900, margin: "0 auto" }}>
+        <h2 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 600, color: "#e5e5e5" }}>Episodes</h2>
+        <div style={{ height: 1, background: "#1a1a1a", marginBottom: 4 }} />
+        {loading ? (
+          <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Spinner /></div>
+        ) : episodes.length === 0 ? (
+          <p style={{ color: "#555", fontSize: 15, padding: "40px 0" }}>No episodes yet.</p>
+        ) : episodes.map(ep => (
+          <PodcastEpisodeRow key={ep.id} episode={ep} podcast={podcast} onPlay={onPlay} progress={watchProgress[ep.id]} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PodcastEpisodeRow({ episode, podcast, onPlay, progress }) {
+  const [hovered, setHovered] = useState(false);
+  const isMobile = useIsMobile();
+  const pct = progress?.duration_seconds > 0 ? Math.min(100, (progress.progress_seconds / progress.duration_seconds) * 100) : 0;
+  const isCompleted = !!progress?.completed;
+
+  return (
+    <div onClick={() => onPlay(episode)} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
+      style={{ display: "flex", gap: isMobile ? 14 : 20, padding: "18px 0", borderBottom: "1px solid #141414", cursor: "pointer", alignItems: "center", opacity: isCompleted ? 0.55 : 1, transition: "opacity 0.2s" }}>
+
+      {/* Episode number */}
+      <div style={{ flexShrink: 0, width: 36, height: 36, borderRadius: "50%", background: hovered ? "rgba(129,140,248,0.25)" : "rgba(129,140,248,0.1)", border: "1px solid rgba(129,140,248,0.2)", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" }}>
+        {hovered
+          ? <svg width="12" height="12" viewBox="0 0 24 24" fill="#818cf8"><polygon points="5,3 19,12 5,21" /></svg>
+          : isCompleted
+          ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
+          : <span style={{ fontSize: 12, fontWeight: 700, color: "#818cf8" }}>{episode.episode_number}</span>
+        }
+      </div>
+
+      {/* Thumbnail (optional) */}
+      {!isMobile && episode.thumbnail && (
+        <div style={{ flexShrink: 0, width: 72, height: 72, borderRadius: 8, overflow: "hidden", background: "#1a1a1a" }}>
+          <img src={episode.thumbnail || podcast.artwork_url} alt={episode.title} style={{ width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.8)" }} />
+        </div>
+      )}
+
+      {/* Info */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ margin: "0 0 4px", fontSize: isMobile ? 13 : 15, fontWeight: 600, color: isCompleted ? "#555" : "#e5e5e5" }}>{episode.title}</p>
+        {episode.description && !isMobile && (
+          <p style={{ margin: "0 0 6px", fontSize: 12, color: "#555", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{episode.description}</p>
+        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {episode.duration && <span style={{ fontSize: 12, color: "#444" }}>{episode.duration}</span>}
+          {pct > 0 && !isCompleted && (
+            <>
+              <div style={{ flex: 1, maxWidth: 120, height: 3, background: "#1a1a1a", borderRadius: 2, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${pct}%`, background: "#818cf8" }} />
+              </div>
+              <span style={{ fontSize: 11, color: "#818cf8", fontWeight: 600 }}>{Math.round(pct)}%</span>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Podcast Player ────────────────────────────────────────────────────────────
+
+function PodcastPlayerView({ episode, podcast, onBack, onSelect, user, activeProfile }) {
+  const audioRef = useRef(null);
+  const saveProgressRef = useRef(null);
+  const progressTimerRef = useRef(null);
+  const [nextEpisode, setNextEpisode] = useState(null);
+  const [allEpisodes, setAllEpisodes] = useState([]);
+  const isMobile = useIsMobile();
+
+  useEffect(() => {
+    supabase.from("podcast_episodes").select("*")
+      .eq("podcast_id", podcast.id).order("episode_number", { ascending: true })
+      .then(({ data }) => {
+        if (!data) return;
+        setAllEpisodes(data);
+        const idx = data.findIndex(e => e.id === episode.id);
+        setNextEpisode(idx >= 0 && idx < data.length - 1 ? data[idx + 1] : null);
+      });
+  }, [episode.id, podcast.id]);
+
+  useEffect(() => {
+    if (!user || !activeProfile) return;
+    saveProgressRef.current = async () => {
+      if (!audioRef.current) return;
+      const { currentTime, duration } = audioRef.current;
+      if (currentTime < 5 || !duration) return;
+      await supabase.from("watch_progress").upsert({
+        user_id: user.id, profile_id: activeProfile.id, content_id: episode.id, content_type: "podcast_episode",
+        progress_seconds: currentTime, duration_seconds: duration,
+        completed: currentTime / duration > 0.92 || duration - currentTime < 30,
+        last_watched_at: new Date().toISOString(),
+      }, { onConflict: "user_id,profile_id,content_id,content_type" });
+    };
+    progressTimerRef.current = setInterval(() => { saveProgressRef.current?.(); }, 15000);
+    return () => clearInterval(progressTimerRef.current);
+  }, [episode.id, user, activeProfile?.id]);
+
+  useEffect(() => () => { clearInterval(progressTimerRef.current); saveProgressRef.current?.(); }, []);
+
+  function handleLoadedMetadata() {
+    if (!user || !activeProfile || !audioRef.current) return;
+    supabase.from("watch_progress").select("progress_seconds, duration_seconds, completed")
+      .eq("user_id", user.id).eq("profile_id", activeProfile.id)
+      .eq("content_id", episode.id).eq("content_type", "podcast_episode").maybeSingle()
+      .then(({ data }) => {
+        if (!data || data.completed || !audioRef.current) return;
+        const pct = data.duration_seconds > 0 ? data.progress_seconds / data.duration_seconds : 0;
+        if (data.progress_seconds > 5 && pct < 0.92) audioRef.current.currentTime = data.progress_seconds;
+      });
+  }
+
+  function handleEnded() {
+    saveProgressRef.current?.();
+    if (nextEpisode) onSelect(nextEpisode);
+  }
+
+  return (
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff", display: "flex", flexDirection: "column" }}>
+      <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
+
+      {/* Blurred background */}
+      {podcast.artwork_url && (
+        <div style={{ position: "fixed", inset: 0, backgroundImage: `url(${podcast.artwork_url})`, backgroundSize: "cover", backgroundPosition: "center", filter: "blur(60px) brightness(0.15) saturate(1.5)", transform: "scale(1.1)", zIndex: 0 }} />
+      )}
+      <div style={{ position: "fixed", inset: 0, background: "rgba(10,10,10,0.7)", zIndex: 0 }} />
+
+      <div style={{ position: "relative", zIndex: 1, flex: 1, display: "flex", flexDirection: "column" }}>
+        {/* Nav */}
+        <nav style={{ display: "flex", alignItems: "center", padding: `0 ${PAD}`, height: 68, gap: 24, background: "rgba(10,10,10,0.5)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(255,255,255,0.05)", flexShrink: 0 }}>
+          <button onClick={onBack} style={{ background: "rgba(255,255,255,0.07)", border: "none", color: "#ccc", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
+            Back
+          </button>
+          <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22 }}><span style={{ color: "#facc15" }}>peep.</span></span>
+        </nav>
+
+        {/* Player content */}
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: `40px ${PAD}` }}>
+          <div style={{ width: "100%", maxWidth: 520, display: "flex", flexDirection: "column", alignItems: "center", gap: 32 }}>
+            {/* Artwork */}
+            <div style={{ width: isMobile ? 220 : 280, height: isMobile ? 220 : 280, borderRadius: 20, overflow: "hidden", background: "linear-gradient(135deg, #1e1b4b, #312e81)", boxShadow: "0 40px 100px rgba(0,0,0,0.8)", flexShrink: 0 }}>
+              {podcast.artwork_url
+                ? <img src={podcast.artwork_url} alt={podcast.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="1.2"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+                  </div>
+              }
+            </div>
+
+            {/* Episode info */}
+            <div style={{ textAlign: "center", width: "100%" }}>
+              <p style={{ margin: "0 0 6px", fontSize: 12, color: "#818cf8", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>{podcast.title} · Ep. {episode.episode_number}</p>
+              <h2 style={{ margin: "0 0 6px", fontSize: isMobile ? 20 : 24, fontWeight: 700, color: "#fff", lineHeight: 1.2 }}>{episode.title}</h2>
+              {podcast.host && <p style={{ margin: 0, fontSize: 13, color: "#555" }}>{podcast.host}</p>}
+            </div>
+
+            {/* Audio player */}
+            <audio ref={audioRef} src={episode.audio_url} controls autoPlay
+              onLoadedMetadata={handleLoadedMetadata}
+              onEnded={handleEnded}
+              style={{ width: "100%", borderRadius: 12, outline: "none", accentColor: "#818cf8" }} />
+
+            {/* Next episode */}
+            {nextEpisode && (
+              <button onClick={() => onSelect(nextEpisode)}
+                style={{ background: "rgba(129,140,248,0.1)", border: "1px solid rgba(129,140,248,0.2)", borderRadius: 10, padding: "12px 20px", color: "#818cf8", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, width: "100%", justifyContent: "center" }}
+                onMouseEnter={e => e.currentTarget.style.background = "rgba(129,140,248,0.18)"}
+                onMouseLeave={e => e.currentTarget.style.background = "rgba(129,140,248,0.1)"}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="5,3 19,12 5,21"/><line x1="19" y1="3" x2="19" y2="21"/></svg>
+                Next: Ep. {nextEpisode.episode_number} · {nextEpisode.title}
+              </button>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
