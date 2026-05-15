@@ -986,6 +986,7 @@ function HeroBanner({ video, onPlay, isShow, myList, onToggleList }) {
     clearTimeout(pauseTimerRef.current);
     clearTimeout(loopTimerRef.current);
     if (!hasBgTrailer) return;
+    if (localStorage.getItem(PREF_AUTOPLAY_HERO) === "false") return;
     const t = setTimeout(() => { setBgPlaying(true); startLoop(); }, 3000);
     return () => { clearTimeout(t); clearTimeout(pauseTimerRef.current); clearTimeout(loopTimerRef.current); };
   }, [video.id, hasBgTrailer]);
@@ -1354,7 +1355,7 @@ function VideoCard({ video, onClick, rank, myList, onToggleList }) {
   function handleMouseEnter() {
     setHovered(true);
     clearTimeout(closingTimerRef.current);
-    if (hasDirectTrailer) {
+    if (hasDirectTrailer && localStorage.getItem(PREF_AUTOPLAY_PREVIEWS) !== "false") {
       trailerTimerRef.current = setTimeout(() => {
         const rect = cardRef.current?.getBoundingClientRect();
         if (!rect) return;
@@ -1719,6 +1720,7 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
 
   function handleTimeUpdate(e) {
     if (!nextEpisode || countdownGuardRef.current) return;
+    if (localStorage.getItem(PREF_AUTOPLAY_NEXT) === "false") return;
     const { currentTime, duration } = e.currentTarget;
     if (!duration || isNaN(duration)) return;
     if (duration - currentTime <= 10) {
@@ -1735,7 +1737,7 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
         await supabase.from("watch_progress").upsert({ user_id: user.id, profile_id: activeProfile.id, content_id: video.id, content_type: ct, progress_seconds: currentTime, duration_seconds: duration, completed: true, last_watched_at: new Date().toISOString() }, { onConflict: "user_id,profile_id,content_id,content_type" });
       }
     }
-    if (nextEpisode) { clearInterval(countdownTimerRef.current); onSelect(nextEpisode); }
+    if (nextEpisode && localStorage.getItem(PREF_AUTOPLAY_NEXT) !== "false") { clearInterval(countdownTimerRef.current); onSelect(nextEpisode); }
   }
 
   function cancelCountdown() {
@@ -2782,54 +2784,79 @@ function ProfilePage({ user, activeProfile, onBack, onProfileUpdate, onOpenSetti
 
 // ─── SettingsPage ─────────────────────────────────────────────────────────────
 
+const PREF_AUTOPLAY_NEXT     = "peep_pref_autoplay_next";
+const PREF_AUTOPLAY_PREVIEWS = "peep_pref_autoplay_previews";
+const PREF_AUTOPLAY_HERO     = "peep_pref_autoplay_hero";
+
+function getPref(key) {
+  const v = localStorage.getItem(key);
+  return v === null ? true : v === "true";
+}
+
+function setPref(key, val) {
+  localStorage.setItem(key, String(val));
+}
+
+function Toggle({ value, onChange }) {
+  return (
+    <div onClick={() => onChange(!value)} style={{ width: 46, height: 26, borderRadius: 13, background: value ? "#facc15" : "#2a2a2a", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+      <div style={{ position: "absolute", top: 3, left: value ? 23 : 3, width: 20, height: 20, borderRadius: "50%", background: value ? "#0a0a0a" : "#555", transition: "left 0.2s, background 0.2s" }} />
+    </div>
+  );
+}
+
+function SettingRow({ label, description, value, onChange }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 24, padding: "16px 0", borderBottom: "1px solid #111" }}>
+      <div>
+        <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 500, color: "#e5e5e5" }}>{label}</p>
+        {description && <p style={{ margin: 0, fontSize: 12, color: "#444" }}>{description}</p>}
+      </div>
+      <Toggle value={value} onChange={onChange} />
+    </div>
+  );
+}
+
+const SETTINGS_AVATARS = [
+  { id: "a1", gradient: "linear-gradient(135deg, #6366f1, #8b5cf6)", emoji: "🎬" },
+  { id: "a2", gradient: "linear-gradient(135deg, #ec4899, #f43f5e)", emoji: "🌙" },
+  { id: "a3", gradient: "linear-gradient(135deg, #f97316, #eab308)", emoji: "🔥" },
+  { id: "a4", gradient: "linear-gradient(135deg, #14b8a6, #06b6d4)", emoji: "🌊" },
+  { id: "a5", gradient: "linear-gradient(135deg, #22c55e, #16a34a)", emoji: "🌿" },
+  { id: "a6", gradient: "linear-gradient(135deg, #3b82f6, #6366f1)", emoji: "⚡" },
+  { id: "a7", gradient: "linear-gradient(135deg, #f59e0b, #ef4444)", emoji: "🎭" },
+  { id: "a8", gradient: "linear-gradient(135deg, #8b5cf6, #ec4899)", emoji: "🎵" },
+  { id: "a9", gradient: "linear-gradient(135deg, #0ea5e9, #22c55e)", emoji: "🎮" },
+  { id: "a10", gradient: "linear-gradient(135deg, #f43f5e, #f97316)", emoji: "🏆" },
+  { id: "a11", gradient: "linear-gradient(135deg, #64748b, #334155)", emoji: "👾" },
+  { id: "a12", gradient: "linear-gradient(135deg, #facc15, #f97316)", emoji: "⭐" },
+];
+
 function SettingsPage({ user, activeProfile, onBack, onProfileUpdate, onAvatarChange, onSignOut }) {
-  const [username, setUsername] = useState("");
-  const [fullName, setFullName] = useState("");
   const [name, setName] = useState(activeProfile?.name || "");
-  const [bio, setBio] = useState(activeProfile?.bio || "");
-  const [bannerUrl, setBannerUrl] = useState(activeProfile?.banner_url || "");
   const [avatarId, setAvatarId] = useState(activeProfile?.avatar_id || null);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [savedProfile, setSavedProfile] = useState(false);
   const [savingAvatar, setSavingAvatar] = useState(false);
-  const isMobile = useIsMobile();
+  const [autoplayNext, setAutoplayNext] = useState(() => getPref(PREF_AUTOPLAY_NEXT));
+  const [autoplayPreviews, setAutoplayPreviews] = useState(() => getPref(PREF_AUTOPLAY_PREVIEWS));
+  const [autoplayHero, setAutoplayHero] = useState(() => getPref(PREF_AUTOPLAY_HERO));
 
-  const PRESET_AVATARS = [
-    { id: "a1", gradient: "linear-gradient(135deg, #6366f1, #8b5cf6)", emoji: "🎬" },
-    { id: "a2", gradient: "linear-gradient(135deg, #ec4899, #f43f5e)", emoji: "🌙" },
-    { id: "a3", gradient: "linear-gradient(135deg, #f97316, #eab308)", emoji: "🔥" },
-    { id: "a4", gradient: "linear-gradient(135deg, #14b8a6, #06b6d4)", emoji: "🌊" },
-    { id: "a5", gradient: "linear-gradient(135deg, #22c55e, #16a34a)", emoji: "🌿" },
-    { id: "a6", gradient: "linear-gradient(135deg, #3b82f6, #6366f1)", emoji: "⚡" },
-    { id: "a7", gradient: "linear-gradient(135deg, #f59e0b, #ef4444)", emoji: "🎭" },
-    { id: "a8", gradient: "linear-gradient(135deg, #8b5cf6, #ec4899)", emoji: "🎵" },
-    { id: "a9", gradient: "linear-gradient(135deg, #0ea5e9, #22c55e)", emoji: "🎮" },
-    { id: "a10", gradient: "linear-gradient(135deg, #f43f5e, #f97316)", emoji: "🏆" },
-    { id: "a11", gradient: "linear-gradient(135deg, #64748b, #334155)", emoji: "👾" },
-    { id: "a12", gradient: "linear-gradient(135deg, #facc15, #f97316)", emoji: "⭐" },
-  ];
-
-  const currentAv = PRESET_AVATARS.find(a => a.id === avatarId) || null;
+  const currentAv = SETTINGS_AVATARS.find(a => a.id === avatarId) || null;
   const initials = (activeProfile?.name?.[0] || user?.email?.[0] || "?").toUpperCase();
   const memberSince = user?.created_at ? new Date(user.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : null;
 
-  useEffect(() => {
-    supabase.from("profiles").select("username, full_name").eq("id", user.id).maybeSingle()
-      .then(({ data }) => {
-        if (data) { setUsername(data.username || ""); setFullName(data.full_name || ""); }
-      });
-  }, [user.id]);
+  function toggleAutoplayNext(val) { setAutoplayNext(val); setPref(PREF_AUTOPLAY_NEXT, val); }
+  function toggleAutoplayPreviews(val) { setAutoplayPreviews(val); setPref(PREF_AUTOPLAY_PREVIEWS, val); }
+  function toggleAutoplayHero(val) { setAutoplayHero(val); setPref(PREF_AUTOPLAY_HERO, val); }
 
-  async function save() {
-    setSaving(true);
-    await Promise.all([
-      supabase.from("profiles").upsert({ id: user.id, username: username.trim(), full_name: fullName.trim() }, { onConflict: "id" }),
-      supabase.from("viewer_profiles").update({ name: name.trim(), bio: bio.trim(), banner_url: bannerUrl.trim() }).eq("id", activeProfile.id),
-    ]);
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
-    onProfileUpdate?.({ ...activeProfile, name: name.trim(), bio: bio.trim(), banner_url: bannerUrl.trim() });
+  async function saveProfile() {
+    setSavingProfile(true);
+    await supabase.from("viewer_profiles").update({ name: name.trim() }).eq("id", activeProfile.id);
+    setSavingProfile(false);
+    setSavedProfile(true);
+    setTimeout(() => setSavedProfile(false), 2500);
+    onProfileUpdate?.({ ...activeProfile, name: name.trim() });
   }
 
   async function pickAvatar(avId) {
@@ -2844,15 +2871,13 @@ function SettingsPage({ user, activeProfile, onBack, onProfileUpdate, onAvatarCh
     onProfileUpdate?.({ ...activeProfile, avatar_id: avId });
   }
 
+  const sectionHead = { margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: "#555", textTransform: "uppercase", letterSpacing: 1 };
   const inputStyle = { width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 8, padding: "11px 14px", color: "#fff", fontSize: 14, outline: "none", boxSizing: "border-box", fontFamily: "inherit" };
-  const labelStyle = { display: "block", fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 };
-  const sectionHeadStyle = { margin: "0 0 16px", fontSize: 11, fontWeight: 600, color: "#555", textTransform: "uppercase", letterSpacing: 1 };
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
       <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
 
-      {/* Nav */}
       <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 50, display: "flex", alignItems: "center", padding: `0 ${PAD}`, height: 68, gap: 24, background: "rgba(10,10,10,0.9)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
         <button onClick={onBack} style={{ background: "rgba(255,255,255,0.07)", border: "none", color: "#ccc", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6 }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
@@ -2861,84 +2886,81 @@ function SettingsPage({ user, activeProfile, onBack, onProfileUpdate, onAvatarCh
         <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22 }}><span style={{ color: "#facc15" }}>peep.</span></span>
       </nav>
 
-      <div style={{ paddingTop: 68 + 40, paddingBottom: 80, paddingLeft: PAD, paddingRight: PAD, maxWidth: 600, margin: "0 auto" }}>
+      <div style={{ paddingTop: 68 + 40, paddingBottom: 80, paddingLeft: PAD, paddingRight: PAD, maxWidth: 580, margin: "0 auto" }}>
 
-        {/* Page title + account info */}
-        <div style={{ marginBottom: 36 }}>
+        <div style={{ marginBottom: 40 }}>
           <h1 style={{ margin: "0 0 4px", fontSize: 26, fontWeight: 700 }}>Settings</h1>
           <p style={{ margin: 0, fontSize: 13, color: "#444" }}>{user?.email}{memberSince ? ` · Member since ${memberSince}` : ""}</p>
         </div>
 
-        {/* Avatar */}
-        <div style={{ marginBottom: 36 }}>
+        {/* Profile section */}
+        <div style={{ marginBottom: 40 }}>
+          <p style={sectionHead}>Profile</p>
+          <p style={{ margin: "0 0 20px", fontSize: 12, color: "#333" }}>Your profile is only visible to you</p>
+
           <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20 }}>
-            <div style={{ width: 72, height: 72, borderRadius: "50%", background: currentAv?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: currentAv ? 30 : 24, fontWeight: 700, border: "3px solid #facc15", flexShrink: 0 }}>
+            <div style={{ width: 64, height: 64, borderRadius: "50%", background: currentAv?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: currentAv ? 26 : 22, fontWeight: 700, border: "3px solid #facc15", flexShrink: 0 }}>
               {currentAv ? currentAv.emoji : initials}
             </div>
-            <div>
-              <p style={{ margin: "0 0 2px", fontSize: 15, fontWeight: 600 }}>{name || activeProfile?.name || "—"}</p>
-              <p style={{ margin: 0, fontSize: 12, color: "#444" }}>{savingAvatar ? "Saving avatar…" : "Choose an avatar below"}</p>
-            </div>
+            <p style={{ margin: 0, fontSize: 12, color: "#444" }}>{savingAvatar ? "Saving…" : "Pick an avatar below"}</p>
           </div>
-          <p style={sectionHeadStyle}>Avatar</p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10 }}>
-            {PRESET_AVATARS.map(av => {
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8, marginBottom: 20 }}>
+            {SETTINGS_AVATARS.map(av => {
               const sel = avatarId === av.id;
               return (
                 <button key={av.id} onClick={() => pickAvatar(av.id)} style={{ background: "none", border: `2px solid ${sel ? "#facc15" : "transparent"}`, borderRadius: 10, padding: 3, cursor: "pointer", outline: "none", transition: "border-color 0.15s" }}>
-                  <div style={{ width: "100%", aspectRatio: "1", borderRadius: 7, background: av.gradient, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>
-                    {av.emoji}
-                  </div>
+                  <div style={{ width: "100%", aspectRatio: "1", borderRadius: 7, background: av.gradient, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>{av.emoji}</div>
                 </button>
               );
             })}
           </div>
+
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: "block", fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Display Name</label>
+            <input type="text" value={name} onChange={e => setName(e.target.value)} maxLength={40} placeholder="Your name" style={inputStyle} />
+          </div>
+          <button onClick={saveProfile} disabled={savingProfile} style={{ background: "#facc15", border: "none", borderRadius: 8, padding: "10px 24px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: savingProfile ? "not-allowed" : "pointer", opacity: savingProfile ? 0.7 : 1 }}>
+            {savingProfile ? "Saving…" : savedProfile ? "Saved ✓" : "Save Name"}
+          </button>
         </div>
 
-        {/* Profile info */}
-        <div style={{ marginBottom: 36 }}>
-          <p style={sectionHeadStyle}>Profile</p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div>
-              <label style={labelStyle}>Display Name</label>
-              <input type="text" value={name} onChange={e => setName(e.target.value)} maxLength={40} placeholder="Your name" style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>Bio</label>
-              <textarea value={bio} onChange={e => setBio(e.target.value)} rows={3} maxLength={200} placeholder="Write something about yourself…" style={{ ...inputStyle, resize: "vertical" }} />
-              <p style={{ margin: "4px 0 0", fontSize: 11, color: "#333", textAlign: "right" }}>{bio.length}/200</p>
-            </div>
-            <div>
-              <label style={labelStyle}>Banner Image URL</label>
-              <input type="text" value={bannerUrl} onChange={e => setBannerUrl(e.target.value)} placeholder="https://…" style={inputStyle} />
-            </div>
+        {/* Playback section */}
+        <div style={{ marginBottom: 40 }}>
+          <p style={sectionHead}>Playback</p>
+          <p style={{ margin: "0 0 4px", fontSize: 12, color: "#333" }}>Controls how content plays automatically</p>
+          <SettingRow
+            label="Autoplay Next Episode"
+            description="Automatically play the next episode when one ends"
+            value={autoplayNext}
+            onChange={toggleAutoplayNext}
+          />
+          <SettingRow
+            label="Hover Previews"
+            description="Play a trailer clip when hovering over a title"
+            value={autoplayPreviews}
+            onChange={toggleAutoplayPreviews}
+          />
+          <SettingRow
+            label="Hero Trailer Autoplay"
+            description="Automatically play the featured trailer on the home screen"
+            value={autoplayHero}
+            onChange={toggleAutoplayHero}
+          />
+        </div>
+
+        {/* Account section */}
+        <div style={{ marginBottom: 40 }}>
+          <p style={sectionHead}>Account</p>
+          <div style={{ background: "#111", border: "1px solid #1a1a1a", borderRadius: 10, padding: "14px 16px" }}>
+            <p style={{ margin: "0 0 2px", fontSize: 12, color: "#444" }}>Email</p>
+            <p style={{ margin: 0, fontSize: 14, color: "#888" }}>{user?.email}</p>
           </div>
         </div>
 
-        {/* Account info */}
-        <div style={{ marginBottom: 36 }}>
-          <p style={sectionHeadStyle}>Account</p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div>
-              <label style={labelStyle}>Username</label>
-              <input type="text" value={username} onChange={e => setUsername(e.target.value)} maxLength={30} placeholder="@handle" style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>Full Name</label>
-              <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} maxLength={60} placeholder="Your full name" style={inputStyle} />
-            </div>
-          </div>
-        </div>
-
-        {/* Save */}
-        <button onClick={save} disabled={saving} style={{ width: "100%", background: "#facc15", border: "none", borderRadius: 10, padding: "14px", color: "#0a0a0a", fontSize: 15, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1, marginBottom: 12 }}>
-          {saving ? "Saving…" : saved ? "Saved ✓" : "Save Changes"}
-        </button>
-
-        {/* Danger */}
-        <div style={{ marginTop: 48, paddingTop: 24, borderTop: "1px solid #1a1a1a" }}>
-          <p style={sectionHeadStyle}>Account Actions</p>
-          <button onClick={onSignOut} style={{ width: "100%", background: "transparent", border: "1px solid #2a2a2a", borderRadius: 10, padding: "13px", color: "#f87171", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+        {/* Sign out */}
+        <div style={{ paddingTop: 24, borderTop: "1px solid #1a1a1a" }}>
+          <button onClick={onSignOut} style={{ width: "100%", background: "transparent", border: "1px solid #2a2a2a", borderRadius: 10, padding: "13px", color: "#f87171", fontSize: 14, fontWeight: 600, cursor: "pointer", transition: "background 0.15s" }}
             onMouseEnter={e => e.currentTarget.style.background = "rgba(248,113,113,0.08)"}
             onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
             Sign Out
