@@ -23,7 +23,7 @@ export function avatarForId(id) {
   return PRESET_AVATARS.find(a => a.id === id) ?? null;
 }
 
-export function ProfileScreen({ user, onClose, onAvatarChange, onSwitchProfile, onViewProfile }) {
+export function ProfileScreen({ user, onClose, onAvatarChange, onSwitchProfile, onViewProfile, onOpenSettings }) {
   const [profile, setProfile] = useState(null);
   const [selectedAvatar, setSelectedAvatar] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -118,6 +118,14 @@ export function ProfileScreen({ user, onClose, onAvatarChange, onSwitchProfile, 
               onMouseEnter={e => e.currentTarget.style.background = "rgba(250,204,21,0.14)"}
               onMouseLeave={e => e.currentTarget.style.background = "rgba(250,204,21,0.08)"}>
               My Profile
+            </button>
+          )}
+          {onOpenSettings && (
+            <button onClick={() => { onClose(); onOpenSettings(); }}
+              style={{ width: "100%", background: "transparent", border: "1px solid #2a2a2a", borderRadius: 10, padding: "12px", color: "#e5e5e5", fontSize: 14, fontWeight: 600, cursor: "pointer", transition: "background 0.15s" }}
+              onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+              Settings
             </button>
           )}
           {onSwitchProfile && (
