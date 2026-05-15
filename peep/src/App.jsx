@@ -1762,9 +1762,16 @@ function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggle
   const [related, setRelated] = useState([]);
   const [trailerOpen, setTrailerOpen] = useState(false);
   const [watchProgress, setWatchProgress] = useState({});
+  const [activeTab, setActiveTab] = useState("episodes");
   const isMobile = useIsMobile();
 
   useEffect(() => {
+    setEpisodes([]);
+    setSelectedSeason(null);
+    setLoading(true);
+    setWatchProgress({});
+    setActiveTab("episodes");
+
     supabase.from("episodes").select("*").eq("show_id", show.id)
       .order("season", { ascending: true })
       .order("episode_number", { ascending: true })
@@ -1778,8 +1785,8 @@ function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggle
 
     if (show.category) {
       Promise.all([
-        supabase.from("shows").select("*").eq("category", show.category).neq("id", show.id).limit(6),
-        supabase.from("videos").select("*").eq("category", show.category).limit(6),
+        supabase.from("shows").select("*").eq("category", show.category).neq("id", show.id).limit(8),
+        supabase.from("videos").select("*").eq("category", show.category).limit(8),
       ]).then(([sRes, vRes]) => {
         setRelated([
           ...(sRes.data || []).map(s => ({ ...s, _type: "show" })),
@@ -1805,14 +1812,17 @@ function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggle
 
   const seasons = [...new Set(episodes.map(e => e.season))].sort((a, b) => a - b);
   const seasonEpisodes = episodes.filter(e => e.season === selectedSeason);
+  const completedCount = episodes.filter(e => watchProgress[e.id]?.completed).length;
 
-  // Find the most-recently-watched incomplete episode to resume from
   const resumeEpisode = (() => {
-    if (!user || !episodes.length) return episodes[0] ?? null;
-    const incomplete = episodes
-      .filter(e => watchProgress[e.id] && !watchProgress[e.id].completed && watchProgress[e.id].progress_seconds > 10)
-      .sort((a, b) => new Date(watchProgress[b.id].last_watched_at) - new Date(watchProgress[a.id].last_watched_at));
-    return incomplete[0] ?? episodes[0] ?? null;
+    if (!episodes.length) return null;
+    if (user) {
+      const incomplete = episodes
+        .filter(e => watchProgress[e.id] && !watchProgress[e.id].completed && watchProgress[e.id].progress_seconds > 10)
+        .sort((a, b) => new Date(watchProgress[b.id].last_watched_at) - new Date(watchProgress[a.id].last_watched_at));
+      if (incomplete[0]) return incomplete[0];
+    }
+    return episodes[0];
   })();
   const isResuming = resumeEpisode && watchProgress[resumeEpisode.id]?.progress_seconds > 10 && !watchProgress[resumeEpisode.id]?.completed;
 
@@ -1821,42 +1831,56 @@ function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggle
       {trailerOpen && <TrailerModal url={show.trailer_url} title={show.title} onClose={() => setTrailerOpen(false)} />}
       <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
 
-      <div style={{ position: "relative", height: "60vh", minHeight: 420, overflow: "hidden" }}>
-        <img src={show.thumbnail || show.poster} alt={show.title} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 20%", filter: "brightness(0.35) saturate(1.1)" }} />
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, #0a0a0a 0%, rgba(10,10,10,0.2) 50%, transparent 70%)" }} />
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, rgba(10,10,10,0.9) 0%, transparent 60%)" }} />
+      {/* ── Hero ── */}
+      <div style={{ position: "relative", height: isMobile ? "65vh" : "72vh", minHeight: 480, overflow: "hidden" }}>
+        <img src={show.thumbnail || show.poster} alt={show.title}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 20%", filter: "brightness(0.28) saturate(1.15)" }} />
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, #0a0a0a 0%, rgba(10,10,10,0.1) 58%, transparent 78%)" }} />
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, rgba(10,10,10,0.97) 0%, rgba(10,10,10,0.5) 55%, transparent 85%)" }} />
 
-        <button onClick={onBack} style={{ position: "absolute", top: 24, left: PAD, background: "rgba(255,255,255,0.07)", border: "none", color: "#ccc", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6, zIndex: 10 }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
-          Back
-        </button>
-        <span style={{ position: "absolute", top: 24, left: "50%", transform: "translateX(-50%)", fontFamily: "'DM Serif Display', serif", fontSize: 22, zIndex: 10 }}><span style={{ color: "#facc15" }}>peep.</span></span>
+        {/* Top nav row */}
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, display: "flex", alignItems: "center", padding: `20px ${PAD}`, gap: 24, zIndex: 10 }}>
+          <button onClick={onBack} style={{ background: "rgba(255,255,255,0.07)", border: "none", color: "#ccc", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
+            Back
+          </button>
+          <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22 }}><span style={{ color: "#facc15" }}>peep.</span></span>
+        </div>
 
-        <div style={{ position: "absolute", bottom: "10%", left: PAD, right: PAD, maxWidth: isMobile ? "100%" : "clamp(400px, 40vw, 660px)" }}>
-          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        {/* Hero content */}
+        <div style={{ position: "absolute", bottom: isMobile ? "6%" : "9%", left: PAD, right: PAD, maxWidth: isMobile ? "100%" : "clamp(440px, 44vw, 700px)" }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
             <span style={{ background: "#3b82f6", color: "#fff", fontSize: 10, fontWeight: 700, padding: "4px 12px", borderRadius: 4, letterSpacing: 1.5, textTransform: "uppercase" }}>Series</span>
             {show.category && <span style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)", color: "#fff", fontSize: 10, fontWeight: 600, padding: "4px 12px", borderRadius: 4, letterSpacing: 1, textTransform: "uppercase" }}>{show.category}</span>}
           </div>
-          <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(36px, 4vw, 68px)", lineHeight: 1.0, margin: "0 0 14px", fontWeight: 400 }}>{show.title}</h1>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
+          <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(34px, 4.5vw, 72px)", lineHeight: 1.0, margin: "0 0 16px", fontWeight: 400 }}>{show.title}</h1>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
             {show.score && <span style={{ color: "#4ade80", fontSize: 14, fontWeight: 700 }}>{show.score}% Match</span>}
             {show.year && <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>{show.year}</span>}
             {show.rating && <span style={{ border: "1px solid rgba(255,255,255,0.28)", color: "rgba(255,255,255,0.5)", fontSize: 11, padding: "2px 7px", borderRadius: 3 }}>{show.rating}</span>}
-            <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>{seasons.length} Season{seasons.length !== 1 ? "s" : ""} · {episodes.length} Episode{episodes.length !== 1 ? "s" : ""}</span>
+            <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 13 }}>{seasons.length} Season{seasons.length !== 1 ? "s" : ""}</span>
+            <span style={{ color: "#333", fontSize: 13 }}>·</span>
+            <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 13 }}>{episodes.length} Episode{episodes.length !== 1 ? "s" : ""}</span>
+            {completedCount > 0 && episodes.length > 0 && (
+              <span style={{ color: "#4ade80", fontSize: 12, fontWeight: 600 }}>{completedCount}/{episodes.length} watched</span>
+            )}
           </div>
-          {show.description && <p style={{ fontSize: 15, color: "rgba(255,255,255,0.72)", lineHeight: 1.75, margin: "0 0 28px" }}>{show.description}</p>}
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {show.description && (
+            <p style={{ fontSize: 15, color: "rgba(255,255,255,0.7)", lineHeight: 1.75, margin: "0 0 28px", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{show.description}</p>
+          )}
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
             {resumeEpisode && (
-              <button onClick={() => onPlay(resumeEpisode)} style={{ background: "#fff", color: "#0a0a0a", border: "none", borderRadius: 7, padding: "13px 28px", fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}
+              <button onClick={() => onPlay(resumeEpisode)}
+                style={{ background: "#fff", color: "#0a0a0a", border: "none", borderRadius: 7, padding: "13px 28px", fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}
                 onMouseEnter={e => e.currentTarget.style.background = "#e5e5e5"}
                 onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                {isResuming ? `Continue S${resumeEpisode.season} E${resumeEpisode.episode_number}` : `Play S${resumeEpisode.season} E${resumeEpisode.episode_number}`}
+                {isResuming ? `Resume S${resumeEpisode.season} E${resumeEpisode.episode_number}` : `Play S${resumeEpisode.season} E${resumeEpisode.episode_number}`}
               </button>
             )}
             {show.trailer_url && (
               <button onClick={() => setTrailerOpen(true)}
-                style={{ background: "rgba(109,109,110,0.65)", backdropFilter: "blur(4px)", color: "#fff", border: "none", borderRadius: 7, padding: "13px 24px", fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}
+                style={{ background: "rgba(109,109,110,0.65)", backdropFilter: "blur(4px)", color: "#fff", border: "none", borderRadius: 7, padding: "13px 22px", fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}
                 onMouseEnter={e => e.currentTarget.style.background = "rgba(109,109,110,0.85)"}
                 onMouseLeave={e => e.currentTarget.style.background = "rgba(109,109,110,0.65)"}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polygon points="10,8 16,12 10,16" fill="currentColor" stroke="none" /></svg>
@@ -1867,8 +1891,13 @@ function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggle
               const inList = myList?.[`show_${show.id}`];
               return (
                 <button onClick={() => onToggleList?.(show.id, "show")}
-                  style={{ background: inList ? "rgba(250,204,21,0.2)" : "rgba(109,109,110,0.65)", backdropFilter: "blur(4px)", color: "#fff", border: inList ? "1px solid rgba(250,204,21,0.5)" : "none", borderRadius: 7, padding: "13px 24px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
-                  {inList ? "✓ In My List" : "+ My List"}
+                  style={{ background: inList ? "rgba(250,204,21,0.15)" : "rgba(109,109,110,0.65)", backdropFilter: "blur(4px)", color: inList ? "#facc15" : "#fff", border: inList ? "1px solid rgba(250,204,21,0.5)" : "none", borderRadius: 7, padding: "13px 22px", fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
+                  {inList ? "✓ My List" : (
+                    <>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                      My List
+                    </>
+                  )}
                 </button>
               );
             })()}
@@ -1876,93 +1905,138 @@ function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggle
         </div>
       </div>
 
-      <div style={{ padding: `40px ${PAD} 80px`, maxWidth: 1400, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600 }}>Episodes</h2>
-          {seasons.length > 1 && (
-            <div style={{ display: "flex", gap: 8 }}>
-              {seasons.map(s => (
-                <button key={s} onClick={() => setSelectedSeason(s)}
-                  style={{ background: selectedSeason === s ? "#facc15" : "#1a1a1a", border: `1px solid ${selectedSeason === s ? "#facc15" : "#2a2a2a"}`, borderRadius: 6, padding: "8px 18px", color: selectedSeason === s ? "#0a0a0a" : "#888", fontSize: 13, fontWeight: selectedSeason === s ? 600 : 400, cursor: "pointer" }}>
-                  Season {s}
-                </button>
-              ))}
-            </div>
-          )}
+      {/* ── Tab bar ── */}
+      <div style={{ position: "sticky", top: 0, zIndex: 50, background: "rgba(10,10,10,0.97)", backdropFilter: "blur(14px)", borderBottom: "1px solid #1a1a1a" }}>
+        <div style={{ display: "flex", padding: `0 ${PAD}` }}>
+          {[
+            { key: "episodes", label: "Episodes", badge: episodes.length || null },
+            { key: "more", label: "More Like This", badge: null },
+          ].map(({ key, label, badge }) => {
+            const active = activeTab === key;
+            return (
+              <button key={key} onClick={() => setActiveTab(key)}
+                style={{ background: "none", border: "none", padding: "18px 20px 16px", fontSize: 14, fontWeight: active ? 600 : 400, color: active ? "#fff" : "#555", cursor: "pointer", borderBottom: `2px solid ${active ? "#facc15" : "transparent"}`, transition: "color 0.15s, border-color 0.15s", display: "flex", alignItems: "center", gap: 8 }}>
+                {label}
+                {badge != null && <span style={{ fontSize: 11, fontWeight: 700, color: active ? "#facc15" : "#333" }}>{badge}</span>}
+              </button>
+            );
+          })}
         </div>
+      </div>
 
-        {loading ? (
-          <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Spinner /></div>
-        ) : seasonEpisodes.length === 0 ? (
-          <p style={{ color: "#555", fontSize: 15 }}>No episodes added yet.</p>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {seasonEpisodes.map(ep => <EpisodeRow key={ep.id} episode={ep} show={show} onPlay={onPlay} progress={watchProgress[ep.id]} />)}
-          </div>
+      {/* ── Content ── */}
+      <div style={{ padding: `32px ${PAD} 80px`, maxWidth: 1100, margin: "0 auto" }}>
+
+        {activeTab === "episodes" && (
+          <>
+            {/* Season selector */}
+            {seasons.length > 1 && (
+              <div style={{ marginBottom: 28 }}>
+                {seasons.length <= 6 ? (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {seasons.map(s => {
+                      const sEps = episodes.filter(e => e.season === s);
+                      const sWatched = sEps.filter(e => watchProgress[e.id]?.completed).length;
+                      const active = selectedSeason === s;
+                      return (
+                        <button key={s} onClick={() => setSelectedSeason(s)}
+                          style={{ background: active ? "#facc15" : "#111", border: `1px solid ${active ? "#facc15" : "#242424"}`, borderRadius: 8, padding: "10px 20px", color: active ? "#0a0a0a" : "#888", fontSize: 13, fontWeight: active ? 700 : 400, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, transition: "all 0.15s" }}>
+                          <span>Season {s}</span>
+                          {sWatched > 0 && <span style={{ fontSize: 10, color: active ? "rgba(10,10,10,0.55)" : "#4ade80", fontWeight: 600 }}>{sWatched}/{sEps.length}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <select value={selectedSeason ?? ""} onChange={e => setSelectedSeason(Number(e.target.value))}
+                    style={{ background: "#111", border: "1px solid #2a2a2a", borderRadius: 8, padding: "10px 16px", color: "#fff", fontSize: 14, cursor: "pointer", outline: "none" }}>
+                    {seasons.map(s => <option key={s} value={s}>Season {s}</option>)}
+                  </select>
+                )}
+              </div>
+            )}
+
+            {loading ? (
+              <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Spinner /></div>
+            ) : seasonEpisodes.length === 0 ? (
+              <p style={{ color: "#555", fontSize: 15, padding: "40px 0" }}>No episodes added yet.</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                {seasonEpisodes.map(ep => (
+                  <EpisodeCard key={ep.id} episode={ep} show={show} onPlay={onPlay} progress={watchProgress[ep.id]} />
+                ))}
+              </div>
+            )}
+          </>
         )}
 
-        {related.length > 0 && (
-          <div style={{ marginTop: 56 }}>
-            <h2 style={{ fontSize: 20, fontWeight: 600, margin: "0 0 20px", color: "#e5e5e5" }}>More Like This</h2>
+        {activeTab === "more" && (
+          related.length === 0 ? (
+            <p style={{ color: "#555", fontSize: 15, padding: "40px 0" }}>No similar titles found.</p>
+          ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 16 }}>
               {related.map(item => (
-                <div key={item.id + item._type} onClick={() => item._type === "show" ? onShowSelect?.(item) : onPlay(item)}
-                  style={{ cursor: "pointer", borderRadius: 10, overflow: "hidden", background: "#141414", border: "1px solid #1a1a1a", transition: "transform 0.2s, box-shadow 0.2s" }}
-                  onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.03)"; e.currentTarget.style.boxShadow = "0 12px 32px rgba(0,0,0,0.6)"; }}
-                  onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "none"; }}>
-                  <div style={{ aspectRatio: "2/3", overflow: "hidden", position: "relative" }}>
-                    <img src={item.poster || item.thumbnail} alt={item.title} style={{ width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.7)" }} />
-                    {item._type === "show" && <div style={{ position: "absolute", top: 6, left: 6, background: "rgba(59,130,246,0.85)", color: "#fff", fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 3, textTransform: "uppercase", letterSpacing: 0.5 }}>Series</div>}
-                  </div>
-                  <div style={{ padding: "12px 14px" }}>
-                    <p style={{ margin: "0 0 4px", fontSize: 13.5, fontWeight: 600, color: "#e5e5e5" }}>{item.title}</p>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      {item.score && <span style={{ fontSize: 12, color: "#4ade80", fontWeight: 600 }}>{item.score}%</span>}
-                      {item.year && <span style={{ fontSize: 11, color: "#555" }}>{item.year}</span>}
-                    </div>
-                  </div>
-                </div>
+                <CatalogCard key={item.id + item._type} item={item}
+                  onClick={() => item._type === "show" ? onShowSelect?.(item) : onPlay(item)}
+                  myList={myList} onToggleList={onToggleList} />
               ))}
             </div>
-          </div>
+          )
         )}
       </div>
     </div>
   );
 }
 
-function EpisodeRow({ episode, show, onPlay, progress }) {
+function EpisodeCard({ episode, show, onPlay, progress }) {
   const [hovered, setHovered] = useState(false);
   const isMobile = useIsMobile();
   const pct = progress?.duration_seconds > 0 ? Math.min(100, (progress.progress_seconds / progress.duration_seconds) * 100) : 0;
+  const isCompleted = !!progress?.completed;
+
   return (
     <div onClick={() => onPlay(episode)} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
-      style={{ display: "flex", gap: isMobile ? 12 : 20, padding: isMobile ? "12px 8px" : "16px 20px", borderRadius: 10, cursor: "pointer", background: hovered ? "#141414" : "transparent", transition: "background 0.2s", alignItems: "center" }}>
-      <div style={{ flexShrink: 0, fontSize: 16, color: progress?.completed ? "#4ade80" : "#333", fontWeight: 700, width: 22, textAlign: "center" }}>
-        {progress?.completed ? "✓" : episode.episode_number}
+      style={{ display: "flex", gap: isMobile ? 12 : 24, padding: isMobile ? "14px 0" : "20px 0", borderBottom: "1px solid #141414", cursor: "pointer", alignItems: "flex-start", opacity: isCompleted ? 0.6 : 1, transition: "opacity 0.2s" }}>
+
+      {/* Episode number / check */}
+      <div style={{ flexShrink: 0, width: 28, paddingTop: isMobile ? 4 : 8, textAlign: "center" }}>
+        {isCompleted
+          ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
+          : <span style={{ fontSize: 16, color: "#333", fontWeight: 700 }}>{episode.episode_number}</span>
+        }
       </div>
-      <div style={{ width: isMobile ? 100 : 160, aspectRatio: "16/9", flexShrink: 0, borderRadius: 6, overflow: "hidden", background: "#1a1a1a", position: "relative" }}>
-        <img src={episode.thumbnail || show.thumbnail} alt={episode.title} style={{ width: "100%", height: "100%", objectFit: "cover", filter: hovered ? "brightness(0.6)" : progress?.completed ? "brightness(0.5)" : "brightness(0.8)", transition: "filter 0.2s" }} onError={e => { e.target.style.display = "none"; }} />
+
+      {/* Thumbnail */}
+      <div style={{ width: isMobile ? 108 : 192, aspectRatio: "16/9", flexShrink: 0, borderRadius: 8, overflow: "hidden", background: "#1a1a1a", position: "relative" }}>
+        <img src={episode.thumbnail || show.thumbnail} alt={episode.title}
+          style={{ width: "100%", height: "100%", objectFit: "cover", filter: hovered ? "brightness(0.5)" : isCompleted ? "brightness(0.42)" : "brightness(0.82)", transition: "filter 0.2s" }}
+          onError={e => { e.target.style.display = "none"; }} />
         {hovered && (
           <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.9)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="#0a0a0a"><polygon points="5,3 19,12 5,21" /></svg>
+            <div style={{ width: 42, height: 42, borderRadius: "50%", background: "rgba(255,255,255,0.92)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 16px rgba(0,0,0,0.5)" }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="#0a0a0a"><polygon points="5,3 19,12 5,21" /></svg>
             </div>
           </div>
         )}
-        {/* Progress bar */}
-        {pct > 0 && !progress?.completed && (
+        {pct > 0 && !isCompleted && (
           <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 3, background: "rgba(0,0,0,0.5)" }}>
             <div style={{ height: "100%", background: "#facc15", width: `${pct}%` }} />
           </div>
         )}
       </div>
-      <div style={{ flex: 1 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-          <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#e5e5e5" }}>{episode.title}</p>
-          {episode.duration && <span style={{ fontSize: 12, color: "#555", flexShrink: 0, marginLeft: 16 }}>{episode.duration}</span>}
+
+      {/* Info */}
+      <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 6 }}>
+          <p style={{ margin: 0, fontSize: isMobile ? 13 : 15, fontWeight: 600, color: isCompleted ? "#555" : "#e5e5e5", lineHeight: 1.3 }}>{episode.title}</p>
+          {episode.duration && <span style={{ fontSize: 12, color: "#444", flexShrink: 0 }}>{episode.duration}</span>}
         </div>
-        {episode.description && <p style={{ margin: 0, fontSize: 13, color: "#666", lineHeight: 1.6 }}>{episode.description}</p>}
+        {!isMobile && episode.description && (
+          <p style={{ margin: 0, fontSize: 13, color: "#555", lineHeight: 1.6, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{episode.description}</p>
+        )}
+        {pct > 0 && !isCompleted && (
+          <p style={{ margin: "6px 0 0", fontSize: 11, color: "#facc15", fontWeight: 600 }}>{Math.round(pct)}% watched</p>
+        )}
       </div>
     </div>
   );
