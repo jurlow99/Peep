@@ -3,6 +3,7 @@ import { supabase } from "./supabase";
 import { AuthModal } from "./components/AuthModal";
 import { LandingPage } from "./pages/LandingPage";
 import { ProfileScreen, avatarForId } from "./components/ProfileScreen";
+import { ProfileSelect } from "./components/ProfileSelect";
 
 class PlayerErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null }; }
@@ -43,28 +44,54 @@ export default function App() {
   const [authOpen, setAuthOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [userAvatarId, setUserAvatarId] = useState(null);
+  const [activeProfile, setActiveProfile] = useState(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
-      if (session?.user) { loadMyList(session.user.id); loadAvatarId(session.user.id); }
+      if (session?.user) loadAvatarId(session.user.id);
       setAuthChecked(true);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
-      if (session?.user) loadMyList(session.user.id);
-      else setMyList({});
+      if (!session?.user) { setMyList({}); setActiveProfile(null); }
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  // Load saved profile from localStorage when user is known
+  useEffect(() => {
+    if (!user) { setActiveProfile(null); return; }
+    try {
+      const stored = JSON.parse(localStorage.getItem(`peep_profile_${user.id}`));
+      setActiveProfile(stored ?? null);
+    } catch { setActiveProfile(null); }
+  }, [user?.id]);
+
+  // Reload My List whenever the active profile changes
+  useEffect(() => {
+    if (!user || !activeProfile) { setMyList({}); return; }
+    loadMyList(user.id, activeProfile.id);
+  }, [user?.id, activeProfile?.id]);
+
+  function selectProfile(profile) {
+    setActiveProfile(profile);
+    localStorage.setItem(`peep_profile_${user.id}`, JSON.stringify(profile));
+  }
+
+  function switchProfile() {
+    setActiveProfile(null);
+    if (user) localStorage.removeItem(`peep_profile_${user.id}`);
+  }
 
   async function loadAvatarId(userId) {
     const { data } = await supabase.from("profiles").select("avatar_id").eq("id", userId).maybeSingle();
     if (data?.avatar_id) setUserAvatarId(data.avatar_id);
   }
 
-  async function loadMyList(userId) {
-    const { data } = await supabase.from("user_list").select("content_id, content_type").eq("user_id", userId);
+  async function loadMyList(userId, profileId) {
+    const { data } = await supabase.from("user_list").select("content_id, content_type")
+      .eq("user_id", userId).eq("profile_id", profileId);
     if (data) {
       const map = {};
       data.forEach(item => { map[`${item.content_type}_${item.content_id}`] = true; });
@@ -73,25 +100,31 @@ export default function App() {
   }
 
   async function toggleList(contentId, contentType) {
-    if (!user) { setAuthOpen(true); return; }
+    if (!user || !activeProfile) { setAuthOpen(true); return; }
     const key = `${contentType}_${contentId}`;
     if (myList[key]) {
-      await supabase.from("user_list").delete().eq("user_id", user.id).eq("content_id", contentId).eq("content_type", contentType);
+      await supabase.from("user_list").delete()
+        .eq("user_id", user.id).eq("profile_id", activeProfile.id)
+        .eq("content_id", contentId).eq("content_type", contentType);
       setMyList(prev => { const next = { ...prev }; delete next[key]; return next; });
     } else {
-      await supabase.from("user_list").insert({ user_id: user.id, content_id: contentId, content_type: contentType });
+      await supabase.from("user_list").insert({
+        user_id: user.id, profile_id: activeProfile.id,
+        content_id: contentId, content_type: contentType,
+      });
       setMyList(prev => ({ ...prev, [key]: true }));
     }
   }
 
-  const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true), onProfileOpen: () => setProfileOpen(true), userAvatarId };
+  const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true), onProfileOpen: () => setProfileOpen(true), userAvatarId, activeProfile, onSwitchProfile: switchProfile };
 
   if (!authChecked) return null;
   if (!user) return <LandingPage />;
   // email verification gate — re-enable once real domain is set up
   // if (!user.email_confirmed_at) return <EmailVerificationGate user={user} />;
+  if (!activeProfile) return <ProfileSelect user={user} onSelect={selectProfile} />;
 
-  const profileScreenEl = profileOpen && <ProfileScreen user={user} onClose={() => setProfileOpen(false)} onAvatarChange={id => setUserAvatarId(id)} />;
+  const profileScreenEl = profileOpen && <ProfileScreen user={user} onClose={() => setProfileOpen(false)} onAvatarChange={id => setUserAvatarId(id)} onSwitchProfile={switchProfile} />;
 
   if (page === "player" && selectedVideo) {
     const handleBack = () => { setPage(selectedShow ? "show" : "home"); setSelectedVideo(null); };
@@ -143,7 +176,7 @@ export default function App() {
 
 // ─── Homepage ─────────────────────────────────────────────────────────────────
 
-function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId }) {
+function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, activeProfile, onSwitchProfile }) {
   const [videos, setVideos] = useState([]);
   const [shows, setShows] = useState([]);
   const [carousels, setCarousels] = useState([]);
@@ -192,7 +225,7 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
     };
   }, []);
 
-  useEffect(() => { loadContinueWatching(); }, [user]);
+  useEffect(() => { loadContinueWatching(); }, [user, activeProfile]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(searchQuery), 150);
@@ -216,21 +249,21 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
   }
 
   async function handleRemoveCW(item) {
-    if (!user) return;
+    if (!user || !activeProfile) return;
     const ct = item._type === "episode" ? "episode" : "movie";
     await supabase.from("watch_progress").upsert(
-      { user_id: user.id, content_id: item.id, content_type: ct, completed: true, last_watched_at: new Date().toISOString() },
-      { onConflict: "user_id,content_id,content_type" }
+      { user_id: user.id, profile_id: activeProfile.id, content_id: item.id, content_type: ct, completed: true, last_watched_at: new Date().toISOString() },
+      { onConflict: "user_id,profile_id,content_id,content_type" }
     );
     setContinueWatching(prev => prev.filter(i => !(i._type === item._type && i.id === item.id)));
   }
 
   async function loadContinueWatching() {
-    if (!user) { setContinueWatching([]); return; }
+    if (!user || !activeProfile) { setContinueWatching([]); return; }
 
     // Fetch all incomplete progress (movies + episodes)
     const { data: progress } = await supabase.from("watch_progress").select("*")
-      .eq("user_id", user.id).eq("completed", false)
+      .eq("user_id", user.id).eq("profile_id", activeProfile.id).eq("completed", false)
       .order("last_watched_at", { ascending: false }).limit(50);
     if (!progress || progress.length === 0) { setContinueWatching([]); return; }
 
@@ -263,7 +296,7 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
         supabase.from("episodes").select("*").in("show_id", showIds)
           .order("season", { ascending: true }).order("episode_number", { ascending: true }),
         supabase.from("watch_progress").select("content_id,completed,progress_seconds,duration_seconds,last_watched_at")
-          .eq("user_id", user.id).eq("content_type", "episode"),
+          .eq("user_id", user.id).eq("profile_id", activeProfile.id).eq("content_type", "episode"),
         supabase.from("shows").select("id,title,thumbnail,poster").in("id", showIds),
       ]);
 
@@ -433,12 +466,12 @@ function Homepage({ onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen
             </div>
           )}
           {!isMobile && (user ? (() => {
-            const av = avatarForId(userAvatarId);
+            const av = avatarForId(activeProfile?.avatar_id);
             return (
-              <div onClick={onProfileOpen} title="View profile" style={{ width: 36, height: 36, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg, #6366f1, #8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? 16 : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
+              <div onClick={onProfileOpen} title={activeProfile?.name ?? "Profile"} style={{ width: 36, height: 36, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg, #6366f1, #8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? 16 : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
                 onMouseEnter={e => e.currentTarget.style.borderColor = "#facc15"}
                 onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}>
-                {av ? av.emoji : (user.user_metadata?.full_name?.[0] || user.email[0]).toUpperCase()}
+                {av ? av.emoji : (activeProfile?.name?.[0] || user.email[0]).toUpperCase()}
               </div>
             );
           })() : (
@@ -1344,7 +1377,7 @@ function getEmbedUrl(url) {
   return null;
 }
 
-function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onToggleList, onAuthOpen }) {
+function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onToggleList, onAuthOpen, activeProfile }) {
   const [allVideos, setAllVideos] = useState([]);
   const [allShows, setAllShows] = useState([]);
   const [nextEpisode, setNextEpisode] = useState(null);
@@ -1418,10 +1451,10 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
   }, [video.id, user]);
 
   useEffect(() => {
-    if (!user) { setContinueWatching([]); return; }
+    if (!user || !activeProfile) { setContinueWatching([]); return; }
     (async () => {
       const { data: progress } = await supabase.from("watch_progress").select("*")
-        .eq("user_id", user.id).eq("completed", false)
+        .eq("user_id", user.id).eq("profile_id", activeProfile.id).eq("completed", false)
         .order("last_watched_at", { ascending: false }).limit(15);
       if (!progress || progress.length === 0) return;
       const movieIds = progress.filter(p => p.content_type === "movie").map(p => p.content_id);
@@ -1440,25 +1473,25 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
         .sort((a, b) => new Date(b._progress.last_watched_at) - new Date(a._progress.last_watched_at));
       setContinueWatching(items);
     })();
-  }, [video.id, user]);
+  }, [video.id, user, activeProfile?.id]);
 
   useEffect(() => {
-    if (!user || getEmbedUrl(video.url)) return;
+    if (!user || !activeProfile || getEmbedUrl(video.url)) return;
     const ct = isEpisode ? "episode" : "movie";
     saveProgressRef.current = async () => {
       if (!videoRef.current) return;
       const { currentTime, duration } = videoRef.current;
       if (currentTime < 5 || !duration) return;
       await supabase.from("watch_progress").upsert({
-        user_id: user.id, content_id: video.id, content_type: ct,
+        user_id: user.id, profile_id: activeProfile.id, content_id: video.id, content_type: ct,
         progress_seconds: currentTime, duration_seconds: duration,
         completed: currentTime / duration > 0.9 || duration - currentTime < 60,
         last_watched_at: new Date().toISOString(),
-      }, { onConflict: "user_id,content_id,content_type" });
+      }, { onConflict: "user_id,profile_id,content_id,content_type" });
     };
     progressTimerRef.current = setInterval(() => { saveProgressRef.current?.(); }, 15000);
     return () => clearInterval(progressTimerRef.current);
-  }, [video.id, user]);
+  }, [video.id, user, activeProfile?.id]);
 
   useEffect(() => () => { clearInterval(progressTimerRef.current); saveProgressRef.current?.(); }, []);
 
@@ -1508,11 +1541,11 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
   }
 
   async function handleEnded() {
-    if (user && videoRef.current && !getEmbedUrl(video.url)) {
+    if (user && activeProfile && videoRef.current && !getEmbedUrl(video.url)) {
       const { currentTime, duration } = videoRef.current;
       if (duration > 0) {
         const ct = isEpisode ? "episode" : "movie";
-        await supabase.from("watch_progress").upsert({ user_id: user.id, content_id: video.id, content_type: ct, progress_seconds: currentTime, duration_seconds: duration, completed: true, last_watched_at: new Date().toISOString() }, { onConflict: "user_id,content_id,content_type" });
+        await supabase.from("watch_progress").upsert({ user_id: user.id, profile_id: activeProfile.id, content_id: video.id, content_type: ct, progress_seconds: currentTime, duration_seconds: duration, completed: true, last_watched_at: new Date().toISOString() }, { onConflict: "user_id,profile_id,content_id,content_type" });
       }
     }
     if (nextEpisode) { clearInterval(countdownTimerRef.current); onSelect(nextEpisode); }
@@ -1525,11 +1558,11 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
   }
 
   async function handleRemoveCW(item) {
-    if (!user) return;
+    if (!user || !activeProfile) return;
     const ct = item._type === "episode" ? "episode" : "movie";
     await supabase.from("watch_progress").upsert(
-      { user_id: user.id, content_id: item.id, content_type: ct, completed: true, last_watched_at: new Date().toISOString() },
-      { onConflict: "user_id,content_id,content_type" }
+      { user_id: user.id, profile_id: activeProfile.id, content_id: item.id, content_type: ct, completed: true, last_watched_at: new Date().toISOString() },
+      { onConflict: "user_id,profile_id,content_id,content_type" }
     );
     setContinueWatching(prev => prev.filter(i => !(i._type === item._type && i.id === item.id)));
   }
@@ -1549,10 +1582,10 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
   }
 
   function handleLoadedMetadata() {
-    if (!user || !videoRef.current || getEmbedUrl(video.url)) return;
+    if (!user || !activeProfile || !videoRef.current || getEmbedUrl(video.url)) return;
     const ct = isEpisode ? "episode" : "movie";
     supabase.from("watch_progress").select("progress_seconds, duration_seconds, completed")
-      .eq("user_id", user.id).eq("content_id", video.id).eq("content_type", ct).maybeSingle()
+      .eq("user_id", user.id).eq("profile_id", activeProfile.id).eq("content_id", video.id).eq("content_type", ct).maybeSingle()
       .then(({ data }) => {
         if (!data || data.completed || !videoRef.current) return;
         const pct = data.duration_seconds > 0 ? data.progress_seconds / data.duration_seconds : 0;
@@ -1714,7 +1747,7 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
 
 // ─── Show Detail ──────────────────────────────────────────────────────────────
 
-function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen }) {
+function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen, activeProfile }) {
   const [episodes, setEpisodes] = useState([]);
   const [selectedSeason, setSelectedSeason] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1749,9 +1782,9 @@ function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggle
   }, [show.id]);
 
   useEffect(() => {
-    if (!user || !episodes.length) { setWatchProgress({}); return; }
+    if (!user || !activeProfile || !episodes.length) { setWatchProgress({}); return; }
     supabase.from("watch_progress").select("*")
-      .eq("user_id", user.id).eq("content_type", "episode")
+      .eq("user_id", user.id).eq("profile_id", activeProfile.id).eq("content_type", "episode")
       .in("content_id", episodes.map(e => e.id))
       .then(({ data }) => {
         if (data) {
@@ -1760,7 +1793,7 @@ function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggle
           setWatchProgress(map);
         }
       });
-  }, [episodes, user]);
+  }, [episodes, user, activeProfile?.id]);
 
   const seasons = [...new Set(episodes.map(e => e.season))].sort((a, b) => a - b);
   const seasonEpisodes = episodes.filter(e => e.season === selectedSeason);
