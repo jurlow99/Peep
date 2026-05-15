@@ -3,7 +3,6 @@ import { supabase } from "../supabase";
 
 const YELLOW = "#facc15";
 
-// Placeholder preset avatars — replace with real images from DB later
 const PRESET_AVATARS = [
   { id: "a1", gradient: "linear-gradient(135deg, #6366f1, #8b5cf6)", emoji: "🎬" },
   { id: "a2", gradient: "linear-gradient(135deg, #ec4899, #f43f5e)", emoji: "🌙" },
@@ -25,6 +24,7 @@ export function avatarForId(id) {
 
 export function ProfileScreen({ user, onClose, onAvatarChange, onSwitchProfile, onViewProfile, onOpenSettings }) {
   const [profile, setProfile] = useState(null);
+  const [savedAvatar, setSavedAvatar] = useState(null);
   const [selectedAvatar, setSelectedAvatar] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -35,19 +35,22 @@ export function ProfileScreen({ user, onClose, onAvatarChange, onSwitchProfile, 
       .then(({ data }) => {
         if (data) {
           setProfile(data);
+          setSavedAvatar(data.avatar_id ?? null);
           setSelectedAvatar(data.avatar_id ?? null);
         }
       });
   }, [user]);
 
-  async function saveAvatar(avatarId) {
-    setSelectedAvatar(avatarId);
-    onAvatarChange?.(avatarId);
+  async function handleSaveAvatar() {
     setSaving(true);
-    await supabase.from("profiles").upsert({ id: user.id, avatar_id: avatarId }, { onConflict: "id" });
+    const { error } = await supabase.from("profiles").upsert({ id: user.id, avatar_id: selectedAvatar }, { onConflict: "id" });
     setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    if (!error) {
+      setSavedAvatar(selectedAvatar);
+      onAvatarChange?.(selectedAvatar);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    }
   }
 
   async function handleSignOut() {
@@ -58,13 +61,12 @@ export function ProfileScreen({ user, onClose, onAvatarChange, onSwitchProfile, 
   const currentAvatar = avatarForId(selectedAvatar);
   const initials = (profile?.username?.[0] || user?.email?.[0] || "?").toUpperCase();
   const memberSince = user?.created_at ? new Date(user.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : null;
+  const hasChange = selectedAvatar !== savedAvatar;
 
   return (
     <>
-      {/* Backdrop */}
       <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }} />
 
-      {/* Panel */}
       <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, zIndex: 201, width: "min(400px, 100vw)", background: "#0f0f0f", borderLeft: "1px solid #1a1a1a", display: "flex", flexDirection: "column", overflowY: "auto", fontFamily: "'Space Grotesk', sans-serif" }}>
 
         {/* Header */}
@@ -89,14 +91,13 @@ export function ProfileScreen({ user, onClose, onAvatarChange, onSwitchProfile, 
         <div style={{ padding: "24px 24px 0" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
             <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: 0.6 }}>Choose Avatar</p>
-            {saving && <span style={{ fontSize: 12, color: "#555" }}>Saving…</span>}
             {saved && <span style={{ fontSize: 12, color: "#22c55e" }}>Saved ✓</span>}
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 16 }}>
             {PRESET_AVATARS.map(av => {
               const isSelected = selectedAvatar === av.id;
               return (
-                <button key={av.id} onClick={() => saveAvatar(av.id)} style={{ background: "none", border: `2px solid ${isSelected ? YELLOW : "transparent"}`, borderRadius: 12, padding: 3, cursor: "pointer", outline: "none", transition: "border-color 0.15s" }}>
+                <button key={av.id} onClick={() => setSelectedAvatar(av.id)} style={{ background: "none", border: `2px solid ${isSelected ? YELLOW : "transparent"}`, borderRadius: 12, padding: 3, cursor: "pointer", outline: "none", transition: "border-color 0.15s" }}>
                   <div style={{ width: "100%", aspectRatio: "1", borderRadius: 9, background: av.gradient, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>
                     {av.emoji}
                   </div>
@@ -104,13 +105,17 @@ export function ProfileScreen({ user, onClose, onAvatarChange, onSwitchProfile, 
               );
             })}
           </div>
-          <p style={{ margin: "14px 0 0", fontSize: 11, color: "#333", textAlign: "center" }}>More avatars coming soon</p>
+          {hasChange && (
+            <button onClick={handleSaveAvatar} disabled={saving} style={{ width: "100%", background: "#facc15", border: "none", borderRadius: 10, padding: "11px", color: "#0a0a0a", fontSize: 14, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1, marginBottom: 8 }}>
+              {saving ? "Saving…" : "Save Avatar"}
+            </button>
+          )}
+          <p style={{ margin: "6px 0 0", fontSize: 11, color: "#333", textAlign: "center" }}>More avatars coming soon</p>
         </div>
 
-        {/* Spacer */}
         <div style={{ flex: 1 }} />
 
-        {/* Switch / Sign out */}
+        {/* Actions */}
         <div style={{ padding: "24px", borderTop: "1px solid #1a1a1a", flexShrink: 0, display: "flex", flexDirection: "column", gap: 10 }}>
           {onViewProfile && (
             <button onClick={() => { onClose(); onViewProfile(); }}

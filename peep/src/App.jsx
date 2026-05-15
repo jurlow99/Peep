@@ -2834,10 +2834,11 @@ const SETTINGS_AVATARS = [
 
 function SettingsPage({ user, activeProfile, onBack, onProfileUpdate, onAvatarChange, onSignOut }) {
   const [name, setName] = useState(activeProfile?.name || "");
+  const [savedName] = useState(activeProfile?.name || "");
   const [avatarId, setAvatarId] = useState(activeProfile?.avatar_id || null);
-  const [savingProfile, setSavingProfile] = useState(false);
-  const [savedProfile, setSavedProfile] = useState(false);
-  const [savingAvatar, setSavingAvatar] = useState(false);
+  const [savedAvatarId] = useState(activeProfile?.avatar_id || null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [autoplayNext, setAutoplayNext] = useState(() => getPref(PREF_AUTOPLAY_NEXT));
   const [autoplayPreviews, setAutoplayPreviews] = useState(() => getPref(PREF_AUTOPLAY_PREVIEWS));
   const [autoplayHero, setAutoplayHero] = useState(() => getPref(PREF_AUTOPLAY_HERO));
@@ -2850,25 +2851,19 @@ function SettingsPage({ user, activeProfile, onBack, onProfileUpdate, onAvatarCh
   function toggleAutoplayPreviews(val) { setAutoplayPreviews(val); setPref(PREF_AUTOPLAY_PREVIEWS, val); }
   function toggleAutoplayHero(val) { setAutoplayHero(val); setPref(PREF_AUTOPLAY_HERO, val); }
 
-  async function saveProfile() {
-    setSavingProfile(true);
-    await supabase.from("viewer_profiles").update({ name: name.trim() }).eq("id", activeProfile.id);
-    setSavingProfile(false);
-    setSavedProfile(true);
-    setTimeout(() => setSavedProfile(false), 2500);
-    onProfileUpdate?.({ ...activeProfile, name: name.trim() });
-  }
+  const hasProfileChange = name.trim() !== savedName || avatarId !== savedAvatarId;
 
-  async function pickAvatar(avId) {
-    setAvatarId(avId);
-    setSavingAvatar(true);
+  async function saveProfile() {
+    setSaving(true);
     await Promise.all([
-      supabase.from("profiles").upsert({ id: user.id, avatar_id: avId }, { onConflict: "id" }),
-      supabase.from("viewer_profiles").update({ avatar_id: avId }).eq("id", activeProfile.id),
+      supabase.from("viewer_profiles").update({ name: name.trim(), avatar_id: avatarId }).eq("id", activeProfile.id),
+      supabase.from("profiles").upsert({ id: user.id, avatar_id: avatarId }, { onConflict: "id" }),
     ]);
-    setSavingAvatar(false);
-    onAvatarChange?.(avId);
-    onProfileUpdate?.({ ...activeProfile, avatar_id: avId });
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+    onAvatarChange?.(avatarId);
+    onProfileUpdate?.({ ...activeProfile, name: name.trim(), avatar_id: avatarId });
   }
 
   const sectionHead = { margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: "#555", textTransform: "uppercase", letterSpacing: 1 };
@@ -2902,14 +2897,14 @@ function SettingsPage({ user, activeProfile, onBack, onProfileUpdate, onAvatarCh
             <div style={{ width: 64, height: 64, borderRadius: "50%", background: currentAv?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: currentAv ? 26 : 22, fontWeight: 700, border: "3px solid #facc15", flexShrink: 0 }}>
               {currentAv ? currentAv.emoji : initials}
             </div>
-            <p style={{ margin: 0, fontSize: 12, color: "#444" }}>{savingAvatar ? "Saving…" : "Pick an avatar below"}</p>
+            <p style={{ margin: 0, fontSize: 12, color: "#444" }}>Pick an avatar below</p>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8, marginBottom: 20 }}>
             {SETTINGS_AVATARS.map(av => {
               const sel = avatarId === av.id;
               return (
-                <button key={av.id} onClick={() => pickAvatar(av.id)} style={{ background: "none", border: `2px solid ${sel ? "#facc15" : "transparent"}`, borderRadius: 10, padding: 3, cursor: "pointer", outline: "none", transition: "border-color 0.15s" }}>
+                <button key={av.id} onClick={() => setAvatarId(av.id)} style={{ background: "none", border: `2px solid ${sel ? "#facc15" : "transparent"}`, borderRadius: 10, padding: 3, cursor: "pointer", outline: "none", transition: "border-color 0.15s" }}>
                   <div style={{ width: "100%", aspectRatio: "1", borderRadius: 7, background: av.gradient, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>{av.emoji}</div>
                 </button>
               );
@@ -2920,9 +2915,11 @@ function SettingsPage({ user, activeProfile, onBack, onProfileUpdate, onAvatarCh
             <label style={{ display: "block", fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Display Name</label>
             <input type="text" value={name} onChange={e => setName(e.target.value)} maxLength={40} placeholder="Your name" style={inputStyle} />
           </div>
-          <button onClick={saveProfile} disabled={savingProfile} style={{ background: "#facc15", border: "none", borderRadius: 8, padding: "10px 24px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: savingProfile ? "not-allowed" : "pointer", opacity: savingProfile ? 0.7 : 1 }}>
-            {savingProfile ? "Saving…" : savedProfile ? "Saved ✓" : "Save Name"}
-          </button>
+          {hasProfileChange && (
+            <button onClick={saveProfile} disabled={saving} style={{ background: "#facc15", border: "none", borderRadius: 8, padding: "10px 24px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
+              {saving ? "Saving…" : saved ? "Saved ✓" : "Save Profile"}
+            </button>
+          )}
         </div>
 
         {/* Playback section */}
