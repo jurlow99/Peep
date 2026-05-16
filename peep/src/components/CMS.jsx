@@ -184,6 +184,7 @@ export function CMS({ onExit }) {
   const [xmltvImportDone, setXmltvImportDone] = useState(null);
   const [xmltvFileName, setXmltvFileName] = useState("");
   const [xmltvPreviewChannel, setXmltvPreviewChannel] = useState(null);
+  const [epgDetailEntry, setEpgDetailEntry] = useState(null);
   const [epgSources, setEpgSources] = useState(() => {
     try { return JSON.parse(localStorage.getItem("peep_epg_sources") || "{}"); } catch { return {}; }
   });
@@ -2004,7 +2005,14 @@ export function CMS({ onExit }) {
                           const now = new Date();
                           const isNow = start <= now && end > now;
                           return (
-                            <div key={entry.id} style={{ background: isNow ? "rgba(79,70,229,0.04)" : "#fff", border: `1px solid ${isNow ? "rgba(79,70,229,0.3)" : "#e2e8f0"}`, borderRadius: 10, padding: "14px 18px", marginBottom: 8, display: "flex", gap: 14, alignItems: "center" }}>
+                            <div key={entry.id}
+                              onClick={() => setEpgDetailEntry(entry)}
+                              style={{ background: isNow ? "rgba(79,70,229,0.04)" : "#fff", border: `1px solid ${isNow ? "rgba(79,70,229,0.3)" : "#e2e8f0"}`, borderRadius: 10, padding: "14px 18px", marginBottom: 8, display: "flex", gap: 14, alignItems: "center", cursor: "pointer", transition: "box-shadow 0.15s" }}
+                              onMouseEnter={e => e.currentTarget.style.boxShadow = "0 2px 12px rgba(0,0,0,0.07)"}
+                              onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
+                              {entry.thumbnail && (
+                                <img src={entry.thumbnail} alt="" style={{ width: 72, height: 40, objectFit: "cover", borderRadius: 6, flexShrink: 0 }} onError={e => e.target.style.display = "none"} />
+                              )}
                               <div style={{ flexShrink: 0, textAlign: "right", minWidth: 72 }}>
                                 <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{start.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}</p>
                                 <p style={{ margin: "1px 0 0", fontSize: 11, color: "#9ca3af" }}>{durationMins}m</p>
@@ -2017,8 +2025,8 @@ export function CMS({ onExit }) {
                                 {entry.description && <p style={{ margin: 0, fontSize: 12, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.description}</p>}
                               </div>
                               <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                                <button onClick={() => startEpgEdit(entry)} style={{ background: "rgba(79,70,229,0.08)", border: "1px solid rgba(79,70,229,0.2)", borderRadius: 5, padding: "5px 10px", color: "#4f46e5", fontSize: 11, cursor: "pointer" }}>Edit</button>
-                                <button onClick={() => setDeleteEpgConfirm(entry)} style={{ background: "rgba(220,38,38,0.07)", border: "1px solid rgba(220,38,38,0.15)", borderRadius: 5, padding: "5px 10px", color: "#dc2626", fontSize: 11, cursor: "pointer" }}>Remove</button>
+                                <button onClick={e => { e.stopPropagation(); startEpgEdit(entry); }} style={{ background: "rgba(79,70,229,0.08)", border: "1px solid rgba(79,70,229,0.2)", borderRadius: 5, padding: "5px 10px", color: "#4f46e5", fontSize: 11, cursor: "pointer" }}>Edit</button>
+                                <button onClick={e => { e.stopPropagation(); setDeleteEpgConfirm(entry); }} style={{ background: "rgba(220,38,38,0.07)", border: "1px solid rgba(220,38,38,0.15)", borderRadius: 5, padding: "5px 10px", color: "#dc2626", fontSize: 11, cursor: "pointer" }}>Remove</button>
                               </div>
                             </div>
                           );
@@ -3134,6 +3142,66 @@ export function CMS({ onExit }) {
           </>
         );
       })()}
+
+    {/* ── EPG PROGRAM DETAIL MODAL ── */}
+    {epgDetailEntry && (() => {
+      const entry = epgDetailEntry;
+      const start = new Date(entry.start_time);
+      const end = new Date(entry.end_time);
+      const durationMins = Math.round((end - start) / 60000);
+      const now = new Date();
+      const isNow = start <= now && end > now;
+      return (
+        <div style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+          onClick={e => { if (e.target === e.currentTarget) setEpgDetailEntry(null); }}>
+          <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 480, boxShadow: "0 24px 80px rgba(0,0,0,0.2)", overflow: "hidden" }}>
+            {entry.thumbnail && (
+              <div style={{ position: "relative", aspectRatio: "16/9", background: "#0f172a" }}>
+                <img src={entry.thumbnail} alt={entry.title} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} onError={e => e.target.parentElement.style.display = "none"} />
+                {isNow && (
+                  <div style={{ position: "absolute", top: 12, left: 12, background: "#ef4444", color: "#fff", fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: 0.5 }}>ON AIR</div>
+                )}
+              </div>
+            )}
+            <div style={{ padding: 24 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 16 }}>
+                <div>
+                  {!entry.thumbnail && isNow && <span style={{ display: "inline-block", background: "#ef4444", color: "#fff", fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4, letterSpacing: 0.5, marginBottom: 6 }}>ON AIR</span>}
+                  <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#0f172a" }}>{entry.title}</h2>
+                </div>
+                <button onClick={() => setEpgDetailEntry(null)} style={{ background: "none", border: "none", fontSize: 20, color: "#9ca3af", cursor: "pointer", flexShrink: 0, lineHeight: 1, padding: 0 }}>✕</button>
+              </div>
+              {entry.description && <p style={{ margin: "0 0 16px", fontSize: 14, color: "#4b5563", lineHeight: 1.6 }}>{entry.description}</p>}
+              <div style={{ display: "flex", gap: 24, padding: "14px 0", borderTop: "1px solid #f1f5f9", borderBottom: "1px solid #f1f5f9", marginBottom: 16 }}>
+                <div>
+                  <p style={{ margin: "0 0 2px", fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.5 }}>Starts</p>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{start.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}</p>
+                  <p style={{ margin: 0, fontSize: 11, color: "#6b7280" }}>{start.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</p>
+                </div>
+                <div>
+                  <p style={{ margin: "0 0 2px", fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.5 }}>Ends</p>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{end.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}</p>
+                </div>
+                <div>
+                  <p style={{ margin: "0 0 2px", fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.5 }}>Duration</p>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{durationMins >= 60 ? `${Math.floor(durationMins / 60)}h ${durationMins % 60}m` : `${durationMins}m`}</p>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => { setEpgDetailEntry(null); startEpgEdit(entry); }}
+                  style={{ flex: 1, background: "#4f46e5", color: "#fff", border: "none", borderRadius: 8, padding: "10px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  Edit Program
+                </button>
+                <button onClick={() => { setEpgDetailEntry(null); setDeleteEpgConfirm(entry); }}
+                  style={{ background: "rgba(220,38,38,0.07)", color: "#dc2626", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 8, padding: "10px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  Remove
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    })()}
 
     {/* ── XMLTV IMPORT MODAL ── */}
     {xmltvOpen && (
