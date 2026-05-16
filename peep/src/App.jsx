@@ -134,7 +134,7 @@ export default function App() {
   // if (!user.email_confirmed_at) return <EmailVerificationGate user={user} />;
   if (!activeProfile) return <ProfileSelect user={user} onSelect={selectProfile} />;
 
-  const profileScreenEl = profileOpen && <ProfileScreen user={user} onClose={() => setProfileOpen(false)} onAvatarChange={id => setUserAvatarId(id)} onSwitchProfile={switchProfile} onViewProfile={() => { setProfileOpen(false); setPage("profile"); }} onOpenSettings={() => { setProfileOpen(false); setPage("settings"); }} />;
+  const profileScreenEl = profileOpen && <ProfileScreen user={user} activeProfile={activeProfile} onClose={() => setProfileOpen(false)} onAvatarChange={id => setUserAvatarId(id)} onProfileUpdate={updated => { setActiveProfile(updated); localStorage.setItem(`peep_profile_${user.id}`, JSON.stringify(updated)); }} onSwitchProfile={switchProfile} onViewProfile={() => { setProfileOpen(false); setPage("profile"); }} onOpenSettings={() => { setProfileOpen(false); setPage("settings"); }} />;
 
   if (page === "player" && selectedVideo) {
     const handleBack = () => { setPage(selectedShow ? "show" : "home"); setSelectedVideo(null); };
@@ -2834,9 +2834,9 @@ const SETTINGS_AVATARS = [
 
 function SettingsPage({ user, activeProfile, onBack, onProfileUpdate, onAvatarChange, onSignOut }) {
   const [name, setName] = useState(activeProfile?.name || "");
-  const [savedName] = useState(activeProfile?.name || "");
+  const [savedName, setSavedName] = useState(activeProfile?.name || "");
   const [avatarId, setAvatarId] = useState(activeProfile?.avatar_id || null);
-  const [savedAvatarId] = useState(activeProfile?.avatar_id || null);
+  const [savedAvatarId, setSavedAvatarId] = useState(activeProfile?.avatar_id || null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [autoplayNext, setAutoplayNext] = useState(() => getPref(PREF_AUTOPLAY_NEXT));
@@ -2861,6 +2861,8 @@ function SettingsPage({ user, activeProfile, onBack, onProfileUpdate, onAvatarCh
     ]);
     setSaving(false);
     setSaved(true);
+    setSavedName(name.trim());
+    setSavedAvatarId(avatarId);
     setTimeout(() => setSaved(false), 2500);
     onAvatarChange?.(avatarId);
     onProfileUpdate?.({ ...activeProfile, name: name.trim(), avatar_id: avatarId });

@@ -22,7 +22,7 @@ export function avatarForId(id) {
   return PRESET_AVATARS.find(a => a.id === id) ?? null;
 }
 
-export function ProfileScreen({ user, onClose, onAvatarChange, onSwitchProfile, onViewProfile, onOpenSettings }) {
+export function ProfileScreen({ user, activeProfile, onClose, onAvatarChange, onProfileUpdate, onSwitchProfile, onViewProfile, onOpenSettings }) {
   const [profile, setProfile] = useState(null);
   const [savedAvatar, setSavedAvatar] = useState(null);
   const [selectedAvatar, setSelectedAvatar] = useState(null);
@@ -43,11 +43,19 @@ export function ProfileScreen({ user, onClose, onAvatarChange, onSwitchProfile, 
 
   async function handleSaveAvatar() {
     setSaving(true);
-    const { error } = await supabase.from("profiles").upsert({ id: user.id, avatar_id: selectedAvatar }, { onConflict: "id" });
+    const saves = [
+      supabase.from("profiles").upsert({ id: user.id, avatar_id: selectedAvatar }, { onConflict: "id" }),
+    ];
+    if (activeProfile?.id) {
+      saves.push(supabase.from("viewer_profiles").update({ avatar_id: selectedAvatar }).eq("id", activeProfile.id));
+    }
+    const results = await Promise.all(saves);
     setSaving(false);
-    if (!error) {
+    const hasError = results.some(r => r.error);
+    if (!hasError) {
       setSavedAvatar(selectedAvatar);
       onAvatarChange?.(selectedAvatar);
+      onProfileUpdate?.({ ...activeProfile, avatar_id: selectedAvatar });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     }
