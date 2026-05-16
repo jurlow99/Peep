@@ -583,7 +583,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
             </div>
           )}
           {!isMobile && (user ? (() => {
-            const av = avatarForId(activeProfile?.avatar_id);
+            const av = avatarForId(userAvatarId || activeProfile?.avatar_id);
             return (
               <div onClick={onProfileOpen} title={activeProfile?.name ?? "Profile"} style={{ width: 36, height: 36, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg, #6366f1, #8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? 16 : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
                 onMouseEnter={e => e.currentTarget.style.borderColor = "#facc15"}
