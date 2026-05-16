@@ -873,7 +873,7 @@ export function CMS({ onExit }) {
   const PAD = "clamp(24px, 4vw, 64px)";
 
   return (
-    <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
+    <div style={{ background: "#f8fafc", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#0f172a" }}>
       <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
 
       {/* Toast */}
@@ -884,14 +884,14 @@ export function CMS({ onExit }) {
             bottom: 32,
             right: 32,
             zIndex: 999,
-            background: toast.type === "error" ? "#7f1d1d" : "#14532d",
-            border: `1px solid ${toast.type === "error" ? "#991b1b" : "#166534"}`,
-            color: "#fff",
+            background: toast.type === "error" ? "#fef2f2" : "#f0fdf4",
+            border: `1px solid ${toast.type === "error" ? "#fca5a5" : "#86efac"}`,
+            color: toast.type === "error" ? "#991b1b" : "#166534",
             padding: "12px 20px",
             borderRadius: 8,
             fontSize: 13,
             fontWeight: 500,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
           }}
         >
           {toast.msg}
@@ -901,18 +901,18 @@ export function CMS({ onExit }) {
       {/* Hero Confirm Modal */}
       {heroConfirm && (
         <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ background: "#141414", border: "1px solid #2a2a2a", borderRadius: 14, padding: "36px 40px", width: 440, textAlign: "center" }}>
+          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "36px 40px", width: 440, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
             <div style={{ fontSize: 28, marginBottom: 12 }}>★</div>
-            <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "#fff" }}>Change Hero Banner?</p>
-            <p style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>
-              Currently showing: <span style={{ color: "#fcd34d", fontWeight: 600 }}>"{heroConfirm.current.title}"</span>
+            <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "#0f172a" }}>Change Hero Banner?</p>
+            <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>
+              Currently showing: <span style={{ color: "#4f46e5", fontWeight: 600 }}>"{heroConfirm.current.title}"</span>
             </p>
-            <p style={{ fontSize: 13, color: "#666", marginBottom: 28 }}>
-              Replace with: <span style={{ color: "#fff", fontWeight: 600 }}>"{heroConfirm.next.title}"</span>
+            <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 28 }}>
+              Replace with: <span style={{ color: "#0f172a", fontWeight: 600 }}>"{heroConfirm.next.title}"</span>
             </p>
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setHeroConfirm(null)} style={{ flex: 1, background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "11px", color: "#888", fontSize: 13, cursor: "pointer" }}>Cancel</button>
-              <button onClick={() => applyHero(heroConfirm.next, heroConfirm.type)} style={{ flex: 1, background: "#fcd34d", border: "none", borderRadius: 7, padding: "11px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Yes, Switch</button>
+              <button onClick={() => setHeroConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+              <button onClick={() => applyHero(heroConfirm.next, heroConfirm.type)} style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 7, padding: "11px", color: "#ffffff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Yes, Switch</button>
             </div>
           </div>
         </div>
@@ -921,13 +921,13 @@ export function CMS({ onExit }) {
       {/* Delete Modal - Carousel */}
       {deleteCarouselConfirm && (
         <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ background: "#141414", border: "1px solid #2a2a2a", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center" }}>
-            <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Delete this carousel?</p>
-            <p style={{ fontSize: 13, color: "#666", marginBottom: 28 }}>"{deleteCarouselConfirm.title}" will be permanently removed.</p>
+          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+            <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "#0f172a" }}>Delete this carousel?</p>
+            <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 28 }}>"{deleteCarouselConfirm.title}" will be permanently removed.</p>
             <div style={{ display: "flex", gap: 10 }}>
               <button
                 onClick={() => setDeleteCarouselConfirm(null)}
-                style={{ flex: 1, background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "11px", color: "#888", fontSize: 13, cursor: "pointer" }}
+                style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}
               >
                 Cancel
               </button>
@@ -943,23 +943,23 @@ export function CMS({ onExit }) {
       )}
 
       {/* Header */}
-      <div style={{ borderBottom: "1px solid #1a1a1a", padding: `0 ${PAD}`, display: "flex", alignItems: "center", justifyContent: "space-between", height: "auto", minHeight: 68, flexWrap: "wrap", gap: 16 }}>
+      <div style={{ borderBottom: "1px solid #e2e8f0", padding: `0 ${PAD}`, display: "flex", alignItems: "center", justifyContent: "space-between", height: "auto", minHeight: 68, flexWrap: "wrap", gap: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
           <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22 }}>
-            <span style={{ color: "#facc15" }}>peep.</span>
+            <span style={{ color: "#4f46e5" }}>peep.</span>
           </span>
-          <span style={{ fontSize: 13, color: "#555", borderLeft: "1px solid #2a2a2a", paddingLeft: 24 }}>
+          <span style={{ fontSize: 13, color: "#6b7280", borderLeft: "1px solid #e2e8f0", paddingLeft: 24 }}>
             Content Management System
           </span>
         </div>
         <button
           onClick={onExit}
           style={{
-            background: "rgba(255,255,255,0.06)",
-            border: "none",
-            borderRadius: 6,
+            background: "#f1f5f9",
+            border: "1px solid #e2e8f0",
+            borderRadius: 8,
             padding: "7px 16px",
-            color: "#888",
+            color: "#374151",
             fontSize: 13,
             cursor: "pointer",
             display: "flex",
@@ -975,20 +975,20 @@ export function CMS({ onExit }) {
       </div>
 
       {/* Tabs */}
-      <div style={{ borderBottom: "1px solid #1a1a1a", padding: `0 ${PAD}`, display: "flex", gap: 24, background: "rgba(0,0,0,0.5)" }}>
+      <div style={{ borderBottom: "1px solid #e2e8f0", padding: `0 ${PAD}`, display: "flex", gap: 24, background: "#ffffff" }}>
         <button
           onClick={() => setTab("videos")}
-          style={{ background: "transparent", border: "none", borderBottom: tab === "videos" ? "2px solid #facc15" : "none", color: tab === "videos" ? "#fff" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "videos" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}
+          style={{ background: "transparent", border: "none", borderBottom: tab === "videos" ? "2px solid #4f46e5" : "none", color: tab === "videos" ? "#0f172a" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "videos" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}
         >
           Content ({rows.length + showsList.length + podcastsList.length})
         </button>
-        <button onClick={() => setTab("carousels")} style={{ background: "transparent", border: "none", borderBottom: tab === "carousels" ? "2px solid #facc15" : "none", color: tab === "carousels" ? "#fff" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "carousels" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
+        <button onClick={() => setTab("carousels")} style={{ background: "transparent", border: "none", borderBottom: tab === "carousels" ? "2px solid #4f46e5" : "none", color: tab === "carousels" ? "#0f172a" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "carousels" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
           Carousels ({carousels.length})
         </button>
-        <button onClick={() => setTab("live")} style={{ background: "transparent", border: "none", borderBottom: tab === "live" ? "2px solid #ef4444" : "none", color: tab === "live" ? "#ef4444" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "live" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
+        <button onClick={() => setTab("live")} style={{ background: "transparent", border: "none", borderBottom: tab === "live" ? "2px solid #ef4444" : "none", color: tab === "live" ? "#ef4444" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "live" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
           Live ({liveList.length})
         </button>
-        <button onClick={() => setTab("reports")} style={{ background: "transparent", border: "none", borderBottom: tab === "reports" ? "2px solid #34d399" : "none", color: tab === "reports" ? "#34d399" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "reports" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
+        <button onClick={() => setTab("reports")} style={{ background: "transparent", border: "none", borderBottom: tab === "reports" ? "2px solid #34d399" : "none", color: tab === "reports" ? "#34d399" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "reports" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
           Reports
         </button>
       </div>
@@ -997,14 +997,14 @@ export function CMS({ onExit }) {
 
         {/* ────── VIDEOS SUB-TAB BAR ────── */}
         {tab === "videos" && (
-          <div style={{ gridColumn: "1 / -1", display: "flex", gap: 6, marginBottom: 8, paddingBottom: 20, borderBottom: "1px solid #1a1a1a" }}>
+          <div style={{ gridColumn: "1 / -1", display: "flex", gap: 6, marginBottom: 8, paddingBottom: 20, borderBottom: "1px solid #e2e8f0" }}>
             {[
               { key: "movies", label: "Movies", count: rows.length },
               { key: "series", label: "Series", count: showsList.length },
               { key: "episodes", label: "Episodes", count: null },
               { key: "podcasts", label: "Podcasts", count: podcastsList.length },
             ].map(({ key, label, count }) => (
-              <button key={key} onClick={() => setVideoSubTab(key)} style={{ background: videoSubTab === key ? "rgba(250,204,21,0.12)" : "transparent", border: `1px solid ${videoSubTab === key ? "rgba(250,204,21,0.4)" : "#2a2a2a"}`, borderRadius: 8, padding: "7px 16px", color: videoSubTab === key ? "#facc15" : "#666", fontSize: 13, fontWeight: videoSubTab === key ? 600 : 400, cursor: "pointer", transition: "all 0.15s" }}>
+              <button key={key} onClick={() => setVideoSubTab(key)} style={{ background: videoSubTab === key ? "rgba(79,70,229,0.08)" : "transparent", border: `1px solid ${videoSubTab === key ? "rgba(79,70,229,0.3)" : "#e2e8f0"}`, borderRadius: 8, padding: "7px 16px", color: videoSubTab === key ? "#4f46e5" : "#6b7280", fontSize: 13, fontWeight: videoSubTab === key ? 600 : 400, cursor: "pointer", transition: "all 0.15s" }}>
                 {label}{count !== null ? ` (${count})` : ""}
               </button>
             ))}
@@ -1015,8 +1015,8 @@ export function CMS({ onExit }) {
         {tab === "videos" && videoSubTab === "movies" && (
           <>
             {/* ── Edit Panel ── */}
-            <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, padding: 32, position: "sticky", top: 24, maxHeight: "90vh", overflowY: "auto" }}>
-              <h2 style={{ margin: "0 0 28px", fontSize: 17, fontWeight: 600, color: "#e5e5e5" }}>
+            <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: 32, position: "sticky", top: 24, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+              <h2 style={{ margin: "0 0 28px", fontSize: 17, fontWeight: 600, color: "#0f172a" }}>
                 {editingId ? "Edit Row" : "Add New Row"}
               </h2>
 
@@ -1071,10 +1071,10 @@ export function CMS({ onExit }) {
 
             {/* Hero Image */}
             <div>
-              <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>
+              <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>
                 Hero Image
               </label>
-              <p style={{ fontSize: 11, color: "#3a3a3a", margin: "0 0 8px" }}>Landscape · 1920×1080px · full-screen banner · Safe zone: center 1400×800 (stay 260px from sides, 140px from top/bottom)</p>
+              <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>Landscape · 1920×1080px · full-screen banner · Safe zone: center 1400×800 (stay 260px from sides, 140px from top/bottom)</p>
               <ImageUploader
                 label="Upload Hero Image (JPG/PNG)"
                 folder="hero"
@@ -1082,19 +1082,21 @@ export function CMS({ onExit }) {
                 onError={err => showToast("Upload failed: " + err, "error")}
               />
               <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "8px 0" }}>
-                <div style={{ flex: 1, height: 1, background: "#1e1e1e" }} />
-                <span style={{ fontSize: 11, color: "#333" }}>or paste URL</span>
-                <div style={{ flex: 1, height: 1, background: "#1e1e1e" }} />
+                <div style={{ flex: 1, height: 1, background: "#e2e8f0" }} />
+                <span style={{ fontSize: 11, color: "#9ca3af" }}>or paste URL</span>
+                <div style={{ flex: 1, height: 1, background: "#e2e8f0" }} />
               </div>
               <input
                 type="text"
                 value={form.thumbnail}
                 onChange={e => setForm(f => ({ ...f, thumbnail: e.target.value }))}
                 placeholder="https://..."
-                style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none" }}
+                style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }}
+                onFocus={e => (e.target.style.borderColor = "#4f46e5")}
+                onBlur={e => (e.target.style.borderColor = "#e2e8f0")}
               />
               {form.thumbnail && (
-                <div style={{ marginTop: 10, borderRadius: 6, overflow: "hidden", border: "1px solid #1e1e1e" }}>
+                <div style={{ marginTop: 10, borderRadius: 6, overflow: "hidden", border: "1px solid #e2e8f0" }}>
                   <img src={form.thumbnail} alt="Hero preview" style={{ width: "100%", height: 110, objectFit: "cover" }} onError={e => { e.target.style.display = "none"; }} />
                 </div>
               )}
@@ -1102,10 +1104,10 @@ export function CMS({ onExit }) {
 
             {/* Poster Image */}
             <div>
-              <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>
+              <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>
                 Poster
               </label>
-              <p style={{ fontSize: 11, color: "#3a3a3a", margin: "0 0 8px" }}>Portrait · 400×600px · browse cards (optional) · Safe zone: center 320×460 (stay 40px from sides, 70px from top, 100px from bottom — title overlay)</p>
+              <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>Portrait · 400×600px · browse cards (optional) · Safe zone: center 320×460 (stay 40px from sides, 70px from top, 100px from bottom — title overlay)</p>
               <ImageUploader
                 label="Upload Poster (JPG/PNG)"
                 folder="posters"
@@ -1113,19 +1115,21 @@ export function CMS({ onExit }) {
                 onError={err => showToast("Upload failed: " + err, "error")}
               />
               <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "8px 0" }}>
-                <div style={{ flex: 1, height: 1, background: "#1e1e1e" }} />
-                <span style={{ fontSize: 11, color: "#333" }}>or paste URL</span>
-                <div style={{ flex: 1, height: 1, background: "#1e1e1e" }} />
+                <div style={{ flex: 1, height: 1, background: "#e2e8f0" }} />
+                <span style={{ fontSize: 11, color: "#9ca3af" }}>or paste URL</span>
+                <div style={{ flex: 1, height: 1, background: "#e2e8f0" }} />
               </div>
               <input
                 type="text"
                 value={form.poster}
                 onChange={e => setForm(f => ({ ...f, poster: e.target.value }))}
                 placeholder="https://..."
-                style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none" }}
+                style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }}
+                onFocus={e => (e.target.style.borderColor = "#4f46e5")}
+                onBlur={e => (e.target.style.borderColor = "#e2e8f0")}
               />
               {form.poster && (
-                <div style={{ marginTop: 10, borderRadius: 6, overflow: "hidden", border: "1px solid #1e1e1e", width: 80 }}>
+                <div style={{ marginTop: 10, borderRadius: 6, overflow: "hidden", border: "1px solid #e2e8f0", width: 80 }}>
                   <img src={form.poster} alt="Poster preview" style={{ width: "100%", aspectRatio: "2/3", objectFit: "cover" }} onError={e => { e.target.style.display = "none"; }} />
                 </div>
               )}
@@ -1157,7 +1161,7 @@ export function CMS({ onExit }) {
 
             {/* Description */}
             <div>
-              <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>
+              <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>
                 Description
               </label>
               <textarea
@@ -1167,18 +1171,18 @@ export function CMS({ onExit }) {
                 placeholder="Short synopsis..."
                 style={{
                   width: "100%",
-                  background: "#0a0a0a",
-                  border: "1px solid #2a2a2a",
+                  background: "#ffffff",
+                  border: "1px solid #e2e8f0",
                   borderRadius: 7,
                   padding: "10px 12px",
-                  color: "#fff",
+                  color: "#0f172a",
                   fontSize: 13,
                   outline: "none",
                   resize: "vertical",
                   fontFamily: "inherit",
                 }}
-                onFocus={e => (e.target.style.borderColor = "#facc15")}
-                onBlur={e => (e.target.style.borderColor = "#2a2a2a")}
+                onFocus={e => (e.target.style.borderColor = "#4f46e5")}
+                onBlur={e => (e.target.style.borderColor = "#e2e8f0")}
               />
             </div>
           </div>
@@ -1190,7 +1194,7 @@ export function CMS({ onExit }) {
               disabled={saving}
               style={{
                 flex: 1,
-                background: "#facc15",
+                background: "#4f46e5",
                 border: "none",
                 borderRadius: 7,
                 padding: "12px",
@@ -1207,11 +1211,11 @@ export function CMS({ onExit }) {
               <button
                 onClick={cancelEdit}
                 style={{
-                  background: "#1a1a1a",
-                  border: "1px solid #2a2a2a",
+                  background: "#f1f5f9",
+                  border: "1px solid #e2e8f0",
                   borderRadius: 7,
                   padding: "12px 20px",
-                  color: "#888",
+                  color: "#374151",
                   fontSize: 13,
                   cursor: "pointer",
                 }}
@@ -1234,11 +1238,11 @@ export function CMS({ onExit }) {
                 onChange={e => setSearchFilter(e.target.value)}
                 style={{
                   width: "100%",
-                  background: "#111",
-                  border: "1px solid #2a2a2a",
+                  background: "#ffffff",
+                  border: "1px solid #e2e8f0",
                   borderRadius: 8,
                   padding: "10px 14px",
-                  color: "#fff",
+                  color: "#0f172a",
                   fontSize: 13,
                   outline: "none",
                 }}
@@ -1250,11 +1254,11 @@ export function CMS({ onExit }) {
                   key={cat}
                   onClick={() => setCategoryFilter(cat)}
                   style={{
-                    background: categoryFilter === cat ? "#facc15" : "#1a1a1a",
-                    border: `1px solid ${categoryFilter === cat ? "#facc15" : "#2a2a2a"}`,
+                    background: categoryFilter === cat ? "#4f46e5" : "#f1f5f9",
+                    border: `1px solid ${categoryFilter === cat ? "#4f46e5" : "#e2e8f0"}`,
                     borderRadius: 6,
                     padding: "8px 14px",
-                    color: categoryFilter === cat ? "#fff" : "#888",
+                    color: categoryFilter === cat ? "#fff" : "#6b7280",
                     fontSize: 12,
                     cursor: "pointer",
                     fontWeight: categoryFilter === cat ? 600 : 400,
@@ -1267,11 +1271,11 @@ export function CMS({ onExit }) {
             <button
               onClick={loadRows}
               style={{
-                background: "#1a1a1a",
-                border: "1px solid #2a2a2a",
+                background: "#f1f5f9",
+                border: "1px solid #e2e8f0",
                 borderRadius: 6,
                 padding: "10px 14px",
-                color: "#888",
+                color: "#6b7280",
                 fontSize: 12,
                 cursor: "pointer",
               }}
@@ -1283,10 +1287,11 @@ export function CMS({ onExit }) {
           {/* Table Header */}
           <div
             style={{
-              background: "#111",
-              border: "1px solid #1e1e1e",
-              borderRadius: 8,
+              background: "#ffffff",
+              border: "1px solid #e2e8f0",
+              borderRadius: 12,
               overflow: "hidden",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
             }}
           >
             <div
@@ -1295,16 +1300,16 @@ export function CMS({ onExit }) {
                 gridTemplateColumns: "80px 1fr 100px 100px 100px 100px",
                 gap: 16,
                 padding: "14px 16px",
-                borderBottom: "1px solid #1e1e1e",
-                background: "#0a0a0a",
+                borderBottom: "1px solid #e2e8f0",
+                background: "#f8fafc",
               }}
             >
-              <span style={{ fontSize: 11, color: "#555", fontWeight: 600, textTransform: "uppercase" }}>Thumb</span>
-              <span style={{ fontSize: 11, color: "#555", fontWeight: 600, textTransform: "uppercase" }}>Title & Info</span>
-              <span style={{ fontSize: 11, color: "#555", fontWeight: 600, textTransform: "uppercase" }}>Category</span>
-              <span style={{ fontSize: 11, color: "#555", fontWeight: 600, textTransform: "uppercase" }}>Year</span>
-              <span style={{ fontSize: 11, color: "#555", fontWeight: 600, textTransform: "uppercase" }}>Score</span>
-              <span style={{ fontSize: 11, color: "#555", fontWeight: 600, textTransform: "uppercase" }}>Actions</span>
+              <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 600, textTransform: "uppercase" }}>Thumb</span>
+              <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 600, textTransform: "uppercase" }}>Title & Info</span>
+              <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 600, textTransform: "uppercase" }}>Category</span>
+              <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 600, textTransform: "uppercase" }}>Year</span>
+              <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 600, textTransform: "uppercase" }}>Score</span>
+              <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 600, textTransform: "uppercase" }}>Actions</span>
             </div>
 
             {/* Rows */}
@@ -1313,7 +1318,7 @@ export function CMS({ onExit }) {
                 <Spinner />
               </div>
             ) : filteredRows.length === 0 ? (
-              <div style={{ padding: "40px", textAlign: "center", color: "#555", fontSize: 14 }}>
+              <div style={{ padding: "40px", textAlign: "center", color: "#6b7280", fontSize: 14 }}>
                 {rows.length === 0 ? "No rows yet. Add one using the form." : "No results found."}
               </div>
             ) : (
@@ -1326,10 +1331,10 @@ export function CMS({ onExit }) {
                       gridTemplateColumns: "80px 1fr 100px 100px 100px 100px",
                       gap: 16,
                       padding: "12px 16px",
-                      borderBottom: idx < filteredRows.length - 1 ? "1px solid #0f0f0f" : "none",
+                      borderBottom: idx < filteredRows.length - 1 ? "1px solid #f1f5f9" : "none",
                       alignItems: "center",
-                      background: editingId === row.id ? "#1a0a0a" : "transparent",
-                      borderLeft: editingId === row.id ? "2px solid #facc15" : "none",
+                      background: editingId === row.id ? "rgba(79,70,229,0.04)" : "transparent",
+                      borderLeft: editingId === row.id ? "2px solid #4f46e5" : "none",
                       paddingLeft: editingId === row.id ? 14 : 16,
                       transition: "background 0.2s",
                     }}
@@ -1344,7 +1349,7 @@ export function CMS({ onExit }) {
                           height: 40,
                           objectFit: "cover",
                           borderRadius: 4,
-                          background: "#1a1a1a",
+                          background: "#f1f5f9",
                         }}
                         onError={e => {
                           e.target.style.display = "none";
@@ -1354,10 +1359,10 @@ export function CMS({ onExit }) {
 
                     {/* Title & Info */}
                     <div>
-                      <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 600, color: "#fff" }}>
+                      <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>
                         {row.title}
                       </p>
-                      <div style={{ display: "flex", gap: 8, fontSize: 11, color: "#666" }}>
+                      <div style={{ display: "flex", gap: 8, fontSize: 11, color: "#6b7280" }}>
                         {row.duration && <span>{row.duration}</span>}
                         {row.rating && <span>{row.rating}</span>}
                       </div>
@@ -1365,31 +1370,31 @@ export function CMS({ onExit }) {
 
                     {/* Category */}
                     <div>
-                      <span style={{ fontSize: 12, color: "#facc15", fontWeight: 500 }}>
+                      <span style={{ fontSize: 12, color: "#4f46e5", fontWeight: 500 }}>
                         {row.category}
                       </span>
                     </div>
 
                     {/* Year */}
                     <div>
-                      <span style={{ fontSize: 12, color: "#888" }}>
+                      <span style={{ fontSize: 12, color: "#6b7280" }}>
                         {row.year || "—"}
                       </span>
                     </div>
 
                     {/* Score */}
                     <div>
-                      <span style={{ fontSize: 12, color: row.score ? "#4ade80" : "#555", fontWeight: 500 }}>
+                      <span style={{ fontSize: 12, color: row.score ? "#4ade80" : "#9ca3af", fontWeight: 500 }}>
                         {row.score ? row.score + "%" : "—"}
                       </span>
                     </div>
 
                     {/* Actions */}
                     <div style={{ display: "flex", gap: 6 }}>
-                      <button onClick={() => setHeroVideo(row)} style={{ background: row.featured ? "rgba(255,200,0,0.15)" : "rgba(255,255,255,0.04)", border: `1px solid ${row.featured ? "rgba(255,200,0,0.4)" : "#2a2a2a"}`, borderRadius: 5, padding: "5px 10px", color: row.featured ? "#fcd34d" : "#555", fontSize: 11, cursor: "pointer", fontWeight: 500 }} title="Set as hero banner">
+                      <button onClick={() => setHeroVideo(row)} style={{ background: row.featured ? "rgba(79,70,229,0.1)" : "#f8fafc", border: `1px solid ${row.featured ? "rgba(79,70,229,0.3)" : "#e2e8f0"}`, borderRadius: 5, padding: "5px 10px", color: row.featured ? "#4f46e5" : "#6b7280", fontSize: 11, cursor: "pointer", fontWeight: 500 }} title="Set as hero banner">
                         {row.featured ? "★ Hero" : "☆ Hero"}
                       </button>
-                      <button onClick={() => startEdit(row)} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid #2a2a2a", borderRadius: 5, padding: "5px 10px", color: "#aaa", fontSize: 11, cursor: "pointer", fontWeight: 500 }}>Edit</button>
+                      <button onClick={() => startEdit(row)} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 5, padding: "5px 10px", color: "#374151", fontSize: 11, cursor: "pointer", fontWeight: 500 }}>Edit</button>
                       <button onClick={() => setDeleteConfirm(row)} style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 5, padding: "5px 10px", color: "#f87171", fontSize: 11, cursor: "pointer", fontWeight: 500 }}>Delete</button>
                     </div>
                   </div>
@@ -1399,7 +1404,7 @@ export function CMS({ onExit }) {
           </div>
 
           {/* Stats */}
-          <div style={{ marginTop: 16, padding: "12px 16px", background: "#111", border: "1px solid #1e1e1e", borderRadius: 8, fontSize: 12, color: "#666" }}>
+          <div style={{ marginTop: 16, padding: "12px 16px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 12, color: "#6b7280" }}>
             Showing {filteredRows.length} of {rows.length} rows
           </div>
         </div>
@@ -1409,8 +1414,8 @@ export function CMS({ onExit }) {
         {/* ────── VIDEOS TAB — SERIES ────── */}
         {tab === "videos" && videoSubTab === "series" && (
           <>
-            <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, padding: 32, position: "sticky", top: 24, maxHeight: "90vh", overflowY: "auto" }}>
-              <h2 style={{ margin: "0 0 28px", fontSize: 17, fontWeight: 600, color: "#e5e5e5" }}>{editingShowId ? "Edit Show" : "Add New Show"}</h2>
+            <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: 32, position: "sticky", top: 24, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+              <h2 style={{ margin: "0 0 28px", fontSize: 17, fontWeight: 600, color: "#0f172a" }}>{editingShowId ? "Edit Show" : "Add New Show"}</h2>
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 <FieldInput label="Title *" value={showForm.title} onChange={v => setShowForm(f => ({ ...f, title: v }))} placeholder="e.g. The Twilight Zone" />
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -1423,50 +1428,50 @@ export function CMS({ onExit }) {
                 </div>
                 <FieldInput label="Tags (comma-separated)" value={showForm.tags} onChange={v => setShowForm(f => ({ ...f, tags: v }))} placeholder="Anthology, Black & White, Classic" />
                 <div>
-                  <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Hero Image</label>
-                  <p style={{ fontSize: 11, color: "#3a3a3a", margin: "0 0 8px" }}>Landscape · 1920×1080px · banner background · Safe zone: center 1400×800 (stay 260px from sides, 140px from top/bottom)</p>
+                  <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Hero Image</label>
+                  <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>Landscape · 1920×1080px · banner background · Safe zone: center 1400×800 (stay 260px from sides, 140px from top/bottom)</p>
                   <ImageUploader label="Upload Hero Image" folder="hero" onUploadSuccess={url => setShowForm(f => ({ ...f, thumbnail: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
-                  <input type="text" value={showForm.thumbnail} onChange={e => setShowForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none" }} />
+                  <input type="text" value={showForm.thumbnail} onChange={e => setShowForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
                   {showForm.thumbnail && <img src={showForm.thumbnail} alt="" style={{ width: "100%", height: 100, objectFit: "cover", borderRadius: 6, marginTop: 8 }} onError={e => { e.target.style.display = "none"; }} />}
                 </div>
                 <div>
-                  <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Poster</label>
-                  <p style={{ fontSize: 11, color: "#3a3a3a", margin: "0 0 8px" }}>Portrait · 400×600px · card image · Safe zone: center 320×460 (stay 40px from sides, 70px from top, 100px from bottom — title overlay)</p>
+                  <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Poster</label>
+                  <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>Portrait · 400×600px · card image · Safe zone: center 320×460 (stay 40px from sides, 70px from top, 100px from bottom — title overlay)</p>
                   <ImageUploader label="Upload Poster" folder="posters" onUploadSuccess={url => setShowForm(f => ({ ...f, poster: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
-                  <input type="text" value={showForm.poster} onChange={e => setShowForm(f => ({ ...f, poster: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none" }} />
+                  <input type="text" value={showForm.poster} onChange={e => setShowForm(f => ({ ...f, poster: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
                   {showForm.poster && <img src={showForm.poster} alt="" style={{ width: 70, aspectRatio: "2/3", objectFit: "cover", borderRadius: 6, marginTop: 8 }} onError={e => { e.target.style.display = "none"; }} />}
                 </div>
                 <div>
-                  <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Description</label>
-                  <textarea value={showForm.description} onChange={e => setShowForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Short synopsis..." style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit" }} />
+                  <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Description</label>
+                  <textarea value={showForm.description} onChange={e => setShowForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Short synopsis..." style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
                 </div>
                 <FieldInput label="Trailer URL" value={showForm.trailer_url} onChange={v => setShowForm(f => ({ ...f, trailer_url: v }))} placeholder="https://youtube.com/watch?v=... (optional)" />
               </div>
               <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
-                <button onClick={saveShow} disabled={showSaving} style={{ flex: 1, background: "#facc15", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: showSaving ? "not-allowed" : "pointer", opacity: showSaving ? 0.7 : 1 }}>
+                <button onClick={saveShow} disabled={showSaving} style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: showSaving ? "not-allowed" : "pointer", opacity: showSaving ? 0.7 : 1 }}>
                   {showSaving ? "Saving…" : editingShowId ? "Save Changes" : "Add Show"}
                 </button>
-                {editingShowId && <button onClick={cancelShowEdit} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "12px 20px", color: "#888", fontSize: 13, cursor: "pointer" }}>Cancel</button>}
+                {editingShowId && <button onClick={cancelShowEdit} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>}
               </div>
             </div>
 
             <div>
-              <h3 style={{ margin: "0 0 20px", fontSize: 15, fontWeight: 600, color: "#e5e5e5" }}>All Shows ({showsList.length})</h3>
-              {showsLoading ? <div style={{ color: "#555", padding: 20 }}>Loading...</div> : showsList.length === 0 ? (
-                <div style={{ color: "#555", padding: 40, textAlign: "center" }}>No shows yet.</div>
+              <h3 style={{ margin: "0 0 20px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>All Shows ({showsList.length})</h3>
+              {showsLoading ? <div style={{ color: "#6b7280", padding: 20 }}>Loading...</div> : showsList.length === 0 ? (
+                <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>No shows yet.</div>
               ) : showsList.map(show => (
-                <div key={show.id} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "16px 20px", marginBottom: 12, display: "flex", gap: 16, alignItems: "center" }}>
+                <div key={show.id} style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "16px 20px", marginBottom: 12, display: "flex", gap: 16, alignItems: "center" }}>
                   {(show.poster || show.thumbnail) && <img src={show.poster || show.thumbnail} alt={show.title} style={{ width: 44, height: 64, objectFit: "cover", borderRadius: 5, flexShrink: 0 }} />}
                   <div style={{ flex: 1 }}>
                     <p style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 600 }}>{show.title}</p>
-                    <p style={{ margin: 0, fontSize: 12, color: "#666" }}>{show.category} · {show.year} · {show.rating}</p>
+                    <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>{show.category} · {show.year} · {show.rating}</p>
                   </div>
                   <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={() => setHeroShow(show)} style={{ background: show.featured ? "rgba(255,200,0,0.15)" : "rgba(255,255,255,0.04)", border: `1px solid ${show.featured ? "rgba(255,200,0,0.4)" : "#2a2a2a"}`, borderRadius: 5, padding: "5px 10px", color: show.featured ? "#fcd34d" : "#555", fontSize: 11, cursor: "pointer", fontWeight: 500 }}>
+                    <button onClick={() => setHeroShow(show)} style={{ background: show.featured ? "rgba(79,70,229,0.1)" : "#f8fafc", border: `1px solid ${show.featured ? "rgba(79,70,229,0.3)" : "#e2e8f0"}`, borderRadius: 5, padding: "5px 10px", color: show.featured ? "#4f46e5" : "#6b7280", fontSize: 11, cursor: "pointer", fontWeight: 500 }}>
                       {show.featured ? "★ Hero" : "☆ Hero"}
                     </button>
                     <button onClick={() => { setVideoSubTab("episodes"); setSelectedShowForEpisodes(String(show.id)); loadEpisodes(String(show.id)); setEpisodeForm({ ...EMPTY_EPISODE, show_id: String(show.id) }); }} style={{ background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.2)", borderRadius: 5, padding: "5px 10px", color: "#60a5fa", fontSize: 11, cursor: "pointer", fontWeight: 500 }}>Episodes</button>
-                    <button onClick={() => startShowEdit(show)} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid #2a2a2a", borderRadius: 5, padding: "5px 10px", color: "#aaa", fontSize: 11, cursor: "pointer" }}>Edit</button>
+                    <button onClick={() => startShowEdit(show)} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 5, padding: "5px 10px", color: "#374151", fontSize: 11, cursor: "pointer" }}>Edit</button>
                     <button onClick={() => setDeleteShowConfirm(show)} style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 5, padding: "5px 10px", color: "#f87171", fontSize: 11, cursor: "pointer" }}>Delete</button>
                   </div>
                 </div>
@@ -1475,11 +1480,11 @@ export function CMS({ onExit }) {
 
             {deleteShowConfirm && (
               <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <div style={{ background: "#141414", border: "1px solid #2a2a2a", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center" }}>
-                  <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Delete "{deleteShowConfirm.title}"?</p>
-                  <p style={{ fontSize: 13, color: "#666", marginBottom: 28 }}>All episodes will also be deleted.</p>
+                <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+                  <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "#0f172a" }}>Delete "{deleteShowConfirm.title}"?</p>
+                  <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 28 }}>All episodes will also be deleted.</p>
                   <div style={{ display: "flex", gap: 10 }}>
-                    <button onClick={() => setDeleteShowConfirm(null)} style={{ flex: 1, background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "11px", color: "#888", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    <button onClick={() => setDeleteShowConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
                     <button onClick={() => deleteShow(deleteShowConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
                   </div>
                 </div>
@@ -1491,13 +1496,13 @@ export function CMS({ onExit }) {
         {/* ────── VIDEOS TAB — EPISODES ────── */}
         {tab === "videos" && videoSubTab === "episodes" && (
           <>
-            <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, padding: 32, position: "sticky", top: 24, maxHeight: "90vh", overflowY: "auto" }}>
-              <h2 style={{ margin: "0 0 20px", fontSize: 17, fontWeight: 600, color: "#e5e5e5" }}>{editingEpisodeId ? "Edit Episode" : "Add Episode"}</h2>
+            <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: 32, position: "sticky", top: 24, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+              <h2 style={{ margin: "0 0 20px", fontSize: 17, fontWeight: 600, color: "#0f172a" }}>{editingEpisodeId ? "Edit Episode" : "Add Episode"}</h2>
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 <div>
-                  <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Show *</label>
+                  <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Show *</label>
                   <select value={selectedShowForEpisodes} onChange={e => { setSelectedShowForEpisodes(e.target.value); loadEpisodes(e.target.value); setEpisodeForm({ ...EMPTY_EPISODE, show_id: e.target.value }); cancelEpisodeEdit(); }}
-                    style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none" }}>
+                    style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }}>
                     <option value="">Select a show...</option>
                     {showsList.map(s => <option key={s.id} value={String(s.id)}>{s.title}</option>)}
                   </select>
@@ -1510,45 +1515,45 @@ export function CMS({ onExit }) {
                 <FieldInput label="Duration" value={episodeForm.duration} onChange={v => setEpisodeForm(f => ({ ...f, duration: v }))} placeholder="42 min" />
                 <FieldInput label="Video URL" value={episodeForm.url} onChange={v => setEpisodeForm(f => ({ ...f, url: v }))} placeholder="https://archive.org/..." />
                 <div>
-                  <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Episode Thumbnail</label>
-                  <p style={{ fontSize: 11, color: "#3a3a3a", margin: "0 0 8px" }}>16:9 still from the episode (optional)</p>
+                  <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Episode Thumbnail</label>
+                  <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>16:9 still from the episode (optional)</p>
                   <ImageUploader label="Upload Thumbnail" folder="episodes" onUploadSuccess={url => setEpisodeForm(f => ({ ...f, thumbnail: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
-                  <input type="text" value={episodeForm.thumbnail} onChange={e => setEpisodeForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none" }} />
+                  <input type="text" value={episodeForm.thumbnail} onChange={e => setEpisodeForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
                 </div>
                 <div>
-                  <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Description</label>
-                  <textarea value={episodeForm.description} onChange={e => setEpisodeForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Episode synopsis..." style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit" }} />
+                  <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Description</label>
+                  <textarea value={episodeForm.description} onChange={e => setEpisodeForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Episode synopsis..." style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
                 </div>
               </div>
               <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
-                <button onClick={saveEpisode} disabled={episodeSaving || !selectedShowForEpisodes} style={{ flex: 1, background: "#facc15", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: (episodeSaving || !selectedShowForEpisodes) ? "not-allowed" : "pointer", opacity: (episodeSaving || !selectedShowForEpisodes) ? 0.5 : 1 }}>
+                <button onClick={saveEpisode} disabled={episodeSaving || !selectedShowForEpisodes} style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: (episodeSaving || !selectedShowForEpisodes) ? "not-allowed" : "pointer", opacity: (episodeSaving || !selectedShowForEpisodes) ? 0.5 : 1 }}>
                   {episodeSaving ? "Saving…" : editingEpisodeId ? "Save Changes" : "Add Episode"}
                 </button>
-                {editingEpisodeId && <button onClick={cancelEpisodeEdit} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "12px 20px", color: "#888", fontSize: 13, cursor: "pointer" }}>Cancel</button>}
+                {editingEpisodeId && <button onClick={cancelEpisodeEdit} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>}
               </div>
             </div>
 
             <div>
               {!selectedShowForEpisodes ? (
-                <div style={{ padding: 40, textAlign: "center", color: "#555" }}>Select a show to manage its episodes.</div>
+                <div style={{ padding: 40, textAlign: "center", color: "#6b7280" }}>Select a show to manage its episodes.</div>
               ) : (
                 <>
-                  <h3 style={{ margin: "0 0 20px", fontSize: 15, fontWeight: 600, color: "#e5e5e5" }}>
+                  <h3 style={{ margin: "0 0 20px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>
                     Episodes — {showsList.find(s => String(s.id) === selectedShowForEpisodes)?.title}
                   </h3>
-                  {episodesLoading ? <div style={{ color: "#555", padding: 20 }}>Loading...</div> : episodesList.length === 0 ? (
-                    <div style={{ color: "#555", padding: 40, textAlign: "center" }}>No episodes yet. Add one using the form.</div>
+                  {episodesLoading ? <div style={{ color: "#6b7280", padding: 20 }}>Loading...</div> : episodesList.length === 0 ? (
+                    <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>No episodes yet. Add one using the form.</div>
                   ) : episodesList.map(ep => (
-                    <div key={ep.id} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "14px 18px", marginBottom: 10, display: "flex", alignItems: "center", gap: 16 }}>
-                      <div style={{ flexShrink: 0, width: 80, aspectRatio: "16/9", borderRadius: 5, overflow: "hidden", background: "#1a1a1a" }}>
+                    <div key={ep.id} style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 18px", marginBottom: 10, display: "flex", alignItems: "center", gap: 16 }}>
+                      <div style={{ flexShrink: 0, width: 80, aspectRatio: "16/9", borderRadius: 5, overflow: "hidden", background: "#f1f5f9" }}>
                         {ep.thumbnail && <img src={ep.thumbnail} alt={ep.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
                       </div>
                       <div style={{ flex: 1 }}>
                         <p style={{ margin: "0 0 3px", fontSize: 13, fontWeight: 600 }}>S{ep.season} E{ep.episode_number} · {ep.title}</p>
-                        <p style={{ margin: 0, fontSize: 11, color: "#555" }}>{ep.duration || "No duration"}</p>
+                        <p style={{ margin: 0, fontSize: 11, color: "#6b7280" }}>{ep.duration || "No duration"}</p>
                       </div>
                       <div style={{ display: "flex", gap: 8 }}>
-                        <button onClick={() => startEpisodeEdit(ep)} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid #2a2a2a", borderRadius: 5, padding: "5px 10px", color: "#aaa", fontSize: 11, cursor: "pointer" }}>Edit</button>
+                        <button onClick={() => startEpisodeEdit(ep)} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 5, padding: "5px 10px", color: "#374151", fontSize: 11, cursor: "pointer" }}>Edit</button>
                         <button onClick={() => setDeleteEpisodeConfirm(ep)} style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 5, padding: "5px 10px", color: "#f87171", fontSize: 11, cursor: "pointer" }}>Delete</button>
                       </div>
                     </div>
@@ -1559,11 +1564,11 @@ export function CMS({ onExit }) {
 
             {deleteEpisodeConfirm && (
               <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <div style={{ background: "#141414", border: "1px solid #2a2a2a", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center" }}>
-                  <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Delete this episode?</p>
-                  <p style={{ fontSize: 13, color: "#666", marginBottom: 28 }}>S{deleteEpisodeConfirm.season} E{deleteEpisodeConfirm.episode_number} · "{deleteEpisodeConfirm.title}"</p>
+                <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+                  <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "#0f172a" }}>Delete this episode?</p>
+                  <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 28 }}>S{deleteEpisodeConfirm.season} E{deleteEpisodeConfirm.episode_number} · "{deleteEpisodeConfirm.title}"</p>
                   <div style={{ display: "flex", gap: 10 }}>
-                    <button onClick={() => setDeleteEpisodeConfirm(null)} style={{ flex: 1, background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "11px", color: "#888", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    <button onClick={() => setDeleteEpisodeConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
                     <button onClick={() => deleteEpisode(deleteEpisodeConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
                   </div>
                 </div>
@@ -1583,27 +1588,27 @@ export function CMS({ onExit }) {
           return (
           <>
             {/* ── Carousel Form Panel ── */}
-            <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, padding: 32, position: "sticky", top: 24, maxHeight: "90vh", overflowY: "auto" }}>
-              <h2 style={{ margin: "0 0 4px", fontSize: 17, fontWeight: 600, color: "#e5e5e5" }}>
+            <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: 32, position: "sticky", top: 24, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+              <h2 style={{ margin: "0 0 4px", fontSize: 17, fontWeight: 600, color: "#0f172a" }}>
                 {editingCarouselId ? "Edit Row" : "New Content Row"}
               </h2>
-              <p style={{ margin: "0 0 28px", fontSize: 12, color: "#555" }}>A horizontal scrolling row shown on selected pages.</p>
+              <p style={{ margin: "0 0 28px", fontSize: 12, color: "#6b7280" }}>A horizontal scrolling row shown on selected pages.</p>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
                 {/* ── Step 1: Title ── */}
                 <div>
-                  <label style={{ display: "block", fontSize: 11, color: "#facc15", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>1 · Row Title</label>
+                  <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>1 · Row Title</label>
                   <FieldInput value={carouselForm.title} onChange={v => setCarouselForm(f => ({ ...f, title: v }))} placeholder="e.g. Top Horror Picks, New This Week…" />
                 </div>
 
                 {/* ── Divider ── */}
-                <div style={{ height: 1, background: "#1e1e1e" }} />
+                <div style={{ height: 1, background: "#e2e8f0" }} />
 
                 {/* ── Step 2: Which pages ── */}
                 <div>
-                  <label style={{ display: "block", fontSize: 11, color: "#facc15", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>2 · Where to show it</label>
-                  <p style={{ margin: "0 0 12px", fontSize: 11, color: "#555" }}>Pick every page this row should appear on.</p>
+                  <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>2 · Where to show it</label>
+                  <p style={{ margin: "0 0 12px", fontSize: 11, color: "#6b7280" }}>Pick every page this row should appear on.</p>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {[
                       { val: "home",   icon: "🏠", label: "Home",        desc: "The main landing page" },
@@ -1613,14 +1618,14 @@ export function CMS({ onExit }) {
                       const on = pagesArr.includes(val);
                       return (
                         <button key={val} onClick={() => togglePage(val)}
-                          style={{ background: on ? "rgba(250,204,21,0.08)" : "#0a0a0a", border: `1.5px solid ${on ? "#facc15" : "#222"}`, borderRadius: 9, padding: "11px 14px", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 12, transition: "border-color 0.15s, background 0.15s" }}>
+                          style={{ background: on ? "rgba(79,70,229,0.08)" : "#f8fafc", border: `1.5px solid ${on ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 9, padding: "11px 14px", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 12, transition: "border-color 0.15s, background 0.15s" }}>
                           <span style={{ fontSize: 18, flexShrink: 0 }}>{icon}</span>
                           <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: on ? "#facc15" : "#bbb" }}>{label}</div>
-                            <div style={{ fontSize: 11, color: "#555", marginTop: 1 }}>{desc}</div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: on ? "#4f46e5" : "#374151" }}>{label}</div>
+                            <div style={{ fontSize: 11, color: "#6b7280", marginTop: 1 }}>{desc}</div>
                           </div>
-                          <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${on ? "#facc15" : "#333"}`, background: on ? "#facc15" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.15s" }}>
-                            {on && <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="#0a0a0a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                          <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${on ? "#4f46e5" : "#e2e8f0"}`, background: on ? "#4f46e5" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.15s" }}>
+                            {on && <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                           </div>
                         </button>
                       );
@@ -1632,12 +1637,12 @@ export function CMS({ onExit }) {
                 </div>
 
                 {/* ── Divider ── */}
-                <div style={{ height: 1, background: "#1e1e1e" }} />
+                <div style={{ height: 1, background: "#e2e8f0" }} />
 
                 {/* ── Step 3: What to show ── */}
                 <div>
-                  <label style={{ display: "block", fontSize: 11, color: "#facc15", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>3 · What to show</label>
-                  <p style={{ margin: "0 0 10px", fontSize: 11, color: "#555" }}>What kind of content fills this row.</p>
+                  <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>3 · What to show</label>
+                  <p style={{ margin: "0 0 10px", fontSize: 11, color: "#6b7280" }}>What kind of content fills this row.</p>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                     {[
                       { ct: "movies", t: null,      icon: "🎬", label: "Movies only",   desc: "Only movies" },
@@ -1654,10 +1659,10 @@ export function CMS({ onExit }) {
                           if (isPodcast) setCarouselForm(f => ({ ...f, type: "podcast", content_type: "all" }));
                           else setCarouselForm(f => ({ ...f, content_type: ct, type: f.type === "podcast" ? "custom" : f.type }));
                         }}
-                          style={{ background: isActive ? "rgba(250,204,21,0.1)" : "#0a0a0a", border: `1.5px solid ${isActive ? "#facc15" : "#222"}`, borderRadius: 10, padding: "13px 12px", cursor: "pointer", textAlign: "left", transition: "border-color 0.15s, background 0.15s" }}>
+                          style={{ background: isActive ? "rgba(79,70,229,0.08)" : "#f8fafc", border: `1.5px solid ${isActive ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 10, padding: "13px 12px", cursor: "pointer", textAlign: "left", transition: "border-color 0.15s, background 0.15s" }}>
                           <div style={{ fontSize: 20, marginBottom: 5 }}>{icon}</div>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: isActive ? "#facc15" : "#ccc", marginBottom: 2 }}>{label}</div>
-                          <div style={{ fontSize: 11, color: "#555" }}>{desc}</div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: isActive ? "#4f46e5" : "#374151", marginBottom: 2 }}>{label}</div>
+                          <div style={{ fontSize: 11, color: "#6b7280" }}>{desc}</div>
                         </button>
                       );
                     })}
@@ -1665,13 +1670,13 @@ export function CMS({ onExit }) {
                 </div>
 
                 {/* ── Divider ── */}
-                <div style={{ height: 1, background: "#1e1e1e" }} />
+                <div style={{ height: 1, background: "#e2e8f0" }} />
 
                 {/* ── Step 4: How to order ── */}
                 {carouselForm.type !== "podcast" ? (
                   <div>
-                    <label style={{ display: "block", fontSize: 11, color: "#facc15", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>4 · How to order</label>
-                    <p style={{ margin: "0 0 10px", fontSize: 11, color: "#555" }}>How content is sorted inside this row.</p>
+                    <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>4 · How to order</label>
+                    <p style={{ margin: "0 0 10px", fontSize: 11, color: "#6b7280" }}>How content is sorted inside this row.</p>
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       {[
                         { val: "custom",   icon: "📋", label: "Show all",       desc: "All matching content, default order" },
@@ -1681,42 +1686,44 @@ export function CMS({ onExit }) {
                         const isActive = carouselForm.type === val;
                         return (
                           <button key={val} onClick={() => setCarouselForm(f => ({ ...f, type: val }))}
-                            style={{ background: isActive ? "rgba(250,204,21,0.08)" : "#0a0a0a", border: `1.5px solid ${isActive ? "#facc15" : "#222"}`, borderRadius: 9, padding: "11px 14px", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 12, transition: "border-color 0.15s, background 0.15s" }}>
+                            style={{ background: isActive ? "rgba(79,70,229,0.08)" : "#f8fafc", border: `1.5px solid ${isActive ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 9, padding: "11px 14px", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 12, transition: "border-color 0.15s, background 0.15s" }}>
                             <span style={{ fontSize: 17, flexShrink: 0 }}>{icon}</span>
                             <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: 13, fontWeight: 600, color: isActive ? "#facc15" : "#bbb" }}>{label}</div>
-                              <div style={{ fontSize: 11, color: "#555", marginTop: 1 }}>{desc}</div>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: isActive ? "#4f46e5" : "#374151" }}>{label}</div>
+                              <div style={{ fontSize: 11, color: "#6b7280", marginTop: 1 }}>{desc}</div>
                             </div>
-                            {isActive && <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#facc15", flexShrink: 0 }} />}
+                            {isActive && <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#4f46e5", flexShrink: 0 }} />}
                           </button>
                         );
                       })}
                     </div>
                     {carouselForm.type === "category" && (
-                      <div style={{ marginTop: 10, background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 8, padding: "14px" }}>
-                        <label style={{ display: "block", fontSize: 11, color: "#aaa", marginBottom: 6, fontWeight: 600 }}>Category name</label>
+                      <div style={{ marginTop: 10, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "14px" }}>
+                        <label style={{ display: "block", fontSize: 11, color: "#6b7280", marginBottom: 6, fontWeight: 600 }}>Category name</label>
                         <input value={carouselForm.filter_value} onChange={e => setCarouselForm(f => ({ ...f, filter_value: e.target.value }))}
                           placeholder="e.g. Horror, Comedy, Sci-Fi…"
-                          style={{ width: "100%", background: "#141414", border: "1px solid #333", borderRadius: 6, padding: "9px 12px", color: "#fff", fontSize: 13, outline: "none" }} />
-                        <p style={{ margin: "6px 0 0", fontSize: 11, color: "#555" }}>Must match exactly as set on your videos (case-insensitive).</p>
+                          style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 6, padding: "9px 12px", color: "#0f172a", fontSize: 13, outline: "none" }}
+                          onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                        <p style={{ margin: "6px 0 0", fontSize: 11, color: "#9ca3af" }}>Must match exactly as set on your videos (case-insensitive).</p>
                       </div>
                     )}
                   </div>
                 ) : (
                   <div>
-                    <label style={{ display: "block", fontSize: 11, color: "#facc15", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>4 · Tag filter (optional)</label>
+                    <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>4 · Tag filter (optional)</label>
                     <input value={carouselForm.filter_value} onChange={e => setCarouselForm(f => ({ ...f, filter_value: e.target.value }))}
                       placeholder="e.g. true-crime — leave blank to show all podcasts"
-                      style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none" }} />
+                      style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }}
+                      onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
                   </div>
                 )}
 
                 {/* ── Divider ── */}
-                <div style={{ height: 1, background: "#1e1e1e" }} />
+                <div style={{ height: 1, background: "#e2e8f0" }} />
 
                 {/* ── Step 5: Visibility ── */}
                 <div>
-                  <label style={{ display: "block", fontSize: 11, color: "#facc15", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>5 · Visibility</label>
+                  <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>5 · Visibility</label>
                   <button onClick={() => setCarouselForm(f => ({ ...f, enabled: !f.enabled }))}
                     style={{ width: "100%", background: carouselForm.enabled ? "rgba(16,185,129,0.1)" : "rgba(107,114,128,0.08)", border: `1px solid ${carouselForm.enabled ? "rgba(16,185,129,0.35)" : "#222"}`, borderRadius: 8, padding: "11px", color: carouselForm.enabled ? "#10b981" : "#555", fontSize: 13, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                     <span style={{ fontSize: 16 }}>{carouselForm.enabled ? "✓" : "○"}</span>
@@ -1729,12 +1736,12 @@ export function CMS({ onExit }) {
               {/* Action buttons */}
               <div style={{ display: "flex", gap: 10, marginTop: 28 }}>
                 <button onClick={saveCarousel} disabled={carouselSaving || pagesArr.length === 0}
-                  style={{ flex: 1, background: "#facc15", border: "none", borderRadius: 8, padding: "13px", color: "#0a0a0a", fontSize: 14, fontWeight: 700, cursor: (carouselSaving || pagesArr.length === 0) ? "not-allowed" : "pointer", opacity: (carouselSaving || pagesArr.length === 0) ? 0.5 : 1 }}>
+                  style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 8, padding: "13px", color: "#fff", fontSize: 14, fontWeight: 700, cursor: (carouselSaving || pagesArr.length === 0) ? "not-allowed" : "pointer", opacity: (carouselSaving || pagesArr.length === 0) ? 0.5 : 1 }}>
                   {carouselSaving ? "Saving…" : editingCarouselId ? "Update Row" : "Create Row"}
                 </button>
                 {editingCarouselId && (
                   <button onClick={cancelCarouselEdit}
-                    style={{ flex: 1, background: "transparent", border: "1px solid #2a2a2a", borderRadius: 8, padding: "13px", color: "#666", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                    style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "13px", color: "#374151", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
                     Cancel
                   </button>
                 )}
@@ -1743,14 +1750,14 @@ export function CMS({ onExit }) {
 
             {/* ── Carousels List ── */}
             <div>
-              <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 600, color: "#e5e5e5" }}>
-                Content Rows <span style={{ color: "#555", fontWeight: 400, fontSize: 13 }}>— ▲▼ to reorder</span>
+              <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>
+                Content Rows <span style={{ color: "#6b7280", fontWeight: 400, fontSize: 13 }}>— ▲▼ to reorder</span>
               </h3>
 
               {carouselLoading ? (
-                <div style={{ padding: 40, textAlign: "center", color: "#666" }}>Loading…</div>
+                <div style={{ padding: 40, textAlign: "center", color: "#6b7280" }}>Loading…</div>
               ) : carousels.length === 0 ? (
-                <div style={{ padding: 40, textAlign: "center", color: "#555", background: "#111", border: "1px solid #1e1e1e", borderRadius: 12 }}>
+                <div style={{ padding: 40, textAlign: "center", color: "#6b7280", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12 }}>
                   <div style={{ fontSize: 32, marginBottom: 10 }}>📋</div>
                   <p style={{ margin: 0, fontSize: 14 }}>No rows yet. Create your first one.</p>
                 </div>
@@ -1765,23 +1772,23 @@ export function CMS({ onExit }) {
                     const contentColor = t === "podcast" ? "#a78bfa" : ct === "movies" ? "#60a5fa" : ct === "shows" ? "#34d399" : "#f59e0b";
                     const pageLabels = { home: "Home", movies: "Movies", series: "Series" };
                     return (
-                      <div key={carousel.id} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+                      <div key={carousel.id} style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
                         <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
-                          <button onClick={() => moveCarousel(idx, -1)} disabled={idx === 0} style={{ background: "transparent", border: "none", color: idx === 0 ? "#2a2a2a" : "#555", cursor: idx === 0 ? "default" : "pointer", fontSize: 11, padding: "2px 5px", lineHeight: 1 }}>▲</button>
-                          <button onClick={() => moveCarousel(idx, 1)} disabled={idx === carousels.length - 1} style={{ background: "transparent", border: "none", color: idx === carousels.length - 1 ? "#2a2a2a" : "#555", cursor: idx === carousels.length - 1 ? "default" : "pointer", fontSize: 11, padding: "2px 5px", lineHeight: 1 }}>▼</button>
+                          <button onClick={() => moveCarousel(idx, -1)} disabled={idx === 0} style={{ background: "transparent", border: "none", color: idx === 0 ? "#e2e8f0" : "#6b7280", cursor: idx === 0 ? "default" : "pointer", fontSize: 11, padding: "2px 5px", lineHeight: 1 }}>▲</button>
+                          <button onClick={() => moveCarousel(idx, 1)} disabled={idx === carousels.length - 1} style={{ background: "transparent", border: "none", color: idx === carousels.length - 1 ? "#e2e8f0" : "#6b7280", cursor: idx === carousels.length - 1 ? "default" : "pointer", fontSize: 11, padding: "2px 5px", lineHeight: 1 }}>▼</button>
                         </div>
 
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ margin: "0 0 7px", fontSize: 14, fontWeight: 600, color: carousel.enabled ? "#fff" : "#555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{carousel.title}</p>
+                          <p style={{ margin: "0 0 7px", fontSize: 14, fontWeight: 600, color: carousel.enabled ? "#0f172a" : "#6b7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{carousel.title}</p>
                           <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                             {/* Pages */}
                             {rowPages.map(p => (
-                              <span key={p} style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 20, background: "rgba(250,204,21,0.1)", color: "#facc15", border: "1px solid rgba(250,204,21,0.3)" }}>{pageLabels[p] || p}</span>
+                              <span key={p} style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 20, background: "rgba(79,70,229,0.08)", color: "#4f46e5", border: "1px solid rgba(79,70,229,0.2)" }}>{pageLabels[p] || p}</span>
                             ))}
                             {/* Content type */}
                             <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: `${contentColor}15`, color: contentColor, border: `1px solid ${contentColor}35` }}>{contentLabel}</span>
                             {/* Order */}
-                            <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: "rgba(255,255,255,0.04)", color: "#666", border: "1px solid #222" }}>{orderLabel}</span>
+                            <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: "#f1f5f9", color: "#6b7280", border: "1px solid #e2e8f0" }}>{orderLabel}</span>
                             {/* Live/Hidden */}
                             <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: carousel.enabled ? "rgba(16,185,129,0.1)" : "rgba(255,255,255,0.04)", color: carousel.enabled ? "#10b981" : "#555", border: `1px solid ${carousel.enabled ? "rgba(16,185,129,0.3)" : "#222"}` }}>{carousel.enabled ? "Live" : "Hidden"}</span>
                           </div>
@@ -1797,7 +1804,7 @@ export function CMS({ onExit }) {
                 </div>
               )}
 
-              <div style={{ marginTop: 12, fontSize: 12, color: "#444", textAlign: "right" }}>
+              <div style={{ marginTop: 12, fontSize: 12, color: "#9ca3af", textAlign: "right" }}>
                 {carousels.length} row{carousels.length !== 1 ? "s" : ""} total
               </div>
             </div>
@@ -1807,20 +1814,20 @@ export function CMS({ onExit }) {
         {/* ────── LIVE TAB ────── */}
         {tab === "live" && (
           <>
-            <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, padding: 32, position: "sticky", top: 24, maxHeight: "90vh", overflowY: "auto" }}>
-              <h2 style={{ margin: "0 0 28px", fontSize: 17, fontWeight: 600, color: "#e5e5e5" }}>{editingLiveId ? "Edit Stream" : "Add Live Stream"}</h2>
+            <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: 32, position: "sticky", top: 24, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+              <h2 style={{ margin: "0 0 28px", fontSize: 17, fontWeight: 600, color: "#0f172a" }}>{editingLiveId ? "Edit Stream" : "Add Live Stream"}</h2>
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 <FieldInput label="Title *" value={liveForm.title} onChange={v => setLiveForm(f => ({ ...f, title: v }))} placeholder="e.g. Friday Night Live" />
                 <FieldInput label="Description" value={liveForm.description} onChange={v => setLiveForm(f => ({ ...f, description: v }))} placeholder="What's streaming..." />
                 <FieldInput label="Stream URL" value={liveForm.stream_url} onChange={v => setLiveForm(f => ({ ...f, stream_url: v }))} placeholder="https://... (YouTube Live, direct video, etc.)" />
                 <FieldInput label="Badge Text" value={liveForm.badge_text} onChange={v => setLiveForm(f => ({ ...f, badge_text: v }))} placeholder="LIVE" />
                 <div>
-                  <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Thumbnail</label>
+                  <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Thumbnail</label>
                   <ImageUploader label="Upload Thumbnail" folder="live" onUploadSuccess={url => setLiveForm(f => ({ ...f, thumbnail: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
-                  <input type="text" value={liveForm.thumbnail} onChange={e => setLiveForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none" }} />
+                  <input type="text" value={liveForm.thumbnail} onChange={e => setLiveForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
                 </div>
                 <div>
-                  <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.7 }}>Status</label>
+                  <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.7 }}>Status</label>
                   <button onClick={() => setLiveForm(f => ({ ...f, is_live: !f.is_live }))}
                     style={{ width: "100%", background: liveForm.is_live ? "rgba(239,68,68,0.12)" : "rgba(107,114,128,0.1)", border: `1px solid ${liveForm.is_live ? "rgba(239,68,68,0.35)" : "rgba(107,114,128,0.3)"}`, borderRadius: 7, padding: "10px 12px", color: liveForm.is_live ? "#ef4444" : "#888", fontSize: 13, cursor: "pointer", fontWeight: 500 }}>
                     {liveForm.is_live ? "🔴 Live" : "○ Offline"}
@@ -1831,23 +1838,23 @@ export function CMS({ onExit }) {
                 <button onClick={saveLiveStream} disabled={liveSaving} style={{ flex: 1, background: "#ef4444", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: liveSaving ? "not-allowed" : "pointer", opacity: liveSaving ? 0.7 : 1 }}>
                   {liveSaving ? "Saving…" : editingLiveId ? "Save Changes" : "Go Live"}
                 </button>
-                {editingLiveId && <button onClick={cancelLiveEdit} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "12px 20px", color: "#888", fontSize: 13, cursor: "pointer" }}>Cancel</button>}
+                {editingLiveId && <button onClick={cancelLiveEdit} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>}
               </div>
             </div>
 
             <div>
-              <h3 style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 600, color: "#e5e5e5" }}>All Streams ({liveList.length})</h3>
-              <p style={{ margin: "0 0 20px", fontSize: 12, color: "#555" }}>Toggle a stream to Live to show it on the homepage "Live Now" section.</p>
+              <h3 style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>All Streams ({liveList.length})</h3>
+              <p style={{ margin: "0 0 20px", fontSize: 12, color: "#6b7280" }}>Toggle a stream to Live to show it on the homepage "Live Now" section.</p>
               {liveLoading ? (
-                <div style={{ color: "#555", padding: 40, textAlign: "center" }}>Loading...</div>
+                <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>Loading...</div>
               ) : liveList.length === 0 ? (
-                <div style={{ color: "#555", padding: 40, textAlign: "center", border: "1px dashed #1e1e1e", borderRadius: 10 }}>No streams yet.</div>
+                <div style={{ color: "#6b7280", padding: 40, textAlign: "center", border: "1px dashed #e2e8f0", borderRadius: 10 }}>No streams yet.</div>
               ) : liveList.map(s => (
-                <div key={s.id} style={{ background: "#111", border: `1px solid ${s.is_live ? "rgba(239,68,68,0.3)" : "#1e1e1e"}`, borderRadius: 10, padding: "16px 20px", marginBottom: 12, display: "flex", gap: 16, alignItems: "center" }}>
+                <div key={s.id} style={{ background: "#ffffff", border: `1px solid ${s.is_live ? "rgba(239,68,68,0.3)" : "#e2e8f0"}`, borderRadius: 10, padding: "16px 20px", marginBottom: 12, display: "flex", gap: 16, alignItems: "center" }}>
                   {s.thumbnail && <img src={s.thumbnail} alt={s.title} style={{ width: 80, height: 45, objectFit: "cover", borderRadius: 6, flexShrink: 0 }} onError={e => { e.target.style.display = "none"; }} />}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: "0 0 3px", fontSize: 14, fontWeight: 600, color: "#fff" }}>{s.title}</p>
-                    <p style={{ margin: 0, fontSize: 12, color: "#666" }}>
+                    <p style={{ margin: "0 0 3px", fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{s.title}</p>
+                    <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>
                       <span style={{ color: s.is_live ? "#ef4444" : "#555", fontWeight: s.is_live ? 600 : 400 }}>{s.is_live ? "🔴 LIVE" : "Offline"}</span>
                       {s.badge_text && s.badge_text !== "LIVE" && ` · Badge: ${s.badge_text}`}
                     </p>
@@ -1862,10 +1869,10 @@ export function CMS({ onExit }) {
 
             {deleteLiveConfirm && (
               <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <div style={{ background: "#141414", border: "1px solid #2a2a2a", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center" }}>
-                  <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Delete "{deleteLiveConfirm.title}"?</p>
+                <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+                  <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "#0f172a" }}>Delete "{deleteLiveConfirm.title}"?</p>
                   <div style={{ display: "flex", gap: 10 }}>
-                    <button onClick={() => setDeleteLiveConfirm(null)} style={{ flex: 1, background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "11px", color: "#888", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    <button onClick={() => setDeleteLiveConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
                     <button onClick={() => deleteLiveStream(deleteLiveConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
                   </div>
                 </div>
@@ -1877,8 +1884,8 @@ export function CMS({ onExit }) {
         {/* ────── PODCASTS SUB-TAB ────── */}
         {tab === "videos" && videoSubTab === "podcasts" && (
           <>
-            <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, padding: 32, position: "sticky", top: 24, maxHeight: "90vh", overflowY: "auto" }}>
-              <h2 style={{ margin: "0 0 28px", fontSize: 17, fontWeight: 600, color: "#e5e5e5" }}>{editingPodcastId ? "Edit Podcast" : "Add New Podcast"}</h2>
+            <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: 32, position: "sticky", top: 24, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+              <h2 style={{ margin: "0 0 28px", fontSize: 17, fontWeight: 600, color: "#0f172a" }}>{editingPodcastId ? "Edit Podcast" : "Add New Podcast"}</h2>
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 <FieldInput label="Title *" value={podcastForm.title} onChange={v => setPodcastForm(f => ({ ...f, title: v }))} placeholder="e.g. The Daily" />
                 <FieldInput label="Host" value={podcastForm.host} onChange={v => setPodcastForm(f => ({ ...f, host: v }))} placeholder="e.g. Michael Barbaro" />
@@ -1889,17 +1896,17 @@ export function CMS({ onExit }) {
 
                 {/* Artwork */}
                 <div>
-                  <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Artwork</label>
-                  <p style={{ fontSize: 11, color: "#3a3a3a", margin: "0 0 8px" }}>Square · 1400×1400px recommended</p>
+                  <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Artwork</label>
+                  <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>Square · 1400×1400px recommended</p>
                   <ImageUploader label="Upload Artwork (JPG/PNG)" folder="podcasts" onUploadSuccess={url => setPodcastForm(f => ({ ...f, artwork_url: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
                   <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "8px 0" }}>
-                    <div style={{ flex: 1, height: 1, background: "#1e1e1e" }} />
-                    <span style={{ fontSize: 11, color: "#333" }}>or paste URL</span>
-                    <div style={{ flex: 1, height: 1, background: "#1e1e1e" }} />
+                    <div style={{ flex: 1, height: 1, background: "#e2e8f0" }} />
+                    <span style={{ fontSize: 11, color: "#9ca3af" }}>or paste URL</span>
+                    <div style={{ flex: 1, height: 1, background: "#e2e8f0" }} />
                   </div>
-                  <input type="text" value={podcastForm.artwork_url} onChange={e => setPodcastForm(f => ({ ...f, artwork_url: e.target.value }))} placeholder="https://..." style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none" }} />
+                  <input type="text" value={podcastForm.artwork_url} onChange={e => setPodcastForm(f => ({ ...f, artwork_url: e.target.value }))} placeholder="https://..." style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
                   {podcastForm.artwork_url && (
-                    <div style={{ marginTop: 10, borderRadius: 8, overflow: "hidden", border: "1px solid #1e1e1e", width: 80, height: 80 }}>
+                    <div style={{ marginTop: 10, borderRadius: 8, overflow: "hidden", border: "1px solid #e2e8f0", width: 80, height: 80 }}>
                       <img src={podcastForm.artwork_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => { e.target.style.display = "none"; }} />
                     </div>
                   )}
@@ -1908,46 +1915,46 @@ export function CMS({ onExit }) {
                 <FieldInput label="Link URL" value={podcastForm.link_url} onChange={v => setPodcastForm(f => ({ ...f, link_url: v }))} placeholder="https://open.spotify.com/show/..." />
 
                 <div>
-                  <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Description</label>
-                  <textarea value={podcastForm.description} onChange={e => setPodcastForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Short description..." style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit" }} onFocus={e => (e.target.style.borderColor = "#818cf8")} onBlur={e => (e.target.style.borderColor = "#2a2a2a")} />
+                  <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Description</label>
+                  <textarea value={podcastForm.description} onChange={e => setPodcastForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Short description..." style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
                 </div>
 
                 <div>
-                  <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.7 }}>Status</label>
+                  <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.7 }}>Status</label>
                   <button onClick={() => setPodcastForm(f => ({ ...f, enabled: !f.enabled }))}
-                    style={{ width: "100%", background: podcastForm.enabled ? "rgba(129,140,248,0.1)" : "rgba(107,114,128,0.1)", border: `1px solid ${podcastForm.enabled ? "rgba(129,140,248,0.3)" : "rgba(107,114,128,0.3)"}`, borderRadius: 7, padding: "10px 12px", color: podcastForm.enabled ? "#818cf8" : "#888", fontSize: 13, cursor: "pointer", fontWeight: 500 }}>
+                    style={{ width: "100%", background: podcastForm.enabled ? "rgba(79,70,229,0.08)" : "rgba(107,114,128,0.08)", border: `1px solid ${podcastForm.enabled ? "rgba(79,70,229,0.3)" : "#e2e8f0"}`, borderRadius: 7, padding: "10px 12px", color: podcastForm.enabled ? "#4f46e5" : "#6b7280", fontSize: 13, cursor: "pointer", fontWeight: 500 }}>
                     {podcastForm.enabled ? "✓ Enabled" : "○ Disabled"}
                   </button>
                 </div>
               </div>
               <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
-                <button onClick={savePodcast} disabled={podcastSaving} style={{ flex: 1, background: "#818cf8", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: podcastSaving ? "not-allowed" : "pointer", opacity: podcastSaving ? 0.7 : 1 }}>
+                <button onClick={savePodcast} disabled={podcastSaving} style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: podcastSaving ? "not-allowed" : "pointer", opacity: podcastSaving ? 0.7 : 1 }}>
                   {podcastSaving ? "Saving…" : editingPodcastId ? "Save Changes" : "Add Podcast"}
                 </button>
-                {editingPodcastId && <button onClick={cancelPodcastEdit} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "12px 20px", color: "#888", fontSize: 13, cursor: "pointer" }}>Cancel</button>}
+                {editingPodcastId && <button onClick={cancelPodcastEdit} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>}
               </div>
             </div>
 
             {/* Right column — podcast list + episode panel in ONE grid cell */}
             <div>
               <div style={{ marginBottom: 28 }}>
-                <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#e5e5e5" }}>All Podcasts ({podcastsList.length})</h3>
-                <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Click <strong style={{ color: "#818cf8", fontWeight: 600 }}>Episodes</strong> on any podcast to manage its audio episodes.</p>
+                <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>All Podcasts ({podcastsList.length})</h3>
+                <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Click <strong style={{ color: "#4f46e5", fontWeight: 600 }}>Episodes</strong> on any podcast to manage its audio episodes.</p>
               </div>
               {podcastsLoading ? (
-                <div style={{ color: "#555", padding: 40, textAlign: "center" }}>Loading...</div>
+                <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>Loading...</div>
               ) : podcastsList.length === 0 ? (
-                <div style={{ padding: 32, textAlign: "center", border: "1px dashed #1e1e1e", borderRadius: 10 }}>
-                  <p style={{ color: "#555", margin: "0 0 8px", fontSize: 14 }}>No podcasts yet. Add one using the form.</p>
-                  <p style={{ color: "#333", margin: 0, fontSize: 12 }}>Once added, click <strong style={{ color: "#818cf8" }}>Episodes</strong> on a podcast to add its audio episodes.</p>
+                <div style={{ padding: 32, textAlign: "center", border: "1px dashed #e2e8f0", borderRadius: 10 }}>
+                  <p style={{ color: "#6b7280", margin: "0 0 8px", fontSize: 14 }}>No podcasts yet. Add one using the form.</p>
+                  <p style={{ color: "#9ca3af", margin: 0, fontSize: 12 }}>Once added, click <strong style={{ color: "#4f46e5" }}>Episodes</strong> on a podcast to add its audio episodes.</p>
                 </div>
               ) : podcastsList.map(pod => (
-                <div key={pod.id} style={{ background: "#111", border: `1px solid ${editingPodcastId === pod.id ? "#818cf8" : selectedPodcastForEp?.id === pod.id ? "#818cf8" : "#1e1e1e"}`, borderRadius: 10, padding: "14px 16px", marginBottom: 10, display: "flex", gap: 14, alignItems: "center", borderLeft: `3px solid ${editingPodcastId === pod.id || selectedPodcastForEp?.id === pod.id ? "#818cf8" : "transparent"}` }}>
+                <div key={pod.id} style={{ background: "#ffffff", border: `1px solid ${editingPodcastId === pod.id ? "#4f46e5" : selectedPodcastForEp?.id === pod.id ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 10, padding: "14px 16px", marginBottom: 10, display: "flex", gap: 14, alignItems: "center", borderLeft: `3px solid ${editingPodcastId === pod.id || selectedPodcastForEp?.id === pod.id ? "#4f46e5" : "transparent"}` }}>
                   {pod.artwork_url ? (
                     <img src={pod.artwork_url} alt={pod.title} style={{ width: 46, height: 46, objectFit: "cover", borderRadius: 7, flexShrink: 0 }} onError={e => { e.target.style.display = "none"; }} />
                   ) : (
-                    <div style={{ width: 46, height: 46, borderRadius: 7, background: "linear-gradient(135deg, #1e1b4b, #312e81)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="2">
+                    <div style={{ width: 46, height: 46, borderRadius: 7, background: "linear-gradient(135deg, #e0e7ff, #c7d2fe)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2">
                         <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
                         <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
                         <line x1="12" y1="19" x2="12" y2="22"/>
@@ -1955,9 +1962,9 @@ export function CMS({ onExit }) {
                     </div>
                   )}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{pod.title}</p>
-                    <p style={{ margin: 0, fontSize: 12, color: "#666" }}>
-                      {pod.host && <span style={{ color: "#818cf8" }}>{pod.host}</span>}
+                    <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{pod.title}</p>
+                    <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>
+                      {pod.host && <span style={{ color: "#4f46e5" }}>{pod.host}</span>}
                       {pod.host && " · "}
                       <span style={{ color: pod.enabled ? "#4ade80" : "#f87171" }}>{pod.enabled ? "Enabled" : "Disabled"}</span>
                     </p>
@@ -1966,10 +1973,10 @@ export function CMS({ onExit }) {
                     <button onClick={() => {
                       if (selectedPodcastForEp?.id === pod.id) { setSelectedPodcastForEp(null); setPodEpList([]); cancelPodEpEdit(); }
                       else { setSelectedPodcastForEp(pod); loadPodEpisodes(pod.id); setPodEpForm({ ...EMPTY_PODCAST_EPISODE, podcast_id: pod.id }); cancelPodEpEdit(); }
-                    }} style={{ background: selectedPodcastForEp?.id === pod.id ? "rgba(129,140,248,0.25)" : "rgba(129,140,248,0.08)", border: `1px solid ${selectedPodcastForEp?.id === pod.id ? "#818cf8" : "rgba(129,140,248,0.25)"}`, borderRadius: 5, padding: "5px 10px", color: "#818cf8", fontSize: 11, cursor: "pointer", fontWeight: selectedPodcastForEp?.id === pod.id ? 700 : 400 }}>
+                    }} style={{ background: selectedPodcastForEp?.id === pod.id ? "rgba(79,70,229,0.15)" : "rgba(79,70,229,0.08)", border: `1px solid ${selectedPodcastForEp?.id === pod.id ? "#4f46e5" : "rgba(79,70,229,0.25)"}`, borderRadius: 5, padding: "5px 10px", color: "#4f46e5", fontSize: 11, cursor: "pointer", fontWeight: selectedPodcastForEp?.id === pod.id ? 700 : 400 }}>
                       {selectedPodcastForEp?.id === pod.id ? "Close" : "Episodes"}
                     </button>
-                    <button onClick={() => startPodcastEdit(pod)} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid #2a2a2a", borderRadius: 5, padding: "5px 10px", color: "#aaa", fontSize: 11, cursor: "pointer" }}>Edit</button>
+                    <button onClick={() => startPodcastEdit(pod)} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 5, padding: "5px 10px", color: "#374151", fontSize: 11, cursor: "pointer" }}>Edit</button>
                     <button onClick={() => setDeletePodcastConfirm(pod)} style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 5, padding: "5px 10px", color: "#f87171", fontSize: 11, cursor: "pointer" }}>Delete</button>
                   </div>
                 </div>
@@ -1977,19 +1984,19 @@ export function CMS({ onExit }) {
 
               {/* ── Episode panel — inline below the selected podcast ── */}
               {selectedPodcastForEp && (
-                <div style={{ marginTop: 24, background: "#0d0d0d", border: "1px solid #1e1e1e", borderRadius: 12, padding: 24 }}>
+                <div style={{ marginTop: 24, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 12, padding: 24 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
                     <div>
-                      <h3 style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 700, color: "#818cf8" }}>Episodes — {selectedPodcastForEp.title}</h3>
-                      <p style={{ margin: 0, fontSize: 11, color: "#444" }}>Audio files · upload or paste a URL</p>
+                      <h3 style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 700, color: "#4f46e5" }}>Episodes — {selectedPodcastForEp.title}</h3>
+                      <p style={{ margin: 0, fontSize: 11, color: "#6b7280" }}>Audio files · upload or paste a URL</p>
                     </div>
                     <button onClick={() => { setSelectedPodcastForEp(null); setPodEpList([]); cancelPodEpEdit(); }}
-                      style={{ background: "none", border: "none", color: "#444", fontSize: 20, cursor: "pointer", lineHeight: 1, padding: "2px 4px" }}>×</button>
+                      style={{ background: "none", border: "none", color: "#6b7280", fontSize: 20, cursor: "pointer", lineHeight: 1, padding: "2px 4px" }}>×</button>
                   </div>
 
                   {/* Add / Edit episode form */}
-                  <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 20, marginBottom: 20 }}>
-                    <p style={{ margin: "0 0 16px", fontSize: 12, fontWeight: 600, color: "#e5e5e5", textTransform: "uppercase", letterSpacing: 0.6 }}>
+                  <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 20, marginBottom: 20 }}>
+                    <p style={{ margin: "0 0 16px", fontSize: 12, fontWeight: 600, color: "#0f172a", textTransform: "uppercase", letterSpacing: 0.6 }}>
                       {editingPodEpId ? "Edit Episode" : "Add Episode"}
                     </p>
                     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -1999,45 +2006,45 @@ export function CMS({ onExit }) {
                       </div>
                       <FieldInput label="Title *" value={podEpForm.title} onChange={v => setPodEpForm(f => ({ ...f, title: v }))} placeholder="Episode title" />
                       <div>
-                        <label style={{ display: "block", fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Audio File</label>
+                        <label style={{ display: "block", fontSize: 11, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Audio File</label>
                         <ImageUploader label="Upload MP4 / MP3 / Audio" folder="podcast-audio" accept="video/mp4,video/mov,video/webm,audio/*" onUploadSuccess={url => setPodEpForm(f => ({ ...f, audio_url: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
-                        <input type="text" value={podEpForm.audio_url} onChange={e => setPodEpForm(f => ({ ...f, audio_url: e.target.value }))} placeholder="or paste audio URL..." style={{ width: "100%", marginTop: 6, background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "9px 12px", color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                        <input type="text" value={podEpForm.audio_url} onChange={e => setPodEpForm(f => ({ ...f, audio_url: e.target.value }))} placeholder="or paste audio URL..." style={{ width: "100%", marginTop: 6, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "9px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
                       </div>
                       <div>
-                        <label style={{ display: "block", fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Thumbnail (optional)</label>
+                        <label style={{ display: "block", fontSize: 11, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Thumbnail (optional)</label>
                         <ImageUploader label="Upload Thumbnail" folder="podcast-thumbs" onUploadSuccess={url => setPodEpForm(f => ({ ...f, thumbnail: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
-                        <input type="text" value={podEpForm.thumbnail} onChange={e => setPodEpForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="or paste image URL..." style={{ width: "100%", marginTop: 6, background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "9px 12px", color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                        <input type="text" value={podEpForm.thumbnail} onChange={e => setPodEpForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="or paste image URL..." style={{ width: "100%", marginTop: 6, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "9px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
                       </div>
                       <div>
-                        <label style={{ display: "block", fontSize: 11, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Description</label>
-                        <textarea value={podEpForm.description} onChange={e => setPodEpForm(f => ({ ...f, description: e.target.value }))} rows={2} placeholder="Episode description..." style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "9px 12px", color: "#fff", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }} />
+                        <label style={{ display: "block", fontSize: 11, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Description</label>
+                        <textarea value={podEpForm.description} onChange={e => setPodEpForm(f => ({ ...f, description: e.target.value }))} rows={2} placeholder="Episode description..." style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "9px 12px", color: "#0f172a", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
                       <button onClick={savePodEp} disabled={podEpSaving}
-                        style={{ flex: 1, background: "#818cf8", border: "none", borderRadius: 7, padding: "10px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: podEpSaving ? "not-allowed" : "pointer", opacity: podEpSaving ? 0.7 : 1 }}>
+                        style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 7, padding: "10px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: podEpSaving ? "not-allowed" : "pointer", opacity: podEpSaving ? 0.7 : 1 }}>
                         {podEpSaving ? "Saving…" : editingPodEpId ? "Save Changes" : "Add Episode"}
                       </button>
-                      {editingPodEpId && <button onClick={cancelPodEpEdit} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "10px 16px", color: "#888", fontSize: 13, cursor: "pointer" }}>Cancel</button>}
+                      {editingPodEpId && <button onClick={cancelPodEpEdit} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 16px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>}
                     </div>
                   </div>
 
                   {/* Episode list */}
                   {podEpLoading ? (
-                    <div style={{ color: "#555", padding: 32, textAlign: "center" }}>Loading...</div>
+                    <div style={{ color: "#6b7280", padding: 32, textAlign: "center" }}>Loading...</div>
                   ) : podEpList.length === 0 ? (
-                    <div style={{ color: "#444", padding: "24px 0", textAlign: "center", fontSize: 13 }}>No episodes yet — add one above.</div>
+                    <div style={{ color: "#9ca3af", padding: "24px 0", textAlign: "center", fontSize: 13 }}>No episodes yet — add one above.</div>
                   ) : podEpList.map(ep => (
-                    <div key={ep.id} style={{ background: "#111", border: `1px solid ${editingPodEpId === ep.id ? "#818cf8" : "#1e1e1e"}`, borderRadius: 9, padding: "11px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 12 }}>
-                      <div style={{ width: 30, height: 30, borderRadius: "50%", background: "rgba(129,140,248,0.15)", border: "1px solid rgba(129,140,248,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: "#818cf8" }}>{ep.episode_number}</span>
+                    <div key={ep.id} style={{ background: "#ffffff", border: `1px solid ${editingPodEpId === ep.id ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 9, padding: "11px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ width: 30, height: 30, borderRadius: "50%", background: "rgba(79,70,229,0.1)", border: "1px solid rgba(79,70,229,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "#4f46e5" }}>{ep.episode_number}</span>
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: "#e5e5e5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{ep.title}</p>
-                        <p style={{ margin: 0, fontSize: 11, color: "#555" }}>{ep.duration || "—"}{ep.audio_url ? " · Audio ✓" : " · No audio"}</p>
+                        <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{ep.title}</p>
+                        <p style={{ margin: 0, fontSize: 11, color: "#6b7280" }}>{ep.duration || "—"}{ep.audio_url ? " · Audio ✓" : " · No audio"}</p>
                       </div>
                       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                        <button onClick={() => startPodEpEdit(ep)} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid #2a2a2a", borderRadius: 5, padding: "4px 9px", color: "#aaa", fontSize: 11, cursor: "pointer" }}>Edit</button>
+                        <button onClick={() => startPodEpEdit(ep)} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 5, padding: "4px 9px", color: "#374151", fontSize: 11, cursor: "pointer" }}>Edit</button>
                         <button onClick={() => setDeletePodEpConfirm(ep)} style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 5, padding: "4px 9px", color: "#f87171", fontSize: 11, cursor: "pointer" }}>Delete</button>
                       </div>
                     </div>
@@ -2048,11 +2055,11 @@ export function CMS({ onExit }) {
 
             {deletePodEpConfirm && (
               <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <div style={{ background: "#141414", border: "1px solid #2a2a2a", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center" }}>
-                  <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Delete episode?</p>
-                  <p style={{ fontSize: 13, color: "#666", marginBottom: 28 }}>"{deletePodEpConfirm.title}"</p>
+                <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+                  <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "#0f172a" }}>Delete episode?</p>
+                  <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 28 }}>"{deletePodEpConfirm.title}"</p>
                   <div style={{ display: "flex", gap: 10 }}>
-                    <button onClick={() => setDeletePodEpConfirm(null)} style={{ flex: 1, background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "11px", color: "#888", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    <button onClick={() => setDeletePodEpConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
                     <button onClick={() => deletePodEp(deletePodEpConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
                   </div>
                 </div>
@@ -2061,11 +2068,11 @@ export function CMS({ onExit }) {
 
             {deletePodcastConfirm && (
               <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <div style={{ background: "#141414", border: "1px solid #2a2a2a", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center" }}>
-                  <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Delete "{deletePodcastConfirm.title}"?</p>
-                  <p style={{ fontSize: 13, color: "#666", marginBottom: 28 }}>This podcast will be permanently removed.</p>
+                <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+                  <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "#0f172a" }}>Delete "{deletePodcastConfirm.title}"?</p>
+                  <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 28 }}>This podcast will be permanently removed.</p>
                   <div style={{ display: "flex", gap: 10 }}>
-                    <button onClick={() => setDeletePodcastConfirm(null)} style={{ flex: 1, background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "11px", color: "#888", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    <button onClick={() => setDeletePodcastConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
                     <button onClick={() => deletePodcast(deletePodcastConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
                   </div>
                 </div>
@@ -2079,11 +2086,11 @@ export function CMS({ onExit }) {
           <div style={{ gridColumn: "1 / -1" }}>
             {/* Header row */}
             <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28, flexWrap: "wrap" }}>
-              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#fff" }}>Analytics</h2>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Analytics</h2>
               <select
                 value={reportSection}
                 onChange={e => setReportSection(e.target.value)}
-                style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 8, padding: "8px 14px", color: "#e5e5e5", fontSize: 13, cursor: "pointer", outline: "none" }}
+                style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 14px", color: "#0f172a", fontSize: 13, cursor: "pointer", outline: "none" }}
               >
                 <option value="overview">Overview</option>
                 <option value="content">Content Performance</option>
@@ -2117,8 +2124,8 @@ export function CMS({ onExit }) {
                         { label: "List Saves", value: reportData.totalSaves, color: "#a78bfa" },
                         { label: "Ratings Given", value: reportData.totalRatings, color: "#f97316" },
                       ].map(stat => (
-                        <div key={stat.label} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 20px 16px" }}>
-                          <p style={{ margin: "0 0 6px", fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 0.8 }}>{stat.label}</p>
+                        <div key={stat.label} style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 20px 16px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                          <p style={{ margin: "0 0 6px", fontSize: 11, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.8 }}>{stat.label}</p>
                           <p style={{ margin: 0, fontSize: 28, fontWeight: 700, color: stat.color }}>{stat.value.toLocaleString()}</p>
                         </div>
                       ))}
@@ -2127,22 +2134,22 @@ export function CMS({ onExit }) {
                     {reportData.watchSessions > 0 && (() => {
                       const pct = Math.round((reportData.completedSessions / reportData.watchSessions) * 100);
                       return (
-                        <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px", marginBottom: 24 }}>
+                        <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", marginBottom: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>Completion Rate</p>
+                            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#0f172a" }}>Completion Rate</p>
                             <span style={{ fontSize: 13, fontWeight: 700, color: "#34d399" }}>{pct}%</span>
                           </div>
-                          <div style={{ background: "#1e1e1e", borderRadius: 6, height: 8, overflow: "hidden" }}>
+                          <div style={{ background: "#e2e8f0", borderRadius: 6, height: 8, overflow: "hidden" }}>
                             <div style={{ height: "100%", width: `${pct}%`, background: "linear-gradient(90deg, #34d399, #059669)", borderRadius: 6, transition: "width 0.6s ease" }} />
                           </div>
-                          <p style={{ margin: "8px 0 0", fontSize: 11, color: "#555" }}>{reportData.completedSessions.toLocaleString()} of {reportData.watchSessions.toLocaleString()} sessions completed</p>
+                          <p style={{ margin: "8px 0 0", fontSize: 11, color: "#6b7280" }}>{reportData.completedSessions.toLocaleString()} of {reportData.watchSessions.toLocaleString()} sessions completed</p>
                         </div>
                       );
                     })()}
 
                     {reportData.userGrowth.length > 0 && (
-                      <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px" }}>
-                        <p style={{ margin: "0 0 20px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>User Signups by Month</p>
+                      <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                        <p style={{ margin: "0 0 20px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>User Signups by Month</p>
                         <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 80 }}>
                           {(() => {
                             const max = Math.max(...reportData.userGrowth.map(([, c]) => c));
@@ -2150,7 +2157,7 @@ export function CMS({ onExit }) {
                               <div key={month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
                                 <span style={{ fontSize: 10, color: "#34d399", fontWeight: 600 }}>{count}</span>
                                 <div style={{ width: "100%", background: "rgba(52,211,153,0.2)", borderRadius: 4, height: `${Math.round((count / max) * 52) + 4}px`, minHeight: 4, transition: "height 0.4s ease" }} />
-                                <span style={{ fontSize: 9, color: "#444", whiteSpace: "nowrap" }}>{month.slice(5)}</span>
+                                <span style={{ fontSize: 9, color: "#9ca3af", whiteSpace: "nowrap" }}>{month.slice(5)}</span>
                               </div>
                             ));
                           })()}
@@ -2169,16 +2176,16 @@ export function CMS({ onExit }) {
                       { title: "Top Rated (👍)", items: reportData.topRated, valueKey: "count", valueSuffix: "", valueColor: "#f97316", emptyMsg: "No ratings yet" },
                       { title: "Most Saved to List", items: reportData.topSaved, valueKey: "count", valueSuffix: "", valueColor: "#a78bfa", emptyMsg: "No saves yet" },
                     ].map(({ title, items, valueKey, valueSuffix, valueColor, emptyMsg }) => (
-                      <div key={title} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px" }}>
-                        <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>{title}</p>
+                      <div key={title} style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                        <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{title}</p>
                         {items.length === 0 ? (
-                          <p style={{ fontSize: 13, color: "#444", textAlign: "center", padding: "20px 0" }}>{emptyMsg}</p>
+                          <p style={{ fontSize: 13, color: "#9ca3af", textAlign: "center", padding: "20px 0" }}>{emptyMsg}</p>
                         ) : items.map((item, i) => (
-                          <div key={`${item.type}:${item.id}`} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 0", borderBottom: i < items.length - 1 ? "1px solid #1a1a1a" : "none" }}>
-                            <span style={{ fontSize: 11, color: "#333", width: 18, textAlign: "right", flexShrink: 0 }}>{i + 1}</span>
+                          <div key={`${item.type}:${item.id}`} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 0", borderBottom: i < items.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                            <span style={{ fontSize: 11, color: "#9ca3af", width: 18, textAlign: "right", flexShrink: 0 }}>{i + 1}</span>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <p style={{ margin: 0, fontSize: 13, color: "#e5e5e5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
-                              <span style={{ fontSize: 11, color: item.type === "movie" ? "#facc15" : item.type === "podcast_episode" ? "#a78bfa" : "#60a5fa" }}>{item.type}</span>
+                              <p style={{ margin: 0, fontSize: 13, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
+                              <span style={{ fontSize: 11, color: item.type === "movie" ? "#4f46e5" : item.type === "podcast_episode" ? "#7c3aed" : "#2563eb" }}>{item.type}</span>
                             </div>
                             <span style={{ fontSize: 13, fontWeight: 600, color: valueColor, flexShrink: 0 }}>{item[valueKey].toLocaleString()}{valueSuffix}</span>
                           </div>
@@ -2198,56 +2205,56 @@ export function CMS({ onExit }) {
                         { label: "Never Watched", value: reportData.neverWatchedUsers.length, color: "#f87171" },
                         { label: "Avg Sessions / User", value: reportData.avgSessionsPerUser.toFixed(1), color: "#60a5fa" },
                       ].map(stat => (
-                        <div key={stat.label} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 20px 16px" }}>
-                          <p style={{ margin: "0 0 6px", fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 0.8 }}>{stat.label}</p>
+                        <div key={stat.label} style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 20px 16px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                          <p style={{ margin: "0 0 6px", fontSize: 11, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.8 }}>{stat.label}</p>
                           <p style={{ margin: 0, fontSize: 28, fontWeight: 700, color: stat.color }}>{stat.value}</p>
                         </div>
                       ))}
                     </div>
 
                     {reportData.sessionTrend.length > 0 && (
-                      <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px", marginBottom: 24 }}>
-                        <p style={{ margin: "0 0 20px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>Watch Sessions — Last 30 Days</p>
+                      <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", marginBottom: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                        <p style={{ margin: "0 0 20px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>Watch Sessions — Last 30 Days</p>
                         <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 72 }}>
                           {(() => {
                             const max = Math.max(...reportData.sessionTrend.map(([, c]) => c), 1);
                             return reportData.sessionTrend.map(([day, count]) => (
                               <div key={day} title={`${day}: ${count} sessions`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "default" }}>
                                 <div style={{ width: "100%", background: "rgba(96,165,250,0.25)", borderRadius: 3, height: `${Math.round((count / max) * 52) + 4}px`, minHeight: 4 }} />
-                                {reportData.sessionTrend.length <= 14 && <span style={{ fontSize: 9, color: "#444" }}>{day.slice(8)}</span>}
+                                {reportData.sessionTrend.length <= 14 && <span style={{ fontSize: 9, color: "#9ca3af" }}>{day.slice(8)}</span>}
                               </div>
                             ));
                           })()}
                         </div>
-                        <p style={{ margin: "10px 0 0", fontSize: 11, color: "#444" }}>{reportData.sessionTrend.length} active days · hover bars for date</p>
+                        <p style={{ margin: "10px 0 0", fontSize: 11, color: "#9ca3af" }}>{reportData.sessionTrend.length} active days · hover bars for date</p>
                       </div>
                     )}
 
-                    <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px 24px", marginBottom: 24, overflowX: "auto" }}>
-                      <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>All Users by Activity</p>
+                    <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", marginBottom: 24, overflowX: "auto", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                      <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>All Users by Activity</p>
                       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                         <thead>
-                          <tr style={{ borderBottom: "1px solid #1e1e1e" }}>
+                          <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
                             {["#", "User", "Sessions", "Completed", "Total Hours", "Avg Watch (min)", "Saves", "Ratings", "Last Watched", "Status"].map(h => (
-                              <th key={h} style={{ padding: "0 12px 10px", textAlign: "left", color: "#555", fontWeight: 600, whiteSpace: "nowrap" }}>{h}</th>
+                              <th key={h} style={{ padding: "0 12px 10px", textAlign: "left", color: "#6b7280", fontWeight: 600, whiteSpace: "nowrap" }}>{h}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
                           {reportData.userEngagement.map((u, i) => (
-                            <tr key={u.id} style={{ borderBottom: "1px solid #141414" }}>
-                              <td style={{ padding: "10px 12px", color: "#333" }}>{i + 1}</td>
+                            <tr key={u.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                              <td style={{ padding: "10px 12px", color: "#9ca3af" }}>{i + 1}</td>
                               <td style={{ padding: "10px 12px" }}>
-                                <p style={{ margin: 0, color: "#e5e5e5", fontWeight: 500 }}>{u.display}</p>
-                                {u.email && u.display !== u.email && <p style={{ margin: 0, color: "#444", fontSize: 11 }}>{u.email}</p>}
+                                <p style={{ margin: 0, color: "#0f172a", fontWeight: 500 }}>{u.display}</p>
+                                {u.email && u.display !== u.email && <p style={{ margin: 0, color: "#9ca3af", fontSize: 11 }}>{u.email}</p>}
                               </td>
                               <td style={{ padding: "10px 12px", color: "#60a5fa", fontWeight: 600 }}>{u.sessions}</td>
                               <td style={{ padding: "10px 12px", color: "#34d399" }}>{u.completed}</td>
                               <td style={{ padding: "10px 12px", color: "#f472b6", fontWeight: 600 }}>{u.totalHours > 0 ? u.totalHours + " h" : "—"}</td>
-                              <td style={{ padding: "10px 12px", color: "#e5e5e5" }}>{u.avgProgressMin > 0 ? u.avgProgressMin : "—"}</td>
-                              <td style={{ padding: "10px 12px", color: "#a78bfa" }}>{u.saves || "—"}</td>
+                              <td style={{ padding: "10px 12px", color: "#374151" }}>{u.avgProgressMin > 0 ? u.avgProgressMin : "—"}</td>
+                              <td style={{ padding: "10px 12px", color: "#7c3aed" }}>{u.saves || "—"}</td>
                               <td style={{ padding: "10px 12px", color: "#f97316" }}>{u.ratings || "—"}</td>
-                              <td style={{ padding: "10px 12px", color: "#555", whiteSpace: "nowrap" }}>
+                              <td style={{ padding: "10px 12px", color: "#6b7280", whiteSpace: "nowrap" }}>
                                 {u.lastWatched ? new Date(u.lastWatched).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
                               </td>
                               <td style={{ padding: "10px 12px" }}>
@@ -2256,7 +2263,7 @@ export function CMS({ onExit }) {
                                   : u.active7d
                                   ? <span style={{ background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)", borderRadius: 4, padding: "2px 7px", color: "#34d399", fontSize: 10 }}>Active</span>
                                   : u.active30d
-                                  ? <span style={{ background: "rgba(250,204,21,0.1)", border: "1px solid rgba(250,204,21,0.2)", borderRadius: 4, padding: "2px 7px", color: "#facc15", fontSize: 10 }}>Recent</span>
+                                  ? <span style={{ background: "rgba(79,70,229,0.08)", border: "1px solid rgba(79,70,229,0.2)", borderRadius: 4, padding: "2px 7px", color: "#4f46e5", fontSize: 10 }}>Recent</span>
                                   : <span style={{ background: "rgba(100,116,139,0.1)", border: "1px solid rgba(100,116,139,0.2)", borderRadius: 4, padding: "2px 7px", color: "#64748b", fontSize: 10 }}>Inactive</span>
                                 }
                               </td>
@@ -2267,15 +2274,15 @@ export function CMS({ onExit }) {
                     </div>
 
                     {reportData.neverWatchedUsers.length > 0 && (
-                      <div style={{ background: "#111", border: "1px solid rgba(248,113,113,0.15)", borderRadius: 12, padding: "20px 24px" }}>
-                        <p style={{ margin: "0 0 14px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>
+                      <div style={{ background: "#ffffff", border: "1px solid rgba(248,113,113,0.15)", borderRadius: 12, padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                        <p style={{ margin: "0 0 14px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>
                           Never Watched <span style={{ color: "#f87171", fontSize: 12 }}>({reportData.neverWatchedUsers.length})</span>
                         </p>
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                           {reportData.neverWatchedUsers.map(u => (
-                            <div key={u.id} style={{ background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 8, padding: "6px 12px" }}>
-                              <p style={{ margin: 0, fontSize: 12, color: "#e5e5e5" }}>{u.display}</p>
-                              <p style={{ margin: 0, fontSize: 11, color: "#444" }}>Joined {new Date(u.joinedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
+                            <div key={u.id} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "6px 12px" }}>
+                              <p style={{ margin: 0, fontSize: 12, color: "#0f172a" }}>{u.display}</p>
+                              <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>Joined {new Date(u.joinedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
                             </div>
                           ))}
                         </div>
@@ -2287,7 +2294,7 @@ export function CMS({ onExit }) {
             )}
 
             {!reportLoading && !reportData && (
-              <div style={{ textAlign: "center", padding: 80, color: "#444" }}>Click Refresh to load reports</div>
+              <div style={{ textAlign: "center", padding: 80, color: "#9ca3af" }}>Click Refresh to load reports</div>
             )}
           </div>
         )}
@@ -2302,7 +2309,7 @@ export function CMS({ onExit }) {
 function FieldInput({ label, value, onChange, placeholder, type = "text" }) {
   return (
     <div>
-      <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>
+      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>
         {label}
       </label>
       <input
@@ -2312,16 +2319,16 @@ function FieldInput({ label, value, onChange, placeholder, type = "text" }) {
         placeholder={placeholder}
         style={{
           width: "100%",
-          background: "#0a0a0a",
-          border: "1px solid #2a2a2a",
+          background: "#ffffff",
+          border: "1px solid #e2e8f0",
           borderRadius: 7,
           padding: "10px 12px",
-          color: "#fff",
+          color: "#0f172a",
           fontSize: 13,
           outline: "none",
         }}
-        onFocus={e => (e.target.style.borderColor = "#facc15")}
-        onBlur={e => (e.target.style.borderColor = "#2a2a2a")}
+        onFocus={e => (e.target.style.borderColor = "#4f46e5")}
+        onBlur={e => (e.target.style.borderColor = "#e2e8f0")}
       />
     </div>
   );
@@ -2330,7 +2337,7 @@ function FieldInput({ label, value, onChange, placeholder, type = "text" }) {
 function FieldSelect({ label, value, onChange, options }) {
   return (
     <div>
-      <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>
+      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>
         {label}
       </label>
       <select
@@ -2338,11 +2345,11 @@ function FieldSelect({ label, value, onChange, options }) {
         onChange={e => onChange(e.target.value)}
         style={{
           width: "100%",
-          background: "#0a0a0a",
-          border: "1px solid #2a2a2a",
+          background: "#ffffff",
+          border: "1px solid #e2e8f0",
           borderRadius: 7,
           padding: "10px 12px",
-          color: "#fff",
+          color: "#0f172a",
           fontSize: 13,
           outline: "none",
           cursor: "pointer",
@@ -2360,7 +2367,7 @@ function FieldSelect({ label, value, onChange, options }) {
 
 function Spinner() {
   return (
-    <div style={{ width: 32, height: 32, border: "3px solid #222", borderTop: "3px solid #facc15", borderRadius: "50%", animation: "spin 0.8s linear infinite" }}>
+    <div style={{ width: 32, height: 32, border: "3px solid #e2e8f0", borderTop: "3px solid #4f46e5", borderRadius: "50%", animation: "spin 0.8s linear infinite" }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
