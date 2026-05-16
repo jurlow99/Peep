@@ -1648,21 +1648,22 @@ export function CMS({ onExit }) {
                 {/* ── OVERVIEW ── */}
                 {reportSection === "overview" && (
                   <>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16, marginBottom: 24 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 24 }}>
                       {[
-                        { label: "Total Users", value: reportData.userCount, color: "#34d399" },
-                        { label: "Videos", value: reportData.videoCount, color: "#facc15" },
-                        { label: "Shows", value: reportData.showCount, color: "#facc15" },
-                        { label: "Episodes", value: reportData.episodeCount, color: "#facc15" },
-                        { label: "Watch Sessions", value: reportData.watchSessions, color: "#60a5fa" },
-                        { label: "Completed", value: reportData.completedSessions, color: "#60a5fa" },
-                        { label: "Hours Watched", value: reportData.totalWatchHours.toLocaleString() + " h", color: "#f472b6" },
-                        { label: "List Saves", value: reportData.totalSaves, color: "#a78bfa" },
-                        { label: "Ratings Given", value: reportData.totalRatings, color: "#f97316" },
+                        { label: "Total Users", value: reportData.userCount, color: "#34d399", desc: "Registered accounts across all profiles" },
+                        { label: "Videos", value: reportData.videoCount, color: "#4f46e5", desc: "Movies uploaded to the library" },
+                        { label: "Shows", value: reportData.showCount, color: "#4f46e5", desc: "Series with one or more episodes" },
+                        { label: "Episodes", value: reportData.episodeCount, color: "#4f46e5", desc: "Individual episode entries across all shows" },
+                        { label: "Watch Sessions", value: reportData.watchSessions, color: "#60a5fa", desc: "Total times any content was played" },
+                        { label: "Completed", value: reportData.completedSessions, color: "#60a5fa", desc: "Sessions where the viewer reached the end" },
+                        { label: "Hours Watched", value: reportData.totalWatchHours.toLocaleString() + " h", color: "#f472b6", desc: "Total cumulative watch time across all users" },
+                        { label: "List Saves", value: reportData.totalSaves, color: "#a78bfa", desc: "Times users added content to My List" },
+                        { label: "Ratings Given", value: reportData.totalRatings, color: "#f97316", desc: "Thumbs up ratings submitted by users" },
                       ].map(stat => (
                         <div key={stat.label} style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 20px 16px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-                          <p style={{ margin: "0 0 6px", fontSize: 11, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.8 }}>{stat.label}</p>
-                          <p style={{ margin: 0, fontSize: 28, fontWeight: 700, color: stat.color }}>{stat.value.toLocaleString()}</p>
+                          <p style={{ margin: "0 0 6px", fontSize: 11, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 600 }}>{stat.label}</p>
+                          <p style={{ margin: "0 0 8px", fontSize: 28, fontWeight: 700, color: stat.color }}>{stat.value.toLocaleString()}</p>
+                          <p style={{ margin: 0, fontSize: 11, color: "#9ca3af", lineHeight: 1.4 }}>{stat.desc}</p>
                         </div>
                       ))}
                     </div>
