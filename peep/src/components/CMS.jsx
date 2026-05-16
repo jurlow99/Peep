@@ -173,6 +173,16 @@ export function CMS({ onExit }) {
   const [bulkDefaultMins, setBulkDefaultMins] = useState(45);
   const [bulkSaving, setBulkSaving] = useState(false);
 
+  // XMLTV import state
+  const [xmltvOpen, setXmltvOpen] = useState(false);
+  const [xmltvUrl, setXmltvUrl] = useState("");
+  const [xmltvParsed, setXmltvParsed] = useState(null);
+  const [xmltvChannelMap, setXmltvChannelMap] = useState({});
+  const [xmltvLoading, setXmltvLoading] = useState(false);
+  const [xmltvError, setXmltvError] = useState("");
+  const [xmltvImporting, setXmltvImporting] = useState(false);
+  const [xmltvImportDone, setXmltvImportDone] = useState(null);
+
   const [heroConfirm, setHeroConfirm] = useState(null); // { current, next, type: "video"|"show" }
 
   // Reports state
@@ -183,6 +193,7 @@ export function CMS({ onExit }) {
   const subscriptionRef = useRef(null);
   const carouselSubRef = useRef(null);
   const showSubRef = useRef(null);
+  const xmltvFileRef = useRef(null);
 
   const categories = ["Horror", "Sci-Fi", "Comedy", "Drama", "Action", "Documentary"];
   const carouselTypes = [
@@ -920,6 +931,123 @@ export function CMS({ onExit }) {
       return parts.length === 2 ? parts[0] * 60 + parts[1] : parts[0] * 3600 + parts[1] * 60 + (parts[2] || 0);
     }
     return parseInt(dur) || 0;
+  }
+
+  function parseXMLTVDate(str) {
+    if (!str) return null;
+    const raw = str.trim().replace(/\s+/, " ");
+    const spaceIdx = raw.indexOf(" ");
+    const datePart = spaceIdx >= 0 ? raw.slice(0, spaceIdx) : raw;
+    const offsetPart = spaceIdx >= 0 ? raw.slice(spaceIdx + 1) : "";
+    const y = datePart.slice(0, 4), mo = datePart.slice(4, 6), d = datePart.slice(6, 8);
+    const h = datePart.slice(8, 10) || "00", mi = datePart.slice(10, 12) || "00", s = datePart.slice(12, 14) || "00";
+    let iso = `${y}-${mo}-${d}T${h}:${mi}:${s}`;
+    if (offsetPart) {
+      iso += `${offsetPart[0]}${offsetPart.slice(1, 3)}:${offsetPart.slice(3, 5) || "00"}`;
+    } else {
+      iso += "Z";
+    }
+    const dt = new Date(iso);
+    return isNaN(dt) ? null : dt;
+  }
+
+  function parseXMLTVText(xmlText) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xmlText, "text/xml");
+    if (doc.querySelector("parsererror")) throw new Error("Invalid XML — check the file format");
+    const channels = {};
+    doc.querySelectorAll("channel").forEach(ch => {
+      const id = ch.getAttribute("id");
+      if (id) channels[id] = ch.querySelector("display-name")?.textContent?.trim() || id;
+    });
+    const programmes = [];
+    doc.querySelectorAll("programme").forEach(prog => {
+      const channel = prog.getAttribute("channel");
+      const start = parseXMLTVDate(prog.getAttribute("start"));
+      const end = parseXMLTVDate(prog.getAttribute("stop"));
+      if (!start || !end || !channel) return;
+      programmes.push({
+        channel,
+        start_time: start,
+        end_time: end,
+        title: prog.querySelector("title")?.textContent?.trim() || "(Untitled)",
+        description: prog.querySelector("desc")?.textContent?.trim() || "",
+        thumbnail: prog.querySelector("icon")?.getAttribute("src") || "",
+      });
+    });
+    return { channels, programmes };
+  }
+
+  function xmltvAutoMap(channels) {
+    const autoMap = {};
+    Object.entries(channels).forEach(([xId, xName]) => {
+      const lower = xName.toLowerCase();
+      const match = liveList.find(ch =>
+        ch.title.toLowerCase().includes(lower) || lower.includes(ch.title.toLowerCase())
+      );
+      if (match) autoMap[xId] = match.id;
+    });
+    return autoMap;
+  }
+
+  async function loadXmltvFile(file) {
+    setXmltvLoading(true); setXmltvError(""); setXmltvParsed(null);
+    try {
+      const text = await file.text();
+      const parsed = parseXMLTVText(text);
+      setXmltvParsed(parsed);
+      setXmltvChannelMap(xmltvAutoMap(parsed.channels));
+    } catch (e) { setXmltvError(e.message); }
+    setXmltvLoading(false);
+  }
+
+  async function loadXmltvUrl() {
+    if (!xmltvUrl.trim()) return;
+    setXmltvLoading(true); setXmltvError(""); setXmltvParsed(null);
+    try {
+      const res = await fetch(xmltvUrl.trim());
+      if (!res.ok) throw new Error(`HTTP ${res.status} — check the URL`);
+      const text = await res.text();
+      const parsed = parseXMLTVText(text);
+      setXmltvParsed(parsed);
+      setXmltvChannelMap(xmltvAutoMap(parsed.channels));
+    } catch (e) { setXmltvError(e.message); }
+    setXmltvLoading(false);
+  }
+
+  async function importXmltv() {
+    if (!xmltvParsed) return;
+    setXmltvImporting(true); setXmltvError("");
+    const entries = xmltvParsed.programmes
+      .filter(p => xmltvChannelMap[p.channel])
+      .map(p => ({
+        channel_id: xmltvChannelMap[p.channel],
+        title: p.title,
+        description: p.description || null,
+        thumbnail: p.thumbnail || null,
+        start_time: p.start_time.toISOString(),
+        end_time: p.end_time.toISOString(),
+      }));
+    if (!entries.length) {
+      setXmltvError("No channels mapped — assign at least one channel below.");
+      setXmltvImporting(false); return;
+    }
+    const channelIds = [...new Set(entries.map(e => e.channel_id))];
+    const minStart = entries.reduce((m, e) => e.start_time < m ? e.start_time : m, entries[0].start_time);
+    const maxEnd = entries.reduce((m, e) => e.end_time > m ? e.end_time : m, entries[0].end_time);
+    for (const cId of channelIds) {
+      await supabase.from("epg_entries").delete().eq("channel_id", cId).gte("start_time", minStart).lte("end_time", maxEnd);
+    }
+    const BATCH = 500;
+    for (let i = 0; i < entries.length; i += BATCH) {
+      const { error } = await supabase.from("epg_entries").insert(entries.slice(i, i + BATCH));
+      if (error) { setXmltvError(error.message); setXmltvImporting(false); return; }
+    }
+    setXmltvImportDone(entries.length);
+    setXmltvImporting(false);
+    if (selectedChannelForEpg && channelIds.includes(selectedChannelForEpg.id)) {
+      loadEpgEntries(selectedChannelForEpg.id, epgDayOffset);
+    }
   }
 
   async function loadEpgEntries(channelId, dayOffset = 0) {
@@ -1824,6 +1952,11 @@ export function CMS({ onExit }) {
                           onClick={startBulkSchedule}
                           style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 16px", color: "#374151", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
                           ⚡ Auto-Schedule
+                        </button>
+                        <button
+                          onClick={() => { setXmltvOpen(true); setXmltvParsed(null); setXmltvChannelMap({}); setXmltvError(""); setXmltvImportDone(null); setXmltvUrl(""); }}
+                          style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 16px", color: "#374151", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                          📡 Import XMLTV
                         </button>
                         <button
                           onClick={startEpgAdd}
@@ -2979,6 +3112,133 @@ export function CMS({ onExit }) {
         );
       })()}
 
+    {/* ── XMLTV IMPORT MODAL ── */}
+    {xmltvOpen && (
+      <div style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+        onClick={e => { if (e.target === e.currentTarget) setXmltvOpen(false); }}>
+        <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 640, maxHeight: "90vh", overflow: "auto", boxShadow: "0 24px 80px rgba(0,0,0,0.25)" }}>
+
+          {/* Header */}
+          <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#0f172a" }}>Import EPG · XMLTV</h2>
+              <p style={{ margin: "3px 0 0", fontSize: 12, color: "#6b7280" }}>Upload a .xml file or load from a URL, then map channels to your live streams</p>
+            </div>
+            <button onClick={() => setXmltvOpen(false)} style={{ background: "none", border: "none", fontSize: 20, color: "#9ca3af", cursor: "pointer", lineHeight: 1, padding: 4 }}>✕</button>
+          </div>
+
+          <div style={{ padding: 24 }}>
+            {xmltvImportDone ? (
+              /* Success screen */
+              <div style={{ textAlign: "center", padding: "32px 0" }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
+                <h3 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Import Complete</h3>
+                <p style={{ margin: "0 0 24px", color: "#4b5563", fontSize: 14 }}>{xmltvImportDone.toLocaleString()} programs imported successfully</p>
+                <button onClick={() => setXmltvOpen(false)}
+                  style={{ background: "#4f46e5", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                  Done
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* Step 1: source */}
+                <div style={{ marginBottom: 24 }}>
+                  <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "#374151" }}>1. Load XMLTV source</p>
+                  <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+                    <input
+                      ref={xmltvFileRef}
+                      type="file"
+                      accept=".xml,.gz"
+                      style={{ display: "none" }}
+                      onChange={e => { if (e.target.files[0]) loadXmltvFile(e.target.files[0]); }}
+                    />
+                    <button onClick={() => xmltvFileRef.current?.click()}
+                      style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, color: "#374151", cursor: "pointer", flexShrink: 0 }}>
+                      Upload .xml file
+                    </button>
+                    <span style={{ color: "#9ca3af", display: "flex", alignItems: "center", fontSize: 13, flexShrink: 0 }}>or</span>
+                    <input
+                      value={xmltvUrl}
+                      onChange={e => setXmltvUrl(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && loadXmltvUrl()}
+                      placeholder="https://example.com/epg.xml"
+                      style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 12px", fontSize: 13, outline: "none" }}
+                    />
+                    <button onClick={loadXmltvUrl} disabled={xmltvLoading || !xmltvUrl.trim()}
+                      style={{ background: "#0f172a", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0, opacity: !xmltvUrl.trim() ? 0.4 : 1 }}>
+                      {xmltvLoading ? "Loading…" : "Load"}
+                    </button>
+                  </div>
+                  {xmltvError && <p style={{ margin: 0, fontSize: 13, color: "#ef4444" }}>{xmltvError}</p>}
+                  {xmltvLoading && !xmltvParsed && <p style={{ margin: 0, fontSize: 13, color: "#6b7280" }}>Parsing…</p>}
+                </div>
+
+                {/* Step 2: channel mapping */}
+                {xmltvParsed && (
+                  <>
+                    <div style={{ marginBottom: 20, padding: "12px 16px", background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
+                      <p style={{ margin: 0, fontSize: 13, color: "#374151" }}>
+                        Found <strong>{Object.keys(xmltvParsed.channels).length}</strong> channel{Object.keys(xmltvParsed.channels).length !== 1 ? "s" : ""} · <strong>{xmltvParsed.programmes.length.toLocaleString()}</strong> programs
+                      </p>
+                    </div>
+
+                    <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "#374151" }}>2. Map XMLTV channels to your live streams</p>
+                    <div style={{ border: "1px solid #e2e8f0", borderRadius: 10, overflow: "hidden", marginBottom: 20 }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 0, background: "#f8fafc", padding: "8px 16px", borderBottom: "1px solid #e2e8f0" }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5 }}>XMLTV Channel</span>
+                        <span />
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5 }}>Map to</span>
+                      </div>
+                      {Object.entries(xmltvParsed.channels).map(([xId, xName]) => {
+                        const progCount = xmltvParsed.programmes.filter(p => p.channel === xId).length;
+                        return (
+                          <div key={xId} style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 12, alignItems: "center", padding: "10px 16px", borderBottom: "1px solid #f1f5f9" }}>
+                            <div>
+                              <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: "#0f172a" }}>{xName}</p>
+                              <p style={{ margin: "1px 0 0", fontSize: 11, color: "#9ca3af" }}>{progCount} program{progCount !== 1 ? "s" : ""}</p>
+                            </div>
+                            <span style={{ color: "#9ca3af", fontSize: 16 }}>→</span>
+                            <select
+                              value={xmltvChannelMap[xId] || ""}
+                              onChange={e => setXmltvChannelMap(m => ({ ...m, [xId]: e.target.value ? Number(e.target.value) : undefined }))}
+                              style={{ border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 10px", fontSize: 13, background: xmltvChannelMap[xId] ? "#f0fdf4" : "#fff", color: xmltvChannelMap[xId] ? "#15803d" : "#374151" }}>
+                              <option value="">— Skip —</option>
+                              {liveList.map(ch => (
+                                <option key={ch.id} value={ch.id}>{ch.channel_number ? `CH ${ch.channel_number} · ` : ""}{ch.title}</option>
+                              ))}
+                            </select>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Summary + import */}
+                    {(() => {
+                      const mappedCount = xmltvParsed.programmes.filter(p => xmltvChannelMap[p.channel]).length;
+                      return (
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
+                          <p style={{ margin: 0, fontSize: 13, color: mappedCount > 0 ? "#15803d" : "#6b7280" }}>
+                            {mappedCount > 0
+                              ? `${mappedCount.toLocaleString()} programs ready to import`
+                              : "Map at least one channel to import"}
+                          </p>
+                          <button
+                            onClick={importXmltv}
+                            disabled={xmltvImporting || mappedCount === 0}
+                            style={{ background: mappedCount > 0 ? "#4f46e5" : "#e2e8f0", color: mappedCount > 0 ? "#fff" : "#9ca3af", border: "none", borderRadius: 8, padding: "10px 22px", fontSize: 14, fontWeight: 700, cursor: mappedCount > 0 ? "pointer" : "not-allowed", flexShrink: 0, minWidth: 160 }}>
+                            {xmltvImporting ? "Importing…" : `Import ${mappedCount > 0 ? mappedCount.toLocaleString() : ""} Programs`}
+                          </button>
+                        </div>
+                      );
+                    })()}
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
     </div>
   );
 }
