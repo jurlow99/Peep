@@ -127,6 +127,8 @@ export default function App() {
     }
   }
 
+  const goHome = () => { setPage("home"); setActiveNav("Home"); setSelectedVideo(null); setSelectedShow(null); setSelectedPodcast(null); setSelectedPodcastEp(null); };
+
   const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true), onProfileOpen: () => setProfileOpen(true), userAvatarId, activeProfile, onSwitchProfile: switchProfile, onPodcastSelect: pod => { setSelectedPodcast(pod); setPage("podcast"); }, onViewProfile: () => setPage("profile") };
 
   if (!authChecked) return null;
@@ -148,6 +150,7 @@ export default function App() {
             key={selectedVideo.id}
             video={selectedVideo}
             onBack={handleBack}
+            onGoHome={goHome}
             onSelect={v => setSelectedVideo(v)}
             onShowSelect={s => { setSelectedShow(s); setPage("show"); setSelectedVideo(null); }}
             {...listProps}
@@ -165,6 +168,7 @@ export default function App() {
         <ShowDetail
           show={selectedShow}
           onBack={() => { setSelectedShow(null); setPage("home"); }}
+          onGoHome={goHome}
           onPlay={v => { setSelectedVideo(v); setPage("player"); }}
           onShowSelect={s => setSelectedShow(s)}
           {...listProps}
@@ -180,6 +184,7 @@ export default function App() {
         <PodcastDetail
           podcast={selectedPodcast}
           onBack={() => { setSelectedPodcast(null); setPage("home"); }}
+          onGoHome={goHome}
           onPlay={ep => { setSelectedPodcastEp(ep); setPage("podcast_player"); }}
           {...listProps}
         />
@@ -195,6 +200,7 @@ export default function App() {
           episode={selectedPodcastEp}
           podcast={selectedPodcast}
           onBack={() => setPage("podcast")}
+          onGoHome={goHome}
           onSelect={ep => setSelectedPodcastEp(ep)}
           {...listProps}
         />
@@ -209,6 +215,7 @@ export default function App() {
           user={user}
           activeProfile={activeProfile}
           onBack={() => setPage("home")}
+          onGoHome={goHome}
           onProfileUpdate={updated => {
             setActiveProfile(updated);
             localStorage.setItem(`peep_profile_${user.id}`, JSON.stringify(updated));
@@ -227,6 +234,7 @@ export default function App() {
           user={user}
           activeProfile={activeProfile}
           onBack={() => setPage("home")}
+          onGoHome={goHome}
           onProfileUpdate={updated => {
             setActiveProfile(updated);
             localStorage.setItem(`peep_profile_${user.id}`, JSON.stringify(updated));
@@ -1891,7 +1899,7 @@ function isHlsUrl(url) {
   return !!url && (url.includes(".m3u8") || url.includes("m3u8"));
 }
 
-function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onToggleList, onAuthOpen, activeProfile }) {
+function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myList, onToggleList, onAuthOpen, activeProfile }) {
   const [allVideos, setAllVideos] = useState([]);
   const [allShows, setAllShows] = useState([]);
   const [nextEpisode, setNextEpisode] = useState(null);
@@ -2163,7 +2171,7 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
           Back
         </button>
-        <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22 }}><span style={{ color: "#facc15" }}>peep.</span></span>
+        <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
       </nav>
 
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
@@ -2401,7 +2409,7 @@ function rankRelated(source, pool, limit = 12) {
 
 // ─── Show Detail ──────────────────────────────────────────────────────────────
 
-function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen, activeProfile }) {
+function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen, activeProfile }) {
   const [episodes, setEpisodes] = useState([]);
   const [selectedSeason, setSelectedSeason] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -2489,7 +2497,7 @@ function ShowDetail({ show, onBack, onPlay, onShowSelect, user, myList, onToggle
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
             Back
           </button>
-          <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22 }}><span style={{ color: "#facc15" }}>peep.</span></span>
+          <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
         </div>
 
         {/* Hero content */}
@@ -2689,7 +2697,7 @@ function EpisodeCard({ episode, show, onPlay, progress }) {
 
 // ─── Podcast Detail ───────────────────────────────────────────────────────────
 
-function PodcastDetail({ podcast, onBack, onPlay, user, activeProfile }) {
+function PodcastDetail({ podcast, onBack, onGoHome, onPlay, user, activeProfile }) {
   const [episodes, setEpisodes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [watchProgress, setWatchProgress] = useState({});
@@ -2744,7 +2752,7 @@ function PodcastDetail({ podcast, onBack, onPlay, user, activeProfile }) {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
             Back
           </button>
-          <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22 }}><span style={{ color: "#facc15" }}>peep.</span></span>
+          <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
         </div>
 
         {/* Artwork + info */}
@@ -2847,7 +2855,7 @@ function PodcastEpisodeRow({ episode, podcast, onPlay, progress }) {
 
 // ─── Podcast Player ────────────────────────────────────────────────────────────
 
-function PodcastPlayerView({ episode, podcast, onBack, onSelect, user, activeProfile }) {
+function PodcastPlayerView({ episode, podcast, onBack, onGoHome, onSelect, user, activeProfile }) {
   const audioRef = useRef(null);
   const saveProgressRef = useRef(null);
   const progressTimerRef = useRef(null);
@@ -2919,7 +2927,7 @@ function PodcastPlayerView({ episode, podcast, onBack, onSelect, user, activePro
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
             Back
           </button>
-          <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22 }}><span style={{ color: "#facc15" }}>peep.</span></span>
+          <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
         </nav>
 
         {/* Player content */}
@@ -2998,7 +3006,7 @@ function timeAgo(dateStr) {
   return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function ProfilePage({ user, activeProfile, onBack, onProfileUpdate, onOpenSettings }) {
+function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, onOpenSettings }) {
   const [history, setHistory] = useState([]);
   const [contentMap, setContentMap] = useState({});
   const [showsMap, setShowsMap] = useState({});
@@ -3072,7 +3080,7 @@ function ProfilePage({ user, activeProfile, onBack, onProfileUpdate, onOpenSetti
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
           Back
         </button>
-        <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22 }}><span style={{ color: "#facc15" }}>peep.</span></span>
+        <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
       </nav>
 
       {/* Banner */}
@@ -3235,7 +3243,7 @@ function SettingRow({ label, description, value, onChange }) {
 }
 
 
-function SettingsPage({ user, activeProfile, onBack, onProfileUpdate, onAvatarChange, onSignOut }) {
+function SettingsPage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, onAvatarChange, onSignOut }) {
   const [name, setName] = useState(activeProfile?.name || "");
   const [savedName, setSavedName] = useState(activeProfile?.name || "");
   const [avatarId, setAvatarId] = useState(activeProfile?.avatar_id || null);
@@ -3283,7 +3291,7 @@ function SettingsPage({ user, activeProfile, onBack, onProfileUpdate, onAvatarCh
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
           Back
         </button>
-        <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22 }}><span style={{ color: "#facc15" }}>peep.</span></span>
+        <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
       </nav>
 
       <div style={{ paddingTop: 68 + 40, paddingBottom: 80, paddingLeft: PAD, paddingRight: PAD, maxWidth: 580, margin: "0 auto" }}>
