@@ -84,6 +84,7 @@ const EMPTY_PODCAST_EPISODE = {
 export function CMS({ onExit }) {
   const [tab, setTab] = useState("videos");
   const [videoSubTab, setVideoSubTab] = useState("movies"); // "movies" | "series" | "episodes"
+  const [drawerOpen, setDrawerOpen] = useState(false);
   
   // Videos state
   const [rows, setRows] = useState([]);
@@ -183,6 +184,10 @@ export function CMS({ onExit }) {
   function showToast(msg, type = "success") {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
+  }
+
+  function closeDrawer() {
+    setDrawerOpen(false);
   }
 
   useEffect(() => {
@@ -396,6 +401,7 @@ export function CMS({ onExit }) {
 
   function startEdit(row) {
     setEditingId(row.id);
+    setDrawerOpen(true);
     setForm({
       title: row.title ?? "",
       category: row.category ?? "Horror",
@@ -415,6 +421,7 @@ export function CMS({ onExit }) {
   function cancelEdit() {
     setEditingId(null);
     setForm(EMPTY_ROW);
+    setDrawerOpen(false);
   }
 
   function parseForm() {
@@ -453,6 +460,7 @@ export function CMS({ onExit }) {
         if (error) throw error;
         showToast("Video added");
         setForm(EMPTY_ROW);
+        setDrawerOpen(false);
       }
       await loadRows();
     } catch (error) {
@@ -526,6 +534,7 @@ export function CMS({ onExit }) {
 
   function startCarouselEdit(carousel) {
     setEditingCarouselId(carousel.id);
+    setDrawerOpen(true);
     setCarouselForm({
       title: carousel.title ?? "",
       type: carousel.type ?? "category",
@@ -540,6 +549,7 @@ export function CMS({ onExit }) {
   function cancelCarouselEdit() {
     setEditingCarouselId(null);
     setCarouselForm(EMPTY_CAROUSEL);
+    setDrawerOpen(false);
   }
 
   async function saveCarousel() {
@@ -571,6 +581,7 @@ export function CMS({ onExit }) {
         if (error) throw error;
         showToast("Carousel added");
         setCarouselForm(EMPTY_CAROUSEL);
+        setDrawerOpen(false);
       }
       await loadCarousels();
     } catch (error) {
@@ -625,10 +636,11 @@ export function CMS({ onExit }) {
 
   function startShowEdit(show) {
     setEditingShowId(show.id);
+    setDrawerOpen(true);
     setShowForm({ title: show.title ?? "", category: show.category ?? "Horror", rating: show.rating ?? "NR", year: show.year ?? "", score: show.score ?? "", thumbnail: show.thumbnail ?? "", poster: show.poster ?? "", description: show.description ?? "", tags: Array.isArray(show.tags) ? show.tags.join(", ") : (show.tags ?? ""), trailer_url: show.trailer_url ?? "" });
   }
 
-  function cancelShowEdit() { setEditingShowId(null); setShowForm(EMPTY_SHOW); }
+  function cancelShowEdit() { setEditingShowId(null); setShowForm(EMPTY_SHOW); setDrawerOpen(false); }
 
   async function saveShow() {
     if (!showForm.title.trim()) { showToast("Title is required.", "error"); return; }
@@ -645,6 +657,7 @@ export function CMS({ onExit }) {
         if (error) throw error;
         showToast("Show added");
         setShowForm(EMPTY_SHOW);
+        setDrawerOpen(false);
       }
       await loadShows();
     } catch (error) { showToast("Save failed: " + error.message, "error"); }
@@ -689,10 +702,11 @@ export function CMS({ onExit }) {
 
   function startEpisodeEdit(ep) {
     setEditingEpisodeId(ep.id);
+    setDrawerOpen(true);
     setEpisodeForm({ show_id: ep.show_id, season: ep.season, episode_number: ep.episode_number, title: ep.title ?? "", description: ep.description ?? "", url: ep.url ?? "", thumbnail: ep.thumbnail ?? "", duration: ep.duration ?? "" });
   }
 
-  function cancelEpisodeEdit() { setEditingEpisodeId(null); setEpisodeForm({ ...EMPTY_EPISODE, show_id: selectedShowForEpisodes }); }
+  function cancelEpisodeEdit() { setEditingEpisodeId(null); setEpisodeForm({ ...EMPTY_EPISODE, show_id: selectedShowForEpisodes }); setDrawerOpen(false); }
 
   async function saveEpisode() {
     if (!episodeForm.title.trim() || !selectedShowForEpisodes) { showToast("Show and title are required.", "error"); return; }
@@ -709,6 +723,7 @@ export function CMS({ onExit }) {
         if (error) throw error;
         showToast("Episode added");
         setEpisodeForm({ ...EMPTY_EPISODE, show_id: selectedShowForEpisodes });
+        setDrawerOpen(false);
       }
       await loadEpisodes(selectedShowForEpisodes);
     } catch (error) { showToast("Save failed: " + error.message, "error"); }
@@ -733,10 +748,11 @@ export function CMS({ onExit }) {
 
   function startPodcastEdit(p) {
     setEditingPodcastId(p.id);
+    setDrawerOpen(true);
     setPodcastForm({ title: p.title ?? "", host: p.host ?? "", description: p.description ?? "", artwork_url: p.artwork_url ?? "", link_url: p.link_url ?? "", episode_count: p.episode_count ?? "", tags: Array.isArray(p.tags) ? p.tags.join(", ") : (p.tags ?? ""), enabled: p.enabled ?? true });
   }
 
-  function cancelPodcastEdit() { setEditingPodcastId(null); setPodcastForm(EMPTY_PODCAST); }
+  function cancelPodcastEdit() { setEditingPodcastId(null); setPodcastForm(EMPTY_PODCAST); setDrawerOpen(false); }
 
   async function savePodcast() {
     if (!podcastForm.title.trim()) { showToast("Title is required.", "error"); return; }
@@ -753,6 +769,7 @@ export function CMS({ onExit }) {
         if (error) throw error;
         showToast("Podcast added");
         setPodcastForm(EMPTY_PODCAST);
+        setDrawerOpen(false);
       }
       await loadPodcasts();
     } catch (error) { showToast("Save failed: " + error.message, "error"); }
@@ -832,10 +849,11 @@ export function CMS({ onExit }) {
 
   function startLiveEdit(s) {
     setEditingLiveId(s.id);
+    setDrawerOpen(true);
     setLiveForm({ title: s.title ?? "", description: s.description ?? "", stream_url: s.stream_url ?? "", thumbnail: s.thumbnail ?? "", is_live: s.is_live ?? true, badge_text: s.badge_text ?? "LIVE" });
   }
 
-  function cancelLiveEdit() { setEditingLiveId(null); setLiveForm(EMPTY_LIVE_STREAM); }
+  function cancelLiveEdit() { setEditingLiveId(null); setLiveForm(EMPTY_LIVE_STREAM); setDrawerOpen(false); }
 
   async function saveLiveStream() {
     if (!liveForm.title.trim()) { showToast("Title is required.", "error"); return; }
@@ -848,7 +866,7 @@ export function CMS({ onExit }) {
       } else {
         const { error } = await supabase.from("live_streams").insert([liveForm]);
         if (error) throw error;
-        showToast("Stream added"); setLiveForm(EMPTY_LIVE_STREAM);
+        showToast("Stream added"); setLiveForm(EMPTY_LIVE_STREAM); setDrawerOpen(false);
       }
       await loadLiveStreams();
     } catch (error) { showToast("Save failed: " + error.message, "error"); }
@@ -993,11 +1011,11 @@ export function CMS({ onExit }) {
         </button>
       </div>
 
-      <div style={{ maxWidth: 1600, margin: "0 auto", padding: `40px ${PAD} 80px`, display: "grid", gridTemplateColumns: "400px 1fr", gap: 40, alignItems: "start" }}>
+      <div style={{ maxWidth: 1600, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
 
         {/* ────── VIDEOS SUB-TAB BAR ────── */}
         {tab === "videos" && (
-          <div style={{ gridColumn: "1 / -1", display: "flex", gap: 6, marginBottom: 8, paddingBottom: 20, borderBottom: "1px solid #e2e8f0" }}>
+          <div style={{ display: "flex", gap: 6, marginBottom: 8, paddingBottom: 20, borderBottom: "1px solid #e2e8f0" }}>
             {[
               { key: "movies", label: "Movies", count: rows.length },
               { key: "series", label: "Series", count: showsList.length },
@@ -1014,220 +1032,18 @@ export function CMS({ onExit }) {
         {/* ────── VIDEOS TAB — MOVIES ────── */}
         {tab === "videos" && videoSubTab === "movies" && (
           <>
-            {/* ── Edit Panel ── */}
-            <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: 32, position: "sticky", top: 24, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-              <h2 style={{ margin: "0 0 28px", fontSize: 17, fontWeight: 600, color: "#0f172a" }}>
-                {editingId ? "Edit Row" : "Add New Row"}
-              </h2>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {/* Title */}
-            <FieldInput
-              label="Title *"
-              value={form.title}
-              onChange={v => setForm(f => ({ ...f, title: v }))}
-              placeholder="e.g. Metropolis"
-            />
-
-            {/* Category & Rating */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <FieldSelect
-                label="Category"
-                value={form.category}
-                onChange={v => setForm(f => ({ ...f, category: v }))}
-                options={categories}
-              />
-              <FieldSelect
-                label="Rating"
-                value={form.rating}
-                onChange={v => setForm(f => ({ ...f, rating: v }))}
-                options={["NR", "G", "PG", "PG-13", "R"]}
-              />
-            </div>
-
-            {/* Year, Duration, Score */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-              <FieldInput
-                label="Year"
-                value={form.year}
-                onChange={v => setForm(f => ({ ...f, year: v }))}
-                placeholder="1927"
-                type="number"
-              />
-              <FieldInput
-                label="Duration"
-                value={form.duration}
-                onChange={v => setForm(f => ({ ...f, duration: v }))}
-                placeholder="2h 33m"
-              />
-              <FieldInput
-                label="Score %"
-                value={form.score}
-                onChange={v => setForm(f => ({ ...f, score: v }))}
-                placeholder="99"
-                type="number"
-              />
-            </div>
-
-            {/* Hero Image */}
             <div>
-              <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>
-                Hero Image
-              </label>
-              <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>Landscape · 1920×1080px · full-screen banner · Safe zone: center 1400×800 (stay 260px from sides, 140px from top/bottom)</p>
-              <ImageUploader
-                label="Upload Hero Image (JPG/PNG)"
-                folder="hero"
-                onUploadSuccess={url => setForm(f => ({ ...f, thumbnail: url }))}
-                onError={err => showToast("Upload failed: " + err, "error")}
-              />
-              <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "8px 0" }}>
-                <div style={{ flex: 1, height: 1, background: "#e2e8f0" }} />
-                <span style={{ fontSize: 11, color: "#9ca3af" }}>or paste URL</span>
-                <div style={{ flex: 1, height: 1, background: "#e2e8f0" }} />
+              {/* Header row with Add button */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Movies ({rows.length})</h2>
+                <button
+                  onClick={() => { setForm(EMPTY_ROW); setEditingId(null); setDrawerOpen(true); }}
+                  style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+                >
+                  + Add Movie
+                </button>
               </div>
-              <input
-                type="text"
-                value={form.thumbnail}
-                onChange={e => setForm(f => ({ ...f, thumbnail: e.target.value }))}
-                placeholder="https://..."
-                style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }}
-                onFocus={e => (e.target.style.borderColor = "#4f46e5")}
-                onBlur={e => (e.target.style.borderColor = "#e2e8f0")}
-              />
-              {form.thumbnail && (
-                <div style={{ marginTop: 10, borderRadius: 6, overflow: "hidden", border: "1px solid #e2e8f0" }}>
-                  <img src={form.thumbnail} alt="Hero preview" style={{ width: "100%", height: 110, objectFit: "cover" }} onError={e => { e.target.style.display = "none"; }} />
-                </div>
-              )}
-            </div>
 
-            {/* Poster Image */}
-            <div>
-              <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>
-                Poster
-              </label>
-              <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>Portrait · 400×600px · browse cards (optional) · Safe zone: center 320×460 (stay 40px from sides, 70px from top, 100px from bottom — title overlay)</p>
-              <ImageUploader
-                label="Upload Poster (JPG/PNG)"
-                folder="posters"
-                onUploadSuccess={url => setForm(f => ({ ...f, poster: url }))}
-                onError={err => showToast("Upload failed: " + err, "error")}
-              />
-              <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "8px 0" }}>
-                <div style={{ flex: 1, height: 1, background: "#e2e8f0" }} />
-                <span style={{ fontSize: 11, color: "#9ca3af" }}>or paste URL</span>
-                <div style={{ flex: 1, height: 1, background: "#e2e8f0" }} />
-              </div>
-              <input
-                type="text"
-                value={form.poster}
-                onChange={e => setForm(f => ({ ...f, poster: e.target.value }))}
-                placeholder="https://..."
-                style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }}
-                onFocus={e => (e.target.style.borderColor = "#4f46e5")}
-                onBlur={e => (e.target.style.borderColor = "#e2e8f0")}
-              />
-              {form.poster && (
-                <div style={{ marginTop: 10, borderRadius: 6, overflow: "hidden", border: "1px solid #e2e8f0", width: 80 }}>
-                  <img src={form.poster} alt="Poster preview" style={{ width: "100%", aspectRatio: "2/3", objectFit: "cover" }} onError={e => { e.target.style.display = "none"; }} />
-                </div>
-              )}
-            </div>
-
-            {/* Video URL */}
-            <FieldInput
-              label="Video URL *"
-              value={form.url}
-              onChange={v => setForm(f => ({ ...f, url: v }))}
-              placeholder="https://archive.org/..."
-            />
-
-            {/* Trailer URL */}
-            <FieldInput
-              label="Trailer URL"
-              value={form.trailer_url}
-              onChange={v => setForm(f => ({ ...f, trailer_url: v }))}
-              placeholder="https://youtube.com/watch?v=... (optional)"
-            />
-
-            {/* Tags */}
-            <FieldInput
-              label="Tags (comma-separated)"
-              value={form.tags}
-              onChange={v => setForm(f => ({ ...f, tags: v }))}
-              placeholder="Silent, Epic, Classic"
-            />
-
-            {/* Description */}
-            <div>
-              <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>
-                Description
-              </label>
-              <textarea
-                value={form.description}
-                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                rows={3}
-                placeholder="Short synopsis..."
-                style={{
-                  width: "100%",
-                  background: "#ffffff",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: 7,
-                  padding: "10px 12px",
-                  color: "#0f172a",
-                  fontSize: 13,
-                  outline: "none",
-                  resize: "vertical",
-                  fontFamily: "inherit",
-                }}
-                onFocus={e => (e.target.style.borderColor = "#4f46e5")}
-                onBlur={e => (e.target.style.borderColor = "#e2e8f0")}
-              />
-            </div>
-          </div>
-
-          {/* Buttons */}
-          <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
-            <button
-              onClick={saveRow}
-              disabled={saving}
-              style={{
-                flex: 1,
-                background: "#4f46e5",
-                border: "none",
-                borderRadius: 7,
-                padding: "12px",
-                color: "#fff",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: saving ? "not-allowed" : "pointer",
-                opacity: saving ? 0.7 : 1,
-              }}
-            >
-              {saving ? "Saving…" : editingId ? "Save Changes" : "Add Row"}
-            </button>
-            {editingId && (
-              <button
-                onClick={cancelEdit}
-                style={{
-                  background: "#f1f5f9",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: 7,
-                  padding: "12px 20px",
-                  color: "#374151",
-                  fontSize: 13,
-                  cursor: "pointer",
-                }}
-              >
-                Cancel
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* ── Data Table ── */}
-        <div>
           {/* Controls */}
           <div style={{ display: "flex", gap: 16, marginBottom: 24, flexWrap: "wrap", alignItems: "center" }}>
             <div style={{ flex: 1, minWidth: 200 }}>
@@ -1414,49 +1230,17 @@ export function CMS({ onExit }) {
         {/* ────── VIDEOS TAB — SERIES ────── */}
         {tab === "videos" && videoSubTab === "series" && (
           <>
-            <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: 32, position: "sticky", top: 24, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-              <h2 style={{ margin: "0 0 28px", fontSize: 17, fontWeight: 600, color: "#0f172a" }}>{editingShowId ? "Edit Show" : "Add New Show"}</h2>
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                <FieldInput label="Title *" value={showForm.title} onChange={v => setShowForm(f => ({ ...f, title: v }))} placeholder="e.g. The Twilight Zone" />
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <FieldSelect label="Category" value={showForm.category} onChange={v => setShowForm(f => ({ ...f, category: v }))} options={["Horror", "Sci-Fi", "Comedy", "Drama", "Action", "Documentary"]} />
-                  <FieldSelect label="Rating" value={showForm.rating} onChange={v => setShowForm(f => ({ ...f, rating: v }))} options={["NR", "G", "PG", "PG-13", "R"]} />
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <FieldInput label="Year" value={showForm.year} onChange={v => setShowForm(f => ({ ...f, year: v }))} placeholder="1959" type="number" />
-                  <FieldInput label="Score %" value={showForm.score} onChange={v => setShowForm(f => ({ ...f, score: v }))} placeholder="98" type="number" />
-                </div>
-                <FieldInput label="Tags (comma-separated)" value={showForm.tags} onChange={v => setShowForm(f => ({ ...f, tags: v }))} placeholder="Anthology, Black & White, Classic" />
-                <div>
-                  <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Hero Image</label>
-                  <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>Landscape · 1920×1080px · banner background · Safe zone: center 1400×800 (stay 260px from sides, 140px from top/bottom)</p>
-                  <ImageUploader label="Upload Hero Image" folder="hero" onUploadSuccess={url => setShowForm(f => ({ ...f, thumbnail: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
-                  <input type="text" value={showForm.thumbnail} onChange={e => setShowForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
-                  {showForm.thumbnail && <img src={showForm.thumbnail} alt="" style={{ width: "100%", height: 100, objectFit: "cover", borderRadius: 6, marginTop: 8 }} onError={e => { e.target.style.display = "none"; }} />}
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Poster</label>
-                  <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>Portrait · 400×600px · card image · Safe zone: center 320×460 (stay 40px from sides, 70px from top, 100px from bottom — title overlay)</p>
-                  <ImageUploader label="Upload Poster" folder="posters" onUploadSuccess={url => setShowForm(f => ({ ...f, poster: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
-                  <input type="text" value={showForm.poster} onChange={e => setShowForm(f => ({ ...f, poster: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
-                  {showForm.poster && <img src={showForm.poster} alt="" style={{ width: 70, aspectRatio: "2/3", objectFit: "cover", borderRadius: 6, marginTop: 8 }} onError={e => { e.target.style.display = "none"; }} />}
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Description</label>
-                  <textarea value={showForm.description} onChange={e => setShowForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Short synopsis..." style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
-                </div>
-                <FieldInput label="Trailer URL" value={showForm.trailer_url} onChange={v => setShowForm(f => ({ ...f, trailer_url: v }))} placeholder="https://youtube.com/watch?v=... (optional)" />
-              </div>
-              <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
-                <button onClick={saveShow} disabled={showSaving} style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: showSaving ? "not-allowed" : "pointer", opacity: showSaving ? 0.7 : 1 }}>
-                  {showSaving ? "Saving…" : editingShowId ? "Save Changes" : "Add Show"}
-                </button>
-                {editingShowId && <button onClick={cancelShowEdit} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>}
-              </div>
-            </div>
-
             <div>
-              <h3 style={{ margin: "0 0 20px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>All Shows ({showsList.length})</h3>
+              {/* Header row with Add button */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#0f172a" }}>All Shows ({showsList.length})</h2>
+                <button
+                  onClick={() => { setShowForm(EMPTY_SHOW); setEditingShowId(null); setDrawerOpen(true); }}
+                  style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+                >
+                  + Add Series
+                </button>
+              </div>
               {showsLoading ? <div style={{ color: "#6b7280", padding: 20 }}>Loading...</div> : showsList.length === 0 ? (
                 <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>No shows yet.</div>
               ) : showsList.map(show => (
@@ -1476,64 +1260,45 @@ export function CMS({ onExit }) {
                   </div>
                 </div>
               ))}
-            </div>
 
-            {deleteShowConfirm && (
-              <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
-                  <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "#0f172a" }}>Delete "{deleteShowConfirm.title}"?</p>
-                  <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 28 }}>All episodes will also be deleted.</p>
-                  <div style={{ display: "flex", gap: 10 }}>
-                    <button onClick={() => setDeleteShowConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
-                    <button onClick={() => deleteShow(deleteShowConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+              {deleteShowConfirm && (
+                <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+                    <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "#0f172a" }}>Delete "{deleteShowConfirm.title}"?</p>
+                    <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 28 }}>All episodes will also be deleted.</p>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <button onClick={() => setDeleteShowConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                      <button onClick={() => deleteShow(deleteShowConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </>
         )}
 
         {/* ────── VIDEOS TAB — EPISODES ────── */}
         {tab === "videos" && videoSubTab === "episodes" && (
           <>
-            <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: 32, position: "sticky", top: 24, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-              <h2 style={{ margin: "0 0 20px", fontSize: 17, fontWeight: 600, color: "#0f172a" }}>{editingEpisodeId ? "Edit Episode" : "Add Episode"}</h2>
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                <div>
-                  <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Show *</label>
+            <div>
+              {/* Header row with show selector and Add button */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Episodes</h2>
                   <select value={selectedShowForEpisodes} onChange={e => { setSelectedShowForEpisodes(e.target.value); loadEpisodes(e.target.value); setEpisodeForm({ ...EMPTY_EPISODE, show_id: e.target.value }); cancelEpisodeEdit(); }}
-                    style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }}>
+                    style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "8px 12px", color: "#0f172a", fontSize: 13, outline: "none" }}>
                     <option value="">Select a show...</option>
                     {showsList.map(s => <option key={s.id} value={String(s.id)}>{s.title}</option>)}
                   </select>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <FieldInput label="Season" value={episodeForm.season} onChange={v => setEpisodeForm(f => ({ ...f, season: v }))} placeholder="1" type="number" />
-                  <FieldInput label="Episode #" value={episodeForm.episode_number} onChange={v => setEpisodeForm(f => ({ ...f, episode_number: v }))} placeholder="1" type="number" />
-                </div>
-                <FieldInput label="Title *" value={episodeForm.title} onChange={v => setEpisodeForm(f => ({ ...f, title: v }))} placeholder="e.g. Pilot" />
-                <FieldInput label="Duration" value={episodeForm.duration} onChange={v => setEpisodeForm(f => ({ ...f, duration: v }))} placeholder="42 min" />
-                <FieldInput label="Video URL" value={episodeForm.url} onChange={v => setEpisodeForm(f => ({ ...f, url: v }))} placeholder="https://archive.org/..." />
-                <div>
-                  <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Episode Thumbnail</label>
-                  <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>16:9 still from the episode (optional)</p>
-                  <ImageUploader label="Upload Thumbnail" folder="episodes" onUploadSuccess={url => setEpisodeForm(f => ({ ...f, thumbnail: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
-                  <input type="text" value={episodeForm.thumbnail} onChange={e => setEpisodeForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Description</label>
-                  <textarea value={episodeForm.description} onChange={e => setEpisodeForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Episode synopsis..." style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
-                <button onClick={saveEpisode} disabled={episodeSaving || !selectedShowForEpisodes} style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: (episodeSaving || !selectedShowForEpisodes) ? "not-allowed" : "pointer", opacity: (episodeSaving || !selectedShowForEpisodes) ? 0.5 : 1 }}>
-                  {episodeSaving ? "Saving…" : editingEpisodeId ? "Save Changes" : "Add Episode"}
+                <button
+                  onClick={() => { setEpisodeForm({ ...EMPTY_EPISODE, show_id: selectedShowForEpisodes }); setEditingEpisodeId(null); setDrawerOpen(true); }}
+                  style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+                >
+                  + Add Episode
                 </button>
-                {editingEpisodeId && <button onClick={cancelEpisodeEdit} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>}
               </div>
-            </div>
 
-            <div>
               {!selectedShowForEpisodes ? (
                 <div style={{ padding: 40, textAlign: "center", color: "#6b7280" }}>Select a show to manage its episodes.</div>
               ) : (
@@ -1542,7 +1307,7 @@ export function CMS({ onExit }) {
                     Episodes — {showsList.find(s => String(s.id) === selectedShowForEpisodes)?.title}
                   </h3>
                   {episodesLoading ? <div style={{ color: "#6b7280", padding: 20 }}>Loading...</div> : episodesList.length === 0 ? (
-                    <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>No episodes yet. Add one using the form.</div>
+                    <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>No episodes yet. Add one using the button above.</div>
                   ) : episodesList.map(ep => (
                     <div key={ep.id} style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 18px", marginBottom: 10, display: "flex", alignItems: "center", gap: 16 }}>
                       <div style={{ flexShrink: 0, width: 80, aspectRatio: "16/9", borderRadius: 5, overflow: "hidden", background: "#f1f5f9" }}>
@@ -1560,312 +1325,125 @@ export function CMS({ onExit }) {
                   ))}
                 </>
               )}
-            </div>
 
-            {deleteEpisodeConfirm && (
-              <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
-                  <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "#0f172a" }}>Delete this episode?</p>
-                  <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 28 }}>S{deleteEpisodeConfirm.season} E{deleteEpisodeConfirm.episode_number} · "{deleteEpisodeConfirm.title}"</p>
-                  <div style={{ display: "flex", gap: 10 }}>
-                    <button onClick={() => setDeleteEpisodeConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
-                    <button onClick={() => deleteEpisode(deleteEpisodeConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+              {deleteEpisodeConfirm && (
+                <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+                    <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "#0f172a" }}>Delete this episode?</p>
+                    <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 28 }}>S{deleteEpisodeConfirm.season} E{deleteEpisodeConfirm.episode_number} · "{deleteEpisodeConfirm.title}"</p>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <button onClick={() => setDeleteEpisodeConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                      <button onClick={() => deleteEpisode(deleteEpisodeConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </>
         )}
 
         {/* ────── CAROUSELS TAB ────── */}
-        {tab === "carousels" && (() => {
-          const pagesArr = (carouselForm.pages || "home").split(",").map(p => p.trim()).filter(Boolean);
-          const togglePage = page => {
-            const s = new Set(pagesArr);
-            s.has(page) ? s.delete(page) : s.add(page);
-            setCarouselForm(f => ({ ...f, pages: [...s].join(",") }));
-          };
-          return (
-          <>
-            {/* ── Carousel Form Panel ── */}
-            <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: 32, position: "sticky", top: 24, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-              <h2 style={{ margin: "0 0 4px", fontSize: 17, fontWeight: 600, color: "#0f172a" }}>
-                {editingCarouselId ? "Edit Row" : "New Content Row"}
-              </h2>
-              <p style={{ margin: "0 0 28px", fontSize: 12, color: "#6b7280" }}>A horizontal scrolling row shown on selected pages.</p>
+        {tab === "carousels" && (
+          <div>
+            {/* Header row with Add button */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Content Rows ({carousels.length}) <span style={{ color: "#6b7280", fontWeight: 400, fontSize: 13 }}>— ▲▼ to reorder</span></h2>
+              <button
+                onClick={() => { setCarouselForm(EMPTY_CAROUSEL); setEditingCarouselId(null); setDrawerOpen(true); }}
+                style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+              >
+                + Add Carousel
+              </button>
+            </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            {carouselLoading ? (
+              <div style={{ padding: 40, textAlign: "center", color: "#6b7280" }}>Loading…</div>
+            ) : carousels.length === 0 ? (
+              <div style={{ padding: 40, textAlign: "center", color: "#6b7280", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12 }}>
+                <div style={{ fontSize: 32, marginBottom: 10 }}>📋</div>
+                <p style={{ margin: 0, fontSize: 14 }}>No rows yet. Create your first one.</p>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {carousels.map((carousel, idx) => {
+                  const t = carousel.type;
+                  const ct = carousel.content_type;
+                  const rowPages = (carousel.pages || "home").split(",").map(p => p.trim()).filter(Boolean);
+                  const contentLabel = t === "podcast" ? "Podcasts" : ct === "movies" ? "Movies only" : ct === "shows" ? "Series only" : "All content";
+                  const orderLabel = t === "trending" ? "Trending" : t === "category" ? `Genre: ${carousel.filter_value || "?"}` : t === "podcast" ? (carousel.filter_value ? `Tag: ${carousel.filter_value}` : "All podcasts") : "Default order";
+                  const contentColor = t === "podcast" ? "#a78bfa" : ct === "movies" ? "#60a5fa" : ct === "shows" ? "#34d399" : "#f59e0b";
+                  const pageLabels = { home: "Home", movies: "Movies", series: "Series" };
+                  return (
+                    <div key={carousel.id} style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
+                        <button onClick={() => moveCarousel(idx, -1)} disabled={idx === 0} style={{ background: "transparent", border: "none", color: idx === 0 ? "#e2e8f0" : "#6b7280", cursor: idx === 0 ? "default" : "pointer", fontSize: 11, padding: "2px 5px", lineHeight: 1 }}>▲</button>
+                        <button onClick={() => moveCarousel(idx, 1)} disabled={idx === carousels.length - 1} style={{ background: "transparent", border: "none", color: idx === carousels.length - 1 ? "#e2e8f0" : "#6b7280", cursor: idx === carousels.length - 1 ? "default" : "pointer", fontSize: 11, padding: "2px 5px", lineHeight: 1 }}>▼</button>
+                      </div>
 
-                {/* ── Step 1: Title ── */}
-                <div>
-                  <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>1 · Row Title</label>
-                  <FieldInput value={carouselForm.title} onChange={v => setCarouselForm(f => ({ ...f, title: v }))} placeholder="e.g. Top Horror Picks, New This Week…" />
-                </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: "0 0 7px", fontSize: 14, fontWeight: 600, color: carousel.enabled ? "#0f172a" : "#6b7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{carousel.title}</p>
+                        <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                          {rowPages.map(p => (
+                            <span key={p} style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 20, background: "rgba(79,70,229,0.08)", color: "#4f46e5", border: "1px solid rgba(79,70,229,0.2)" }}>{pageLabels[p] || p}</span>
+                          ))}
+                          <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: `${contentColor}15`, color: contentColor, border: `1px solid ${contentColor}35` }}>{contentLabel}</span>
+                          <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: "#f1f5f9", color: "#6b7280", border: "1px solid #e2e8f0" }}>{orderLabel}</span>
+                          <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: carousel.enabled ? "rgba(16,185,129,0.1)" : "rgba(255,255,255,0.04)", color: carousel.enabled ? "#10b981" : "#555", border: `1px solid ${carousel.enabled ? "rgba(16,185,129,0.3)" : "#222"}` }}>{carousel.enabled ? "Live" : "Hidden"}</span>
+                        </div>
+                      </div>
 
-                {/* ── Divider ── */}
-                <div style={{ height: 1, background: "#e2e8f0" }} />
-
-                {/* ── Step 2: Which pages ── */}
-                <div>
-                  <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>2 · Where to show it</label>
-                  <p style={{ margin: "0 0 12px", fontSize: 11, color: "#6b7280" }}>Pick every page this row should appear on.</p>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {[
-                      { val: "home",   icon: "🏠", label: "Home",        desc: "The main landing page" },
-                      { val: "movies", icon: "🎬", label: "Movies tab",  desc: "The dedicated Movies browse page" },
-                      { val: "series", icon: "📺", label: "Series tab",  desc: "The dedicated Series browse page" },
-                    ].map(({ val, icon, label, desc }) => {
-                      const on = pagesArr.includes(val);
-                      return (
-                        <button key={val} onClick={() => togglePage(val)}
-                          style={{ background: on ? "rgba(79,70,229,0.08)" : "#f8fafc", border: `1.5px solid ${on ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 9, padding: "11px 14px", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 12, transition: "border-color 0.15s, background 0.15s" }}>
-                          <span style={{ fontSize: 18, flexShrink: 0 }}>{icon}</span>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: on ? "#4f46e5" : "#374151" }}>{label}</div>
-                            <div style={{ fontSize: 11, color: "#6b7280", marginTop: 1 }}>{desc}</div>
-                          </div>
-                          <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${on ? "#4f46e5" : "#e2e8f0"}`, background: on ? "#4f46e5" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.15s" }}>
-                            {on && <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {pagesArr.length === 0 && (
-                    <p style={{ margin: "8px 0 0", fontSize: 11, color: "#dc2626" }}>Pick at least one page.</p>
-                  )}
-                </div>
-
-                {/* ── Divider ── */}
-                <div style={{ height: 1, background: "#e2e8f0" }} />
-
-                {/* ── Step 3: What to show ── */}
-                <div>
-                  <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>3 · What to show</label>
-                  <p style={{ margin: "0 0 10px", fontSize: 11, color: "#6b7280" }}>What kind of content fills this row.</p>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                    {[
-                      { ct: "movies", t: null,      icon: "🎬", label: "Movies only",   desc: "Only movies" },
-                      { ct: "shows",  t: null,      icon: "📺", label: "Series only",   desc: "Only TV shows & series" },
-                      { ct: "all",    t: null,      icon: "⭐", label: "Everything",    desc: "Movies + series mixed" },
-                      { ct: "all",    t: "podcast", icon: "🎙️", label: "Podcasts",      desc: "Podcast episodes" },
-                    ].map(({ ct, t, icon, label, desc }) => {
-                      const isPodcast = t === "podcast";
-                      const isActive = isPodcast
-                        ? carouselForm.type === "podcast"
-                        : carouselForm.content_type === ct && carouselForm.type !== "podcast";
-                      return (
-                        <button key={label} onClick={() => {
-                          if (isPodcast) setCarouselForm(f => ({ ...f, type: "podcast", content_type: "all" }));
-                          else setCarouselForm(f => ({ ...f, content_type: ct, type: f.type === "podcast" ? "custom" : f.type }));
-                        }}
-                          style={{ background: isActive ? "rgba(79,70,229,0.08)" : "#f8fafc", border: `1.5px solid ${isActive ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 10, padding: "13px 12px", cursor: "pointer", textAlign: "left", transition: "border-color 0.15s, background 0.15s" }}>
-                          <div style={{ fontSize: 20, marginBottom: 5 }}>{icon}</div>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: isActive ? "#4f46e5" : "#374151", marginBottom: 2 }}>{label}</div>
-                          <div style={{ fontSize: 11, color: "#6b7280" }}>{desc}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* ── Divider ── */}
-                <div style={{ height: 1, background: "#e2e8f0" }} />
-
-                {/* ── Step 4: How to order ── */}
-                {carouselForm.type !== "podcast" ? (
-                  <div>
-                    <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>4 · How to order</label>
-                    <p style={{ margin: "0 0 10px", fontSize: 11, color: "#6b7280" }}>How content is sorted inside this row.</p>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      {[
-                        { val: "custom",   icon: "📋", label: "Show all",       desc: "All matching content, default order" },
-                        { val: "trending", icon: "🔥", label: "Trending / New", desc: "Newest added first" },
-                        { val: "category", icon: "🏷️", label: "By category",    desc: "Filter to a specific genre" },
-                      ].map(({ val, icon, label, desc }) => {
-                        const isActive = carouselForm.type === val;
-                        return (
-                          <button key={val} onClick={() => setCarouselForm(f => ({ ...f, type: val }))}
-                            style={{ background: isActive ? "rgba(79,70,229,0.08)" : "#f8fafc", border: `1.5px solid ${isActive ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 9, padding: "11px 14px", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 12, transition: "border-color 0.15s, background 0.15s" }}>
-                            <span style={{ fontSize: 17, flexShrink: 0 }}>{icon}</span>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: 13, fontWeight: 600, color: isActive ? "#4f46e5" : "#374151" }}>{label}</div>
-                              <div style={{ fontSize: 11, color: "#6b7280", marginTop: 1 }}>{desc}</div>
-                            </div>
-                            {isActive && <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#4f46e5", flexShrink: 0 }} />}
-                          </button>
-                        );
-                      })}
+                      <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                        <button onClick={() => startCarouselEdit(carousel)} style={{ background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.2)", borderRadius: 6, padding: "6px 12px", color: "#60a5fa", fontSize: 12, cursor: "pointer", fontWeight: 500 }}>Edit</button>
+                        <button onClick={() => setDeleteCarouselConfirm(carousel)} style={{ background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 6, padding: "6px 12px", color: "#f87171", fontSize: 12, cursor: "pointer", fontWeight: 500 }}>Delete</button>
+                      </div>
                     </div>
-                    {carouselForm.type === "category" && (
-                      <div style={{ marginTop: 10, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "14px" }}>
-                        <label style={{ display: "block", fontSize: 11, color: "#6b7280", marginBottom: 6, fontWeight: 600 }}>Category name</label>
-                        <input value={carouselForm.filter_value} onChange={e => setCarouselForm(f => ({ ...f, filter_value: e.target.value }))}
-                          placeholder="e.g. Horror, Comedy, Sci-Fi…"
-                          style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 6, padding: "9px 12px", color: "#0f172a", fontSize: 13, outline: "none" }}
-                          onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
-                        <p style={{ margin: "6px 0 0", fontSize: 11, color: "#9ca3af" }}>Must match exactly as set on your videos (case-insensitive).</p>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div>
-                    <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>4 · Tag filter (optional)</label>
-                    <input value={carouselForm.filter_value} onChange={e => setCarouselForm(f => ({ ...f, filter_value: e.target.value }))}
-                      placeholder="e.g. true-crime — leave blank to show all podcasts"
-                      style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }}
-                      onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
-                  </div>
-                )}
-
-                {/* ── Divider ── */}
-                <div style={{ height: 1, background: "#e2e8f0" }} />
-
-                {/* ── Step 5: Visibility ── */}
-                <div>
-                  <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>5 · Visibility</label>
-                  <button onClick={() => setCarouselForm(f => ({ ...f, enabled: !f.enabled }))}
-                    style={{ width: "100%", background: carouselForm.enabled ? "rgba(16,185,129,0.1)" : "rgba(107,114,128,0.08)", border: `1px solid ${carouselForm.enabled ? "rgba(16,185,129,0.35)" : "#222"}`, borderRadius: 8, padding: "11px", color: carouselForm.enabled ? "#10b981" : "#555", fontSize: 13, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                    <span style={{ fontSize: 16 }}>{carouselForm.enabled ? "✓" : "○"}</span>
-                    {carouselForm.enabled ? "Live — visible to users" : "Hidden — not shown to users"}
-                  </button>
-                </div>
-
+                  );
+                })}
               </div>
+            )}
 
-              {/* Action buttons */}
-              <div style={{ display: "flex", gap: 10, marginTop: 28 }}>
-                <button onClick={saveCarousel} disabled={carouselSaving || pagesArr.length === 0}
-                  style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 8, padding: "13px", color: "#fff", fontSize: 14, fontWeight: 700, cursor: (carouselSaving || pagesArr.length === 0) ? "not-allowed" : "pointer", opacity: (carouselSaving || pagesArr.length === 0) ? 0.5 : 1 }}>
-                  {carouselSaving ? "Saving…" : editingCarouselId ? "Update Row" : "Create Row"}
-                </button>
-                {editingCarouselId && (
-                  <button onClick={cancelCarouselEdit}
-                    style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "13px", color: "#374151", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
-                    Cancel
-                  </button>
-                )}
-              </div>
+            <div style={{ marginTop: 12, fontSize: 12, color: "#9ca3af", textAlign: "right" }}>
+              {carousels.length} row{carousels.length !== 1 ? "s" : ""} total
             </div>
-
-            {/* ── Carousels List ── */}
-            <div>
-              <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>
-                Content Rows <span style={{ color: "#6b7280", fontWeight: 400, fontSize: 13 }}>— ▲▼ to reorder</span>
-              </h3>
-
-              {carouselLoading ? (
-                <div style={{ padding: 40, textAlign: "center", color: "#6b7280" }}>Loading…</div>
-              ) : carousels.length === 0 ? (
-                <div style={{ padding: 40, textAlign: "center", color: "#6b7280", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12 }}>
-                  <div style={{ fontSize: 32, marginBottom: 10 }}>📋</div>
-                  <p style={{ margin: 0, fontSize: 14 }}>No rows yet. Create your first one.</p>
-                </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {carousels.map((carousel, idx) => {
-                    const t = carousel.type;
-                    const ct = carousel.content_type;
-                    const rowPages = (carousel.pages || "home").split(",").map(p => p.trim()).filter(Boolean);
-                    const contentLabel = t === "podcast" ? "Podcasts" : ct === "movies" ? "Movies only" : ct === "shows" ? "Series only" : "All content";
-                    const orderLabel = t === "trending" ? "Trending" : t === "category" ? `Genre: ${carousel.filter_value || "?"}` : t === "podcast" ? (carousel.filter_value ? `Tag: ${carousel.filter_value}` : "All podcasts") : "Default order";
-                    const contentColor = t === "podcast" ? "#a78bfa" : ct === "movies" ? "#60a5fa" : ct === "shows" ? "#34d399" : "#f59e0b";
-                    const pageLabels = { home: "Home", movies: "Movies", series: "Series" };
-                    return (
-                      <div key={carousel.id} style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
-                          <button onClick={() => moveCarousel(idx, -1)} disabled={idx === 0} style={{ background: "transparent", border: "none", color: idx === 0 ? "#e2e8f0" : "#6b7280", cursor: idx === 0 ? "default" : "pointer", fontSize: 11, padding: "2px 5px", lineHeight: 1 }}>▲</button>
-                          <button onClick={() => moveCarousel(idx, 1)} disabled={idx === carousels.length - 1} style={{ background: "transparent", border: "none", color: idx === carousels.length - 1 ? "#e2e8f0" : "#6b7280", cursor: idx === carousels.length - 1 ? "default" : "pointer", fontSize: 11, padding: "2px 5px", lineHeight: 1 }}>▼</button>
-                        </div>
-
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ margin: "0 0 7px", fontSize: 14, fontWeight: 600, color: carousel.enabled ? "#0f172a" : "#6b7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{carousel.title}</p>
-                          <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                            {/* Pages */}
-                            {rowPages.map(p => (
-                              <span key={p} style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 20, background: "rgba(79,70,229,0.08)", color: "#4f46e5", border: "1px solid rgba(79,70,229,0.2)" }}>{pageLabels[p] || p}</span>
-                            ))}
-                            {/* Content type */}
-                            <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: `${contentColor}15`, color: contentColor, border: `1px solid ${contentColor}35` }}>{contentLabel}</span>
-                            {/* Order */}
-                            <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: "#f1f5f9", color: "#6b7280", border: "1px solid #e2e8f0" }}>{orderLabel}</span>
-                            {/* Live/Hidden */}
-                            <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: carousel.enabled ? "rgba(16,185,129,0.1)" : "rgba(255,255,255,0.04)", color: carousel.enabled ? "#10b981" : "#555", border: `1px solid ${carousel.enabled ? "rgba(16,185,129,0.3)" : "#222"}` }}>{carousel.enabled ? "Live" : "Hidden"}</span>
-                          </div>
-                        </div>
-
-                        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                          <button onClick={() => startCarouselEdit(carousel)} style={{ background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.2)", borderRadius: 6, padding: "6px 12px", color: "#60a5fa", fontSize: 12, cursor: "pointer", fontWeight: 500 }}>Edit</button>
-                          <button onClick={() => setDeleteCarouselConfirm(carousel)} style={{ background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 6, padding: "6px 12px", color: "#f87171", fontSize: 12, cursor: "pointer", fontWeight: 500 }}>Delete</button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              <div style={{ marginTop: 12, fontSize: 12, color: "#9ca3af", textAlign: "right" }}>
-                {carousels.length} row{carousels.length !== 1 ? "s" : ""} total
-              </div>
-            </div>
-          </>
-          );
-        })()}
+          </div>
+        )}
         {/* ────── LIVE TAB ────── */}
         {tab === "live" && (
-          <>
-            <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: 32, position: "sticky", top: 24, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-              <h2 style={{ margin: "0 0 28px", fontSize: 17, fontWeight: 600, color: "#0f172a" }}>{editingLiveId ? "Edit Stream" : "Add Live Stream"}</h2>
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                <FieldInput label="Title *" value={liveForm.title} onChange={v => setLiveForm(f => ({ ...f, title: v }))} placeholder="e.g. Friday Night Live" />
-                <FieldInput label="Description" value={liveForm.description} onChange={v => setLiveForm(f => ({ ...f, description: v }))} placeholder="What's streaming..." />
-                <FieldInput label="Stream URL" value={liveForm.stream_url} onChange={v => setLiveForm(f => ({ ...f, stream_url: v }))} placeholder="https://... (YouTube Live, direct video, etc.)" />
-                <FieldInput label="Badge Text" value={liveForm.badge_text} onChange={v => setLiveForm(f => ({ ...f, badge_text: v }))} placeholder="LIVE" />
-                <div>
-                  <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Thumbnail</label>
-                  <ImageUploader label="Upload Thumbnail" folder="live" onUploadSuccess={url => setLiveForm(f => ({ ...f, thumbnail: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
-                  <input type="text" value={liveForm.thumbnail} onChange={e => setLiveForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.7 }}>Status</label>
-                  <button onClick={() => setLiveForm(f => ({ ...f, is_live: !f.is_live }))}
-                    style={{ width: "100%", background: liveForm.is_live ? "rgba(239,68,68,0.12)" : "rgba(107,114,128,0.1)", border: `1px solid ${liveForm.is_live ? "rgba(239,68,68,0.35)" : "rgba(107,114,128,0.3)"}`, borderRadius: 7, padding: "10px 12px", color: liveForm.is_live ? "#ef4444" : "#888", fontSize: 13, cursor: "pointer", fontWeight: 500 }}>
-                    {liveForm.is_live ? "🔴 Live" : "○ Offline"}
-                  </button>
-                </div>
+          <div>
+            {/* Header row with Add button */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div>
+                <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 600, color: "#0f172a" }}>All Streams ({liveList.length})</h2>
+                <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Toggle a stream to Live to show it on the homepage "Live Now" section.</p>
               </div>
-              <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
-                <button onClick={saveLiveStream} disabled={liveSaving} style={{ flex: 1, background: "#ef4444", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: liveSaving ? "not-allowed" : "pointer", opacity: liveSaving ? 0.7 : 1 }}>
-                  {liveSaving ? "Saving…" : editingLiveId ? "Save Changes" : "Go Live"}
-                </button>
-                {editingLiveId && <button onClick={cancelLiveEdit} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>}
-              </div>
+              <button
+                onClick={() => { setLiveForm(EMPTY_LIVE_STREAM); setEditingLiveId(null); setDrawerOpen(true); }}
+                style={{ background: "#ef4444", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+              >
+                + Add Stream
+              </button>
             </div>
 
-            <div>
-              <h3 style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>All Streams ({liveList.length})</h3>
-              <p style={{ margin: "0 0 20px", fontSize: 12, color: "#6b7280" }}>Toggle a stream to Live to show it on the homepage "Live Now" section.</p>
-              {liveLoading ? (
-                <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>Loading...</div>
-              ) : liveList.length === 0 ? (
-                <div style={{ color: "#6b7280", padding: 40, textAlign: "center", border: "1px dashed #e2e8f0", borderRadius: 10 }}>No streams yet.</div>
-              ) : liveList.map(s => (
-                <div key={s.id} style={{ background: "#ffffff", border: `1px solid ${s.is_live ? "rgba(239,68,68,0.3)" : "#e2e8f0"}`, borderRadius: 10, padding: "16px 20px", marginBottom: 12, display: "flex", gap: 16, alignItems: "center" }}>
-                  {s.thumbnail && <img src={s.thumbnail} alt={s.title} style={{ width: 80, height: 45, objectFit: "cover", borderRadius: 6, flexShrink: 0 }} onError={e => { e.target.style.display = "none"; }} />}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: "0 0 3px", fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{s.title}</p>
-                    <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>
-                      <span style={{ color: s.is_live ? "#ef4444" : "#555", fontWeight: s.is_live ? 600 : 400 }}>{s.is_live ? "🔴 LIVE" : "Offline"}</span>
-                      {s.badge_text && s.badge_text !== "LIVE" && ` · Badge: ${s.badge_text}`}
-                    </p>
-                  </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={() => startLiveEdit(s)} style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 5, padding: "5px 10px", color: "#f87171", fontSize: 11, cursor: "pointer" }}>Edit</button>
-                    <button onClick={() => setDeleteLiveConfirm(s)} style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 5, padding: "5px 10px", color: "#f87171", fontSize: 11, cursor: "pointer" }}>Delete</button>
-                  </div>
+            {liveLoading ? (
+              <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>Loading...</div>
+            ) : liveList.length === 0 ? (
+              <div style={{ color: "#6b7280", padding: 40, textAlign: "center", border: "1px dashed #e2e8f0", borderRadius: 10 }}>No streams yet.</div>
+            ) : liveList.map(s => (
+              <div key={s.id} style={{ background: "#ffffff", border: `1px solid ${s.is_live ? "rgba(239,68,68,0.3)" : "#e2e8f0"}`, borderRadius: 10, padding: "16px 20px", marginBottom: 12, display: "flex", gap: 16, alignItems: "center" }}>
+                {s.thumbnail && <img src={s.thumbnail} alt={s.title} style={{ width: 80, height: 45, objectFit: "cover", borderRadius: 6, flexShrink: 0 }} onError={e => { e.target.style.display = "none"; }} />}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: "0 0 3px", fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{s.title}</p>
+                  <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>
+                    <span style={{ color: s.is_live ? "#ef4444" : "#555", fontWeight: s.is_live ? 600 : 400 }}>{s.is_live ? "🔴 LIVE" : "Offline"}</span>
+                    {s.badge_text && s.badge_text !== "LIVE" && ` · Badge: ${s.badge_text}`}
+                  </p>
                 </div>
-              ))}
-            </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => startLiveEdit(s)} style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 5, padding: "5px 10px", color: "#f87171", fontSize: 11, cursor: "pointer" }}>Edit</button>
+                  <button onClick={() => setDeleteLiveConfirm(s)} style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 5, padding: "5px 10px", color: "#f87171", fontSize: 11, cursor: "pointer" }}>Delete</button>
+                </div>
+              </div>
+            ))}
 
             {deleteLiveConfirm && (
               <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1878,74 +1456,32 @@ export function CMS({ onExit }) {
                 </div>
               </div>
             )}
-          </>
+          </div>
         )}
 
         {/* ────── PODCASTS SUB-TAB ────── */}
         {tab === "videos" && videoSubTab === "podcasts" && (
           <>
-            <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: 32, position: "sticky", top: 24, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-              <h2 style={{ margin: "0 0 28px", fontSize: 17, fontWeight: 600, color: "#0f172a" }}>{editingPodcastId ? "Edit Podcast" : "Add New Podcast"}</h2>
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                <FieldInput label="Title *" value={podcastForm.title} onChange={v => setPodcastForm(f => ({ ...f, title: v }))} placeholder="e.g. The Daily" />
-                <FieldInput label="Host" value={podcastForm.host} onChange={v => setPodcastForm(f => ({ ...f, host: v }))} placeholder="e.g. Michael Barbaro" />
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <FieldInput label="Episodes" value={podcastForm.episode_count} onChange={v => setPodcastForm(f => ({ ...f, episode_count: v }))} placeholder="24" type="number" />
-                  <FieldInput label="Tags (comma-sep)" value={podcastForm.tags} onChange={v => setPodcastForm(f => ({ ...f, tags: v }))} placeholder="news, daily" />
-                </div>
-
-                {/* Artwork */}
-                <div>
-                  <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Artwork</label>
-                  <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>Square · 1400×1400px recommended</p>
-                  <ImageUploader label="Upload Artwork (JPG/PNG)" folder="podcasts" onUploadSuccess={url => setPodcastForm(f => ({ ...f, artwork_url: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "8px 0" }}>
-                    <div style={{ flex: 1, height: 1, background: "#e2e8f0" }} />
-                    <span style={{ fontSize: 11, color: "#9ca3af" }}>or paste URL</span>
-                    <div style={{ flex: 1, height: 1, background: "#e2e8f0" }} />
-                  </div>
-                  <input type="text" value={podcastForm.artwork_url} onChange={e => setPodcastForm(f => ({ ...f, artwork_url: e.target.value }))} placeholder="https://..." style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
-                  {podcastForm.artwork_url && (
-                    <div style={{ marginTop: 10, borderRadius: 8, overflow: "hidden", border: "1px solid #e2e8f0", width: 80, height: 80 }}>
-                      <img src={podcastForm.artwork_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => { e.target.style.display = "none"; }} />
-                    </div>
-                  )}
-                </div>
-
-                <FieldInput label="Link URL" value={podcastForm.link_url} onChange={v => setPodcastForm(f => ({ ...f, link_url: v }))} placeholder="https://open.spotify.com/show/..." />
-
-                <div>
-                  <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Description</label>
-                  <textarea value={podcastForm.description} onChange={e => setPodcastForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Short description..." style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
-                </div>
-
-                <div>
-                  <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.7 }}>Status</label>
-                  <button onClick={() => setPodcastForm(f => ({ ...f, enabled: !f.enabled }))}
-                    style={{ width: "100%", background: podcastForm.enabled ? "rgba(79,70,229,0.08)" : "rgba(107,114,128,0.08)", border: `1px solid ${podcastForm.enabled ? "rgba(79,70,229,0.3)" : "#e2e8f0"}`, borderRadius: 7, padding: "10px 12px", color: podcastForm.enabled ? "#4f46e5" : "#6b7280", fontSize: 13, cursor: "pointer", fontWeight: 500 }}>
-                    {podcastForm.enabled ? "✓ Enabled" : "○ Disabled"}
-                  </button>
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
-                <button onClick={savePodcast} disabled={podcastSaving} style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: podcastSaving ? "not-allowed" : "pointer", opacity: podcastSaving ? 0.7 : 1 }}>
-                  {podcastSaving ? "Saving…" : editingPodcastId ? "Save Changes" : "Add Podcast"}
-                </button>
-                {editingPodcastId && <button onClick={cancelPodcastEdit} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>}
-              </div>
-            </div>
-
-            {/* Right column — podcast list + episode panel in ONE grid cell */}
             <div>
-              <div style={{ marginBottom: 28 }}>
-                <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>All Podcasts ({podcastsList.length})</h3>
-                <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Click <strong style={{ color: "#4f46e5", fontWeight: 600 }}>Episodes</strong> on any podcast to manage its audio episodes.</p>
+              {/* Header row with Add button */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                <div>
+                  <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 600, color: "#0f172a" }}>All Podcasts ({podcastsList.length})</h2>
+                  <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Click <strong style={{ color: "#4f46e5", fontWeight: 600 }}>Episodes</strong> on any podcast to manage its audio episodes.</p>
+                </div>
+                <button
+                  onClick={() => { setPodcastForm(EMPTY_PODCAST); setEditingPodcastId(null); setDrawerOpen(true); }}
+                  style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+                >
+                  + Add Podcast
+                </button>
               </div>
+
               {podcastsLoading ? (
                 <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>Loading...</div>
               ) : podcastsList.length === 0 ? (
                 <div style={{ padding: 32, textAlign: "center", border: "1px dashed #e2e8f0", borderRadius: 10 }}>
-                  <p style={{ color: "#6b7280", margin: "0 0 8px", fontSize: 14 }}>No podcasts yet. Add one using the form.</p>
+                  <p style={{ color: "#6b7280", margin: "0 0 8px", fontSize: 14 }}>No podcasts yet. Add one using the button above.</p>
                   <p style={{ color: "#9ca3af", margin: 0, fontSize: 12 }}>Once added, click <strong style={{ color: "#4f46e5" }}>Episodes</strong> on a podcast to add its audio episodes.</p>
                 </div>
               ) : podcastsList.map(pod => (
@@ -2053,37 +1589,37 @@ export function CMS({ onExit }) {
               )}
             </div>
 
-            {deletePodEpConfirm && (
-              <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
-                  <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "#0f172a" }}>Delete episode?</p>
-                  <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 28 }}>"{deletePodEpConfirm.title}"</p>
-                  <div style={{ display: "flex", gap: 10 }}>
-                    <button onClick={() => setDeletePodEpConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
-                    <button onClick={() => deletePodEp(deletePodEpConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+              {deletePodEpConfirm && (
+                <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+                    <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "#0f172a" }}>Delete episode?</p>
+                    <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 28 }}>"{deletePodEpConfirm.title}"</p>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <button onClick={() => setDeletePodEpConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                      <button onClick={() => deletePodEp(deletePodEpConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {deletePodcastConfirm && (
-              <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
-                  <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "#0f172a" }}>Delete "{deletePodcastConfirm.title}"?</p>
-                  <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 28 }}>This podcast will be permanently removed.</p>
-                  <div style={{ display: "flex", gap: 10 }}>
-                    <button onClick={() => setDeletePodcastConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
-                    <button onClick={() => deletePodcast(deletePodcastConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+              {deletePodcastConfirm && (
+                <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+                    <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "#0f172a" }}>Delete "{deletePodcastConfirm.title}"?</p>
+                    <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 28 }}>This podcast will be permanently removed.</p>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <button onClick={() => setDeletePodcastConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                      <button onClick={() => deletePodcast(deletePodcastConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
           </>
         )}
 
         {/* ────── REPORTS TAB ────── */}
         {tab === "reports" && (
-          <div style={{ gridColumn: "1 / -1" }}>
+          <div>
             {/* Header row */}
             <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28, flexWrap: "wrap" }}>
               <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Analytics</h2>
@@ -2300,6 +1836,418 @@ export function CMS({ onExit }) {
         )}
 
       </div>
+
+      {/* ── Slide-over Drawer ── */}
+      {drawerOpen && (() => {
+        const pagesArr = (carouselForm.pages || "home").split(",").map(p => p.trim()).filter(Boolean);
+        const togglePage = page => {
+          const s = new Set(pagesArr);
+          s.has(page) ? s.delete(page) : s.add(page);
+          setCarouselForm(f => ({ ...f, pages: [...s].join(",") }));
+        };
+        return (
+          <>
+            {/* Backdrop */}
+            <div
+              onClick={closeDrawer}
+              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.25)", zIndex: 298, backdropFilter: "blur(2px)" }}
+            />
+            {/* Drawer panel */}
+            <div style={{
+              position: "fixed", right: 0, top: 0, bottom: 0,
+              width: "min(520px, 100vw)",
+              background: "#ffffff",
+              borderLeft: "1px solid #e2e8f0",
+              boxShadow: "-8px 0 32px rgba(0,0,0,0.1)",
+              zIndex: 299,
+              display: "flex",
+              flexDirection: "column",
+              fontFamily: "'Space Grotesk', sans-serif",
+            }}>
+              {/* Drawer header */}
+              <div style={{ padding: "20px 24px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+                <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "#0f172a" }}>
+                  {tab === "videos" && videoSubTab === "movies" && (editingId ? "Edit Movie" : "Add Movie")}
+                  {tab === "videos" && videoSubTab === "series" && (editingShowId ? "Edit Series" : "Add Series")}
+                  {tab === "videos" && videoSubTab === "episodes" && (editingEpisodeId ? "Edit Episode" : "Add Episode")}
+                  {tab === "videos" && videoSubTab === "podcasts" && (editingPodcastId ? "Edit Podcast" : "Add Podcast")}
+                  {tab === "carousels" && (editingCarouselId ? "Edit Carousel" : "Add Carousel")}
+                  {tab === "live" && (editingLiveId ? "Edit Stream" : "Add Stream")}
+                </h2>
+                <button
+                  onClick={closeDrawer}
+                  style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 18, color: "#6b7280", lineHeight: 1 }}
+                >
+                  ×
+                </button>
+              </div>
+
+              {/* Scrollable form content */}
+              <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
+
+                {/* ── MOVIES FORM ── */}
+                {tab === "videos" && videoSubTab === "movies" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                    <FieldInput label="Title *" value={form.title} onChange={v => setForm(f => ({ ...f, title: v }))} placeholder="e.g. Metropolis" />
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      <FieldSelect label="Category" value={form.category} onChange={v => setForm(f => ({ ...f, category: v }))} options={categories} />
+                      <FieldSelect label="Rating" value={form.rating} onChange={v => setForm(f => ({ ...f, rating: v }))} options={["NR", "G", "PG", "PG-13", "R"]} />
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                      <FieldInput label="Year" value={form.year} onChange={v => setForm(f => ({ ...f, year: v }))} placeholder="1927" type="number" />
+                      <FieldInput label="Duration" value={form.duration} onChange={v => setForm(f => ({ ...f, duration: v }))} placeholder="2h 33m" />
+                      <FieldInput label="Score %" value={form.score} onChange={v => setForm(f => ({ ...f, score: v }))} placeholder="99" type="number" />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Hero Image</label>
+                      <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>Landscape · 1920×1080px · full-screen banner · Safe zone: center 1400×800 (stay 260px from sides, 140px from top/bottom)</p>
+                      <ImageUploader label="Upload Hero Image (JPG/PNG)" folder="hero" onUploadSuccess={url => setForm(f => ({ ...f, thumbnail: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "8px 0" }}>
+                        <div style={{ flex: 1, height: 1, background: "#e2e8f0" }} />
+                        <span style={{ fontSize: 11, color: "#9ca3af" }}>or paste URL</span>
+                        <div style={{ flex: 1, height: 1, background: "#e2e8f0" }} />
+                      </div>
+                      <input type="text" value={form.thumbnail} onChange={e => setForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="https://..." style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                      {form.thumbnail && (
+                        <div style={{ marginTop: 10, borderRadius: 6, overflow: "hidden", border: "1px solid #e2e8f0" }}>
+                          <img src={form.thumbnail} alt="Hero preview" style={{ width: "100%", height: 110, objectFit: "cover" }} onError={e => { e.target.style.display = "none"; }} />
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Poster</label>
+                      <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>Portrait · 400×600px · browse cards (optional) · Safe zone: center 320×460 (stay 40px from sides, 70px from top, 100px from bottom — title overlay)</p>
+                      <ImageUploader label="Upload Poster (JPG/PNG)" folder="posters" onUploadSuccess={url => setForm(f => ({ ...f, poster: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "8px 0" }}>
+                        <div style={{ flex: 1, height: 1, background: "#e2e8f0" }} />
+                        <span style={{ fontSize: 11, color: "#9ca3af" }}>or paste URL</span>
+                        <div style={{ flex: 1, height: 1, background: "#e2e8f0" }} />
+                      </div>
+                      <input type="text" value={form.poster} onChange={e => setForm(f => ({ ...f, poster: e.target.value }))} placeholder="https://..." style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                      {form.poster && (
+                        <div style={{ marginTop: 10, borderRadius: 6, overflow: "hidden", border: "1px solid #e2e8f0", width: 80 }}>
+                          <img src={form.poster} alt="Poster preview" style={{ width: "100%", aspectRatio: "2/3", objectFit: "cover" }} onError={e => { e.target.style.display = "none"; }} />
+                        </div>
+                      )}
+                    </div>
+                    <FieldInput label="Video URL *" value={form.url} onChange={v => setForm(f => ({ ...f, url: v }))} placeholder="https://archive.org/..." />
+                    <FieldInput label="Trailer URL" value={form.trailer_url} onChange={v => setForm(f => ({ ...f, trailer_url: v }))} placeholder="https://youtube.com/watch?v=... (optional)" />
+                    <FieldInput label="Tags (comma-separated)" value={form.tags} onChange={v => setForm(f => ({ ...f, tags: v }))} placeholder="Silent, Epic, Classic" />
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Description</label>
+                      <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Short synopsis..." style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                    </div>
+                    <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+                      <button onClick={saveRow} disabled={saving} style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
+                        {saving ? "Saving…" : editingId ? "Save Changes" : "Add Movie"}
+                      </button>
+                      <button onClick={cancelEdit} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── SERIES FORM ── */}
+                {tab === "videos" && videoSubTab === "series" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                    <FieldInput label="Title *" value={showForm.title} onChange={v => setShowForm(f => ({ ...f, title: v }))} placeholder="e.g. The Twilight Zone" />
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      <FieldSelect label="Category" value={showForm.category} onChange={v => setShowForm(f => ({ ...f, category: v }))} options={["Horror", "Sci-Fi", "Comedy", "Drama", "Action", "Documentary"]} />
+                      <FieldSelect label="Rating" value={showForm.rating} onChange={v => setShowForm(f => ({ ...f, rating: v }))} options={["NR", "G", "PG", "PG-13", "R"]} />
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      <FieldInput label="Year" value={showForm.year} onChange={v => setShowForm(f => ({ ...f, year: v }))} placeholder="1959" type="number" />
+                      <FieldInput label="Score %" value={showForm.score} onChange={v => setShowForm(f => ({ ...f, score: v }))} placeholder="98" type="number" />
+                    </div>
+                    <FieldInput label="Tags (comma-separated)" value={showForm.tags} onChange={v => setShowForm(f => ({ ...f, tags: v }))} placeholder="Anthology, Black & White, Classic" />
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Hero Image</label>
+                      <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>Landscape · 1920×1080px · banner background · Safe zone: center 1400×800 (stay 260px from sides, 140px from top/bottom)</p>
+                      <ImageUploader label="Upload Hero Image" folder="hero" onUploadSuccess={url => setShowForm(f => ({ ...f, thumbnail: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
+                      <input type="text" value={showForm.thumbnail} onChange={e => setShowForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                      {showForm.thumbnail && <img src={showForm.thumbnail} alt="" style={{ width: "100%", height: 100, objectFit: "cover", borderRadius: 6, marginTop: 8 }} onError={e => { e.target.style.display = "none"; }} />}
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Poster</label>
+                      <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>Portrait · 400×600px · card image · Safe zone: center 320×460 (stay 40px from sides, 70px from top, 100px from bottom — title overlay)</p>
+                      <ImageUploader label="Upload Poster" folder="posters" onUploadSuccess={url => setShowForm(f => ({ ...f, poster: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
+                      <input type="text" value={showForm.poster} onChange={e => setShowForm(f => ({ ...f, poster: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                      {showForm.poster && <img src={showForm.poster} alt="" style={{ width: 70, aspectRatio: "2/3", objectFit: "cover", borderRadius: 6, marginTop: 8 }} onError={e => { e.target.style.display = "none"; }} />}
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Description</label>
+                      <textarea value={showForm.description} onChange={e => setShowForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Short synopsis..." style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                    </div>
+                    <FieldInput label="Trailer URL" value={showForm.trailer_url} onChange={v => setShowForm(f => ({ ...f, trailer_url: v }))} placeholder="https://youtube.com/watch?v=... (optional)" />
+                    <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+                      <button onClick={saveShow} disabled={showSaving} style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: showSaving ? "not-allowed" : "pointer", opacity: showSaving ? 0.7 : 1 }}>
+                        {showSaving ? "Saving…" : editingShowId ? "Save Changes" : "Add Show"}
+                      </button>
+                      <button onClick={cancelShowEdit} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── EPISODES FORM ── */}
+                {tab === "videos" && videoSubTab === "episodes" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Show *</label>
+                      <select value={selectedShowForEpisodes} onChange={e => { setSelectedShowForEpisodes(e.target.value); loadEpisodes(e.target.value); setEpisodeForm({ ...EMPTY_EPISODE, show_id: e.target.value }); }}
+                        style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }}>
+                        <option value="">Select a show...</option>
+                        {showsList.map(s => <option key={s.id} value={String(s.id)}>{s.title}</option>)}
+                      </select>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      <FieldInput label="Season" value={episodeForm.season} onChange={v => setEpisodeForm(f => ({ ...f, season: v }))} placeholder="1" type="number" />
+                      <FieldInput label="Episode #" value={episodeForm.episode_number} onChange={v => setEpisodeForm(f => ({ ...f, episode_number: v }))} placeholder="1" type="number" />
+                    </div>
+                    <FieldInput label="Title *" value={episodeForm.title} onChange={v => setEpisodeForm(f => ({ ...f, title: v }))} placeholder="e.g. Pilot" />
+                    <FieldInput label="Duration" value={episodeForm.duration} onChange={v => setEpisodeForm(f => ({ ...f, duration: v }))} placeholder="42 min" />
+                    <FieldInput label="Video URL" value={episodeForm.url} onChange={v => setEpisodeForm(f => ({ ...f, url: v }))} placeholder="https://archive.org/..." />
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Episode Thumbnail</label>
+                      <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>16:9 still from the episode (optional)</p>
+                      <ImageUploader label="Upload Thumbnail" folder="episodes" onUploadSuccess={url => setEpisodeForm(f => ({ ...f, thumbnail: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
+                      <input type="text" value={episodeForm.thumbnail} onChange={e => setEpisodeForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Description</label>
+                      <textarea value={episodeForm.description} onChange={e => setEpisodeForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Episode synopsis..." style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                    </div>
+                    <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+                      <button onClick={saveEpisode} disabled={episodeSaving || !selectedShowForEpisodes} style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: (episodeSaving || !selectedShowForEpisodes) ? "not-allowed" : "pointer", opacity: (episodeSaving || !selectedShowForEpisodes) ? 0.5 : 1 }}>
+                        {episodeSaving ? "Saving…" : editingEpisodeId ? "Save Changes" : "Add Episode"}
+                      </button>
+                      <button onClick={cancelEpisodeEdit} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── PODCASTS FORM ── */}
+                {tab === "videos" && videoSubTab === "podcasts" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                    <FieldInput label="Title *" value={podcastForm.title} onChange={v => setPodcastForm(f => ({ ...f, title: v }))} placeholder="e.g. The Daily" />
+                    <FieldInput label="Host" value={podcastForm.host} onChange={v => setPodcastForm(f => ({ ...f, host: v }))} placeholder="e.g. Michael Barbaro" />
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      <FieldInput label="Episodes" value={podcastForm.episode_count} onChange={v => setPodcastForm(f => ({ ...f, episode_count: v }))} placeholder="24" type="number" />
+                      <FieldInput label="Tags (comma-sep)" value={podcastForm.tags} onChange={v => setPodcastForm(f => ({ ...f, tags: v }))} placeholder="news, daily" />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Artwork</label>
+                      <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>Square · 1400×1400px recommended</p>
+                      <ImageUploader label="Upload Artwork (JPG/PNG)" folder="podcasts" onUploadSuccess={url => setPodcastForm(f => ({ ...f, artwork_url: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "8px 0" }}>
+                        <div style={{ flex: 1, height: 1, background: "#e2e8f0" }} />
+                        <span style={{ fontSize: 11, color: "#9ca3af" }}>or paste URL</span>
+                        <div style={{ flex: 1, height: 1, background: "#e2e8f0" }} />
+                      </div>
+                      <input type="text" value={podcastForm.artwork_url} onChange={e => setPodcastForm(f => ({ ...f, artwork_url: e.target.value }))} placeholder="https://..." style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                      {podcastForm.artwork_url && (
+                        <div style={{ marginTop: 10, borderRadius: 8, overflow: "hidden", border: "1px solid #e2e8f0", width: 80, height: 80 }}>
+                          <img src={podcastForm.artwork_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => { e.target.style.display = "none"; }} />
+                        </div>
+                      )}
+                    </div>
+                    <FieldInput label="Link URL" value={podcastForm.link_url} onChange={v => setPodcastForm(f => ({ ...f, link_url: v }))} placeholder="https://open.spotify.com/show/..." />
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Description</label>
+                      <textarea value={podcastForm.description} onChange={e => setPodcastForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Short description..." style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.7 }}>Status</label>
+                      <button onClick={() => setPodcastForm(f => ({ ...f, enabled: !f.enabled }))}
+                        style={{ width: "100%", background: podcastForm.enabled ? "rgba(79,70,229,0.08)" : "rgba(107,114,128,0.08)", border: `1px solid ${podcastForm.enabled ? "rgba(79,70,229,0.3)" : "#e2e8f0"}`, borderRadius: 7, padding: "10px 12px", color: podcastForm.enabled ? "#4f46e5" : "#6b7280", fontSize: 13, cursor: "pointer", fontWeight: 500 }}>
+                        {podcastForm.enabled ? "✓ Enabled" : "○ Disabled"}
+                      </button>
+                    </div>
+                    <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+                      <button onClick={savePodcast} disabled={podcastSaving} style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: podcastSaving ? "not-allowed" : "pointer", opacity: podcastSaving ? 0.7 : 1 }}>
+                        {podcastSaving ? "Saving…" : editingPodcastId ? "Save Changes" : "Add Podcast"}
+                      </button>
+                      <button onClick={cancelPodcastEdit} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── CAROUSELS FORM ── */}
+                {tab === "carousels" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+                    <p style={{ margin: "0 0 4px", fontSize: 12, color: "#6b7280" }}>A horizontal scrolling row shown on selected pages.</p>
+
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>1 · Row Title</label>
+                      <FieldInput value={carouselForm.title} onChange={v => setCarouselForm(f => ({ ...f, title: v }))} placeholder="e.g. Top Horror Picks, New This Week…" />
+                    </div>
+
+                    <div style={{ height: 1, background: "#e2e8f0" }} />
+
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>2 · Where to show it</label>
+                      <p style={{ margin: "0 0 12px", fontSize: 11, color: "#6b7280" }}>Pick every page this row should appear on.</p>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {[
+                          { val: "home",   icon: "🏠", label: "Home",        desc: "The main landing page" },
+                          { val: "movies", icon: "🎬", label: "Movies tab",  desc: "The dedicated Movies browse page" },
+                          { val: "series", icon: "📺", label: "Series tab",  desc: "The dedicated Series browse page" },
+                        ].map(({ val, icon, label, desc }) => {
+                          const on = pagesArr.includes(val);
+                          return (
+                            <button key={val} onClick={() => togglePage(val)}
+                              style={{ background: on ? "rgba(79,70,229,0.08)" : "#f8fafc", border: `1.5px solid ${on ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 9, padding: "11px 14px", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 12, transition: "border-color 0.15s, background 0.15s" }}>
+                              <span style={{ fontSize: 18, flexShrink: 0 }}>{icon}</span>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: on ? "#4f46e5" : "#374151" }}>{label}</div>
+                                <div style={{ fontSize: 11, color: "#6b7280", marginTop: 1 }}>{desc}</div>
+                              </div>
+                              <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${on ? "#4f46e5" : "#e2e8f0"}`, background: on ? "#4f46e5" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.15s" }}>
+                                {on && <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {pagesArr.length === 0 && (
+                        <p style={{ margin: "8px 0 0", fontSize: 11, color: "#dc2626" }}>Pick at least one page.</p>
+                      )}
+                    </div>
+
+                    <div style={{ height: 1, background: "#e2e8f0" }} />
+
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>3 · What to show</label>
+                      <p style={{ margin: "0 0 10px", fontSize: 11, color: "#6b7280" }}>What kind of content fills this row.</p>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                        {[
+                          { ct: "movies", t: null,      icon: "🎬", label: "Movies only",   desc: "Only movies" },
+                          { ct: "shows",  t: null,      icon: "📺", label: "Series only",   desc: "Only TV shows & series" },
+                          { ct: "all",    t: null,      icon: "⭐", label: "Everything",    desc: "Movies + series mixed" },
+                          { ct: "all",    t: "podcast", icon: "🎙️", label: "Podcasts",      desc: "Podcast episodes" },
+                        ].map(({ ct, t, icon, label, desc }) => {
+                          const isPodcast = t === "podcast";
+                          const isActive = isPodcast
+                            ? carouselForm.type === "podcast"
+                            : carouselForm.content_type === ct && carouselForm.type !== "podcast";
+                          return (
+                            <button key={label} onClick={() => {
+                              if (isPodcast) setCarouselForm(f => ({ ...f, type: "podcast", content_type: "all" }));
+                              else setCarouselForm(f => ({ ...f, content_type: ct, type: f.type === "podcast" ? "custom" : f.type }));
+                            }}
+                              style={{ background: isActive ? "rgba(79,70,229,0.08)" : "#f8fafc", border: `1.5px solid ${isActive ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 10, padding: "13px 12px", cursor: "pointer", textAlign: "left", transition: "border-color 0.15s, background 0.15s" }}>
+                              <div style={{ fontSize: 20, marginBottom: 5 }}>{icon}</div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: isActive ? "#4f46e5" : "#374151", marginBottom: 2 }}>{label}</div>
+                              <div style={{ fontSize: 11, color: "#6b7280" }}>{desc}</div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div style={{ height: 1, background: "#e2e8f0" }} />
+
+                    {carouselForm.type !== "podcast" ? (
+                      <div>
+                        <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>4 · How to order</label>
+                        <p style={{ margin: "0 0 10px", fontSize: 11, color: "#6b7280" }}>How content is sorted inside this row.</p>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          {[
+                            { val: "custom",   icon: "📋", label: "Show all",       desc: "All matching content, default order" },
+                            { val: "trending", icon: "🔥", label: "Trending / New", desc: "Newest added first" },
+                            { val: "category", icon: "🏷️", label: "By category",    desc: "Filter to a specific genre" },
+                          ].map(({ val, icon, label, desc }) => {
+                            const isActive = carouselForm.type === val;
+                            return (
+                              <button key={val} onClick={() => setCarouselForm(f => ({ ...f, type: val }))}
+                                style={{ background: isActive ? "rgba(79,70,229,0.08)" : "#f8fafc", border: `1.5px solid ${isActive ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 9, padding: "11px 14px", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 12, transition: "border-color 0.15s, background 0.15s" }}>
+                                <span style={{ fontSize: 17, flexShrink: 0 }}>{icon}</span>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ fontSize: 13, fontWeight: 600, color: isActive ? "#4f46e5" : "#374151" }}>{label}</div>
+                                  <div style={{ fontSize: 11, color: "#6b7280", marginTop: 1 }}>{desc}</div>
+                                </div>
+                                {isActive && <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#4f46e5", flexShrink: 0 }} />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {carouselForm.type === "category" && (
+                          <div style={{ marginTop: 10, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "14px" }}>
+                            <label style={{ display: "block", fontSize: 11, color: "#6b7280", marginBottom: 6, fontWeight: 600 }}>Category name</label>
+                            <input value={carouselForm.filter_value} onChange={e => setCarouselForm(f => ({ ...f, filter_value: e.target.value }))}
+                              placeholder="e.g. Horror, Comedy, Sci-Fi…"
+                              style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 6, padding: "9px 12px", color: "#0f172a", fontSize: 13, outline: "none" }}
+                              onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                            <p style={{ margin: "6px 0 0", fontSize: 11, color: "#9ca3af" }}>Must match exactly as set on your videos (case-insensitive).</p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div>
+                        <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>4 · Tag filter (optional)</label>
+                        <input value={carouselForm.filter_value} onChange={e => setCarouselForm(f => ({ ...f, filter_value: e.target.value }))}
+                          placeholder="e.g. true-crime — leave blank to show all podcasts"
+                          style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }}
+                          onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                      </div>
+                    )}
+
+                    <div style={{ height: 1, background: "#e2e8f0" }} />
+
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>5 · Visibility</label>
+                      <button onClick={() => setCarouselForm(f => ({ ...f, enabled: !f.enabled }))}
+                        style={{ width: "100%", background: carouselForm.enabled ? "rgba(16,185,129,0.1)" : "rgba(107,114,128,0.08)", border: `1px solid ${carouselForm.enabled ? "rgba(16,185,129,0.35)" : "#222"}`, borderRadius: 8, padding: "11px", color: carouselForm.enabled ? "#10b981" : "#555", fontSize: 13, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                        <span style={{ fontSize: 16 }}>{carouselForm.enabled ? "✓" : "○"}</span>
+                        {carouselForm.enabled ? "Live — visible to users" : "Hidden — not shown to users"}
+                      </button>
+                    </div>
+
+                    <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+                      <button onClick={saveCarousel} disabled={carouselSaving || pagesArr.length === 0}
+                        style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 8, padding: "13px", color: "#fff", fontSize: 14, fontWeight: 700, cursor: (carouselSaving || pagesArr.length === 0) ? "not-allowed" : "pointer", opacity: (carouselSaving || pagesArr.length === 0) ? 0.5 : 1 }}>
+                        {carouselSaving ? "Saving…" : editingCarouselId ? "Update Row" : "Create Row"}
+                      </button>
+                      <button onClick={cancelCarouselEdit}
+                        style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "13px 20px", color: "#374151", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── LIVE FORM ── */}
+                {tab === "live" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                    <FieldInput label="Title *" value={liveForm.title} onChange={v => setLiveForm(f => ({ ...f, title: v }))} placeholder="e.g. Friday Night Live" />
+                    <FieldInput label="Description" value={liveForm.description} onChange={v => setLiveForm(f => ({ ...f, description: v }))} placeholder="What's streaming..." />
+                    <FieldInput label="Stream URL" value={liveForm.stream_url} onChange={v => setLiveForm(f => ({ ...f, stream_url: v }))} placeholder="https://... (YouTube Live, direct video, etc.)" />
+                    <FieldInput label="Badge Text" value={liveForm.badge_text} onChange={v => setLiveForm(f => ({ ...f, badge_text: v }))} placeholder="LIVE" />
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Thumbnail</label>
+                      <ImageUploader label="Upload Thumbnail" folder="live" onUploadSuccess={url => setLiveForm(f => ({ ...f, thumbnail: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
+                      <input type="text" value={liveForm.thumbnail} onChange={e => setLiveForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.7 }}>Status</label>
+                      <button onClick={() => setLiveForm(f => ({ ...f, is_live: !f.is_live }))}
+                        style={{ width: "100%", background: liveForm.is_live ? "rgba(239,68,68,0.12)" : "rgba(107,114,128,0.1)", border: `1px solid ${liveForm.is_live ? "rgba(239,68,68,0.35)" : "rgba(107,114,128,0.3)"}`, borderRadius: 7, padding: "10px 12px", color: liveForm.is_live ? "#ef4444" : "#888", fontSize: 13, cursor: "pointer", fontWeight: 500 }}>
+                        {liveForm.is_live ? "🔴 Live" : "○ Offline"}
+                      </button>
+                    </div>
+                    <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+                      <button onClick={saveLiveStream} disabled={liveSaving} style={{ flex: 1, background: "#ef4444", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: liveSaving ? "not-allowed" : "pointer", opacity: liveSaving ? 0.7 : 1 }}>
+                        {liveSaving ? "Saving…" : editingLiveId ? "Save Changes" : "Go Live"}
+                      </button>
+                      <button onClick={cancelLiveEdit} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            </div>
+          </>
+        );
+      })()}
+
     </div>
   );
 }
