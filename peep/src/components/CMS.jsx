@@ -183,6 +183,7 @@ export function CMS({ onExit }) {
   const [xmltvImporting, setXmltvImporting] = useState(false);
   const [xmltvImportDone, setXmltvImportDone] = useState(null);
   const [xmltvFileName, setXmltvFileName] = useState("");
+  const [xmltvPreviewChannel, setXmltvPreviewChannel] = useState(null);
 
   const [heroConfirm, setHeroConfirm] = useState(null); // { current, next, type: "video"|"show" }
 
@@ -3188,15 +3189,17 @@ export function CMS({ onExit }) {
 
                     <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "#374151" }}>2. Map XMLTV channels to your live streams</p>
                     <div style={{ border: "1px solid #e2e8f0", borderRadius: 10, overflow: "hidden", marginBottom: 20 }}>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 0, background: "#f8fafc", padding: "8px 16px", borderBottom: "1px solid #e2e8f0" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr auto", gap: 0, background: "#f8fafc", padding: "8px 16px", borderBottom: "1px solid #e2e8f0" }}>
                         <span style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5 }}>XMLTV Channel</span>
                         <span />
                         <span style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5 }}>Map to</span>
+                        <span />
                       </div>
                       {Object.entries(xmltvParsed.channels).map(([xId, xName]) => {
                         const progCount = xmltvParsed.programmes.filter(p => p.channel === xId).length;
+                        const isPreviewing = xmltvPreviewChannel === xId;
                         return (
-                          <div key={xId} style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 12, alignItems: "center", padding: "10px 16px", borderBottom: "1px solid #f1f5f9" }}>
+                          <div key={xId} style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr auto", gap: 12, alignItems: "center", padding: "10px 16px", borderBottom: "1px solid #f1f5f9" }}>
                             <div>
                               <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: "#0f172a" }}>{xName}</p>
                               <p style={{ margin: "1px 0 0", fontSize: 11, color: "#9ca3af" }}>{progCount} program{progCount !== 1 ? "s" : ""}</p>
@@ -3211,10 +3214,51 @@ export function CMS({ onExit }) {
                                 <option key={ch.id} value={ch.id}>{ch.channel_number ? `CH ${ch.channel_number} · ` : ""}{ch.title}</option>
                               ))}
                             </select>
+                            <button
+                              onClick={() => setXmltvPreviewChannel(isPreviewing ? null : xId)}
+                              style={{ background: isPreviewing ? "#4f46e5" : "#f1f5f9", border: `1px solid ${isPreviewing ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 6, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: isPreviewing ? "#fff" : "#374151", cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>
+                              {isPreviewing ? "▲ Hide" : "▼ Preview"}
+                            </button>
                           </div>
                         );
                       })}
                     </div>
+
+                    {/* Program preview */}
+                    {xmltvPreviewChannel && (() => {
+                      const progs = xmltvParsed.programmes
+                        .filter(p => p.channel === xmltvPreviewChannel)
+                        .sort((a, b) => a.start_time - b.start_time);
+                      return (
+                        <div style={{ marginBottom: 20, border: "1px solid #e2e8f0", borderRadius: 10, overflow: "hidden" }}>
+                          <div style={{ background: "#f8fafc", padding: "10px 16px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#0f172a" }}>
+                              {xmltvParsed.channels[xmltvPreviewChannel]} · {progs.length} programs
+                            </p>
+                            <button onClick={() => setXmltvPreviewChannel(null)} style={{ background: "none", border: "none", color: "#9ca3af", fontSize: 18, cursor: "pointer", lineHeight: 1, padding: 0 }}>✕</button>
+                          </div>
+                          <div style={{ maxHeight: 300, overflowY: "auto" }}>
+                            {progs.map((p, i) => {
+                              const durMins = Math.round((p.end_time - p.start_time) / 60000);
+                              return (
+                                <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "10px 16px", borderBottom: "1px solid #f1f5f9" }}>
+                                  <div style={{ flexShrink: 0, textAlign: "right", minWidth: 100 }}>
+                                    <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: "#0f172a" }}>{p.start_time.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</p>
+                                    <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>{p.start_time.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}</p>
+                                    <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>{durMins}m</p>
+                                  </div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.title}</p>
+                                    {p.description && <p style={{ margin: 0, fontSize: 12, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.description}</p>}
+                                  </div>
+                                  {p.thumbnail && <img src={p.thumbnail} alt="" style={{ width: 60, height: 34, objectFit: "cover", borderRadius: 4, flexShrink: 0 }} onError={e => e.target.style.display = "none"} />}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Summary + import */}
                     {(() => {
