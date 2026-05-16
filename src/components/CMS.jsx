@@ -257,6 +257,8 @@ export function CMS({ onExit }) {
       { data: ratingsData },
       { data: listData },
       { data: profilesData },
+      { data: videoCatData },
+      { data: showCatData },
     ] = await Promise.all([
       supabase.from("profiles").select("*", { count: "exact", head: true }),
       supabase.from("videos").select("*", { count: "exact", head: true }),
@@ -266,6 +268,8 @@ export function CMS({ onExit }) {
       supabase.from("ratings").select("user_id, content_id, content_type, rating"),
       supabase.from("user_list").select("user_id, content_id, content_type"),
       supabase.from("profiles").select("id, username, email, created_at").order("created_at", { ascending: true }),
+      supabase.from("videos").select("id, category"),
+      supabase.from("shows").select("id, category"),
     ]);
 
     // Group watch sessions by content, also accumulate watch time
@@ -304,11 +308,13 @@ export function CMS({ onExit }) {
     const allItems = [...topWatchedRaw, ...topByTimeRaw, ...topRatedRaw, ...topSavedRaw];
     const allKeys = [...new Set(allItems.map(t => `${t.type}:${t.id}`))];
     const idsFor = (prefix) => allKeys.filter(k => k.startsWith(prefix + ":")).map(k => parseInt(k.split(":")[1]));
-    const [movTitles, epTitles, podEpTitles, showTitles] = await Promise.all([
+    const allEpIds = [...new Set((watchData || []).filter(w => w.content_type === "episode").map(w => w.content_id))];
+    const [movTitles, epTitles, podEpTitles, showTitles, epShowRes] = await Promise.all([
       idsFor("movie").length ? supabase.from("videos").select("id, title").in("id", idsFor("movie")) : { data: [] },
       idsFor("episode").length ? supabase.from("episodes").select("id, title").in("id", idsFor("episode")) : { data: [] },
       idsFor("podcast_episode").length ? supabase.from("podcast_episodes").select("id, title").in("id", idsFor("podcast_episode")) : { data: [] },
       idsFor("show").length ? supabase.from("shows").select("id, title").in("id", idsFor("show")) : { data: [] },
+      allEpIds.length ? supabase.from("episodes").select("id, show_id").in("id", allEpIds) : { data: [] },
     ]);
     const titleMap = {};
     (movTitles.data || []).forEach(v => { titleMap[`movie:${v.id}`] = v.title; });
@@ -392,6 +398,71 @@ export function CMS({ onExit }) {
     });
     const sessionTrend = Object.entries(sessionsByDay).sort((a, b) => a[0].localeCompare(b[0]));
 
+    // Category performance (movies by videos.category, episodes/shows by shows.category)
+    const movieCatMap = {};
+    (videoCatData || []).forEach(v => { if (v.category) movieCatMap[v.id] = v.category; });
+    const showCatMap = {};
+    (showCatData || []).forEach(s => { if (s.category) showCatMap[s.id] = s.category; });
+    const epShowMap = {};
+    (epShowRes.data || []).forEach(e => { epShowMap[e.id] = e.show_id; });
+    const catMap = {};
+    (watchData || []).forEach(w => {
+      let cat = null;
+      if (w.content_type === "movie") cat = movieCatMap[w.content_id];
+      else if (w.content_type === "show") cat = showCatMap[w.content_id];
+      else if (w.content_type === "episode") { const sid = epShowMap[w.content_id]; cat = sid ? showCatMap[sid] : null; }
+      if (!cat) return;
+      if (!catMap[cat]) catMap[cat] = { sessions: 0, completed: 0, seconds: 0 };
+      catMap[cat].sessions++;
+      if (w.completed) catMap[cat].completed++;
+      if (w.progress_seconds) catMap[cat].seconds += w.progress_seconds;
+    });
+    const categoryStats = Object.entries(catMap)
+      .map(([cat, d]) => ({
+        cat,
+        sessions: d.sessions,
+        completedPct: d.sessions > 0 ? Math.round(d.completed / d.sessions * 100) : 0,
+        hours: Math.round(d.seconds / 3600 * 10) / 10,
+      }))
+      .sort((a, b) => b.sessions - a.sessions);
+
+    // Subscriber funnel — computed after userEngagement is built
+    const watchedCount = userEngagement.filter(u => u.sessions > 0).length;
+    const completedCount = userEngagement.filter(u => u.completed > 0).length;
+    const subscriberFunnel = [
+      { label: "Registered", count: userCount ?? 0 },
+      { label: "Watched ≥1", count: watchedCount },
+      { label: "Completed ≥1", count: completedCount },
+      { label: "Active (7d)", count: activeUsers7d },
+    ];
+
+    // Watch depth distribution (progress_seconds / duration_seconds buckets)
+    const depthBuckets = [
+      { label: "< 25%", count: 0, color: "#f87171" },
+      { label: "25–50%", count: 0, color: "#fb923c" },
+      { label: "50–75%", count: 0, color: "#facc15" },
+      { label: "75–100%", count: 0, color: "#34d399" },
+    ];
+    (watchData || []).forEach(w => {
+      if (!w.duration_seconds) return;
+      const pct = (w.progress_seconds || 0) / w.duration_seconds;
+      if (pct < 0.25) depthBuckets[0].count++;
+      else if (pct < 0.5) depthBuckets[1].count++;
+      else if (pct < 0.75) depthBuckets[2].count++;
+      else depthBuckets[3].count++;
+    });
+
+    // Hour-of-day activity (all-time)
+    const hourMap = Array(24).fill(0);
+    (watchData || []).forEach(w => {
+      if (!w.last_watched_at) return;
+      hourMap[new Date(w.last_watched_at).getHours()]++;
+    });
+    const hourStats = hourMap.map((count, h) => ({
+      label: h === 0 ? "12a" : h < 12 ? `${h}a` : h === 12 ? "12p" : `${h - 12}p`,
+      count,
+    }));
+
     // Watch hours over time (by day, last 30 days)
     const hoursByDay = {};
     (watchData || []).forEach(w => {
@@ -445,6 +516,7 @@ export function CMS({ onExit }) {
       userEngagement, activeUsers30d, activeUsers7d,
       neverWatchedUsers, avgSessionsPerUser, sessionTrend,
       hoursTrend, contentTypeStats, dowStats,
+      categoryStats, subscriberFunnel, depthBuckets, hourStats,
     });
     setReportLoading(false);
   }
@@ -2452,30 +2524,87 @@ export function CMS({ onExit }) {
 
                 {/* ── CONTENT PERFORMANCE ── */}
                 {reportSection === "content" && (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 24 }}>
-                    {[
-                      { title: "Top by Sessions", items: reportData.topWatched, valueKey: "count", valueSuffix: " plays", valueColor: "#60a5fa", emptyMsg: "No watch data yet" },
-                      { title: "Top by Watch Time", items: reportData.topByTime, valueKey: "minutes", valueSuffix: " min", valueColor: "#f472b6", emptyMsg: "No watch time data yet" },
-                      { title: "Top Rated (👍)", items: reportData.topRated, valueKey: "count", valueSuffix: "", valueColor: "#f97316", emptyMsg: "No ratings yet" },
-                      { title: "Most Saved to List", items: reportData.topSaved, valueKey: "count", valueSuffix: "", valueColor: "#a78bfa", emptyMsg: "No saves yet" },
-                    ].map(({ title, items, valueKey, valueSuffix, valueColor, emptyMsg }) => (
-                      <div key={title} style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-                        <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{title}</p>
-                        {items.length === 0 ? (
-                          <p style={{ fontSize: 13, color: "#9ca3af", textAlign: "center", padding: "20px 0" }}>{emptyMsg}</p>
-                        ) : items.map((item, i) => (
-                          <div key={`${item.type}:${item.id}`} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 0", borderBottom: i < items.length - 1 ? "1px solid #f1f5f9" : "none" }}>
-                            <span style={{ fontSize: 11, color: "#9ca3af", width: 18, textAlign: "right", flexShrink: 0 }}>{i + 1}</span>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <p style={{ margin: 0, fontSize: 13, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
-                              <span style={{ fontSize: 11, color: item.type === "movie" ? "#4f46e5" : item.type === "podcast_episode" ? "#7c3aed" : "#2563eb" }}>{item.type}</span>
+                  <>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 24, marginBottom: 24 }}>
+                      {[
+                        { title: "Top by Sessions", items: reportData.topWatched, valueKey: "count", valueSuffix: " plays", valueColor: "#60a5fa", emptyMsg: "No watch data yet" },
+                        { title: "Top by Watch Time", items: reportData.topByTime, valueKey: "minutes", valueSuffix: " min", valueColor: "#f472b6", emptyMsg: "No watch time data yet" },
+                        { title: "Top Rated (👍)", items: reportData.topRated, valueKey: "count", valueSuffix: "", valueColor: "#f97316", emptyMsg: "No ratings yet" },
+                        { title: "Most Saved to List", items: reportData.topSaved, valueKey: "count", valueSuffix: "", valueColor: "#a78bfa", emptyMsg: "No saves yet" },
+                      ].map(({ title, items, valueKey, valueSuffix, valueColor, emptyMsg }) => (
+                        <div key={title} style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                          <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{title}</p>
+                          {items.length === 0 ? (
+                            <p style={{ fontSize: 13, color: "#9ca3af", textAlign: "center", padding: "20px 0" }}>{emptyMsg}</p>
+                          ) : items.map((item, i) => (
+                            <div key={`${item.type}:${item.id}`} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 0", borderBottom: i < items.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                              <span style={{ fontSize: 11, color: "#9ca3af", width: 18, textAlign: "right", flexShrink: 0 }}>{i + 1}</span>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <p style={{ margin: 0, fontSize: 13, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
+                                <span style={{ fontSize: 11, color: item.type === "movie" ? "#4f46e5" : item.type === "podcast_episode" ? "#7c3aed" : "#2563eb" }}>{item.type}</span>
+                              </div>
+                              <span style={{ fontSize: 13, fontWeight: 600, color: valueColor, flexShrink: 0 }}>{item[valueKey].toLocaleString()}{valueSuffix}</span>
                             </div>
-                            <span style={{ fontSize: 13, fontWeight: 600, color: valueColor, flexShrink: 0 }}>{item[valueKey].toLocaleString()}{valueSuffix}</span>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Category performance */}
+                    {reportData.categoryStats.length > 0 && (
+                      <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", marginBottom: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                        <p style={{ margin: "0 0 18px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>Performance by Category</p>
+                        {(() => {
+                          const maxS = Math.max(...reportData.categoryStats.map(c => c.sessions), 1);
+                          return reportData.categoryStats.map(c => (
+                            <div key={c.cat} style={{ marginBottom: 14 }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+                                <span style={{ fontSize: 12, fontWeight: 600, color: "#0f172a" }}>{c.cat}</span>
+                                <div style={{ display: "flex", gap: 20, fontSize: 11, color: "#6b7280" }}>
+                                  <span><strong style={{ color: "#60a5fa" }}>{c.sessions.toLocaleString()}</strong> sessions</span>
+                                  <span><strong style={{ color: "#34d399" }}>{c.completedPct}%</strong> completed</span>
+                                  <span><strong style={{ color: "#f472b6" }}>{c.hours}h</strong> watched</span>
+                                </div>
+                              </div>
+                              <div style={{ height: 8, background: "#f1f5f9", borderRadius: 4, overflow: "hidden" }}>
+                                <div style={{ height: "100%", width: `${Math.max(Math.round(c.sessions / maxS * 100), 2)}%`, background: "linear-gradient(90deg, #6366f1, #8b5cf6)", borderRadius: 4 }} />
+                              </div>
+                            </div>
+                          ));
+                        })()}
                       </div>
-                    ))}
-                  </div>
+                    )}
+
+                    {/* Watch depth distribution */}
+                    {reportData.depthBuckets.some(b => b.count > 0) && (
+                      <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                        <p style={{ margin: "0 0 6px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>Watch Depth Distribution</p>
+                        <p style={{ margin: "0 0 18px", fontSize: 11, color: "#9ca3af" }}>How far into content viewers watch on average</p>
+                        {(() => {
+                          const total = reportData.depthBuckets.reduce((s, b) => s + b.count, 0);
+                          const maxB = Math.max(...reportData.depthBuckets.map(b => b.count), 1);
+                          return (
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+                              {reportData.depthBuckets.map(b => {
+                                const pct = total > 0 ? Math.round(b.count / total * 100) : 0;
+                                const barH = Math.round(b.count / maxB * 80) + 4;
+                                return (
+                                  <div key={b.label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                                    <span style={{ fontSize: 13, fontWeight: 700, color: b.color }}>{pct}%</span>
+                                    <div style={{ width: "100%", height: 88, display: "flex", alignItems: "flex-end" }}>
+                                      <div style={{ width: "100%", height: barH, background: b.color, borderRadius: "4px 4px 0 0", opacity: 0.85 }} />
+                                    </div>
+                                    <span style={{ fontSize: 11, fontWeight: 600, color: "#374151" }}>{b.label}</span>
+                                    <span style={{ fontSize: 10, color: "#9ca3af" }}>{b.count.toLocaleString()} sessions</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </>
                 )}
 
                 {/* ── USER ENGAGEMENT ── */}
@@ -2494,6 +2623,39 @@ export function CMS({ onExit }) {
                         </div>
                       ))}
                     </div>
+
+                    {/* Subscriber funnel */}
+                    {reportData.subscriberFunnel[0].count > 0 && (
+                      <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", marginBottom: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                        <p style={{ margin: "0 0 6px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>Subscriber Funnel</p>
+                        <p style={{ margin: "0 0 20px", fontSize: 11, color: "#9ca3af" }}>Drop-off at each stage of user engagement</p>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 0 }}>
+                          {reportData.subscriberFunnel.map((step, i) => {
+                            const base = reportData.subscriberFunnel[0].count;
+                            const pct = base > 0 ? Math.round(step.count / base * 100) : 0;
+                            const dropPct = i > 0 ? Math.round(step.count / reportData.subscriberFunnel[i - 1].count * 100) : 100;
+                            const COLORS = ["#34d399", "#60a5fa", "#a78bfa", "#f472b6"];
+                            return (
+                              <div key={step.label} style={{ position: "relative", padding: "0 8px" }}>
+                                {i > 0 && (
+                                  <div style={{ position: "absolute", top: 24, left: -2, fontSize: 10, color: dropPct >= 70 ? "#34d399" : dropPct >= 40 ? "#facc15" : "#f87171", fontWeight: 600, zIndex: 1 }}>
+                                    {dropPct}%→
+                                  </div>
+                                )}
+                                <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "16px 12px", textAlign: "center" }}>
+                                  <div style={{ fontSize: 22, fontWeight: 800, color: COLORS[i], marginBottom: 4 }}>{step.count.toLocaleString()}</div>
+                                  <div style={{ fontSize: 10, color: "#6b7280", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>{step.label}</div>
+                                  <div style={{ height: 4, background: "#e2e8f0", borderRadius: 2, overflow: "hidden" }}>
+                                    <div style={{ height: "100%", width: `${pct}%`, background: COLORS[i], borderRadius: 2 }} />
+                                  </div>
+                                  <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 5 }}>{pct}% of total</div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Content type breakdown */}
                     {reportData.contentTypeStats.length > 0 && (
@@ -2541,6 +2703,29 @@ export function CMS({ onExit }) {
                           })()}
                         </div>
                         <p style={{ margin: "8px 0 0", fontSize: 11, color: "#9ca3af" }}>All-time sessions · hover bars for count</p>
+                      </div>
+                    )}
+
+                    {/* Hour of day activity */}
+                    {reportData.hourStats.some(h => h.count > 0) && (
+                      <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", marginBottom: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                        <p style={{ margin: "0 0 6px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>Activity by Hour of Day</p>
+                        <p style={{ margin: "0 0 20px", fontSize: 11, color: "#9ca3af" }}>All-time watch sessions by local hour (viewer's timezone)</p>
+                        <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 72 }}>
+                          {(() => {
+                            const max = Math.max(...reportData.hourStats.map(h => h.count), 1);
+                            return reportData.hourStats.map((h, i) => {
+                              const isPrimetime = i >= 18 && i <= 23;
+                              return (
+                                <div key={h.label} title={`${h.label}: ${h.count} sessions`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "default" }}>
+                                  <div style={{ width: "100%", background: isPrimetime ? "rgba(251,146,60,0.35)" : "rgba(96,165,250,0.25)", borderRadius: "3px 3px 0 0", height: `${Math.round((h.count / max) * 52) + 2}px`, minHeight: 2 }} />
+                                  {i % 4 === 0 && <span style={{ fontSize: 8, color: "#9ca3af" }}>{h.label}</span>}
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
+                        <p style={{ margin: "8px 0 0", fontSize: 11, color: "#9ca3af" }}>Orange bars = 6pm–midnight · hover for exact count</p>
                       </div>
                     )}
 
