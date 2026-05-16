@@ -556,7 +556,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           </span>
           {!isMobile && (
             <div style={{ display: "flex", gap: 4 }}>
-              {["Home", "Movies", "Series", "Podcasts", "Live TV", "New & Popular"].map(label => {
+              {["Home", "Movies", "Series", "Podcasts", "New & Popular"].map(label => {
                 const active = activeNav === label;
                 return (
                   <span key={label} onClick={() => setActiveNav(label)} style={{ fontSize: 13.5, padding: "6px 12px", borderRadius: 6, color: active ? "#fff" : "rgba(255,255,255,0.55)", fontWeight: active ? 600 : 400, cursor: "pointer", background: active ? "rgba(250,204,21,0.12)" : "transparent", transition: "color 0.2s, background 0.2s" }}
@@ -619,7 +619,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       {isMobile && menuOpen && (
         <div style={{ position: "fixed", top: 68, left: 0, right: 0, bottom: 0, zIndex: 98, background: "rgba(10,10,10,0.98)", backdropFilter: "blur(16px)", display: "flex", flexDirection: "column", overflowY: "auto" }}>
           <div style={{ padding: "12px 0" }}>
-            {["Home", "Movies", "Series", "Podcasts", "Live TV", "New & Popular", "My List"].map(label => {
+            {["Home", "Movies", "Series", "Podcasts", "New & Popular", "My List"].map(label => {
               const active = activeNav === label;
               return (
                 <div key={label} onClick={() => { if (label === "My List" && !user) { onAuthOpen(); setMenuOpen(false); return; } setActiveNav(label); setMenuOpen(false); }}
@@ -729,8 +729,8 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         </div>
       )}
 
-      {/* Hero — hidden on catalog pages, Podcasts, and Live TV */}
-      {activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "Podcasts" && activeNav !== "Live TV" && (
+      {/* Hero — hidden on catalog pages and Podcasts */}
+      {activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "Podcasts" && (
         loading ? (
           <div style={{ height: "85vh", display: "flex", alignItems: "center", justifyContent: "center" }}><Spinner /></div>
         ) : featured ? (
@@ -756,22 +756,16 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         />
       )}
 
-      {/* Live TV page */}
-      {activeNav === "Live TV" && !loading && (
-        <LiveTVPage streams={liveStreams} epgEntries={epgEntries} onPlay={onPlay} />
-      )}
+      {/* Live TV — hidden from viewers */}
 
       {/* Content rows (Home / My List / New & Popular / Podcasts) */}
-      {activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "Live TV" && !loading && (allContent.length > 0 || podcasts.length > 0 || liveStreams.length > 0 || continueWatching.length > 0) && (
+      {activeNav !== "Movies" && activeNav !== "Series" && !loading && (allContent.length > 0 || podcasts.length > 0 || continueWatching.length > 0) && (
         <div style={{ position: "relative", zIndex: 1, marginTop: activeNav === "Podcasts" ? 0 : -60, paddingBottom: 80 }}>
           {activeNav === "Podcasts" && (
             <div style={{ padding: `48px ${PAD} 0` }}>
               <h1 style={{ margin: 0, fontFamily: "'DM Serif Display', serif", fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 400, color: "#fff" }}>Podcasts</h1>
               <p style={{ margin: "8px 0 0", fontSize: 14, color: "#555" }}>{podcasts.length} show{podcasts.length !== 1 ? "s" : ""}</p>
             </div>
-          )}
-          {liveStreams.length > 0 && activeNav === "Home" && (
-            <LiveSection streams={liveStreams} onPlay={onPlay} />
           )}
           {continueWatching.length > 0 && activeNav === "Home" && (
             <ContinueWatchingRow items={continueWatching} onPlay={onPlay} onRemove={handleRemoveCW} />

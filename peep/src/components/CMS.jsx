@@ -100,6 +100,8 @@ export function CMS({ onExit }) {
   const [toast, setToast] = useState(null);
   const [searchFilter, setSearchFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
+  const [livePasscodeEntered, setLivePasscodeEntered] = useState(false);
+  const [livePasscodeInput, setLivePasscodeInput] = useState("");
   
   // Carousels state
   const [carousels, setCarousels] = useState([]);
@@ -1483,7 +1485,7 @@ export function CMS({ onExit }) {
         <button onClick={() => setTab("carousels")} style={{ background: "transparent", border: "none", borderBottom: tab === "carousels" ? "2px solid #4f46e5" : "none", color: tab === "carousels" ? "#0f172a" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "carousels" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
           Carousels ({carousels.length})
         </button>
-        <button onClick={() => setTab("live")} style={{ background: "transparent", border: "none", borderBottom: tab === "live" ? "2px solid #ef4444" : "none", color: tab === "live" ? "#ef4444" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "live" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
+        <button onClick={() => { setTab("live"); setLivePasscodeInput(""); setLivePasscodeEntered(false); }} style={{ background: "transparent", border: "none", borderBottom: tab === "live" ? "2px solid #ef4444" : "none", color: tab === "live" ? "#ef4444" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "live" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
           Live ({liveList.length})
         </button>
         <button onClick={() => setTab("reports")} style={{ background: "transparent", border: "none", borderBottom: tab === "reports" ? "2px solid #34d399" : "none", color: tab === "reports" ? "#34d399" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "reports" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
@@ -1888,7 +1890,30 @@ export function CMS({ onExit }) {
           </div>
         )}
         {/* ────── LIVE TAB ────── */}
-        {tab === "live" && (
+        {tab === "live" && !livePasscodeEntered && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 400 }}>
+            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "48px 40px", width: 360, textAlign: "center", boxShadow: "0 8px 32px rgba(0,0,0,0.08)" }}>
+              <div style={{ fontSize: 36, marginBottom: 16 }}>🔒</div>
+              <h2 style={{ margin: "0 0 6px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Live TV</h2>
+              <p style={{ margin: "0 0 24px", fontSize: 13, color: "#6b7280" }}>Enter the passcode to access Live settings</p>
+              <input
+                type="password"
+                value={livePasscodeInput}
+                onChange={e => setLivePasscodeInput(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") { if (livePasscodeInput === "1234") { setLivePasscodeEntered(true); } else { setLivePasscodeInput(""); showToast("Incorrect passcode", "error"); } } }}
+                placeholder="Passcode"
+                autoFocus
+                style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 14px", fontSize: 16, textAlign: "center", letterSpacing: 4, outline: "none", marginBottom: 12, boxSizing: "border-box" }}
+              />
+              <button
+                onClick={() => { if (livePasscodeInput === "1234") { setLivePasscodeEntered(true); } else { setLivePasscodeInput(""); showToast("Incorrect passcode", "error"); } }}
+                style={{ width: "100%", background: "#0f172a", color: "#fff", border: "none", borderRadius: 8, padding: "12px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                Unlock
+              </button>
+            </div>
+          </div>
+        )}
+        {tab === "live" && livePasscodeEntered && (
           <div>
             {/* Header row with Add button */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
