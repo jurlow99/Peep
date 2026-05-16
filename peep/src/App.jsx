@@ -441,6 +441,8 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     ? [{ id: "mylist", title: "My List", videos: allContent.filter(v => myList?.[`${v._type}_${v.id}`]) }]
     : activeNav === "New & Popular"
     ? [{ id: "new", title: "New & Popular", videos: [...allContent].sort((a, b) => (b.year || 0) - (a.year || 0)) }]
+    : activeNav === "Live TV"
+    ? []
     : activeNav === "Podcasts"
     ? [{ id: "all-podcasts", title: "All Podcasts", isPodcast: true, videos: [], podcastItems: podcasts }]
     : visibleCarousels.length > 0
@@ -545,7 +547,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           </span>
           {!isMobile && (
             <div style={{ display: "flex", gap: 4 }}>
-              {["Home", "Movies", "Series", "Podcasts", "New & Popular"].map(label => {
+              {["Home", "Movies", "Series", "Podcasts", "Live TV", "New & Popular"].map(label => {
                 const active = activeNav === label;
                 return (
                   <span key={label} onClick={() => setActiveNav(label)} style={{ fontSize: 13.5, padding: "6px 12px", borderRadius: 6, color: active ? "#fff" : "rgba(255,255,255,0.55)", fontWeight: active ? 600 : 400, cursor: "pointer", background: active ? "rgba(250,204,21,0.12)" : "transparent", transition: "color 0.2s, background 0.2s" }}
@@ -608,7 +610,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       {isMobile && menuOpen && (
         <div style={{ position: "fixed", top: 68, left: 0, right: 0, bottom: 0, zIndex: 98, background: "rgba(10,10,10,0.98)", backdropFilter: "blur(16px)", display: "flex", flexDirection: "column", overflowY: "auto" }}>
           <div style={{ padding: "12px 0" }}>
-            {["Home", "Movies", "Series", "Podcasts", "New & Popular", "My List"].map(label => {
+            {["Home", "Movies", "Series", "Podcasts", "Live TV", "New & Popular", "My List"].map(label => {
               const active = activeNav === label;
               return (
                 <div key={label} onClick={() => { if (label === "My List" && !user) { onAuthOpen(); setMenuOpen(false); return; } setActiveNav(label); setMenuOpen(false); }}
@@ -718,8 +720,8 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         </div>
       )}
 
-      {/* Hero — hidden on catalog pages and Podcasts */}
-      {activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "Podcasts" && (
+      {/* Hero — hidden on catalog pages, Podcasts, and Live TV */}
+      {activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "Podcasts" && activeNav !== "Live TV" && (
         loading ? (
           <div style={{ height: "85vh", display: "flex", alignItems: "center", justifyContent: "center" }}><Spinner /></div>
         ) : featured ? (
@@ -745,8 +747,13 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         />
       )}
 
+      {/* Live TV page */}
+      {activeNav === "Live TV" && !loading && (
+        <LiveTVPage streams={liveStreams} onPlay={onPlay} />
+      )}
+
       {/* Content rows (Home / My List / New & Popular / Podcasts) */}
-      {activeNav !== "Movies" && activeNav !== "Series" && !loading && (allContent.length > 0 || podcasts.length > 0 || liveStreams.filter(s => s.is_live).length > 0 || continueWatching.length > 0) && (
+      {activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "Live TV" && !loading && (allContent.length > 0 || podcasts.length > 0 || liveStreams.filter(s => s.is_live).length > 0 || continueWatching.length > 0) && (
         <div style={{ position: "relative", zIndex: 1, marginTop: activeNav === "Podcasts" ? 0 : -60, paddingBottom: 80 }}>
           {activeNav === "Podcasts" && (
             <div style={{ padding: `48px ${PAD} 0` }}>
@@ -1222,10 +1229,17 @@ function LiveCard({ stream, onPlay }) {
               <svg width="40" height="40" viewBox="0 0 24 24" fill="#ef4444" opacity="0.4"><polygon points="5,3 19,12 5,21" /></svg>
             </div>
         }
-        <div style={{ position: "absolute", top: 10, left: 10, display: "flex", alignItems: "center", gap: 5, background: "#ef4444", borderRadius: 5, padding: "4px 10px" }}>
-          <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#fff", animation: "livepulse 1.5s infinite" }} />
-          <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 0.5 }}>{stream.badge_text || "LIVE"}</span>
-        </div>
+        {stream.is_live && (
+          <div style={{ position: "absolute", top: 10, left: 10, display: "flex", alignItems: "center", gap: 5, background: "#ef4444", borderRadius: 5, padding: "4px 10px" }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#fff", animation: "livepulse 1.5s infinite" }} />
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 0.5 }}>{stream.badge_text || "LIVE"}</span>
+          </div>
+        )}
+        {stream.channel_number != null && stream.channel_number !== "" && (
+          <div style={{ position: "absolute", top: 10, right: 10, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)", borderRadius: 5, padding: "4px 8px", fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: 0.5 }}>
+            CH {stream.channel_number}
+          </div>
+        )}
         {hovered && stream.stream_url && (
           <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <div style={{ width: 52, height: 52, borderRadius: "50%", background: "rgba(239,68,68,0.9)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 20px rgba(239,68,68,0.5)" }}>
@@ -1236,8 +1250,70 @@ function LiveCard({ stream, onPlay }) {
       </div>
       <div style={{ padding: "14px 16px" }}>
         <p style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 600, color: "#fff" }}>{stream.title}</p>
-        {stream.description && <p style={{ margin: 0, fontSize: 12, color: "#666", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{stream.description}</p>}
+        {stream.now_airing && (
+          <p style={{ margin: "0 0 3px", fontSize: 12, color: "#ef4444", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            Now: {stream.now_airing}
+          </p>
+        )}
+        {stream.up_next && (
+          <p style={{ margin: 0, fontSize: 11, color: "#555", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            Up Next: {stream.up_next}
+          </p>
+        )}
+        {!stream.now_airing && stream.description && (
+          <p style={{ margin: 0, fontSize: 12, color: "#666", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{stream.description}</p>
+        )}
       </div>
+    </div>
+  );
+}
+
+// ─── Live TV Page ─────────────────────────────────────────────────────────────
+
+function LiveTVPage({ streams, onPlay }) {
+  const liveNow = [...streams.filter(s => s.is_live)].sort((a, b) => (a.channel_number ?? 999) - (b.channel_number ?? 999));
+  const offline = [...streams.filter(s => !s.is_live)].sort((a, b) => (a.channel_number ?? 999) - (b.channel_number ?? 999));
+
+  return (
+    <div style={{ paddingTop: 100, paddingBottom: 80, minHeight: "100vh" }}>
+      <style>{`@keyframes livepulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.4; transform:scale(1.3); } }`}</style>
+
+      <div style={{ padding: `0 ${PAD} 40px` }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+          {liveNow.length > 0 && <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite" }} />}
+          <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(28px, 4vw, 48px)", fontWeight: 400, margin: 0, color: "#fff" }}>Live TV</h1>
+        </div>
+        <p style={{ margin: 0, fontSize: 14, color: "#555" }}>
+          {liveNow.length > 0
+            ? `${liveNow.length} channel${liveNow.length !== 1 ? "s" : ""} on air now`
+            : "No channels on air right now"}
+        </p>
+      </div>
+
+      {streams.length === 0 && (
+        <div style={{ padding: "80px 0", textAlign: "center", color: "#444", fontSize: 15 }}>No channels set up yet.</div>
+      )}
+
+      {liveNow.length > 0 && (
+        <div style={{ padding: `0 ${PAD}`, marginBottom: 56 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite" }} />
+            <h2 style={{ margin: 0, fontSize: "clamp(15px, 1.3vw, 19px)", fontWeight: 600, color: "#e5e5e5" }}>On Air Now</h2>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 20 }}>
+            {liveNow.map(s => <LiveCard key={s.id} stream={s} onPlay={onPlay} />)}
+          </div>
+        </div>
+      )}
+
+      {offline.length > 0 && (
+        <div style={{ padding: `0 ${PAD}` }}>
+          <h2 style={{ margin: "0 0 20px", fontSize: "clamp(12px, 1vw, 15px)", fontWeight: 600, color: "#333", textTransform: "uppercase", letterSpacing: 1.2 }}>Offline Channels</h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 20, opacity: 0.45 }}>
+            {offline.map(s => <LiveCard key={s.id} stream={s} onPlay={onPlay} />)}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1834,7 +1910,11 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
       </nav>
 
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
-        <style>{`video::-webkit-media-controls-fullscreen-button{display:none!important}`}</style>
+        <style>{`
+          video::-webkit-media-controls-fullscreen-button{display:none!important}
+          ${video._type === "live" ? "video::-webkit-media-controls-timeline{display:none!important} video::-webkit-media-controls-time-remaining-display{display:none!important} video::-webkit-media-controls-current-time-display{display:none!important}" : ""}
+          @keyframes livepulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.4; transform:scale(1.3); } }
+        `}</style>
         <div ref={playerContainerRef} style={isFullscreen ? { position: "fixed", inset: 0, zIndex: 999, background: "#000", display: "flex", alignItems: "center", justifyContent: "center" } : { position: "relative", marginBottom: 30 }}>
           <div style={isFullscreen ? { position: "relative", width: "100%", height: "100%" } : { background: "#000", borderRadius: 14, overflow: "hidden", aspectRatio: "16/9", boxShadow: "0 32px 80px rgba(0,0,0,0.8)" }}>
             {getEmbedUrl(video.url) ? (
@@ -1890,15 +1970,49 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
           )}
         </div>
 
+        {video._type === "live" && (video.now_airing || video.up_next) && (
+          <div style={{ marginBottom: 24, background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.18)", borderRadius: 12, padding: "16px 20px", display: "flex", gap: 32, flexWrap: "wrap" }}>
+            {video.now_airing && (
+              <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite", flexShrink: 0, marginTop: 5 }} />
+                <div>
+                  <p style={{ margin: "0 0 3px", fontSize: 11, color: "#666", textTransform: "uppercase", letterSpacing: 0.7, fontWeight: 600 }}>Now Airing</p>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#e5e5e5" }}>{video.now_airing}</p>
+                </div>
+              </div>
+            )}
+            {video.up_next && (
+              <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#444", flexShrink: 0, marginTop: 5 }} />
+                <div>
+                  <p style={{ margin: "0 0 3px", fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 0.7, fontWeight: 600 }}>Up Next</p>
+                  <p style={{ margin: 0, fontSize: 14, color: "#888" }}>{video.up_next}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 48 }}>
           <div style={{ flex: 1, maxWidth: 700 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+              {video._type === "live" && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#ef4444", borderRadius: 5, padding: "4px 10px" }}>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#fff", animation: "livepulse 1.5s infinite" }} />
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 0.5 }}>{video.badge_text || "LIVE"}</span>
+                </div>
+              )}
+              {video.channel_number != null && video.channel_number !== "" && (
+                <span style={{ fontSize: 12, color: "#555", fontWeight: 600 }}>CH {video.channel_number}</span>
+              )}
+            </div>
             <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 38, margin: "0 0 14px", fontWeight: 400 }}>{video.title}</h1>
             <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 20, flexWrap: "wrap" }}>
               {video.score && <span style={{ color: "#4ade80", fontWeight: 700, fontSize: 14 }}>{video.score}% Match</span>}
               {video.year && <span style={{ color: "#666", fontSize: 13 }}>{video.year}</span>}
               {video.rating && <span style={{ border: "1px solid #2e2e2e", color: "#666", fontSize: 11, padding: "2px 8px", borderRadius: 4 }}>{video.rating}</span>}
               {video.duration && <span style={{ color: "#666", fontSize: 13 }}>{video.duration}</span>}
-              <span style={{ background: "#1a1a1a", border: "1px solid #222", color: "#777", fontSize: 11, padding: "3px 10px", borderRadius: 4, fontWeight: 600, letterSpacing: 0.5 }}>FREE</span>
+              {video._type !== "live" && <span style={{ background: "#1a1a1a", border: "1px solid #222", color: "#777", fontSize: 11, padding: "3px 10px", borderRadius: 4, fontWeight: 600, letterSpacing: 0.5 }}>FREE</span>}
             </div>
             {video.description && <p style={{ fontSize: 15, color: "#888", lineHeight: 1.8, margin: 0 }}>{video.description}</p>}
           </div>

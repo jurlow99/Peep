@@ -58,6 +58,9 @@ const EMPTY_LIVE_STREAM = {
   thumbnail: "",
   is_live: true,
   badge_text: "LIVE",
+  channel_number: "",
+  now_airing: "",
+  up_next: "",
 };
 
 const EMPTY_PODCAST = {
@@ -850,7 +853,7 @@ export function CMS({ onExit }) {
   function startLiveEdit(s) {
     setEditingLiveId(s.id);
     setDrawerOpen(true);
-    setLiveForm({ title: s.title ?? "", description: s.description ?? "", stream_url: s.stream_url ?? "", thumbnail: s.thumbnail ?? "", is_live: s.is_live ?? true, badge_text: s.badge_text ?? "LIVE" });
+    setLiveForm({ title: s.title ?? "", description: s.description ?? "", stream_url: s.stream_url ?? "", thumbnail: s.thumbnail ?? "", is_live: s.is_live ?? true, badge_text: s.badge_text ?? "LIVE", channel_number: s.channel_number ?? "", now_airing: s.now_airing ?? "", up_next: s.up_next ?? "" });
   }
 
   function cancelLiveEdit() { setEditingLiveId(null); setLiveForm(EMPTY_LIVE_STREAM); setDrawerOpen(false); }
@@ -871,6 +874,12 @@ export function CMS({ onExit }) {
       await loadLiveStreams();
     } catch (error) { showToast("Save failed: " + error.message, "error"); }
     setLiveSaving(false);
+  }
+
+  async function toggleLive(s) {
+    const { error } = await supabase.from("live_streams").update({ is_live: !s.is_live }).eq("id", s.id);
+    if (error) showToast("Update failed: " + error.message, "error");
+    else { showToast(s.is_live ? "Stream is now offline" : "🔴 Stream is live!"); await loadLiveStreams(); }
   }
 
   async function deleteLiveStream(id) {
@@ -1429,18 +1438,29 @@ export function CMS({ onExit }) {
             ) : liveList.length === 0 ? (
               <div style={{ color: "#6b7280", padding: 40, textAlign: "center", border: "1px dashed #e2e8f0", borderRadius: 10 }}>No streams yet.</div>
             ) : liveList.map(s => (
-              <div key={s.id} style={{ background: "#ffffff", border: `1px solid ${s.is_live ? "rgba(239,68,68,0.3)" : "#e2e8f0"}`, borderRadius: 10, padding: "16px 20px", marginBottom: 12, display: "flex", gap: 16, alignItems: "center" }}>
+              <div key={s.id} style={{ background: "#ffffff", border: `1px solid ${s.is_live ? "rgba(239,68,68,0.3)" : "#e2e8f0"}`, borderRadius: 10, padding: "16px 20px", marginBottom: 12, display: "flex", gap: 14, alignItems: "center" }}>
+                {s.channel_number != null && s.channel_number !== "" && (
+                  <div style={{ flexShrink: 0, width: 40, height: 40, borderRadius: 8, background: "#f1f5f9", border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                    <span style={{ fontSize: 9, color: "#94a3b8", fontWeight: 600, letterSpacing: 0.5, textTransform: "uppercase" }}>CH</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#374151", lineHeight: 1 }}>{s.channel_number}</span>
+                  </div>
+                )}
                 {s.thumbnail && <img src={s.thumbnail} alt={s.title} style={{ width: 80, height: 45, objectFit: "cover", borderRadius: 6, flexShrink: 0 }} onError={e => { e.target.style.display = "none"; }} />}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ margin: "0 0 3px", fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{s.title}</p>
                   <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>
-                    <span style={{ color: s.is_live ? "#ef4444" : "#555", fontWeight: s.is_live ? 600 : 400 }}>{s.is_live ? "🔴 LIVE" : "Offline"}</span>
-                    {s.badge_text && s.badge_text !== "LIVE" && ` · Badge: ${s.badge_text}`}
+                    <span style={{ color: s.is_live ? "#ef4444" : "#9ca3af", fontWeight: s.is_live ? 600 : 400 }}>{s.is_live ? "🔴 LIVE" : "○ Offline"}</span>
+                    {s.now_airing && <span style={{ color: "#6b7280" }}> · {s.now_airing}</span>}
                   </p>
+                  {s.up_next && <p style={{ margin: "2px 0 0", fontSize: 11, color: "#9ca3af" }}>Up next: {s.up_next}</p>}
                 </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => startLiveEdit(s)} style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 5, padding: "5px 10px", color: "#f87171", fontSize: 11, cursor: "pointer" }}>Edit</button>
-                  <button onClick={() => setDeleteLiveConfirm(s)} style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 5, padding: "5px 10px", color: "#f87171", fontSize: 11, cursor: "pointer" }}>Delete</button>
+                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                  <button onClick={() => toggleLive(s)}
+                    style={{ background: s.is_live ? "rgba(107,114,128,0.1)" : "rgba(34,197,94,0.1)", border: `1px solid ${s.is_live ? "rgba(107,114,128,0.2)" : "rgba(34,197,94,0.3)"}`, borderRadius: 5, padding: "5px 10px", color: s.is_live ? "#9ca3af" : "#22c55e", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                    {s.is_live ? "Go Offline" : "Go Live"}
+                  </button>
+                  <button onClick={() => startLiveEdit(s)} style={{ background: "rgba(79,70,229,0.08)", border: "1px solid rgba(79,70,229,0.2)", borderRadius: 5, padding: "5px 10px", color: "#4f46e5", fontSize: 11, cursor: "pointer" }}>Edit</button>
+                  <button onClick={() => setDeleteLiveConfirm(s)} style={{ background: "rgba(220,38,38,0.07)", border: "1px solid rgba(220,38,38,0.15)", borderRadius: 5, padding: "5px 10px", color: "#dc2626", fontSize: 11, cursor: "pointer" }}>Delete</button>
                 </div>
               </div>
             ))}
@@ -2218,9 +2238,12 @@ export function CMS({ onExit }) {
                 {/* ── LIVE FORM ── */}
                 {tab === "live" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                    <FieldInput label="Title *" value={liveForm.title} onChange={v => setLiveForm(f => ({ ...f, title: v }))} placeholder="e.g. Friday Night Live" />
-                    <FieldInput label="Description" value={liveForm.description} onChange={v => setLiveForm(f => ({ ...f, description: v }))} placeholder="What's streaming..." />
-                    <FieldInput label="Stream URL" value={liveForm.stream_url} onChange={v => setLiveForm(f => ({ ...f, stream_url: v }))} placeholder="https://... (YouTube Live, direct video, etc.)" />
+                    <FieldInput label="Channel Number" value={liveForm.channel_number} onChange={v => setLiveForm(f => ({ ...f, channel_number: v }))} placeholder="e.g. 1" type="number" />
+                    <FieldInput label="Title *" value={liveForm.title} onChange={v => setLiveForm(f => ({ ...f, title: v }))} placeholder="e.g. Peep News Network" />
+                    <FieldInput label="Description" value={liveForm.description} onChange={v => setLiveForm(f => ({ ...f, description: v }))} placeholder="What's on this channel..." />
+                    <FieldInput label="Now Airing" value={liveForm.now_airing} onChange={v => setLiveForm(f => ({ ...f, now_airing: v }))} placeholder="e.g. The Daily Briefing · Ep 3" />
+                    <FieldInput label="Up Next" value={liveForm.up_next} onChange={v => setLiveForm(f => ({ ...f, up_next: v }))} placeholder="e.g. Evening Report · Ep 4" />
+                    <FieldInput label="Stream URL" value={liveForm.stream_url} onChange={v => setLiveForm(f => ({ ...f, stream_url: v }))} placeholder="https://... (.m3u8, YouTube Live, etc.)" />
                     <FieldInput label="Badge Text" value={liveForm.badge_text} onChange={v => setLiveForm(f => ({ ...f, badge_text: v }))} placeholder="LIVE" />
                     <div>
                       <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Thumbnail</label>
