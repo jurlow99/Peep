@@ -1380,7 +1380,7 @@ function LiveTVPage({ streams, epgEntries, onPlay }) {
         </div>
       )}
 
-      {epgEntries.length > 0 && streams.length > 0 && (
+      {streams.length > 0 && (
         <div style={{ padding: `0 ${PAD}`, marginBottom: 56 }}>
           <EpgGrid channels={sortedStreams} epgEntries={epgEntries} onTuneIn={tuneIn} now={now} />
         </div>
