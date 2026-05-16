@@ -84,6 +84,15 @@ const EMPTY_PODCAST_EPISODE = {
   thumbnail: "",
 };
 
+const EMPTY_AD = {
+  name: "",
+  tag_url: "",
+  ad_type: "pre_roll",
+  scope: "global",
+  content_id: "",
+  active: true,
+};
+
 export function CMS({ onExit }) {
   const [tab, setTab] = useState("videos");
   const [videoSubTab, setVideoSubTab] = useState("movies"); // "movies" | "series" | "episodes"
@@ -195,6 +204,15 @@ export function CMS({ onExit }) {
 
   const [heroConfirm, setHeroConfirm] = useState(null); // { current, next, type: "video"|"show" }
 
+  // Ads state
+  const [adList, setAdList] = useState([]);
+  const [adLoading, setAdLoading] = useState(false);
+  const [editingAdId, setEditingAdId] = useState(null);
+  const [adForm, setAdForm] = useState(EMPTY_AD);
+  const [adSaving, setAdSaving] = useState(false);
+  const [deleteAdConfirm, setDeleteAdConfirm] = useState(null);
+  const [adTableMissing, setAdTableMissing] = useState(false);
+
   // Reports state
   const [reportData, setReportData] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -220,6 +238,7 @@ export function CMS({ onExit }) {
     loadShows();
     loadPodcasts();
     loadLiveStreams();
+    loadAds();
 
     return () => {
       if (subscriptionRef.current) subscriptionRef.current.unsubscribe();
@@ -1001,6 +1020,61 @@ export function CMS({ onExit }) {
     else { showToast("Episode deleted"); setDeletePodEpConfirm(null); await loadPodEpisodes(selectedPodcastForEp.id); }
   }
 
+  // ──── ADS / VAST TAGS ────
+
+  async function loadAds() {
+    setAdLoading(true);
+    const { data, error } = await supabase.from("vast_tags").select("*").order("id", { ascending: true });
+    if (error) {
+      if (error.code === "42P01") setAdTableMissing(true);
+      else showToast("Failed to load ads: " + error.message, "error");
+    } else {
+      setAdTableMissing(false);
+      setAdList(data || []);
+    }
+    setAdLoading(false);
+  }
+
+  function startAdEdit(ad) {
+    setEditingAdId(ad.id);
+    setAdForm({ name: ad.name ?? "", tag_url: ad.tag_url ?? "", ad_type: ad.ad_type ?? "pre_roll", scope: ad.scope ?? "global", content_id: ad.content_id ?? "", active: ad.active ?? true });
+    setDrawerOpen(true);
+  }
+
+  function cancelAdEdit() { setEditingAdId(null); setAdForm(EMPTY_AD); setDrawerOpen(false); }
+
+  async function saveAd() {
+    if (!adForm.name.trim()) { showToast("Name is required.", "error"); return; }
+    if (!adForm.tag_url.trim()) { showToast("VAST tag URL is required.", "error"); return; }
+    setAdSaving(true);
+    const payload = { name: adForm.name.trim(), tag_url: adForm.tag_url.trim(), ad_type: adForm.ad_type, scope: adForm.scope, content_id: adForm.scope !== "global" && adForm.content_id !== "" ? Number(adForm.content_id) : null, active: adForm.active };
+    try {
+      if (editingAdId) {
+        const { error } = await supabase.from("vast_tags").update(payload).eq("id", editingAdId);
+        if (error) throw error;
+        showToast("Ad tag updated"); cancelAdEdit();
+      } else {
+        const { error } = await supabase.from("vast_tags").insert([payload]);
+        if (error) throw error;
+        showToast("Ad tag added"); setAdForm(EMPTY_AD); setDrawerOpen(false);
+      }
+      await loadAds();
+    } catch (error) { showToast("Save failed: " + error.message, "error"); }
+    setAdSaving(false);
+  }
+
+  async function toggleAdActive(ad) {
+    const { error } = await supabase.from("vast_tags").update({ active: !ad.active }).eq("id", ad.id);
+    if (error) showToast("Update failed: " + error.message, "error");
+    else await loadAds();
+  }
+
+  async function deleteAd(id) {
+    const { error } = await supabase.from("vast_tags").delete().eq("id", id);
+    if (error) showToast("Delete failed: " + error.message, "error");
+    else { showToast("Ad tag deleted"); setDeleteAdConfirm(null); await loadAds(); }
+  }
+
   // ──── LIVE STREAMS ────
 
   async function loadLiveStreams() {
@@ -1602,6 +1676,9 @@ export function CMS({ onExit }) {
         </button>
         <button onClick={() => setTab("reports")} style={{ background: "transparent", border: "none", borderBottom: tab === "reports" ? "2px solid #34d399" : "none", color: tab === "reports" ? "#34d399" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "reports" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
           Reports
+        </button>
+        <button onClick={() => setTab("ads")} style={{ background: "transparent", border: "none", borderBottom: tab === "ads" ? "2px solid #f59e0b" : "none", color: tab === "ads" ? "#f59e0b" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "ads" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
+          Ads {adList.length > 0 && `(${adList.length})`}
         </button>
       </div>
 
@@ -2435,6 +2512,114 @@ export function CMS({ onExit }) {
           </>
         )}
 
+        {/* ────── ADS TAB ────── */}
+        {tab === "ads" && (
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a" }}>VAST Ad Tags</h2>
+              {!adTableMissing && (
+                <button onClick={() => { setEditingAdId(null); setAdForm(EMPTY_AD); setDrawerOpen(true); }}
+                  style={{ marginLeft: "auto", background: "#f59e0b", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  + Add Tag
+                </button>
+              )}
+            </div>
+
+            {/* SQL setup callout */}
+            {adTableMissing && (
+              <div style={{ background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 12, padding: "20px 24px", marginBottom: 24 }}>
+                <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, color: "#92400e" }}>Table setup required</p>
+                <p style={{ margin: "0 0 14px", fontSize: 13, color: "#78350f" }}>Run this SQL once in your Supabase dashboard (SQL Editor) to enable ad tag management:</p>
+                <pre style={{ margin: 0, background: "#1e293b", color: "#e2e8f0", borderRadius: 8, padding: "16px 18px", fontSize: 12, overflowX: "auto", lineHeight: 1.6 }}>{`create table vast_tags (
+  id bigserial primary key,
+  name text not null,
+  tag_url text not null,
+  ad_type text not null default 'pre_roll',
+  scope text not null default 'global',
+  content_id bigint,
+  active boolean not null default true,
+  created_at timestamptz default now()
+);`}</pre>
+                <button onClick={loadAds} style={{ marginTop: 14, background: "#f59e0b", border: "none", borderRadius: 7, padding: "9px 18px", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {adLoading && <div style={{ display: "flex", justifyContent: "center", padding: 80 }}><Spinner /></div>}
+
+            {!adLoading && !adTableMissing && adList.length === 0 && (
+              <div style={{ textAlign: "center", padding: 80, color: "#9ca3af" }}>
+                <p style={{ margin: "0 0 6px", fontSize: 16 }}>No ad tags yet</p>
+                <p style={{ margin: 0, fontSize: 13 }}>Add a VAST tag URL to start serving ads</p>
+              </div>
+            )}
+
+            {!adLoading && !adTableMissing && adList.length > 0 && (() => {
+              const AD_TYPE_LABELS = { pre_roll: "Pre-roll", mid_roll: "Mid-roll", post_roll: "Post-roll" };
+              const SCOPE_LABELS = { global: "All content", movie: "Movies", show: "TV Shows", episode: "Episodes", podcast_episode: "Podcasts" };
+              const AD_TYPE_COLORS = { pre_roll: "#6366f1", mid_roll: "#f59e0b", post_roll: "#ec4899" };
+              return (
+                <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
+                        {["Active", "Name", "Type", "Scope", "VAST Tag URL", ""].map(h => (
+                          <th key={h} style={{ padding: "11px 16px", textAlign: "left", color: "#6b7280", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.7, whiteSpace: "nowrap" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {adList.map((ad, i) => (
+                        <tr key={ad.id} style={{ borderBottom: i < adList.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                          <td style={{ padding: "12px 16px" }}>
+                            <button onClick={() => toggleAdActive(ad)}
+                              style={{ width: 36, height: 20, borderRadius: 10, border: "none", background: ad.active ? "#22c55e" : "#d1d5db", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                              <span style={{ position: "absolute", top: 2, left: ad.active ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left 0.2s", display: "block" }} />
+                            </button>
+                          </td>
+                          <td style={{ padding: "12px 16px", fontWeight: 600, color: "#0f172a" }}>{ad.name}</td>
+                          <td style={{ padding: "12px 16px" }}>
+                            <span style={{ background: `${AD_TYPE_COLORS[ad.ad_type] || "#94a3b8"}18`, border: `1px solid ${AD_TYPE_COLORS[ad.ad_type] || "#94a3b8"}40`, borderRadius: 5, padding: "2px 8px", color: AD_TYPE_COLORS[ad.ad_type] || "#94a3b8", fontSize: 11, fontWeight: 600 }}>
+                              {AD_TYPE_LABELS[ad.ad_type] || ad.ad_type}
+                            </span>
+                          </td>
+                          <td style={{ padding: "12px 16px", color: "#6b7280" }}>
+                            {SCOPE_LABELS[ad.scope] || ad.scope}{ad.content_id ? ` #${ad.content_id}` : ""}
+                          </td>
+                          <td style={{ padding: "12px 16px", color: "#6b7280", maxWidth: 320 }}>
+                            <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "monospace", fontSize: 12 }} title={ad.tag_url}>{ad.tag_url}</span>
+                          </td>
+                          <td style={{ padding: "12px 16px" }}>
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <button onClick={() => startAdEdit(ad)} style={{ background: "rgba(79,70,229,0.07)", border: "1px solid rgba(79,70,229,0.2)", borderRadius: 6, padding: "5px 12px", color: "#4f46e5", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Edit</button>
+                              <button onClick={() => setDeleteAdConfirm(ad)} style={{ background: "rgba(220,38,38,0.06)", border: "1px solid rgba(220,38,38,0.15)", borderRadius: 6, padding: "5px 12px", color: "#dc2626", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
+
+            {/* Delete confirm */}
+            {deleteAdConfirm && (
+              <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ background: "#fff", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+                  <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "#0f172a" }}>Delete ad tag?</p>
+                  <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 28 }}>"{deleteAdConfirm.name}"</p>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button onClick={() => setDeleteAdConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    <button onClick={() => deleteAd(deleteAdConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ────── REPORTS TAB ────── */}
         {tab === "reports" && (
           <div>
@@ -2897,6 +3082,7 @@ export function CMS({ onExit }) {
                   {tab === "live" && drawerFormType !== "epg" && drawerFormType !== "bulk" && (editingLiveId ? "Edit Stream" : "Add Stream")}
                   {tab === "live" && drawerFormType === "epg" && (editingEpgId ? "Edit Program" : "Add Program")}
                   {tab === "live" && drawerFormType === "bulk" && "Auto-Schedule Block"}
+                  {tab === "ads" && (editingAdId ? "Edit Ad Tag" : "Add Ad Tag")}
                 </h2>
                 <button
                   onClick={closeDrawer}
@@ -3544,6 +3730,68 @@ export function CMS({ onExit }) {
                     </div>
                   );
                 })()}
+
+                {/* ── ADS FORM ── */}
+                {tab === "ads" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Name *</label>
+                      <input value={adForm.name} onChange={e => setAdForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Global Pre-roll"
+                        style={{ width: "100%", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                        onFocus={e => (e.target.style.borderColor = "#f59e0b")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>VAST Tag URL *</label>
+                      <input value={adForm.tag_url} onChange={e => setAdForm(f => ({ ...f, tag_url: e.target.value }))} placeholder="https://..."
+                        style={{ width: "100%", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box", fontFamily: "monospace" }}
+                        onFocus={e => (e.target.style.borderColor = "#f59e0b")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Ad Position</label>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        {[{ value: "pre_roll", label: "Pre-roll" }, { value: "mid_roll", label: "Mid-roll" }, { value: "post_roll", label: "Post-roll" }].map(opt => (
+                          <button key={opt.value} onClick={() => setAdForm(f => ({ ...f, ad_type: opt.value }))}
+                            style={{ flex: 1, background: adForm.ad_type === opt.value ? "#f59e0b" : "#f1f5f9", border: `1px solid ${adForm.ad_type === opt.value ? "#f59e0b" : "#e2e8f0"}`, borderRadius: 7, padding: "9px", color: adForm.ad_type === opt.value ? "#fff" : "#374151", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Applies To</label>
+                      <select value={adForm.scope} onChange={e => setAdForm(f => ({ ...f, scope: e.target.value, content_id: "" }))}
+                        style={{ width: "100%", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", cursor: "pointer" }}
+                        onFocus={e => (e.target.style.borderColor = "#f59e0b")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")}>
+                        <option value="global">All Content</option>
+                        <option value="movie">Movies</option>
+                        <option value="show">TV Shows</option>
+                        <option value="episode">Episodes</option>
+                        <option value="podcast_episode">Podcasts</option>
+                      </select>
+                    </div>
+                    {adForm.scope !== "global" && (
+                      <div>
+                        <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Content ID <span style={{ textTransform: "none", color: "#94a3b8" }}>(leave blank for all in type)</span></label>
+                        <input value={adForm.content_id} onChange={e => setAdForm(f => ({ ...f, content_id: e.target.value }))} placeholder="e.g. 42" type="number"
+                          style={{ width: "100%", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                          onFocus={e => (e.target.style.borderColor = "#f59e0b")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                      </div>
+                    )}
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "4px 0" }}>
+                      <button onClick={() => setAdForm(f => ({ ...f, active: !f.active }))}
+                        style={{ width: 40, height: 22, borderRadius: 11, border: "none", background: adForm.active ? "#22c55e" : "#d1d5db", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                        <span style={{ position: "absolute", top: 3, left: adForm.active ? 20 : 3, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left 0.2s", display: "block" }} />
+                      </button>
+                      <span style={{ fontSize: 13, color: "#374151" }}>{adForm.active ? "Active — tag will be served" : "Inactive — tag is paused"}</span>
+                    </div>
+                    <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+                      <button onClick={saveAd} disabled={adSaving} style={{ flex: 1, background: "#f59e0b", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: adSaving ? "not-allowed" : "pointer", opacity: adSaving ? 0.7 : 1 }}>
+                        {adSaving ? "Saving…" : editingAdId ? "Save Changes" : "Add Tag"}
+                      </button>
+                      <button onClick={cancelAdEdit} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    </div>
+                  </div>
+                )}
 
               </div>
             </div>
