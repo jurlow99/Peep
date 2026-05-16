@@ -2043,82 +2043,92 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
 
   useEffect(() => () => { document.body.style.overflow = ""; }, []);
 
-  // Fetch the most relevant active pre-roll VAST tag for this content
+  // Fetch VAST tag + initialize IMA pre-roll in one effect
   useEffect(() => {
     if (getEmbedUrl(video.url)) return;
-    const contentScope = isEpisode ? "episode" : "movie";
-    supabase.from("vast_tags")
-      .select("tag_url, scope, content_id")
-      .eq("active", true)
-      .eq("ad_type", "pre_roll")
-      .or(`scope.eq.global,scope.eq.${contentScope}`)
-      .then(({ data }) => {
-        if (!data || data.length === 0) return;
-        const exact = data.find(t => t.content_id === video.id);
-        const typed = data.find(t => t.scope === contentScope && !t.content_id);
-        const global = data.find(t => t.scope === "global");
-        const tag = exact || typed || global;
-        if (tag) setAdVastUrl(tag.tag_url);
-      });
-  }, [video.id]);
+    let cancelled = false;
 
-  // Initialize IMA SDK pre-roll when VAST URL is ready
-  useEffect(() => {
-    if (!adVastUrl || getEmbedUrl(video.url)) return;
-    const ima = window.google?.ima;
-    if (!ima) return;
-    const videoEl = videoRef.current;
-    const adContainer = adContainerRef.current;
-    if (!videoEl || !adContainer) return;
-
-    const displayContainer = new ima.AdDisplayContainer(adContainer, videoEl);
-    const adsLoader = new ima.AdsLoader(displayContainer);
-
-    adsLoader.addEventListener(ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED, (e) => {
-      const mgr = e.getAdsManager(videoEl);
-      adsManagerRef.current = mgr;
-
-      mgr.addEventListener(ima.AdEvent.Type.CONTENT_PAUSE_REQUESTED, () => {
-        videoEl.pause();
-        setAdPlaying(true);
-      });
-      mgr.addEventListener(ima.AdEvent.Type.CONTENT_RESUME_REQUESTED, () => {
-        setAdPlaying(false);
-        videoEl.play().catch(() => {});
-      });
-      mgr.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, () => {
-        mgr.destroy();
-        adsManagerRef.current = null;
-        setAdPlaying(false);
-        videoEl.play().catch(() => {});
-      });
-
-      try {
-        displayContainer.initialize();
-        mgr.init(videoEl.clientWidth || 640, videoEl.clientHeight || 360, ima.ViewMode.NORMAL);
-        mgr.start();
-      } catch {
-        mgr.destroy();
-        adsManagerRef.current = null;
-        videoEl.play().catch(() => {});
+    async function runAd() {
+      // Wait up to 3s for IMA SDK script to load
+      let waited = 0;
+      while (!window.google?.ima && waited < 3000) {
+        await new Promise(r => setTimeout(r, 100));
+        waited += 100;
       }
-    });
+      if (cancelled || !window.google?.ima) return;
 
-    adsLoader.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, () => {
-      videoEl.play().catch(() => {});
-    });
+      // Fetch best matching pre-roll tag
+      const contentScope = isEpisode ? "episode" : "movie";
+      const { data } = await supabase.from("vast_tags")
+        .select("tag_url, scope, content_id")
+        .eq("active", true)
+        .eq("ad_type", "pre_roll")
+        .or(`scope.eq.global,scope.eq.${contentScope}`);
+      if (cancelled || !data || data.length === 0) return;
 
-    const req = new ima.AdsRequest();
-    req.adTagUrl = adVastUrl;
-    req.linearAdSlotWidth = videoEl.clientWidth || 640;
-    req.linearAdSlotHeight = videoEl.clientHeight || 360;
-    adsLoader.requestAds(req);
+      const exact = data.find(t => t.content_id === video.id);
+      const typed = data.find(t => t.scope === contentScope && !t.content_id);
+      const glob  = data.find(t => t.scope === "global");
+      const tag = exact || typed || glob;
+      if (!tag) return;
+
+      const ima = window.google.ima;
+      const videoEl = videoRef.current;
+      const adContainer = adContainerRef.current;
+      if (cancelled || !videoEl || !adContainer) return;
+
+      // Pause content while ad loads
+      videoEl.pause();
+      setAdPlaying(true);
+      setAdVastUrl(tag.tag_url);
+
+      const displayContainer = new ima.AdDisplayContainer(adContainer, videoEl);
+      displayContainer.initialize();
+      const adsLoader = new ima.AdsLoader(displayContainer);
+
+      const resume = () => {
+        setAdPlaying(false);
+        if (!cancelled) videoEl.play().catch(() => {});
+      };
+
+      adsLoader.addEventListener(ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED, (e) => {
+        if (cancelled) return;
+        const mgr = e.getAdsManager(videoEl);
+        adsManagerRef.current = mgr;
+
+        mgr.addEventListener(ima.AdEvent.Type.CONTENT_PAUSE_REQUESTED, () => { videoEl.pause(); setAdPlaying(true); });
+        mgr.addEventListener(ima.AdEvent.Type.CONTENT_RESUME_REQUESTED, resume);
+        mgr.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, () => { mgr.destroy(); adsManagerRef.current = null; resume(); });
+
+        try {
+          const w = videoEl.clientWidth || 640;
+          const h = videoEl.clientHeight || 360;
+          mgr.init(w, h, ima.ViewMode.NORMAL);
+          mgr.start();
+        } catch {
+          mgr.destroy();
+          adsManagerRef.current = null;
+          resume();
+        }
+      });
+
+      adsLoader.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, resume);
+
+      const req = new ima.AdsRequest();
+      req.adTagUrl = tag.tag_url;
+      req.linearAdSlotWidth = videoEl.clientWidth || 640;
+      req.linearAdSlotHeight = videoEl.clientHeight || 360;
+      adsLoader.requestAds(req);
+    }
+
+    runAd();
 
     return () => {
+      cancelled = true;
       adsManagerRef.current?.destroy();
       adsManagerRef.current = null;
     };
-  }, [adVastUrl]);
+  }, [video.id]);
 
   useEffect(() => {
     if (!isFullscreen) return;
