@@ -1,22 +1,8 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../supabase";
+import { PRESET_AVATARS } from "./ProfileScreen";
 
 const YELLOW = "#facc15";
-
-const PRESET_AVATARS = [
-  { id: "a1", gradient: "linear-gradient(135deg, #6366f1, #8b5cf6)", emoji: "🎬" },
-  { id: "a2", gradient: "linear-gradient(135deg, #ec4899, #f43f5e)", emoji: "🌙" },
-  { id: "a3", gradient: "linear-gradient(135deg, #f97316, #eab308)", emoji: "🔥" },
-  { id: "a4", gradient: "linear-gradient(135deg, #14b8a6, #06b6d4)", emoji: "🌊" },
-  { id: "a5", gradient: "linear-gradient(135deg, #22c55e, #16a34a)", emoji: "🌿" },
-  { id: "a6", gradient: "linear-gradient(135deg, #3b82f6, #6366f1)", emoji: "⚡" },
-  { id: "a7", gradient: "linear-gradient(135deg, #f59e0b, #ef4444)", emoji: "🎭" },
-  { id: "a8", gradient: "linear-gradient(135deg, #8b5cf6, #ec4899)", emoji: "🎵" },
-  { id: "a9", gradient: "linear-gradient(135deg, #0ea5e9, #22c55e)", emoji: "🎮" },
-  { id: "a10", gradient: "linear-gradient(135deg, #f43f5e, #f97316)", emoji: "🏆" },
-  { id: "a11", gradient: "linear-gradient(135deg, #64748b, #334155)", emoji: "👾" },
-  { id: "a12", gradient: "linear-gradient(135deg, #facc15, #f97316)", emoji: "⭐" },
-];
 
 function avatarForId(id) {
   return PRESET_AVATARS.find(a => a.id === id) ?? PRESET_AVATARS[0];

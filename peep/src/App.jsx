@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo, Component } from "react";
 import { supabase } from "./supabase";
 import { AuthModal } from "./components/AuthModal";
 import { LandingPage } from "./pages/LandingPage";
-import { ProfileScreen, avatarForId } from "./components/ProfileScreen";
+import { ProfileScreen, avatarForId, PRESET_AVATARS } from "./components/ProfileScreen";
 import { ProfileSelect } from "./components/ProfileSelect";
 
 class PlayerErrorBoundary extends Component {
@@ -576,12 +576,6 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
             </div>
           </div>
-          {!isMobile && (
-            <div style={{ position: "relative", cursor: "pointer", color: "rgba(255,255,255,0.7)", display: "flex" }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
-              <div style={{ position: "absolute", top: -2, right: -2, width: 7, height: 7, borderRadius: "50%", background: "#facc15", border: "1.5px solid #0a0a0a" }} />
-            </div>
-          )}
           {!isMobile && (user ? (() => {
             const av = avatarForId(userAvatarId || activeProfile?.avatar_id);
             return (
@@ -1583,6 +1577,7 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
   const [continueWatching, setContinueWatching] = useState([]);
   const playerContainerRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
   const countdownGuardRef = useRef(false);
 
   useEffect(() => {
@@ -1687,7 +1682,13 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
 
   useEffect(() => {
     if (!isFullscreen) return;
-    const handler = (e) => { if (e.key === "Escape") toggleFullscreen(); };
+    const handler = (e) => {
+      if (e.key === "Escape") toggleFullscreen();
+      if ((e.key === " " || e.key === "Spacebar") && !getEmbedUrl(video.url)) {
+        e.preventDefault();
+        togglePlayPause();
+      }
+    };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, [isFullscreen]);
@@ -1697,6 +1698,12 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
       document.body.style.overflow = prev ? "" : "hidden";
       return !prev;
     });
+  }
+
+  function togglePlayPause() {
+    if (!videoRef.current) return;
+    if (videoRef.current.paused) videoRef.current.play().catch(() => {});
+    else videoRef.current.pause();
   }
 
   function startCountdown(seconds) {
@@ -1809,7 +1816,8 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
             {getEmbedUrl(video.url) ? (
               <iframe src={getEmbedUrl(video.url)} style={{ width: "100%", height: "100%", display: "block", border: "none" }} allowFullScreen allow="autoplay" />
             ) : (
-              <video ref={videoRef} controls controlsList="nofullscreen" autoPlay style={{ width: "100%", height: "100%", display: "block" }} poster={video.thumbnail}
+              <video ref={videoRef} controls controlsList="nofullscreen" autoPlay style={{ width: "100%", height: "100%", display: "block", cursor: isFullscreen ? "pointer" : "default" }} poster={video.thumbnail}
+                onClick={isFullscreen ? togglePlayPause : undefined}
                 onTimeUpdate={handleTimeUpdate} onEnded={handleEnded} onLoadedMetadata={handleLoadedMetadata}>
                 <source src={video.url} type="video/mp4" />
               </video>
@@ -1889,7 +1897,21 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
                 👎 {ratingCounts.down > 0 && <span style={{ fontSize: 12 }}>{ratingCounts.down}</span>}
               </button>
             </div>
-            <button style={{ background: "#1a1a1a", border: "1px solid #242424", borderRadius: 7, padding: "12px 20px", color: "#777", fontSize: 13, cursor: "pointer" }}>Share</button>
+            <button
+              onClick={() => {
+                const url = window.location.href;
+                if (navigator.share) {
+                  navigator.share({ title: video.title, url }).catch(() => {});
+                } else {
+                  navigator.clipboard.writeText(url).then(() => {
+                    setShareCopied(true);
+                    setTimeout(() => setShareCopied(false), 2000);
+                  });
+                }
+              }}
+              style={{ background: "#1a1a1a", border: "1px solid #242424", borderRadius: 7, padding: "12px 20px", color: shareCopied ? "#4ade80" : "#777", fontSize: 13, cursor: "pointer", transition: "color 0.2s" }}>
+              {shareCopied ? "Copied!" : "Share"}
+            </button>
           </div>
         </div>
 
@@ -2600,9 +2622,9 @@ function ProfilePage({ user, activeProfile, onBack, onProfileUpdate, onOpenSetti
     setLoading(true);
     const [progressRes, videosRes, showsRes, episodesRes, podEpRes, podRes] = await Promise.all([
       supabase.from("watch_progress").select("*").eq("user_id", user.id).eq("profile_id", activeProfile.id).order("last_watched_at", { ascending: false }),
-      supabase.from("videos").select("id, title, thumbnail_url, category, year"),
-      supabase.from("shows").select("id, title, thumbnail_url, category"),
-      supabase.from("episodes").select("id, title, thumbnail_url, show_id, season, episode_number"),
+      supabase.from("videos").select("id, title, thumbnail, poster, category, year"),
+      supabase.from("shows").select("id, title, thumbnail, poster, category"),
+      supabase.from("episodes").select("id, title, thumbnail, show_id, season, episode_number"),
       supabase.from("podcast_episodes").select("id, title, thumbnail, podcast_id, episode_number"),
       supabase.from("podcasts").select("id, title, artwork_url"),
     ]);
@@ -2743,7 +2765,7 @@ function ProfilePage({ user, activeProfile, onBack, onProfileUpdate, onOpenSetti
         ) : enriched.map(h => {
           const c = h.content;
           const pct = h.duration_seconds > 0 ? Math.min(100, Math.round((h.progress_seconds / h.duration_seconds) * 100)) : 0;
-          const thumb = c.thumbnail_url || c.thumbnail;
+          const thumb = c.poster || c.thumbnail;
           const subtitle = c._type === "episode"
             ? `S${c.season} E${c.episode_number}`
             : c._type === "podcast_episode"
@@ -2817,20 +2839,6 @@ function SettingRow({ label, description, value, onChange }) {
   );
 }
 
-const SETTINGS_AVATARS = [
-  { id: "a1", gradient: "linear-gradient(135deg, #6366f1, #8b5cf6)", emoji: "🎬" },
-  { id: "a2", gradient: "linear-gradient(135deg, #ec4899, #f43f5e)", emoji: "🌙" },
-  { id: "a3", gradient: "linear-gradient(135deg, #f97316, #eab308)", emoji: "🔥" },
-  { id: "a4", gradient: "linear-gradient(135deg, #14b8a6, #06b6d4)", emoji: "🌊" },
-  { id: "a5", gradient: "linear-gradient(135deg, #22c55e, #16a34a)", emoji: "🌿" },
-  { id: "a6", gradient: "linear-gradient(135deg, #3b82f6, #6366f1)", emoji: "⚡" },
-  { id: "a7", gradient: "linear-gradient(135deg, #f59e0b, #ef4444)", emoji: "🎭" },
-  { id: "a8", gradient: "linear-gradient(135deg, #8b5cf6, #ec4899)", emoji: "🎵" },
-  { id: "a9", gradient: "linear-gradient(135deg, #0ea5e9, #22c55e)", emoji: "🎮" },
-  { id: "a10", gradient: "linear-gradient(135deg, #f43f5e, #f97316)", emoji: "🏆" },
-  { id: "a11", gradient: "linear-gradient(135deg, #64748b, #334155)", emoji: "👾" },
-  { id: "a12", gradient: "linear-gradient(135deg, #facc15, #f97316)", emoji: "⭐" },
-];
 
 function SettingsPage({ user, activeProfile, onBack, onProfileUpdate, onAvatarChange, onSignOut }) {
   const [name, setName] = useState(activeProfile?.name || "");
@@ -2843,7 +2851,7 @@ function SettingsPage({ user, activeProfile, onBack, onProfileUpdate, onAvatarCh
   const [autoplayPreviews, setAutoplayPreviews] = useState(() => getPref(PREF_AUTOPLAY_PREVIEWS));
   const [autoplayHero, setAutoplayHero] = useState(() => getPref(PREF_AUTOPLAY_HERO));
 
-  const currentAv = SETTINGS_AVATARS.find(a => a.id === avatarId) || null;
+  const currentAv = avatarForId(avatarId);
   const initials = (activeProfile?.name?.[0] || user?.email?.[0] || "?").toUpperCase();
   const memberSince = user?.created_at ? new Date(user.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : null;
 
@@ -2903,7 +2911,7 @@ function SettingsPage({ user, activeProfile, onBack, onProfileUpdate, onAvatarCh
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8, marginBottom: 20 }}>
-            {SETTINGS_AVATARS.map(av => {
+            {PRESET_AVATARS.map(av => {
               const sel = avatarId === av.id;
               return (
                 <button key={av.id} onClick={() => setAvatarId(av.id)} style={{ background: "none", border: `2px solid ${sel ? "#facc15" : "transparent"}`, borderRadius: 10, padding: 3, cursor: "pointer", outline: "none", transition: "border-color 0.15s" }}>

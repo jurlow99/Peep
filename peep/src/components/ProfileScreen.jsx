@@ -3,7 +3,7 @@ import { supabase } from "../supabase";
 
 const YELLOW = "#facc15";
 
-const PRESET_AVATARS = [
+export const PRESET_AVATARS = [
   { id: "a1", gradient: "linear-gradient(135deg, #6366f1, #8b5cf6)", emoji: "🎬" },
   { id: "a2", gradient: "linear-gradient(135deg, #ec4899, #f43f5e)", emoji: "🌙" },
   { id: "a3", gradient: "linear-gradient(135deg, #f97316, #eab308)", emoji: "🔥" },

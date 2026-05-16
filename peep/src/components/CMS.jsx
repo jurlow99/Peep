@@ -82,7 +82,8 @@ const EMPTY_PODCAST_EPISODE = {
 };
 
 export function CMS({ onExit }) {
-  const [tab, setTab] = useState("videos"); // "videos" | "shows" | "episodes" | "carousels"
+  const [tab, setTab] = useState("videos");
+  const [videoSubTab, setVideoSubTab] = useState("movies"); // "movies" | "series" | "episodes"
   
   // Videos state
   const [rows, setRows] = useState([]);
@@ -977,31 +978,12 @@ export function CMS({ onExit }) {
       <div style={{ borderBottom: "1px solid #1a1a1a", padding: `0 ${PAD}`, display: "flex", gap: 24, background: "rgba(0,0,0,0.5)" }}>
         <button
           onClick={() => setTab("videos")}
-          style={{
-            background: "transparent",
-            border: "none",
-            borderBottom: tab === "videos" ? "2px solid #facc15" : "none",
-            color: tab === "videos" ? "#fff" : "#666",
-            padding: "16px 0",
-            fontSize: 14,
-            fontWeight: tab === "videos" ? 600 : 400,
-            cursor: "pointer",
-            transition: "color 0.2s",
-          }}
+          style={{ background: "transparent", border: "none", borderBottom: tab === "videos" ? "2px solid #facc15" : "none", color: tab === "videos" ? "#fff" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "videos" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}
         >
-          Videos ({rows.length})
-        </button>
-        <button onClick={() => setTab("shows")} style={{ background: "transparent", border: "none", borderBottom: tab === "shows" ? "2px solid #facc15" : "none", color: tab === "shows" ? "#fff" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "shows" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
-          Shows ({showsList.length})
-        </button>
-        <button onClick={() => setTab("episodes")} style={{ background: "transparent", border: "none", borderBottom: tab === "episodes" ? "2px solid #facc15" : "none", color: tab === "episodes" ? "#fff" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "episodes" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
-          Episodes
+          Content ({rows.length + showsList.length + podcastsList.length})
         </button>
         <button onClick={() => setTab("carousels")} style={{ background: "transparent", border: "none", borderBottom: tab === "carousels" ? "2px solid #facc15" : "none", color: tab === "carousels" ? "#fff" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "carousels" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
           Carousels ({carousels.length})
-        </button>
-        <button onClick={() => setTab("podcasts")} style={{ background: "transparent", border: "none", borderBottom: tab === "podcasts" ? "2px solid #818cf8" : "none", color: tab === "podcasts" ? "#818cf8" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "podcasts" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
-          Podcasts ({podcastsList.length})
         </button>
         <button onClick={() => setTab("live")} style={{ background: "transparent", border: "none", borderBottom: tab === "live" ? "2px solid #ef4444" : "none", color: tab === "live" ? "#ef4444" : "#666", padding: "16px 0", fontSize: 14, fontWeight: tab === "live" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
           Live ({liveList.length})
@@ -1013,8 +995,24 @@ export function CMS({ onExit }) {
 
       <div style={{ maxWidth: 1600, margin: "0 auto", padding: `40px ${PAD} 80px`, display: "grid", gridTemplateColumns: "400px 1fr", gap: 40, alignItems: "start" }}>
 
-        {/* ────── VIDEOS TAB ────── */}
+        {/* ────── VIDEOS SUB-TAB BAR ────── */}
         {tab === "videos" && (
+          <div style={{ gridColumn: "1 / -1", display: "flex", gap: 6, marginBottom: 8, paddingBottom: 20, borderBottom: "1px solid #1a1a1a" }}>
+            {[
+              { key: "movies", label: "Movies", count: rows.length },
+              { key: "series", label: "Series", count: showsList.length },
+              { key: "episodes", label: "Episodes", count: null },
+              { key: "podcasts", label: "Podcasts", count: podcastsList.length },
+            ].map(({ key, label, count }) => (
+              <button key={key} onClick={() => setVideoSubTab(key)} style={{ background: videoSubTab === key ? "rgba(250,204,21,0.12)" : "transparent", border: `1px solid ${videoSubTab === key ? "rgba(250,204,21,0.4)" : "#2a2a2a"}`, borderRadius: 8, padding: "7px 16px", color: videoSubTab === key ? "#facc15" : "#666", fontSize: 13, fontWeight: videoSubTab === key ? 600 : 400, cursor: "pointer", transition: "all 0.15s" }}>
+                {label}{count !== null ? ` (${count})` : ""}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* ────── VIDEOS TAB — MOVIES ────── */}
+        {tab === "videos" && videoSubTab === "movies" && (
           <>
             {/* ── Edit Panel ── */}
             <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, padding: 32, position: "sticky", top: 24, maxHeight: "90vh", overflowY: "auto" }}>
@@ -1076,7 +1074,7 @@ export function CMS({ onExit }) {
               <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>
                 Hero Image
               </label>
-              <p style={{ fontSize: 11, color: "#3a3a3a", margin: "0 0 8px" }}>Landscape · 1920×1080px · full-screen banner</p>
+              <p style={{ fontSize: 11, color: "#3a3a3a", margin: "0 0 8px" }}>Landscape · 1920×1080px · full-screen banner · Safe zone: center 1400×800 (stay 260px from sides, 140px from top/bottom)</p>
               <ImageUploader
                 label="Upload Hero Image (JPG/PNG)"
                 folder="hero"
@@ -1107,7 +1105,7 @@ export function CMS({ onExit }) {
               <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>
                 Poster
               </label>
-              <p style={{ fontSize: 11, color: "#3a3a3a", margin: "0 0 8px" }}>Portrait · 400×600px · browse cards (optional)</p>
+              <p style={{ fontSize: 11, color: "#3a3a3a", margin: "0 0 8px" }}>Portrait · 400×600px · browse cards (optional) · Safe zone: center 320×460 (stay 40px from sides, 70px from top, 100px from bottom — title overlay)</p>
               <ImageUploader
                 label="Upload Poster (JPG/PNG)"
                 folder="posters"
@@ -1408,8 +1406,8 @@ export function CMS({ onExit }) {
           </>
         )}
 
-        {/* ────── SHOWS TAB ────── */}
-        {tab === "shows" && (
+        {/* ────── VIDEOS TAB — SERIES ────── */}
+        {tab === "videos" && videoSubTab === "series" && (
           <>
             <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, padding: 32, position: "sticky", top: 24, maxHeight: "90vh", overflowY: "auto" }}>
               <h2 style={{ margin: "0 0 28px", fontSize: 17, fontWeight: 600, color: "#e5e5e5" }}>{editingShowId ? "Edit Show" : "Add New Show"}</h2>
@@ -1426,14 +1424,14 @@ export function CMS({ onExit }) {
                 <FieldInput label="Tags (comma-separated)" value={showForm.tags} onChange={v => setShowForm(f => ({ ...f, tags: v }))} placeholder="Anthology, Black & White, Classic" />
                 <div>
                   <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Hero Image</label>
-                  <p style={{ fontSize: 11, color: "#3a3a3a", margin: "0 0 8px" }}>Landscape · 1920×1080px · banner background</p>
+                  <p style={{ fontSize: 11, color: "#3a3a3a", margin: "0 0 8px" }}>Landscape · 1920×1080px · banner background · Safe zone: center 1400×800 (stay 260px from sides, 140px from top/bottom)</p>
                   <ImageUploader label="Upload Hero Image" folder="hero" onUploadSuccess={url => setShowForm(f => ({ ...f, thumbnail: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
                   <input type="text" value={showForm.thumbnail} onChange={e => setShowForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none" }} />
                   {showForm.thumbnail && <img src={showForm.thumbnail} alt="" style={{ width: "100%", height: 100, objectFit: "cover", borderRadius: 6, marginTop: 8 }} onError={e => { e.target.style.display = "none"; }} />}
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Poster</label>
-                  <p style={{ fontSize: 11, color: "#3a3a3a", margin: "0 0 8px" }}>Portrait · 400×600px · card image</p>
+                  <p style={{ fontSize: 11, color: "#3a3a3a", margin: "0 0 8px" }}>Portrait · 400×600px · card image · Safe zone: center 320×460 (stay 40px from sides, 70px from top, 100px from bottom — title overlay)</p>
                   <ImageUploader label="Upload Poster" folder="posters" onUploadSuccess={url => setShowForm(f => ({ ...f, poster: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
                   <input type="text" value={showForm.poster} onChange={e => setShowForm(f => ({ ...f, poster: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 7, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none" }} />
                   {showForm.poster && <img src={showForm.poster} alt="" style={{ width: 70, aspectRatio: "2/3", objectFit: "cover", borderRadius: 6, marginTop: 8 }} onError={e => { e.target.style.display = "none"; }} />}
@@ -1467,7 +1465,7 @@ export function CMS({ onExit }) {
                     <button onClick={() => setHeroShow(show)} style={{ background: show.featured ? "rgba(255,200,0,0.15)" : "rgba(255,255,255,0.04)", border: `1px solid ${show.featured ? "rgba(255,200,0,0.4)" : "#2a2a2a"}`, borderRadius: 5, padding: "5px 10px", color: show.featured ? "#fcd34d" : "#555", fontSize: 11, cursor: "pointer", fontWeight: 500 }}>
                       {show.featured ? "★ Hero" : "☆ Hero"}
                     </button>
-                    <button onClick={() => { setTab("episodes"); setSelectedShowForEpisodes(String(show.id)); loadEpisodes(String(show.id)); setEpisodeForm({ ...EMPTY_EPISODE, show_id: String(show.id) }); }} style={{ background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.2)", borderRadius: 5, padding: "5px 10px", color: "#60a5fa", fontSize: 11, cursor: "pointer", fontWeight: 500 }}>Episodes</button>
+                    <button onClick={() => { setVideoSubTab("episodes"); setSelectedShowForEpisodes(String(show.id)); loadEpisodes(String(show.id)); setEpisodeForm({ ...EMPTY_EPISODE, show_id: String(show.id) }); }} style={{ background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.2)", borderRadius: 5, padding: "5px 10px", color: "#60a5fa", fontSize: 11, cursor: "pointer", fontWeight: 500 }}>Episodes</button>
                     <button onClick={() => startShowEdit(show)} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid #2a2a2a", borderRadius: 5, padding: "5px 10px", color: "#aaa", fontSize: 11, cursor: "pointer" }}>Edit</button>
                     <button onClick={() => setDeleteShowConfirm(show)} style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 5, padding: "5px 10px", color: "#f87171", fontSize: 11, cursor: "pointer" }}>Delete</button>
                   </div>
@@ -1490,8 +1488,8 @@ export function CMS({ onExit }) {
           </>
         )}
 
-        {/* ────── EPISODES TAB ────── */}
-        {tab === "episodes" && (
+        {/* ────── VIDEOS TAB — EPISODES ────── */}
+        {tab === "videos" && videoSubTab === "episodes" && (
           <>
             <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, padding: 32, position: "sticky", top: 24, maxHeight: "90vh", overflowY: "auto" }}>
               <h2 style={{ margin: "0 0 20px", fontSize: 17, fontWeight: 600, color: "#e5e5e5" }}>{editingEpisodeId ? "Edit Episode" : "Add Episode"}</h2>
@@ -1876,8 +1874,8 @@ export function CMS({ onExit }) {
           </>
         )}
 
-        {/* ────── PODCASTS TAB ────── */}
-        {tab === "podcasts" && (
+        {/* ────── PODCASTS SUB-TAB ────── */}
+        {tab === "videos" && videoSubTab === "podcasts" && (
           <>
             <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, padding: 32, position: "sticky", top: 24, maxHeight: "90vh", overflowY: "auto" }}>
               <h2 style={{ margin: "0 0 28px", fontSize: 17, fontWeight: 600, color: "#e5e5e5" }}>{editingPodcastId ? "Edit Podcast" : "Add New Podcast"}</h2>
