@@ -170,6 +170,7 @@ export function CMS({ onExit }) {
   const [bulkSelectedMovies, setBulkSelectedMovies] = useState(new Set());
   const [bulkMovieSearch, setBulkMovieSearch] = useState("");
   const [bulkStartTime, setBulkStartTime] = useState("");
+  const [bulkDefaultMins, setBulkDefaultMins] = useState(45);
   const [bulkSaving, setBulkSaving] = useState(false);
 
   const [heroConfirm, setHeroConfirm] = useState(null); // { current, next, type: "video"|"show" }
@@ -1012,9 +1013,10 @@ export function CMS({ onExit }) {
           .sort((a, b) => a.season - b.season || a.episode_number - b.episode_number);
     if (items.length === 0) { setBulkSaving(false); return; }
     let current = new Date(bulkStartTime);
+    const fallbackSecs = (bulkDefaultMins || 30) * 60;
     const entries = items.map(item => {
       const secs = parseDurationSecs(item.duration);
-      const dur = secs > 0 ? secs : 1800;
+      const dur = secs > 0 ? secs : fallbackSecs;
       const start = new Date(current);
       current = new Date(current.getTime() + dur * 1000);
       return {
@@ -2211,11 +2213,12 @@ export function CMS({ onExit }) {
             : allEpisodesForEpg
                 .filter(ep => bulkSelectedEps.has(ep.id))
                 .sort((a, b) => a.season - b.season || a.episode_number - b.episode_number);
+          const fallbackSecs = (bulkDefaultMins || 30) * 60;
           let current = new Date(bulkStartTime);
           return items.map(item => {
             const secs = parseDurationSecs(item.duration);
             const hasDuration = secs > 0;
-            const dur = hasDuration ? secs : 1800;
+            const dur = hasDuration ? secs : fallbackSecs;
             const start = new Date(current);
             current = new Date(current.getTime() + dur * 1000);
             return { item, start, end: new Date(current), hasDuration };
@@ -2774,7 +2777,7 @@ export function CMS({ onExit }) {
                                             E{ep.episode_number} · {ep.title}
                                           </span>
                                           <span style={{ fontSize: 11, flexShrink: 0, color: dur > 0 ? "#9ca3af" : "#f59e0b" }}>
-                                            {dur > 0 ? `${Math.round(dur / 60)}m` : "⚠ no dur"}
+                                            {dur > 0 ? `${Math.round(dur / 60)}m` : `~${bulkDefaultMins}m`}
                                           </span>
                                         </label>
                                       );
@@ -2822,6 +2825,20 @@ export function CMS({ onExit }) {
                         </div>
                       )}
 
+                      {/* Default episode duration */}
+                      <div>
+                        <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>
+                          Default Duration <span style={{ color: "#94a3b8", textTransform: "none", letterSpacing: 0 }}>(for episodes with no duration set)</span>
+                        </label>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <input type="number" value={bulkDefaultMins} onChange={e => setBulkDefaultMins(Math.max(1, parseInt(e.target.value) || 1))} min={1} max={360}
+                            style={{ width: 80, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "9px 12px", color: "#0f172a", fontSize: 13, outline: "none" }}
+                            onFocus={e => (e.target.style.borderColor = "#4f46e5")}
+                            onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                          <span style={{ fontSize: 13, color: "#6b7280" }}>minutes per episode</span>
+                        </div>
+                      </div>
+
                       {/* Start time */}
                       <div>
                         <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Start Time *</label>
@@ -2852,7 +2869,7 @@ export function CMS({ onExit }) {
                                 <span style={{ fontSize: 11, color: "#6b7280", flexShrink: 0, whiteSpace: "nowrap" }}>
                                   {p.start.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })} – {p.end.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
                                 </span>
-                                {!p.hasDuration && <span style={{ fontSize: 10, color: "#f59e0b", flexShrink: 0 }}>⚠30m</span>}
+                                {!p.hasDuration && <span style={{ fontSize: 10, color: "#f59e0b", flexShrink: 0 }}>~{bulkDefaultMins}m</span>}
                               </div>
                             ))}
                           </div>
