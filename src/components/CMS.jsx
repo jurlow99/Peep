@@ -1003,6 +1003,53 @@ export function CMS({ onExit }) {
     loadContentForEpg();
   }
 
+  const [bulkScanning, setBulkScanning] = useState(false);
+  const [bulkScanProgress, setBulkScanProgress] = useState({ done: 0, total: 0 });
+
+  function detectVideoDuration(url) {
+    return new Promise(resolve => {
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      video.onloadedmetadata = () => { resolve(Math.round(video.duration)); video.src = ""; };
+      video.onerror = () => resolve(null);
+      video.src = url;
+      setTimeout(() => resolve(null), 8000); // 8s timeout per video
+    });
+  }
+
+  async function scanEpisodeDurations() {
+    if (!bulkShowId) return;
+    const eps = allEpisodesForEpg.filter(ep => ep.show_id === Number(bulkShowId) && !parseDurationSecs(ep.duration));
+    if (eps.length === 0) return;
+    setBulkScanning(true);
+    setBulkScanProgress({ done: 0, total: eps.length });
+    const updates = [];
+    for (let i = 0; i < eps.length; i++) {
+      const ep = eps[i];
+      // Fetch video_url from DB (not in allEpisodesForEpg — we only selected a subset of columns)
+      const { data } = await supabase.from("episodes").select("id, video_url").eq("id", ep.id).single();
+      if (data?.video_url) {
+        const secs = await detectVideoDuration(data.video_url);
+        if (secs && secs > 0) {
+          await supabase.from("episodes").update({ duration: secs }).eq("id", ep.id);
+          updates.push({ id: ep.id, duration: secs });
+        }
+      }
+      setBulkScanProgress({ done: i + 1, total: eps.length });
+    }
+    // Update local state so preview reflects new durations
+    if (updates.length > 0) {
+      setAllEpisodesForEpg(prev => prev.map(ep => {
+        const u = updates.find(u => u.id === ep.id);
+        return u ? { ...ep, duration: u.duration } : ep;
+      }));
+      showToast(`Found durations for ${updates.length} episode${updates.length !== 1 ? "s" : ""}`);
+    } else {
+      showToast("Couldn't detect durations — check video URLs are accessible", "error");
+    }
+    setBulkScanning(false);
+  }
+
   async function saveBulkSchedule() {
     if (!selectedChannelForEpg || !bulkStartTime) return;
     setBulkSaving(true);
@@ -2825,19 +2872,28 @@ export function CMS({ onExit }) {
                         </div>
                       )}
 
-                      {/* Default episode duration */}
-                      <div>
-                        <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>
-                          Default Duration <span style={{ color: "#94a3b8", textTransform: "none", letterSpacing: 0 }}>(for episodes with no duration set)</span>
-                        </label>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <input type="number" value={bulkDefaultMins} onChange={e => setBulkDefaultMins(Math.max(1, parseInt(e.target.value) || 1))} min={1} max={360}
-                            style={{ width: 80, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "9px 12px", color: "#0f172a", fontSize: 13, outline: "none" }}
-                            onFocus={e => (e.target.style.borderColor = "#4f46e5")}
-                            onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
-                          <span style={{ fontSize: 13, color: "#6b7280" }}>minutes per episode</span>
-                        </div>
-                      </div>
+                      {/* Scan durations button — shown when episodes are missing durations */}
+                      {bulkContentType === "episode" && bulkShowId && (() => {
+                        const showEpsAll = allEpisodesForEpg.filter(ep => ep.show_id === Number(bulkShowId));
+                        const missingCount = showEpsAll.filter(ep => !parseDurationSecs(ep.duration)).length;
+                        if (missingCount === 0) return null;
+                        return (
+                          <div style={{ background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: 8, padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                            <div>
+                              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#92400e" }}>
+                                {missingCount} episode{missingCount !== 1 ? "s" : ""} missing duration
+                              </p>
+                              <p style={{ margin: "2px 0 0", fontSize: 11, color: "#b45309" }}>
+                                {bulkScanning ? `Scanning… ${bulkScanProgress.done}/${bulkScanProgress.total}` : "Auto-detect from video files"}
+                              </p>
+                            </div>
+                            <button onClick={scanEpisodeDurations} disabled={bulkScanning}
+                              style={{ background: "#f59e0b", border: "none", borderRadius: 7, padding: "8px 16px", color: "#fff", fontSize: 12, fontWeight: 700, cursor: bulkScanning ? "not-allowed" : "pointer", opacity: bulkScanning ? 0.6 : 1, flexShrink: 0, whiteSpace: "nowrap" }}>
+                              {bulkScanning ? "Scanning…" : "Scan Durations"}
+                            </button>
+                          </div>
+                        );
+                      })()}
 
                       {/* Start time */}
                       <div>
