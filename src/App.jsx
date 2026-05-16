@@ -448,9 +448,9 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     if (!featured?.category) return null;
     const cat = featured.category.toLowerCase();
     const allInCat = [
-      ...videos.filter(v => v.category?.toLowerCase() === cat).map(v => ({ id: v.id, _type: "movie", score: v.score || 0 })),
-      ...shows.filter(s => s.category?.toLowerCase() === cat).map(s => ({ id: s.id, _type: "show", score: s.score || 0 })),
-    ].sort((a, b) => b.score - a.score);
+      ...videos.filter(v => v.category?.toLowerCase() === cat).map(v => ({ id: v.id, _type: "movie", views: v.view_count || 0 })),
+      ...shows.filter(s => s.category?.toLowerCase() === cat).map(s => ({ id: s.id, _type: "show", views: s.view_count || 0 })),
+    ].sort((a, b) => b.views - a.views);
     const featuredType = featuredIsShow ? "show" : "movie";
     const rank = allInCat.findIndex(v => v.id === featured.id && v._type === featuredType) + 1;
     return rank > 0 ? rank : null;
