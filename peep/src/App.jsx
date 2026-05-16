@@ -551,7 +551,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         transition: "background 0.4s ease",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 36 }}>
-          <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 26, letterSpacing: "-0.5px", userSelect: "none" }}>
+          <span onClick={() => setActiveNav("Home")} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 26, letterSpacing: "-0.5px", userSelect: "none", cursor: "pointer" }}>
             <span style={{ color: "#facc15" }}>peep.</span>
           </span>
           {!isMobile && (
