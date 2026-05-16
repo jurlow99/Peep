@@ -942,7 +942,7 @@ export function CMS({ onExit }) {
     if (allVideosForEpg.length > 0) return;
     const [vRes, eRes, sRes] = await Promise.all([
       supabase.from("videos").select("id, title, duration, thumbnail").order("title"),
-      supabase.from("episodes").select("id, title, duration, thumbnail, video_url, show_id, season, episode_number").order("season").order("episode_number"),
+      supabase.from("episodes").select("id, title, duration, thumbnail, url, show_id, season, episode_number").order("season").order("episode_number"),
       supabase.from("shows").select("id, title").order("title"),
     ]);
     const showNameMap = {};
@@ -985,7 +985,7 @@ export function CMS({ onExit }) {
             .order("end_time", { ascending: false }).limit(1).single()
         : Promise.resolve({ data: null }),
       supabase.from("videos").select("id, title, duration, thumbnail").order("title"),
-      supabase.from("episodes").select("id, title, duration, thumbnail, video_url, show_id, season, episode_number").order("season").order("episode_number"),
+      supabase.from("episodes").select("id, title, duration, thumbnail, url, show_id, season, episode_number").order("season").order("episode_number"),
       supabase.from("shows").select("id, title").order("title"),
     ]);
 
@@ -1053,8 +1053,8 @@ export function CMS({ onExit }) {
     const updates = [];
     for (let i = 0; i < eps.length; i++) {
       const ep = eps[i];
-      if (ep.video_url) {
-        const secs = await detectVideoDuration(ep.video_url);
+      if (ep.url) {
+        const secs = await detectVideoDuration(ep.url);
         if (secs && secs > 0) {
           await supabase.from("episodes").update({ duration: secs }).eq("id", ep.id);
           updates.push({ id: ep.id, duration: secs });
