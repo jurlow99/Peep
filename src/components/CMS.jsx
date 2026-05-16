@@ -942,7 +942,7 @@ export function CMS({ onExit }) {
     if (allVideosForEpg.length > 0) return;
     const [vRes, eRes, sRes] = await Promise.all([
       supabase.from("videos").select("id, title, duration, thumbnail").order("title"),
-      supabase.from("episodes").select("id, title, duration, thumbnail, show_id, season, episode_number").order("season").order("episode_number"),
+      supabase.from("episodes").select("id, title, duration, thumbnail, video_url, show_id, season, episode_number").order("season").order("episode_number"),
       supabase.from("shows").select("id, title").order("title"),
     ]);
     const showNameMap = {};
@@ -1008,12 +1008,28 @@ export function CMS({ onExit }) {
 
   function detectVideoDuration(url) {
     return new Promise(resolve => {
+      if (!url) return resolve(null);
       const video = document.createElement("video");
       video.preload = "metadata";
-      video.onloadedmetadata = () => { resolve(Math.round(video.duration)); video.src = ""; };
-      video.onerror = () => resolve(null);
+      video.crossOrigin = "anonymous";
+      video.style.cssText = "position:fixed;visibility:hidden;pointer-events:none;width:1px;height:1px;";
+      document.body.appendChild(video);
+      let settled = false;
+      const done = (result) => {
+        if (settled) return;
+        settled = true;
+        video.src = "";
+        video.remove();
+        resolve(result);
+      };
+      video.onloadedmetadata = () => {
+        const dur = video.duration;
+        done(Number.isFinite(dur) && dur > 0 ? Math.round(dur) : null);
+      };
+      video.onerror = () => done(null);
       video.src = url;
-      setTimeout(() => resolve(null), 8000); // 8s timeout per video
+      video.load();
+      setTimeout(() => done(null), 12000);
     });
   }
 
@@ -1026,10 +1042,8 @@ export function CMS({ onExit }) {
     const updates = [];
     for (let i = 0; i < eps.length; i++) {
       const ep = eps[i];
-      // Fetch video_url from DB (not in allEpisodesForEpg — we only selected a subset of columns)
-      const { data } = await supabase.from("episodes").select("id, video_url").eq("id", ep.id).single();
-      if (data?.video_url) {
-        const secs = await detectVideoDuration(data.video_url);
+      if (ep.video_url) {
+        const secs = await detectVideoDuration(ep.video_url);
         if (secs && secs > 0) {
           await supabase.from("episodes").update({ duration: secs }).eq("id", ep.id);
           updates.push({ id: ep.id, duration: secs });
@@ -1037,7 +1051,6 @@ export function CMS({ onExit }) {
       }
       setBulkScanProgress({ done: i + 1, total: eps.length });
     }
-    // Update local state so preview reflects new durations
     if (updates.length > 0) {
       setAllEpisodesForEpg(prev => prev.map(ep => {
         const u = updates.find(u => u.id === ep.id);
@@ -1045,7 +1058,7 @@ export function CMS({ onExit }) {
       }));
       showToast(`Found durations for ${updates.length} episode${updates.length !== 1 ? "s" : ""}`);
     } else {
-      showToast("Couldn't detect durations — check video URLs are accessible", "error");
+      showToast("Couldn't detect durations — videos may not be direct URLs or are inaccessible", "error");
     }
     setBulkScanning(false);
   }
