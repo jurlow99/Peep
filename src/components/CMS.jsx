@@ -976,28 +976,39 @@ export function CMS({ onExit }) {
   }
 
   async function startBulkSchedule() {
-    setBulkContentType("episode");
-    setBulkShowId("");
-    setBulkSelectedEps(new Set());
-    setBulkSelectedMovies(new Set());
-    setBulkMovieSearch("");
-    let defaultStart = "";
-    if (selectedChannelForEpg) {
-      const { data } = await supabase
-        .from("epg_entries").select("end_time")
-        .eq("channel_id", selectedChannelForEpg.id)
-        .gte("end_time", new Date().toISOString())
-        .order("end_time", { ascending: false })
-        .limit(1).single();
-      if (data?.end_time) defaultStart = data.end_time.slice(0, 16);
-    }
+    // Fetch everything in one shot so all state lands in a single React render
+    const [lastEntry, vRes, eRes, sRes] = await Promise.all([
+      selectedChannelForEpg
+        ? supabase.from("epg_entries").select("end_time")
+            .eq("channel_id", selectedChannelForEpg.id)
+            .gte("end_time", new Date().toISOString())
+            .order("end_time", { ascending: false }).limit(1).single()
+        : Promise.resolve({ data: null }),
+      supabase.from("videos").select("id, title, duration, thumbnail").order("title"),
+      supabase.from("episodes").select("id, title, duration, thumbnail, video_url, show_id, season, episode_number").order("season").order("episode_number"),
+      supabase.from("shows").select("id, title").order("title"),
+    ]);
+
+    let defaultStart = lastEntry.data?.end_time?.slice(0, 16) || "";
     if (!defaultStart) {
       const d = new Date();
       d.setUTCMinutes(0, 0, 0);
       d.setUTCHours(d.getUTCHours() + 1);
       defaultStart = d.toISOString().slice(0, 16);
     }
-    await loadContentForEpg();
+
+    const showNameMap = {};
+    (sRes.data || []).forEach(s => { showNameMap[s.id] = s.title; });
+    const eps = (eRes.data || []).map(ep => ({ ...ep, _showTitle: showNameMap[ep.show_id] || "Unknown Show" }));
+
+    // All these setState calls are after a single await — React batches them into one render
+    setAllVideosForEpg(vRes.data || []);
+    setAllEpisodesForEpg(eps);
+    setBulkContentType("episode");
+    setBulkShowId("");
+    setBulkSelectedEps(new Set());
+    setBulkSelectedMovies(new Set());
+    setBulkMovieSearch("");
     setBulkStartTime(defaultStart);
     setDrawerFormType("bulk");
     setDrawerOpen(true);
