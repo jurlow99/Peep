@@ -1886,7 +1886,7 @@ function isHlsUrl(url) {
   return !!url && (url.includes(".m3u8") || url.includes("m3u8"));
 }
 
-function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myList, onToggleList, onAuthOpen, activeProfile }) {
+function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, activeProfile }) {
   const isMobile = useIsMobile();
   const [allVideos, setAllVideos] = useState([]);
   const [allShows, setAllShows] = useState([]);
@@ -2154,12 +2154,24 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
       <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
-      <nav style={{ position: "sticky", top: 0, zIndex: 100, display: "flex", alignItems: "center", padding: `0 ${PAD}`, height: 68, gap: 24, background: "rgba(10,10,10,0.95)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-        <button onClick={onBack} style={{ background: "rgba(255,255,255,0.07)", border: "none", color: "#ccc", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6 }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
-          Back
-        </button>
-        <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
+      <nav style={{ position: "sticky", top: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "space-between", padding: `0 ${PAD}`, height: 68, background: "rgba(10,10,10,0.95)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+          <button onClick={onBack} style={{ background: "rgba(255,255,255,0.07)", border: "none", color: "#ccc", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
+            Back
+          </button>
+          <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
+        </div>
+        {(() => {
+          const av = avatarForId(userAvatarId || activeProfile?.avatar_id);
+          return user ? (
+            <div onClick={onProfileOpen} title={activeProfile?.name ?? "Profile"} style={{ width: 34, height: 34, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? 15 : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = "#facc15"}
+              onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}>
+              {av ? av.emoji : (activeProfile?.name?.[0] || user.email[0]).toUpperCase()}
+            </div>
+          ) : null;
+        })()}
       </nav>
 
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
@@ -2397,7 +2409,7 @@ function rankRelated(source, pool, limit = 12) {
 
 // ─── Show Detail ──────────────────────────────────────────────────────────────
 
-function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen, activeProfile }) {
+function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, activeProfile }) {
   const [episodes, setEpisodes] = useState([]);
   const [selectedSeason, setSelectedSeason] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -2480,12 +2492,24 @@ function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList
         <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, rgba(10,10,10,0.97) 0%, rgba(10,10,10,0.5) 55%, transparent 85%)" }} />
 
         {/* Top nav row */}
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, display: "flex", alignItems: "center", padding: `20px ${PAD}`, gap: 24, zIndex: 10 }}>
-          <button onClick={onBack} style={{ background: "rgba(255,255,255,0.07)", border: "none", color: "#ccc", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
-            Back
-          </button>
-          <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, display: "flex", alignItems: "center", justifyContent: "space-between", padding: `20px ${PAD}`, zIndex: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+            <button onClick={onBack} style={{ background: "rgba(255,255,255,0.07)", border: "none", color: "#ccc", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
+              Back
+            </button>
+            <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
+          </div>
+          {(() => {
+            const av = avatarForId(userAvatarId || activeProfile?.avatar_id);
+            return user ? (
+              <div onClick={onProfileOpen} title={activeProfile?.name ?? "Profile"} style={{ width: 34, height: 34, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? 15 : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = "#facc15"}
+                onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}>
+                {av ? av.emoji : (activeProfile?.name?.[0] || user.email[0]).toUpperCase()}
+              </div>
+            ) : null;
+          })()}
         </div>
 
         {/* Hero content */}
@@ -2685,7 +2709,7 @@ function EpisodeCard({ episode, show, onPlay, progress }) {
 
 // ─── Podcast Detail ───────────────────────────────────────────────────────────
 
-function PodcastDetail({ podcast, onBack, onGoHome, onPlay, user, activeProfile }) {
+function PodcastDetail({ podcast, onBack, onGoHome, onPlay, onProfileOpen, userAvatarId, user, activeProfile }) {
   const [episodes, setEpisodes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [watchProgress, setWatchProgress] = useState({});
@@ -2735,12 +2759,24 @@ function PodcastDetail({ podcast, onBack, onGoHome, onPlay, user, activeProfile 
         <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(10,10,10,0.4) 0%, #0a0a0a 100%)" }} />
 
         {/* Nav */}
-        <div style={{ position: "relative", display: "flex", alignItems: "center", padding: `20px ${PAD}`, gap: 24, zIndex: 10 }}>
-          <button onClick={onBack} style={{ background: "rgba(255,255,255,0.07)", border: "none", color: "#ccc", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
-            Back
-          </button>
-          <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
+        <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", padding: `20px ${PAD}`, zIndex: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+            <button onClick={onBack} style={{ background: "rgba(255,255,255,0.07)", border: "none", color: "#ccc", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
+              Back
+            </button>
+            <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
+          </div>
+          {(() => {
+            const av = avatarForId(userAvatarId || activeProfile?.avatar_id);
+            return user ? (
+              <div onClick={onProfileOpen} title={activeProfile?.name ?? "Profile"} style={{ width: 34, height: 34, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? 15 : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = "#facc15"}
+                onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}>
+                {av ? av.emoji : (activeProfile?.name?.[0] || user.email[0]).toUpperCase()}
+              </div>
+            ) : null;
+          })()}
         </div>
 
         {/* Artwork + info */}
@@ -2843,7 +2879,7 @@ function PodcastEpisodeRow({ episode, podcast, onPlay, progress }) {
 
 // ─── Podcast Player ────────────────────────────────────────────────────────────
 
-function PodcastPlayerView({ episode, podcast, onBack, onGoHome, onSelect, user, activeProfile }) {
+function PodcastPlayerView({ episode, podcast, onBack, onGoHome, onSelect, onProfileOpen, userAvatarId, user, activeProfile }) {
   const audioRef = useRef(null);
   const saveProgressRef = useRef(null);
   const progressTimerRef = useRef(null);
@@ -2910,12 +2946,24 @@ function PodcastPlayerView({ episode, podcast, onBack, onGoHome, onSelect, user,
 
       <div style={{ position: "relative", zIndex: 1, flex: 1, display: "flex", flexDirection: "column" }}>
         {/* Nav */}
-        <nav style={{ display: "flex", alignItems: "center", padding: `0 ${PAD}`, height: 68, gap: 24, background: "rgba(10,10,10,0.5)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(255,255,255,0.05)", flexShrink: 0 }}>
-          <button onClick={onBack} style={{ background: "rgba(255,255,255,0.07)", border: "none", color: "#ccc", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
-            Back
-          </button>
-          <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
+        <nav style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: `0 ${PAD}`, height: 68, background: "rgba(10,10,10,0.5)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(255,255,255,0.05)", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+            <button onClick={onBack} style={{ background: "rgba(255,255,255,0.07)", border: "none", color: "#ccc", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
+              Back
+            </button>
+            <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
+          </div>
+          {(() => {
+            const av = avatarForId(userAvatarId || activeProfile?.avatar_id);
+            return user ? (
+              <div onClick={onProfileOpen} title={activeProfile?.name ?? "Profile"} style={{ width: 34, height: 34, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? 15 : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = "#facc15"}
+                onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}>
+                {av ? av.emoji : (activeProfile?.name?.[0] || user.email[0]).toUpperCase()}
+              </div>
+            ) : null;
+          })()}
         </nav>
 
         {/* Player content */}
