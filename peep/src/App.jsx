@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, Component } from "react";
+import Hls from "hls.js";
 import { supabase } from "./supabase";
 import { AuthModal } from "./components/AuthModal";
 import { LandingPage } from "./pages/LandingPage";
@@ -1559,6 +1560,10 @@ function getEmbedUrl(url) {
   return null;
 }
 
+function isHlsUrl(url) {
+  return !!url && (url.includes(".m3u8") || url.includes("m3u8"));
+}
+
 function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onToggleList, onAuthOpen, activeProfile }) {
   const [allVideos, setAllVideos] = useState([]);
   const [allShows, setAllShows] = useState([]);
@@ -1566,6 +1571,7 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
   const [countdownActive, setCountdownActive] = useState(false);
   const [countdown, setCountdown] = useState(10);
   const videoRef = useRef(null);
+  const hlsRef = useRef(null);
   const countdownTimerRef = useRef(null);
 
   const isEpisode = !!video.show_id;
@@ -1658,8 +1664,26 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
     })();
   }, [video.id, user, activeProfile?.id]);
 
+  // HLS.js setup for .m3u8 streams
   useEffect(() => {
-    if (!user || !activeProfile || getEmbedUrl(video.url)) return;
+    const videoEl = videoRef.current;
+    if (!videoEl || !isHlsUrl(video.url) || getEmbedUrl(video.url)) return;
+    if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
+    if (Hls.isSupported()) {
+      const hls = new Hls({ enableWorker: true });
+      hls.loadSource(video.url);
+      hls.attachMedia(videoEl);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => { videoEl.play().catch(() => {}); });
+      hlsRef.current = hls;
+    } else if (videoEl.canPlayType("application/vnd.apple.mpegurl")) {
+      videoEl.src = video.url;
+      videoEl.play().catch(() => {});
+    }
+    return () => { if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; } };
+  }, [video.url]);
+
+  useEffect(() => {
+    if (!user || !activeProfile || getEmbedUrl(video.url) || video._type === "live") return;
     const ct = isEpisode ? "episode" : "movie";
     saveProgressRef.current = async () => {
       if (!videoRef.current) return;
@@ -1819,7 +1843,7 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
               <video ref={videoRef} controls controlsList="nofullscreen" autoPlay style={{ width: "100%", height: "100%", display: "block", cursor: isFullscreen ? "pointer" : "default" }} poster={video.thumbnail}
                 onClick={isFullscreen ? togglePlayPause : undefined}
                 onTimeUpdate={handleTimeUpdate} onEnded={handleEnded} onLoadedMetadata={handleLoadedMetadata}>
-                <source src={video.url} type="video/mp4" />
+                {!isHlsUrl(video.url) && <source src={video.url} type="video/mp4" />}
               </video>
             )}
           </div>
