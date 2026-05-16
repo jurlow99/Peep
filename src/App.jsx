@@ -1908,6 +1908,10 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
   const countdownTimerRef = useRef(null);
+  const adContainerRef = useRef(null);
+  const adsManagerRef = useRef(null);
+  const [adPlaying, setAdPlaying] = useState(false);
+  const [adVastUrl, setAdVastUrl] = useState(null);
 
   const isEpisode = !!video.show_id;
   const [myRating, setMyRating] = useState(null);
@@ -2038,6 +2042,83 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
   useEffect(() => () => { clearInterval(progressTimerRef.current); saveProgressRef.current?.(); }, []);
 
   useEffect(() => () => { document.body.style.overflow = ""; }, []);
+
+  // Fetch the most relevant active pre-roll VAST tag for this content
+  useEffect(() => {
+    if (getEmbedUrl(video.url)) return;
+    const contentScope = isEpisode ? "episode" : "movie";
+    supabase.from("vast_tags")
+      .select("tag_url, scope, content_id")
+      .eq("active", true)
+      .eq("ad_type", "pre_roll")
+      .or(`scope.eq.global,scope.eq.${contentScope}`)
+      .then(({ data }) => {
+        if (!data || data.length === 0) return;
+        const exact = data.find(t => t.content_id === video.id);
+        const typed = data.find(t => t.scope === contentScope && !t.content_id);
+        const global = data.find(t => t.scope === "global");
+        const tag = exact || typed || global;
+        if (tag) setAdVastUrl(tag.tag_url);
+      });
+  }, [video.id]);
+
+  // Initialize IMA SDK pre-roll when VAST URL is ready
+  useEffect(() => {
+    if (!adVastUrl || getEmbedUrl(video.url)) return;
+    const ima = window.google?.ima;
+    if (!ima) return;
+    const videoEl = videoRef.current;
+    const adContainer = adContainerRef.current;
+    if (!videoEl || !adContainer) return;
+
+    const displayContainer = new ima.AdDisplayContainer(adContainer, videoEl);
+    const adsLoader = new ima.AdsLoader(displayContainer);
+
+    adsLoader.addEventListener(ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED, (e) => {
+      const mgr = e.getAdsManager(videoEl);
+      adsManagerRef.current = mgr;
+
+      mgr.addEventListener(ima.AdEvent.Type.CONTENT_PAUSE_REQUESTED, () => {
+        videoEl.pause();
+        setAdPlaying(true);
+      });
+      mgr.addEventListener(ima.AdEvent.Type.CONTENT_RESUME_REQUESTED, () => {
+        setAdPlaying(false);
+        videoEl.play().catch(() => {});
+      });
+      mgr.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, () => {
+        mgr.destroy();
+        adsManagerRef.current = null;
+        setAdPlaying(false);
+        videoEl.play().catch(() => {});
+      });
+
+      try {
+        displayContainer.initialize();
+        mgr.init(videoEl.clientWidth || 640, videoEl.clientHeight || 360, ima.ViewMode.NORMAL);
+        mgr.start();
+      } catch {
+        mgr.destroy();
+        adsManagerRef.current = null;
+        videoEl.play().catch(() => {});
+      }
+    });
+
+    adsLoader.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, () => {
+      videoEl.play().catch(() => {});
+    });
+
+    const req = new ima.AdsRequest();
+    req.adTagUrl = adVastUrl;
+    req.linearAdSlotWidth = videoEl.clientWidth || 640;
+    req.linearAdSlotHeight = videoEl.clientHeight || 360;
+    adsLoader.requestAds(req);
+
+    return () => {
+      adsManagerRef.current?.destroy();
+      adsManagerRef.current = null;
+    };
+  }, [adVastUrl]);
 
   useEffect(() => {
     if (!isFullscreen) return;
@@ -2193,7 +2274,7 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
           @keyframes livepulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.4; transform:scale(1.3); } }
         `}</style>
         <div ref={playerContainerRef} style={isFullscreen ? { position: "fixed", inset: 0, zIndex: 999, background: "#000", display: "flex", alignItems: "center", justifyContent: "center" } : { position: "relative", marginBottom: 30 }}>
-          <div style={isFullscreen ? { position: "relative", width: "100%", height: "100%" } : { background: "#000", borderRadius: 14, overflow: "hidden", aspectRatio: "16/9", boxShadow: "0 32px 80px rgba(0,0,0,0.8)" }}>
+          <div style={isFullscreen ? { position: "relative", width: "100%", height: "100%" } : { background: "#000", borderRadius: 14, overflow: "hidden", aspectRatio: "16/9", boxShadow: "0 32px 80px rgba(0,0,0,0.8)", position: "relative" }}>
             {getEmbedUrl(video.url) ? (
               <iframe src={getEmbedUrl(video.url)} style={{ width: "100%", height: "100%", display: "block", border: "none" }} allowFullScreen allow="autoplay" />
             ) : (
@@ -2203,6 +2284,7 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
                 {!isHlsUrl(video.url) && <source src={video.url} type="video/mp4" />}
               </video>
             )}
+            <div ref={adContainerRef} style={{ position: "absolute", inset: 0, zIndex: 10, pointerEvents: adPlaying ? "auto" : "none" }} />
           </div>
           {!getEmbedUrl(video.url) && (
             <button onClick={toggleFullscreen} style={{ position: "absolute", bottom: isFullscreen ? 60 : 12, right: 16, zIndex: 1000, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 7, padding: "7px 12px", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600 }}>
