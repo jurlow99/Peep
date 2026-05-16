@@ -88,7 +88,8 @@ export function CMS({ onExit }) {
   const [tab, setTab] = useState("videos");
   const [videoSubTab, setVideoSubTab] = useState("movies"); // "movies" | "series" | "episodes"
   const [drawerOpen, setDrawerOpen] = useState(false);
-  
+  const [drawerFormType, setDrawerFormType] = useState(null); // null = tab-based, "epg" = EPG form
+
   // Videos state
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -150,6 +151,18 @@ export function CMS({ onExit }) {
   const [liveSaving, setLiveSaving] = useState(false);
   const [deleteLiveConfirm, setDeleteLiveConfirm] = useState(null);
 
+  // EPG state
+  const [epgEntries, setEpgEntries] = useState([]);
+  const [epgLoading, setEpgLoading] = useState(false);
+  const [selectedChannelForEpg, setSelectedChannelForEpg] = useState(null);
+  const [epgDayOffset, setEpgDayOffset] = useState(0);
+  const [epgForm, setEpgForm] = useState({ content_id: "", content_type: "movie", title: "", description: "", start_time: "", end_time: "" });
+  const [editingEpgId, setEditingEpgId] = useState(null);
+  const [epgSaving, setEpgSaving] = useState(false);
+  const [deleteEpgConfirm, setDeleteEpgConfirm] = useState(null);
+  const [allVideosForEpg, setAllVideosForEpg] = useState([]);
+  const [allEpisodesForEpg, setAllEpisodesForEpg] = useState([]);
+
   const [heroConfirm, setHeroConfirm] = useState(null); // { current, next, type: "video"|"show" }
 
   // Reports state
@@ -191,6 +204,7 @@ export function CMS({ onExit }) {
 
   function closeDrawer() {
     setDrawerOpen(false);
+    setDrawerFormType(null);
   }
 
   useEffect(() => {
@@ -882,6 +896,111 @@ export function CMS({ onExit }) {
     else { showToast(s.is_live ? "Stream is now offline" : "🔴 Stream is live!"); await loadLiveStreams(); }
   }
 
+  // ──── EPG ────
+
+  async function loadEpgEntries(channelId, dayOffset = 0) {
+    setEpgLoading(true);
+    const dayStart = new Date();
+    dayStart.setDate(dayStart.getDate() + dayOffset);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart);
+    dayEnd.setHours(23, 59, 59, 999);
+    const { data } = await supabase.from("epg_entries")
+      .select("*").eq("channel_id", channelId)
+      .gte("start_time", dayStart.toISOString())
+      .lte("start_time", dayEnd.toISOString())
+      .order("start_time", { ascending: true });
+    setEpgEntries(data || []);
+    setEpgLoading(false);
+  }
+
+  async function loadContentForEpg() {
+    if (allVideosForEpg.length > 0) return;
+    const [vRes, eRes] = await Promise.all([
+      supabase.from("videos").select("id, title, duration, thumbnail").order("title"),
+      supabase.from("episodes").select("id, title, duration, thumbnail, show_id, season, episode_number").order("episode_number"),
+    ]);
+    setAllVideosForEpg(vRes.data || []);
+    setAllEpisodesForEpg(eRes.data || []);
+  }
+
+  function startEpgAdd() {
+    setEditingEpgId(null);
+    setEpgForm({ content_id: "", content_type: "movie", title: "", description: "", start_time: "", end_time: "" });
+    setDrawerFormType("epg");
+    setDrawerOpen(true);
+  }
+
+  function startEpgEdit(entry) {
+    setEditingEpgId(entry.id);
+    setEpgForm({
+      content_id: entry.content_id ? String(entry.content_id) : "",
+      content_type: entry.content_type ?? "movie",
+      title: entry.title ?? "",
+      description: entry.description ?? "",
+      start_time: entry.start_time ? entry.start_time.slice(0, 16) : "",
+      end_time: entry.end_time ? entry.end_time.slice(0, 16) : "",
+    });
+    setDrawerFormType("epg");
+    setDrawerOpen(true);
+  }
+
+  function handleEpgContentSelect(contentId) {
+    if (!contentId) { setEpgForm(f => ({ ...f, content_id: "", title: "" })); return; }
+    const content = epgForm.content_type === "movie"
+      ? allVideosForEpg.find(v => v.id === Number(contentId))
+      : allEpisodesForEpg.find(e => e.id === Number(contentId));
+    if (!content) return;
+    const title = epgForm.content_type === "episode"
+      ? `${content.title} · S${content.season}E${content.episode_number}`
+      : content.title;
+    let endTime = epgForm.end_time;
+    if (content.duration && epgForm.start_time) {
+      let secs = 0;
+      if (typeof content.duration === "number") secs = content.duration;
+      else if (typeof content.duration === "string" && content.duration.includes(":")) {
+        const parts = content.duration.split(":").map(Number);
+        secs = parts.length === 2 ? parts[0] * 60 + parts[1] : parts[0] * 3600 + parts[1] * 60 + (parts[2] || 0);
+      }
+      if (secs > 0) {
+        const end = new Date(new Date(epgForm.start_time).getTime() + secs * 1000);
+        endTime = end.toISOString().slice(0, 16);
+      }
+    }
+    setEpgForm(f => ({ ...f, content_id: String(contentId), title, end_time: endTime }));
+  }
+
+  async function saveEpgEntry() {
+    if (!epgForm.title.trim() || !epgForm.start_time || !epgForm.end_time || !selectedChannelForEpg) return;
+    setEpgSaving(true);
+    const payload = {
+      channel_id: selectedChannelForEpg.id,
+      content_id: epgForm.content_id ? Number(epgForm.content_id) : null,
+      content_type: epgForm.content_id ? epgForm.content_type : null,
+      title: epgForm.title.trim(),
+      description: epgForm.description || null,
+      start_time: new Date(epgForm.start_time).toISOString(),
+      end_time: new Date(epgForm.end_time).toISOString(),
+    };
+    const { error } = editingEpgId
+      ? await supabase.from("epg_entries").update(payload).eq("id", editingEpgId)
+      : await supabase.from("epg_entries").insert([payload]);
+    if (error) showToast("Error: " + error.message, "error");
+    else {
+      showToast(editingEpgId ? "Program updated" : "Program added");
+      closeDrawer();
+      await loadEpgEntries(selectedChannelForEpg.id, epgDayOffset);
+    }
+    setEpgSaving(false);
+  }
+
+  async function deleteEpgEntry(id) {
+    await supabase.from("epg_entries").delete().eq("id", id);
+    showToast("Program removed");
+    setDeleteEpgConfirm(null);
+    await loadEpgEntries(selectedChannelForEpg.id, epgDayOffset);
+  }
+
   async function deleteLiveStream(id) {
     const { error } = await supabase.from("live_streams").delete().eq("id", id);
     if (error) showToast("Delete failed: " + error.message, "error");
@@ -1476,6 +1595,109 @@ export function CMS({ onExit }) {
                 </div>
               </div>
             )}
+
+            {/* ── EPG SCHEDULE SECTION ── */}
+            {liveList.length > 0 && (
+              <div style={{ marginTop: 40, paddingTop: 32, borderTop: "2px solid #e2e8f0" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+                  <div>
+                    <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>Channel Schedule</h2>
+                    <p style={{ margin: 0, fontSize: 13, color: "#6b7280" }}>Program each channel's EPG — viewers tune in at the right spot automatically</p>
+                  </div>
+                </div>
+
+                {/* Channel selector */}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
+                  {liveList.map(ch => (
+                    <button key={ch.id}
+                      onClick={() => {
+                        setSelectedChannelForEpg(ch);
+                        setEpgDayOffset(0);
+                        loadEpgEntries(ch.id, 0);
+                        loadContentForEpg();
+                      }}
+                      style={{ background: selectedChannelForEpg?.id === ch.id ? "#4f46e5" : "#f1f5f9", border: `1px solid ${selectedChannelForEpg?.id === ch.id ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 8, padding: "8px 16px", color: selectedChannelForEpg?.id === ch.id ? "#fff" : "#374151", fontSize: 13, fontWeight: 500, cursor: "pointer", transition: "all 0.15s" }}>
+                      {ch.channel_number ? `CH ${ch.channel_number} · ` : ""}{ch.title}
+                    </button>
+                  ))}
+                </div>
+
+                {selectedChannelForEpg && (
+                  <>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                      <div style={{ display: "flex", gap: 4 }}>
+                        {[0, 1, 2].map(offset => {
+                          const d = new Date(); d.setDate(d.getDate() + offset);
+                          const label = offset === 0 ? "Today" : offset === 1 ? "Tomorrow" : d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+                          return (
+                            <button key={offset}
+                              onClick={() => { setEpgDayOffset(offset); loadEpgEntries(selectedChannelForEpg.id, offset); }}
+                              style={{ background: epgDayOffset === offset ? "#0f172a" : "#f1f5f9", border: `1px solid ${epgDayOffset === offset ? "#0f172a" : "#e2e8f0"}`, borderRadius: 6, padding: "6px 14px", color: epgDayOffset === offset ? "#fff" : "#374151", fontSize: 12, fontWeight: 500, cursor: "pointer" }}>
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <button
+                        onClick={startEpgAdd}
+                        style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                        + Add Program
+                      </button>
+                    </div>
+
+                    {epgLoading ? (
+                      <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>Loading schedule…</div>
+                    ) : epgEntries.length === 0 ? (
+                      <div style={{ color: "#6b7280", padding: 40, textAlign: "center", border: "1px dashed #e2e8f0", borderRadius: 10, fontSize: 14 }}>
+                        No programs scheduled for this day. Hit <strong>+ Add Program</strong> to start building the guide.
+                      </div>
+                    ) : (
+                      <div>
+                        {epgEntries.map(entry => {
+                          const start = new Date(entry.start_time);
+                          const end = new Date(entry.end_time);
+                          const durationMins = Math.round((end - start) / 60000);
+                          const now = new Date();
+                          const isNow = start <= now && end > now;
+                          return (
+                            <div key={entry.id} style={{ background: isNow ? "rgba(79,70,229,0.04)" : "#fff", border: `1px solid ${isNow ? "rgba(79,70,229,0.3)" : "#e2e8f0"}`, borderRadius: 10, padding: "14px 18px", marginBottom: 8, display: "flex", gap: 14, alignItems: "center" }}>
+                              <div style={{ flexShrink: 0, textAlign: "right", minWidth: 72 }}>
+                                <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{start.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}</p>
+                                <p style={{ margin: "1px 0 0", fontSize: 11, color: "#9ca3af" }}>{durationMins}m</p>
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+                                  {isNow && <span style={{ background: "#ef4444", color: "#fff", fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 3, letterSpacing: 0.5, flexShrink: 0 }}>ON AIR</span>}
+                                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.title}</p>
+                                </div>
+                                {entry.description && <p style={{ margin: 0, fontSize: 12, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.description}</p>}
+                              </div>
+                              <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                                <button onClick={() => startEpgEdit(entry)} style={{ background: "rgba(79,70,229,0.08)", border: "1px solid rgba(79,70,229,0.2)", borderRadius: 5, padding: "5px 10px", color: "#4f46e5", fontSize: 11, cursor: "pointer" }}>Edit</button>
+                                <button onClick={() => setDeleteEpgConfirm(entry)} style={{ background: "rgba(220,38,38,0.07)", border: "1px solid rgba(220,38,38,0.15)", borderRadius: 5, padding: "5px 10px", color: "#dc2626", fontSize: 11, cursor: "pointer" }}>Remove</button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {deleteEpgConfirm && (
+                      <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+                          <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "#0f172a" }}>Remove "{deleteEpgConfirm.title}"?</p>
+                          <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 20 }}>This will remove it from the schedule.</p>
+                          <div style={{ display: "flex", gap: 10 }}>
+                            <button onClick={() => setDeleteEpgConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                            <button onClick={() => deleteEpgEntry(deleteEpgConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Remove</button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -1893,7 +2115,8 @@ export function CMS({ onExit }) {
                   {tab === "videos" && videoSubTab === "episodes" && (editingEpisodeId ? "Edit Episode" : "Add Episode")}
                   {tab === "videos" && videoSubTab === "podcasts" && (editingPodcastId ? "Edit Podcast" : "Add Podcast")}
                   {tab === "carousels" && (editingCarouselId ? "Edit Carousel" : "Add Carousel")}
-                  {tab === "live" && (editingLiveId ? "Edit Stream" : "Add Stream")}
+                  {tab === "live" && drawerFormType !== "epg" && (editingLiveId ? "Edit Stream" : "Add Stream")}
+                  {tab === "live" && drawerFormType === "epg" && (editingEpgId ? "Edit Program" : "Add Program")}
                 </h2>
                 <button
                   onClick={closeDrawer}
@@ -2236,7 +2459,7 @@ export function CMS({ onExit }) {
                 )}
 
                 {/* ── LIVE FORM ── */}
-                {tab === "live" && (
+                {tab === "live" && drawerFormType !== "epg" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <FieldInput label="Channel Number" value={liveForm.channel_number} onChange={v => setLiveForm(f => ({ ...f, channel_number: v }))} placeholder="e.g. 1" type="number" />
                     <FieldInput label="Title *" value={liveForm.title} onChange={v => setLiveForm(f => ({ ...f, title: v }))} placeholder="e.g. Peep News Network" />
@@ -2262,6 +2485,67 @@ export function CMS({ onExit }) {
                         {liveSaving ? "Saving…" : editingLiveId ? "Save Changes" : "Go Live"}
                       </button>
                       <button onClick={cancelLiveEdit} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── EPG FORM ── */}
+                {tab === "live" && drawerFormType === "epg" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.7 }}>Content Type</label>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        {["movie", "episode"].map(t => (
+                          <button key={t} onClick={() => setEpgForm(f => ({ ...f, content_type: t, content_id: "", title: "" }))}
+                            style={{ flex: 1, background: epgForm.content_type === t ? "#4f46e5" : "#f1f5f9", border: `1px solid ${epgForm.content_type === t ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 7, padding: "9px", color: epgForm.content_type === t ? "#fff" : "#374151", fontSize: 13, fontWeight: 500, cursor: "pointer", textTransform: "capitalize" }}>
+                            {t === "movie" ? "Movie" : "Episode"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>
+                        Select from Library <span style={{ color: "#94a3b8", textTransform: "none", letterSpacing: 0 }}>(optional)</span>
+                      </label>
+                      <select
+                        value={epgForm.content_id}
+                        onChange={e => handleEpgContentSelect(e.target.value)}
+                        style={{ width: "100%", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: epgForm.content_id ? "#0f172a" : "#9ca3af", fontSize: 13, outline: "none", cursor: "pointer" }}
+                        onFocus={e => (e.target.style.borderColor = "#4f46e5")}
+                        onBlur={e => (e.target.style.borderColor = "#e2e8f0")}
+                      >
+                        <option value="">— None / enter title manually —</option>
+                        {epgForm.content_type === "movie"
+                          ? allVideosForEpg.map(v => <option key={v.id} value={v.id}>{v.title}{v.duration ? ` (${Math.round(v.duration / 60)}m)` : ""}</option>)
+                          : allEpisodesForEpg.map(ep => <option key={ep.id} value={ep.id}>S{ep.season}E{ep.episode_number} · {ep.title}</option>)
+                        }
+                      </select>
+                    </div>
+
+                    <FieldInput label="Program Title *" value={epgForm.title} onChange={v => setEpgForm(f => ({ ...f, title: v }))} placeholder="e.g. The Matrix" />
+                    <FieldInput label="Description" value={epgForm.description} onChange={v => setEpgForm(f => ({ ...f, description: v }))} placeholder="Short description..." />
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      <FieldInput label="Start Time *" value={epgForm.start_time} onChange={v => setEpgForm(f => ({ ...f, start_time: v }))} type="datetime-local" />
+                      <FieldInput label="End Time *" value={epgForm.end_time} onChange={v => setEpgForm(f => ({ ...f, end_time: v }))} type="datetime-local" />
+                    </div>
+                    {epgForm.start_time && epgForm.end_time && new Date(epgForm.end_time) > new Date(epgForm.start_time) && (
+                      <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>
+                        Duration: {Math.round((new Date(epgForm.end_time) - new Date(epgForm.start_time)) / 60000)} minutes
+                      </p>
+                    )}
+
+                    <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+                      <button onClick={saveEpgEntry}
+                        disabled={epgSaving || !epgForm.title.trim() || !epgForm.start_time || !epgForm.end_time}
+                        style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 8, padding: "13px", color: "#fff", fontSize: 14, fontWeight: 700, cursor: (epgSaving || !epgForm.title.trim()) ? "not-allowed" : "pointer", opacity: (epgSaving || !epgForm.title.trim()) ? 0.5 : 1 }}>
+                        {epgSaving ? "Saving…" : editingEpgId ? "Update Program" : "Add to Schedule"}
+                      </button>
+                      <button onClick={closeDrawer}
+                        style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "13px 20px", color: "#374151", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                        Cancel
+                      </button>
                     </div>
                   </div>
                 )}

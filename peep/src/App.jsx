@@ -257,6 +257,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
   const [carousels, setCarousels] = useState([]);
   const [podcasts, setPodcasts] = useState([]);
   const [liveStreams, setLiveStreams] = useState([]);
+  const [epgEntries, setEpgEntries] = useState([]);
   const [continueWatching, setContinueWatching] = useState([]);
   const [loading, setLoading] = useState(true);
   const [scrolled, setScrolled] = useState(false);
@@ -288,6 +289,9 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     const liveChannel = supabase.channel("live-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "live_streams" }, fetchAll)
       .subscribe();
+    const epgChannel = supabase.channel("epg-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "epg_entries" }, fetchAll)
+      .subscribe();
 
     const handler = () => setScrolled(window.scrollY > 60);
     window.addEventListener("scroll", handler);
@@ -298,6 +302,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       supabase.removeChannel(carouselChannel);
       supabase.removeChannel(podcastChannel);
       supabase.removeChannel(liveChannel);
+      supabase.removeChannel(epgChannel);
       window.removeEventListener("scroll", handler);
     };
   }, []);
@@ -310,18 +315,22 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
   }, [searchQuery]);
 
   async function fetchAll() {
-    const [videosRes, showsRes, carouselsRes, podcastsRes, liveRes] = await Promise.all([
+    const epgWindowStart = new Date(Date.now() - 30 * 60 * 1000);
+    const epgWindowEnd = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    const [videosRes, showsRes, carouselsRes, podcastsRes, liveRes, epgRes] = await Promise.all([
       supabase.from("videos").select("*").order("id", { ascending: true }),
       supabase.from("shows").select("*").order("id", { ascending: true }),
       supabase.from("carousels").select("*").eq("enabled", true).order("position", { ascending: true }),
       supabase.from("podcasts").select("*").order("id", { ascending: true }),
       supabase.from("live_streams").select("*").order("id", { ascending: true }),
+      supabase.from("epg_entries").select("*").gte("end_time", epgWindowStart.toISOString()).lte("start_time", epgWindowEnd.toISOString()).order("start_time", { ascending: true }),
     ]);
     if (videosRes.data) setVideos(videosRes.data);
     if (showsRes.data) setShows(showsRes.data);
     if (carouselsRes.data) setCarousels(carouselsRes.data);
     if (podcastsRes.data) setPodcasts(podcastsRes.data.filter(p => p.enabled !== false));
     if (liveRes.data) setLiveStreams(liveRes.data);
+    if (epgRes.data) setEpgEntries(epgRes.data);
     setLoading(false);
   }
 
@@ -749,7 +758,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
 
       {/* Live TV page */}
       {activeNav === "Live TV" && !loading && (
-        <LiveTVPage streams={liveStreams} onPlay={onPlay} />
+        <LiveTVPage streams={liveStreams} epgEntries={epgEntries} onPlay={onPlay} />
       )}
 
       {/* Content rows (Home / My List / New & Popular / Podcasts) */}
@@ -1270,9 +1279,74 @@ function LiveCard({ stream, onPlay }) {
 
 // ─── Live TV Page ─────────────────────────────────────────────────────────────
 
-function LiveTVPage({ streams, onPlay }) {
-  const liveNow = [...streams.filter(s => s.is_live)].sort((a, b) => (a.channel_number ?? 999) - (b.channel_number ?? 999));
-  const offline = [...streams.filter(s => !s.is_live)].sort((a, b) => (a.channel_number ?? 999) - (b.channel_number ?? 999));
+function LiveTVPage({ streams, epgEntries, onPlay }) {
+  const [tuningIn, setTuningIn] = useState(null);
+  const now = new Date();
+
+  const nowAiringMap = {};
+  const upNextMap = {};
+  epgEntries.forEach(e => {
+    const start = new Date(e.start_time);
+    const end = new Date(e.end_time);
+    if (start <= now && end > now) nowAiringMap[e.channel_id] = e;
+  });
+  streams.forEach(ch => {
+    const cur = nowAiringMap[ch.id];
+    if (cur) {
+      const next = epgEntries
+        .filter(e => e.channel_id === ch.id && new Date(e.start_time) >= new Date(cur.end_time))
+        .sort((a, b) => new Date(a.start_time) - new Date(b.start_time))[0];
+      if (next) upNextMap[ch.id] = next;
+    }
+  });
+
+  async function tuneIn(channel) {
+    setTuningIn(channel.id);
+    const cur = nowAiringMap[channel.id];
+    const upNext = upNextMap[channel.id];
+    const fresh = new Date();
+    if (cur?.content_id && cur?.content_type) {
+      const table = cur.content_type === "movie" ? "videos" : "episodes";
+      const { data } = await supabase.from(table).select("*").eq("id", cur.content_id).single();
+      if (data) {
+        const elapsed = Math.floor((fresh - new Date(cur.start_time)) / 1000);
+        setTuningIn(null);
+        onPlay({
+          ...data,
+          url: data.video_url,
+          _type: "live_epg",
+          _elapsed: elapsed,
+          _channel: channel,
+          _epgEntry: cur,
+          now_airing: cur.title,
+          up_next: upNext?.title ?? null,
+          channel_number: channel.channel_number,
+          badge_text: channel.badge_text || "LIVE",
+        });
+        return;
+      }
+    }
+    setTuningIn(null);
+    if (channel.stream_url) {
+      onPlay({
+        ...channel,
+        url: channel.stream_url,
+        _type: "live",
+        now_airing: cur?.title ?? channel.now_airing,
+        up_next: upNext?.title ?? channel.up_next,
+      });
+    }
+  }
+
+  const sortedStreams = [...streams].sort((a, b) => (a.channel_number ?? 999) - (b.channel_number ?? 999));
+  const liveNow = sortedStreams.filter(s => s.is_live);
+  const offline = sortedStreams.filter(s => !s.is_live);
+
+  const enriched = (list) => list.map(s => ({
+    ...s,
+    _nowAiring: nowAiringMap[s.id] ?? null,
+    _upNext: upNextMap[s.id] ?? null,
+  }));
 
   return (
     <div style={{ paddingTop: 100, paddingBottom: 80, minHeight: "100vh" }}>
@@ -1284,9 +1358,7 @@ function LiveTVPage({ streams, onPlay }) {
           <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(28px, 4vw, 48px)", fontWeight: 400, margin: 0, color: "#fff" }}>Live TV</h1>
         </div>
         <p style={{ margin: 0, fontSize: 14, color: "#555" }}>
-          {liveNow.length > 0
-            ? `${liveNow.length} channel${liveNow.length !== 1 ? "s" : ""} on air now`
-            : "No channels on air right now"}
+          {liveNow.length > 0 ? `${liveNow.length} channel${liveNow.length !== 1 ? "s" : ""} on air` : "No channels live right now"}
         </p>
       </div>
 
@@ -1301,19 +1373,228 @@ function LiveTVPage({ streams, onPlay }) {
             <h2 style={{ margin: 0, fontSize: "clamp(15px, 1.3vw, 19px)", fontWeight: 600, color: "#e5e5e5" }}>On Air Now</h2>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 20 }}>
-            {liveNow.map(s => <LiveCard key={s.id} stream={s} onPlay={onPlay} />)}
+            {enriched(liveNow).map(s => (
+              <LiveChannelCard key={s.id} stream={s} onTuneIn={tuneIn} tuning={tuningIn === s.id} />
+            ))}
           </div>
+        </div>
+      )}
+
+      {epgEntries.length > 0 && streams.length > 0 && (
+        <div style={{ padding: `0 ${PAD}`, marginBottom: 56 }}>
+          <EpgGrid channels={sortedStreams} epgEntries={epgEntries} onTuneIn={tuneIn} now={now} />
         </div>
       )}
 
       {offline.length > 0 && (
         <div style={{ padding: `0 ${PAD}` }}>
-          <h2 style={{ margin: "0 0 20px", fontSize: "clamp(12px, 1vw, 15px)", fontWeight: 600, color: "#333", textTransform: "uppercase", letterSpacing: 1.2 }}>Offline Channels</h2>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 20, opacity: 0.45 }}>
-            {offline.map(s => <LiveCard key={s.id} stream={s} onPlay={onPlay} />)}
+          <h2 style={{ margin: "0 0 20px", fontSize: "clamp(12px, 1vw, 15px)", fontWeight: 600, color: "#333", textTransform: "uppercase", letterSpacing: 1.2 }}>Offline</h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 20, opacity: 0.4 }}>
+            {enriched(offline).map(s => (
+              <LiveChannelCard key={s.id} stream={s} onTuneIn={tuneIn} tuning={false} />
+            ))}
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function LiveChannelCard({ stream, onTuneIn, tuning }) {
+  const [hovered, setHovered] = useState(false);
+  const nowAiring = stream._nowAiring;
+  const upNext = stream._upNext;
+
+  return (
+    <div
+      onClick={() => stream.is_live && onTuneIn(stream)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{ cursor: stream.is_live ? "pointer" : "default", borderRadius: 12, overflow: "hidden", background: "#141414", border: `1px solid ${hovered && stream.is_live ? "#ef4444" : "#1e1e1e"}`, transform: hovered && stream.is_live ? "scale(1.02)" : "scale(1)", transition: "all 0.2s", boxShadow: hovered && stream.is_live ? "0 8px 32px rgba(239,68,68,0.2)" : "none" }}>
+      <div style={{ position: "relative", aspectRatio: "16/9", overflow: "hidden" }}>
+        {stream.thumbnail
+          ? <img src={stream.thumbnail} alt={stream.title} style={{ width: "100%", height: "100%", objectFit: "cover", filter: hovered ? "brightness(0.55)" : "brightness(0.8)", transition: "filter 0.2s" }} />
+          : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #1a0000, #3a0000)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="#ef4444" opacity="0.4"><polygon points="5,3 19,12 5,21" /></svg>
+            </div>
+        }
+        {stream.is_live && (
+          <div style={{ position: "absolute", top: 10, left: 10, display: "flex", alignItems: "center", gap: 5, background: "#ef4444", borderRadius: 5, padding: "4px 10px" }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#fff", animation: "livepulse 1.5s infinite" }} />
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 0.5 }}>{stream.badge_text || "LIVE"}</span>
+          </div>
+        )}
+        {stream.channel_number != null && stream.channel_number !== "" && (
+          <div style={{ position: "absolute", top: 10, right: 10, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)", borderRadius: 5, padding: "4px 8px", fontSize: 11, fontWeight: 700, color: "#fff" }}>
+            CH {stream.channel_number}
+          </div>
+        )}
+        {tuning && (
+          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ width: 36, height: 36, borderRadius: "50%", border: "3px solid rgba(255,255,255,0.2)", borderTopColor: "#fff", animation: "spin 0.8s linear infinite" }} />
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+          </div>
+        )}
+        {hovered && stream.is_live && !tuning && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ width: 52, height: 52, borderRadius: "50%", background: "rgba(239,68,68,0.9)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 20px rgba(239,68,68,0.5)" }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><polygon points="5,3 19,12 5,21" /></svg>
+            </div>
+          </div>
+        )}
+      </div>
+      <div style={{ padding: "14px 16px" }}>
+        <p style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 600, color: "#fff" }}>{stream.title}</p>
+        {nowAiring ? (
+          <>
+            <p style={{ margin: "0 0 3px", fontSize: 12, color: "#ef4444", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              Now: {nowAiring.title}
+            </p>
+            {upNext && (
+              <p style={{ margin: 0, fontSize: 11, color: "#555", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                Up Next: {upNext.title}
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            {stream.now_airing && <p style={{ margin: "0 0 3px", fontSize: 12, color: "#ef4444", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Now: {stream.now_airing}</p>}
+            {stream.up_next && <p style={{ margin: 0, fontSize: 11, color: "#555", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Up Next: {stream.up_next}</p>}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── EPG Grid ─────────────────────────────────────────────────────────────────
+
+const PX_PER_MIN = 5;
+const EPG_WINDOW_MINS = 5 * 60;
+const EPG_CH_COL_W = 130;
+
+function EpgGrid({ channels, epgEntries, onTuneIn, now }) {
+  const scrollRef = useRef(null);
+
+  const windowStart = new Date(now);
+  windowStart.setMinutes(Math.floor(windowStart.getMinutes() / 30) * 30, 0, 0);
+  windowStart.setTime(windowStart.getTime() - 60 * 60000);
+  const windowEnd = new Date(windowStart.getTime() + EPG_WINDOW_MINS * 60000);
+  const totalPx = EPG_WINDOW_MINS * PX_PER_MIN;
+  const nowOffsetPx = Math.max(0, Math.min(totalPx, (now - windowStart) / 60000 * PX_PER_MIN));
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollLeft = nowOffsetPx - scrollRef.current.clientWidth * 0.35;
+    }
+  }, []);
+
+  const timeLabels = [];
+  for (let m = 0; m < EPG_WINDOW_MINS; m += 30) {
+    timeLabels.push({ label: new Date(windowStart.getTime() + m * 60000), left: m * PX_PER_MIN });
+  }
+
+  const byChannel = {};
+  epgEntries.forEach(e => {
+    if (!byChannel[e.channel_id]) byChannel[e.channel_id] = [];
+    byChannel[e.channel_id].push(e);
+  });
+
+  const ROW_H = 68;
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+        <h2 style={{ margin: 0, fontSize: "clamp(15px, 1.3vw, 19px)", fontWeight: 600, color: "#e5e5e5" }}>Program Guide</h2>
+        <button onClick={() => { if (scrollRef.current) scrollRef.current.scrollLeft = nowOffsetPx - scrollRef.current.clientWidth * 0.35; }}
+          style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 6, padding: "6px 14px", color: "#f87171", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+          {"●"} Now
+        </button>
+      </div>
+      <div style={{ display: "flex", borderRadius: 12, overflow: "hidden", border: "1px solid #1e1e1e" }}>
+        {/* Fixed channel column */}
+        <div style={{ flexShrink: 0, width: EPG_CH_COL_W, background: "#0f0f0f", borderRight: "1px solid #1e1e1e" }}>
+          <div style={{ height: 36, borderBottom: "1px solid #1e1e1e" }} />
+          {channels.map(ch => (
+            <div key={ch.id} style={{ height: ROW_H, display: "flex", alignItems: "center", padding: "0 12px", borderBottom: "1px solid #111", gap: 6 }}>
+              {ch.channel_number != null && ch.channel_number !== "" && (
+                <span style={{ fontSize: 10, color: "#555", fontWeight: 700, flexShrink: 0 }}>CH{ch.channel_number}</span>
+              )}
+              <span style={{ fontSize: 12, fontWeight: 600, color: "#ccc", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch.title}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Scrollable grid */}
+        <div ref={scrollRef} className="scroll-row" style={{ flex: 1, overflowX: "auto", scrollbarWidth: "none", position: "relative" }}>
+          {/* Time labels */}
+          <div style={{ position: "relative", width: totalPx, height: 36, background: "#0a0a0a", borderBottom: "1px solid #1e1e1e", flexShrink: 0 }}>
+            {timeLabels.map(({ label, left }, i) => (
+              <div key={i} style={{ position: "absolute", left, top: 0, height: "100%", display: "flex", alignItems: "center", paddingLeft: 8, borderLeft: "1px solid #1a1a1a" }}>
+                <span style={{ fontSize: 11, color: "#444", whiteSpace: "nowrap" }}>
+                  {label.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
+                </span>
+              </div>
+            ))}
+            <div style={{ position: "absolute", top: 0, bottom: 0, left: nowOffsetPx, width: 2, background: "#ef4444", zIndex: 5 }} />
+          </div>
+
+          {/* Channel rows */}
+          {channels.map(ch => {
+            const entries = (byChannel[ch.id] || []).filter(e =>
+              new Date(e.end_time) > windowStart && new Date(e.start_time) < windowEnd
+            );
+            return (
+              <div key={ch.id} style={{ position: "relative", width: totalPx, height: ROW_H, borderBottom: "1px solid #111", background: "#0a0a0a" }}>
+                <div style={{ position: "absolute", top: 0, bottom: 0, left: nowOffsetPx, width: 2, background: "rgba(239,68,68,0.25)", zIndex: 2, pointerEvents: "none" }} />
+                {entries.map(entry => {
+                  const eStart = new Date(entry.start_time);
+                  const eEnd = new Date(entry.end_time);
+                  const leftPx = Math.max(0, (eStart - windowStart) / 60000 * PX_PER_MIN);
+                  const rightPx = Math.min(totalPx, (eEnd - windowStart) / 60000 * PX_PER_MIN);
+                  const widthPx = rightPx - leftPx;
+                  const isNow = eStart <= now && eEnd > now;
+                  if (widthPx < 4) return null;
+                  return (
+                    <div key={entry.id}
+                      onClick={() => isNow && ch.is_live && onTuneIn(ch)}
+                      style={{
+                        position: "absolute",
+                        left: leftPx + 2,
+                        width: widthPx - 4,
+                        top: 6,
+                        height: ROW_H - 12,
+                        background: isNow ? "rgba(79,70,229,0.22)" : "rgba(255,255,255,0.03)",
+                        border: `1px solid ${isNow ? "rgba(99,102,241,0.5)" : "rgba(255,255,255,0.06)"}`,
+                        borderRadius: 6,
+                        overflow: "hidden",
+                        cursor: isNow && ch.is_live ? "pointer" : "default",
+                        padding: "6px 10px",
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "center",
+                        zIndex: 3,
+                        transition: "background 0.15s",
+                      }}
+                      onMouseEnter={e => { if (isNow && ch.is_live) e.currentTarget.style.background = "rgba(79,70,229,0.35)"; }}
+                      onMouseLeave={e => { if (isNow && ch.is_live) e.currentTarget.style.background = "rgba(79,70,229,0.22)"; }}
+                    >
+                      <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: isNow ? "#a5b4fc" : "#444", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.title}</p>
+                      {widthPx > 80 && (
+                        <p style={{ margin: "2px 0 0", fontSize: 10, color: isNow ? "#6366f1" : "#2a2a2a", whiteSpace: "nowrap" }}>
+                          {eStart.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
+                          {" – "}
+                          {eEnd.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1759,7 +2040,7 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
   }, [video.url]);
 
   useEffect(() => {
-    if (!user || !activeProfile || getEmbedUrl(video.url) || video._type === "live") return;
+    if (!user || !activeProfile || getEmbedUrl(video.url) || video._type === "live" || video._type === "live_epg") return;
     const ct = isEpisode ? "episode" : "movie";
     saveProgressRef.current = async () => {
       if (!videoRef.current) return;
@@ -1878,7 +2159,13 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
   }
 
   function handleLoadedMetadata() {
-    if (!user || !activeProfile || !videoRef.current || getEmbedUrl(video.url)) return;
+    if (!videoRef.current) return;
+    if ((video._type === "live_epg") && video._elapsed > 0 && !getEmbedUrl(video.url)) {
+      const { duration } = videoRef.current;
+      if (duration && video._elapsed < duration) videoRef.current.currentTime = video._elapsed;
+      return;
+    }
+    if (!user || !activeProfile || getEmbedUrl(video.url)) return;
     const ct = isEpisode ? "episode" : "movie";
     supabase.from("watch_progress").select("progress_seconds, duration_seconds, completed")
       .eq("user_id", user.id).eq("profile_id", activeProfile.id).eq("content_id", video.id).eq("content_type", ct).maybeSingle()
@@ -1912,7 +2199,7 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
         <style>{`
           video::-webkit-media-controls-fullscreen-button{display:none!important}
-          ${video._type === "live" ? "video::-webkit-media-controls-timeline{display:none!important} video::-webkit-media-controls-time-remaining-display{display:none!important} video::-webkit-media-controls-current-time-display{display:none!important}" : ""}
+          ${(video._type === "live" || video._type === "live_epg") ? "video::-webkit-media-controls-timeline{display:none!important} video::-webkit-media-controls-time-remaining-display{display:none!important} video::-webkit-media-controls-current-time-display{display:none!important}" : ""}
           @keyframes livepulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.4; transform:scale(1.3); } }
         `}</style>
         <div ref={playerContainerRef} style={isFullscreen ? { position: "fixed", inset: 0, zIndex: 999, background: "#000", display: "flex", alignItems: "center", justifyContent: "center" } : { position: "relative", marginBottom: 30 }}>
@@ -1970,7 +2257,7 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
           )}
         </div>
 
-        {video._type === "live" && (video.now_airing || video.up_next) && (
+        {(video._type === "live" || video._type === "live_epg") && (video.now_airing || video.up_next) && (
           <div style={{ marginBottom: 24, background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.18)", borderRadius: 12, padding: "16px 20px", display: "flex", gap: 32, flexWrap: "wrap" }}>
             {video.now_airing && (
               <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
@@ -1996,7 +2283,7 @@ function PlayerView({ video, onBack, onSelect, onShowSelect, user, myList, onTog
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 48 }}>
           <div style={{ flex: 1, maxWidth: 700 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-              {video._type === "live" && (
+              {(video._type === "live" || video._type === "live_epg") && (
                 <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#ef4444", borderRadius: 5, padding: "4px 10px" }}>
                   <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#fff", animation: "livepulse 1.5s infinite" }} />
                   <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 0.5 }}>{video.badge_text || "LIVE"}</span>
