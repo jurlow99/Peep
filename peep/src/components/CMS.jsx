@@ -182,6 +182,7 @@ export function CMS({ onExit }) {
   const [xmltvError, setXmltvError] = useState("");
   const [xmltvImporting, setXmltvImporting] = useState(false);
   const [xmltvImportDone, setXmltvImportDone] = useState(null);
+  const [xmltvFileName, setXmltvFileName] = useState("");
 
   const [heroConfirm, setHeroConfirm] = useState(null); // { current, next, type: "video"|"show" }
 
@@ -991,13 +992,13 @@ export function CMS({ onExit }) {
   }
 
   async function loadXmltvFile(file) {
-    setXmltvLoading(true); setXmltvError(""); setXmltvParsed(null);
+    setXmltvLoading(true); setXmltvError(""); setXmltvParsed(null); setXmltvFileName(file.name);
     try {
       const text = await file.text();
       const parsed = parseXMLTVText(text);
       setXmltvParsed(parsed);
       setXmltvChannelMap(xmltvAutoMap(parsed.channels));
-    } catch (e) { setXmltvError(e.message); }
+    } catch (e) { setXmltvError(e.message); setXmltvFileName(""); }
     setXmltvLoading(false);
   }
 
@@ -1954,7 +1955,7 @@ export function CMS({ onExit }) {
                           ⚡ Auto-Schedule
                         </button>
                         <button
-                          onClick={() => { setXmltvOpen(true); setXmltvParsed(null); setXmltvChannelMap({}); setXmltvError(""); setXmltvImportDone(null); setXmltvUrl(""); }}
+                          onClick={() => { setXmltvOpen(true); setXmltvParsed(null); setXmltvChannelMap({}); setXmltvError(""); setXmltvImportDone(null); setXmltvUrl(""); setXmltvFileName(""); }}
                           style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 16px", color: "#374151", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
                           📡 Import XMLTV
                         </button>
@@ -3153,8 +3154,11 @@ export function CMS({ onExit }) {
                       onChange={e => { if (e.target.files[0]) loadXmltvFile(e.target.files[0]); }}
                     />
                     <button onClick={() => xmltvFileRef.current?.click()}
-                      style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, color: "#374151", cursor: "pointer", flexShrink: 0 }}>
-                      Upload .xml file
+                      style={{ background: xmltvFileName ? "#f0fdf4" : "#f1f5f9", border: `1px solid ${xmltvFileName ? "#86efac" : "#e2e8f0"}`, borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, color: xmltvFileName ? "#15803d" : "#374151", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", gap: 6, maxWidth: 220, overflow: "hidden" }}>
+                      <span style={{ flexShrink: 0 }}>{xmltvFileName ? "📄" : "📂"}</span>
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {xmltvFileName || "Upload .xml file"}
+                      </span>
                     </button>
                     <span style={{ color: "#9ca3af", display: "flex", alignItems: "center", fontSize: 13, flexShrink: 0 }}>or</span>
                     <input
