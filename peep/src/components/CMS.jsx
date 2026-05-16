@@ -916,12 +916,16 @@ export function CMS({ onExit }) {
 
   async function loadContentForEpg() {
     if (allVideosForEpg.length > 0) return;
-    const [vRes, eRes] = await Promise.all([
+    const [vRes, eRes, sRes] = await Promise.all([
       supabase.from("videos").select("id, title, duration, thumbnail").order("title"),
-      supabase.from("episodes").select("id, title, duration, thumbnail, show_id, season, episode_number").order("episode_number"),
+      supabase.from("episodes").select("id, title, duration, thumbnail, show_id, season, episode_number").order("season").order("episode_number"),
+      supabase.from("shows").select("id, title").order("title"),
     ]);
+    const showNameMap = {};
+    (sRes.data || []).forEach(s => { showNameMap[s.id] = s.title; });
+    const eps = (eRes.data || []).map(ep => ({ ...ep, _showTitle: showNameMap[ep.show_id] || "Unknown Show" }));
     setAllVideosForEpg(vRes.data || []);
-    setAllEpisodesForEpg(eRes.data || []);
+    setAllEpisodesForEpg(eps);
   }
 
   function startEpgAdd() {
@@ -2518,7 +2522,20 @@ export function CMS({ onExit }) {
                         <option value="">— None / enter title manually —</option>
                         {epgForm.content_type === "movie"
                           ? allVideosForEpg.map(v => <option key={v.id} value={v.id}>{v.title}{v.duration ? ` (${Math.round(v.duration / 60)}m)` : ""}</option>)
-                          : allEpisodesForEpg.map(ep => <option key={ep.id} value={ep.id}>S{ep.season}E{ep.episode_number} · {ep.title}</option>)
+                          : (() => {
+                              const groups = {};
+                              allEpisodesForEpg.forEach(ep => {
+                                if (!groups[ep._showTitle]) groups[ep._showTitle] = [];
+                                groups[ep._showTitle].push(ep);
+                              });
+                              return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)).map(([show, eps]) => (
+                                <optgroup key={show} label={show}>
+                                  {eps.map(ep => (
+                                    <option key={ep.id} value={ep.id}>S{ep.season}E{ep.episode_number} · {ep.title}</option>
+                                  ))}
+                                </optgroup>
+                              ));
+                            })()
                         }
                       </select>
                     </div>
