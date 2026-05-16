@@ -2656,7 +2656,7 @@ export function CMS({ onExit }) {
                 )}
 
                 {/* ── LIVE FORM ── */}
-                {tab === "live" && drawerFormType !== "epg" && (
+                {tab === "live" && drawerFormType !== "epg" && drawerFormType !== "bulk" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <FieldInput label="Channel Number" value={liveForm.channel_number} onChange={v => setLiveForm(f => ({ ...f, channel_number: v }))} placeholder="e.g. 1" type="number" />
                     <FieldInput label="Title *" value={liveForm.title} onChange={v => setLiveForm(f => ({ ...f, title: v }))} placeholder="e.g. Peep News Network" />
