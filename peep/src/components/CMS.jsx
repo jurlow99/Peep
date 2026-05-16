@@ -185,9 +185,7 @@ export function CMS({ onExit }) {
   const [xmltvFileName, setXmltvFileName] = useState("");
   const [xmltvPreviewChannel, setXmltvPreviewChannel] = useState(null);
   const [epgDetailEntry, setEpgDetailEntry] = useState(null);
-  const [epgSources, setEpgSources] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("peep_epg_sources") || "{}"); } catch { return {}; }
-  });
+  const [epgSources, setEpgSources] = useState({});
 
   const [heroConfirm, setHeroConfirm] = useState(null); // { current, next, type: "video"|"show" }
 
@@ -889,9 +887,17 @@ export function CMS({ onExit }) {
 
   async function loadLiveStreams() {
     setLiveLoading(true);
-    const { data, error } = await supabase.from("live_streams").select("*").order("id", { ascending: true });
-    if (error) showToast("Failed to load streams: " + error.message, "error");
-    else setLiveList(data || []);
+    const [streamsRes, sourcesRes] = await Promise.all([
+      supabase.from("live_streams").select("*").order("id", { ascending: true }),
+      supabase.from("epg_channel_sources").select("*"),
+    ]);
+    if (streamsRes.error) showToast("Failed to load streams: " + streamsRes.error.message, "error");
+    else setLiveList(streamsRes.data || []);
+    if (!sourcesRes.error) {
+      const map = {};
+      (sourcesRes.data || []).forEach(row => { map[row.channel_id] = row; });
+      setEpgSources(map);
+    }
     setLiveLoading(false);
   }
 
@@ -1049,14 +1055,23 @@ export function CMS({ onExit }) {
       const { error } = await supabase.from("epg_entries").insert(entries.slice(i, i + BATCH));
       if (error) { setXmltvError(error.message); setXmltvImporting(false); return; }
     }
+    // Save source tracking to DB per channel
+    const sourceName = xmltvFileName || xmltvUrl || "XMLTV import";
+    const now = new Date().toISOString();
+    const sourceRows = channelIds.map(cId => ({
+      channel_id: cId,
+      source_name: sourceName,
+      imported_at: now,
+      program_count: entries.filter(e => e.channel_id === cId).length,
+    }));
+    const { data: savedSources } = await supabase.from("epg_channel_sources").upsert(sourceRows, { onConflict: "channel_id" }).select();
+    if (savedSources) {
+      const updated = { ...epgSources };
+      savedSources.forEach(row => { updated[row.channel_id] = row; });
+      setEpgSources(updated);
+    }
     setXmltvImportDone(entries.length);
     setXmltvImporting(false);
-    // Record source per channel in localStorage
-    const sourceName = xmltvFileName || xmltvUrl || "XMLTV file";
-    const updated = { ...epgSources };
-    channelIds.forEach(cId => { updated[cId] = { source: sourceName, at: new Date().toISOString() }; });
-    localStorage.setItem("peep_epg_sources", JSON.stringify(updated));
-    setEpgSources(updated);
     if (selectedChannelForEpg && channelIds.includes(selectedChannelForEpg.id)) {
       loadEpgEntries(selectedChannelForEpg.id, epgDayOffset);
     }
@@ -1928,32 +1943,49 @@ export function CMS({ onExit }) {
                 </div>
 
                 {/* Channel selector */}
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
                   {liveList.map(ch => {
                     const src = epgSources[ch.id];
                     const isSelected = selectedChannelForEpg?.id === ch.id;
                     return (
-                      <div key={ch.id} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                        <button
-                          onClick={() => {
-                            setSelectedChannelForEpg(ch);
-                            setEpgDayOffset(0);
-                            loadEpgEntries(ch.id, 0);
-                            loadContentForEpg();
-                          }}
-                          style={{ background: isSelected ? "#4f46e5" : "#f1f5f9", border: `1px solid ${isSelected ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 8, padding: "8px 16px", color: isSelected ? "#fff" : "#374151", fontSize: 13, fontWeight: 500, cursor: "pointer", transition: "all 0.15s" }}>
-                          {ch.channel_number ? `CH ${ch.channel_number} · ` : ""}{ch.title}
-                        </button>
+                      <button key={ch.id}
+                        onClick={() => {
+                          setSelectedChannelForEpg(ch);
+                          setEpgDayOffset(0);
+                          loadEpgEntries(ch.id, 0);
+                          loadContentForEpg();
+                        }}
+                        style={{ position: "relative", background: isSelected ? "#4f46e5" : "#f1f5f9", border: `1px solid ${isSelected ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 8, padding: "8px 16px", color: isSelected ? "#fff" : "#374151", fontSize: 13, fontWeight: 500, cursor: "pointer", transition: "all 0.15s" }}>
+                        {ch.channel_number ? `CH ${ch.channel_number} · ` : ""}{ch.title}
                         {src && (
-                          <p style={{ margin: 0, fontSize: 10, color: "#9ca3af", textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 160 }}
-                            title={`Imported from: ${src.source}\n${new Date(src.at).toLocaleString()}`}>
-                            📡 {src.source}
-                          </p>
+                          <span style={{ position: "absolute", top: -4, right: -4, width: 10, height: 10, borderRadius: "50%", background: "#22c55e", border: "2px solid #fff" }} title={`EPG: ${src.source_name}`} />
                         )}
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
+
+                {/* Source info strip for selected channel */}
+                {selectedChannelForEpg && (() => {
+                  const src = epgSources[selectedChannelForEpg.id];
+                  return (
+                    <div style={{ marginBottom: 16, padding: "10px 14px", borderRadius: 8, background: src ? "#f0fdf4" : "#f8fafc", border: `1px solid ${src ? "#bbf7d0" : "#e2e8f0"}`, display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ fontSize: 16 }}>{src ? "📡" : "○"}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        {src ? (
+                          <>
+                            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#15803d", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{src.source_name}</p>
+                            <p style={{ margin: 0, fontSize: 11, color: "#6b7280" }}>
+                              {src.program_count != null ? `${src.program_count} programs · ` : ""}Imported {new Date(src.imported_at).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
+                            </p>
+                          </>
+                        ) : (
+                          <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>No XML import recorded for this channel</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {selectedChannelForEpg && (
                   <>
