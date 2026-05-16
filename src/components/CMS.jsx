@@ -997,10 +997,10 @@ export function CMS({ onExit }) {
       d.setUTCHours(d.getUTCHours() + 1);
       defaultStart = d.toISOString().slice(0, 16);
     }
+    await loadContentForEpg();
     setBulkStartTime(defaultStart);
     setDrawerFormType("bulk");
     setDrawerOpen(true);
-    loadContentForEpg();
   }
 
   const [bulkScanning, setBulkScanning] = useState(false);
