@@ -184,6 +184,10 @@ export function CMS({ onExit }) {
   const [xmltvImportDone, setXmltvImportDone] = useState(null);
   const [xmltvFileName, setXmltvFileName] = useState("");
   const [xmltvPreviewChannel, setXmltvPreviewChannel] = useState(null);
+  const [xmltvRawText, setXmltvRawText] = useState("");
+  const [xmltvRawOpen, setXmltvRawOpen] = useState(false);
+  const [epgSourceXmlModal, setEpgSourceXmlModal] = useState(null); // { source_name, xml_content }
+  const [epgSourceXmlLoading, setEpgSourceXmlLoading] = useState(false);
   const [epgDetailEntry, setEpgDetailEntry] = useState(null);
   const [epgSources, setEpgSources] = useState({});
 
@@ -1003,9 +1007,10 @@ export function CMS({ onExit }) {
   }
 
   async function loadXmltvFile(file) {
-    setXmltvLoading(true); setXmltvError(""); setXmltvParsed(null); setXmltvFileName(file.name);
+    setXmltvLoading(true); setXmltvError(""); setXmltvParsed(null); setXmltvFileName(file.name); setXmltvRawText(""); setXmltvRawOpen(false);
     try {
       const text = await file.text();
+      setXmltvRawText(text);
       const parsed = parseXMLTVText(text);
       setXmltvParsed(parsed);
       setXmltvChannelMap(xmltvAutoMap(parsed.channels));
@@ -1015,11 +1020,12 @@ export function CMS({ onExit }) {
 
   async function loadXmltvUrl() {
     if (!xmltvUrl.trim()) return;
-    setXmltvLoading(true); setXmltvError(""); setXmltvParsed(null);
+    setXmltvLoading(true); setXmltvError(""); setXmltvParsed(null); setXmltvRawText(""); setXmltvRawOpen(false);
     try {
       const res = await fetch(xmltvUrl.trim());
       if (!res.ok) throw new Error(`HTTP ${res.status} — check the URL`);
       const text = await res.text();
+      setXmltvRawText(text);
       const parsed = parseXMLTVText(text);
       setXmltvParsed(parsed);
       setXmltvChannelMap(xmltvAutoMap(parsed.channels));
@@ -1063,6 +1069,7 @@ export function CMS({ onExit }) {
       source_name: sourceName,
       imported_at: now,
       program_count: entries.filter(e => e.channel_id === cId).length,
+      xml_content: xmltvRawText || null,
     }));
     const { data: savedSources } = await supabase.from("epg_channel_sources").upsert(sourceRows, { onConflict: "channel_id" }).select();
     if (savedSources) {
@@ -1335,6 +1342,15 @@ export function CMS({ onExit }) {
     showToast("Program removed");
     setDeleteEpgConfirm(null);
     await loadEpgEntries(selectedChannelForEpg.id, epgDayOffset);
+    // If no entries remain for this channel at all, wipe the source record too
+    const { count } = await supabase
+      .from("epg_entries")
+      .select("id", { count: "exact", head: true })
+      .eq("channel_id", selectedChannelForEpg.id);
+    if (count === 0) {
+      await supabase.from("epg_channel_sources").delete().eq("channel_id", selectedChannelForEpg.id);
+      setEpgSources(prev => { const u = { ...prev }; delete u[selectedChannelForEpg.id]; return u; });
+    }
   }
 
   async function deleteLiveStream(id) {
@@ -1935,150 +1951,189 @@ export function CMS({ onExit }) {
             {/* ── EPG SCHEDULE SECTION ── */}
             {liveList.length > 0 && (
               <div style={{ marginTop: 40, paddingTop: 32, borderTop: "2px solid #e2e8f0" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
                   <div>
                     <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>Channel Schedule</h2>
-                    <p style={{ margin: 0, fontSize: 13, color: "#6b7280" }}>Program each channel's EPG — viewers tune in at the right spot automatically</p>
+                    <p style={{ margin: 0, fontSize: 13, color: "#6b7280" }}>Build each channel's EPG guide</p>
+                  </div>
+                  <button
+                    onClick={() => { setXmltvOpen(true); setXmltvParsed(null); setXmltvChannelMap({}); setXmltvError(""); setXmltvImportDone(null); setXmltvUrl(""); setXmltvFileName(""); setXmltvRawText(""); setXmltvRawOpen(false); }}
+                    style={{ background: "#0f172a", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 7 }}>
+                    📡 Import XMLTV
+                  </button>
+                </div>
+
+                {/* Two-column layout */}
+                <div style={{ display: "flex", border: "1px solid #e2e8f0", borderRadius: 14, overflow: "hidden", minHeight: 500, background: "#fff" }}>
+
+                  {/* ── Left: channel sidebar ── */}
+                  <div style={{ width: 220, borderRight: "1px solid #e2e8f0", background: "#f8fafc", flexShrink: 0, display: "flex", flexDirection: "column" }}>
+                    <div style={{ padding: "12px 16px", borderBottom: "1px solid #e2e8f0" }}>
+                      <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 0.8 }}>Channels ({liveList.length})</p>
+                    </div>
+                    <div style={{ flex: 1, overflowY: "auto" }}>
+                      {liveList.map(ch => {
+                        const src = epgSources[ch.id];
+                        const isSel = selectedChannelForEpg?.id === ch.id;
+                        return (
+                          <button key={ch.id}
+                            onClick={() => { setSelectedChannelForEpg(ch); setEpgDayOffset(0); loadEpgEntries(ch.id, 0); loadContentForEpg(); }}
+                            style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 16px", background: isSel ? "#fff" : "transparent", border: "none", borderBottom: "1px solid #f1f5f9", borderLeft: `3px solid ${isSel ? "#4f46e5" : "transparent"}`, cursor: "pointer", textAlign: "left" }}>
+                            {ch.channel_number != null && ch.channel_number !== "" && (
+                              <div style={{ width: 26, height: 26, borderRadius: 6, background: isSel ? "#4f46e5" : "#e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                <span style={{ fontSize: 10, fontWeight: 700, color: isSel ? "#fff" : "#6b7280" }}>{ch.channel_number}</span>
+                              </div>
+                            )}
+                            <span style={{ fontSize: 13, fontWeight: isSel ? 600 : 400, color: isSel ? "#0f172a" : "#64748b", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch.title}</span>
+                            {src && <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#22c55e", flexShrink: 0 }} title={src.source_name} />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* ── Right: schedule panel ── */}
+                  <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+                    {!selectedChannelForEpg ? (
+                      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 48, color: "#9ca3af", textAlign: "center" }}>
+                        <div style={{ fontSize: 36, marginBottom: 12 }}>📺</div>
+                        <p style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 600, color: "#374151" }}>Select a channel</p>
+                        <p style={{ margin: 0, fontSize: 13 }}>Pick a channel from the left to manage its schedule</p>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Channel header */}
+                        <div style={{ padding: "12px 18px", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+                            {selectedChannelForEpg.channel_number != null && selectedChannelForEpg.channel_number !== "" && (
+                              <span style={{ background: "#4f46e5", color: "#fff", fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 5, flexShrink: 0 }}>CH {selectedChannelForEpg.channel_number}</span>
+                            )}
+                            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{selectedChannelForEpg.title}</h3>
+                            {(() => {
+                              const src = epgSources[selectedChannelForEpg.id];
+                              return src ? (
+                                <button
+                                  onClick={async () => {
+                                    setEpgSourceXmlLoading(true);
+                                    const { data } = await supabase.from("epg_channel_sources").select("source_name, xml_content").eq("channel_id", selectedChannelForEpg.id).single();
+                                    setEpgSourceXmlModal(data || { source_name: src.source_name, xml_content: null });
+                                    setEpgSourceXmlLoading(false);
+                                  }}
+                                  style={{ display: "flex", alignItems: "center", gap: 5, background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 20, padding: "3px 10px 3px 8px", fontSize: 11, fontWeight: 600, color: "#15803d", cursor: "pointer", flexShrink: 0, maxWidth: 200 }}>
+                                  <span>📄</span>
+                                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{epgSourceXmlLoading ? "Loading…" : src.source_name}</span>
+                                </button>
+                              ) : null;
+                            })()}
+                          </div>
+                          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                            <button
+                              onClick={async () => {
+                                await Promise.all([loadEpgEntries(selectedChannelForEpg.id, epgDayOffset), loadLiveStreams()]);
+                                const { count } = await supabase.from("epg_entries").select("id", { count: "exact", head: true }).eq("channel_id", selectedChannelForEpg.id);
+                                if (count === 0) {
+                                  await supabase.from("epg_channel_sources").delete().eq("channel_id", selectedChannelForEpg.id);
+                                  setEpgSources(prev => { const u = { ...prev }; delete u[selectedChannelForEpg.id]; return u; });
+                                }
+                              }}
+                              title="Refresh"
+                              style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "6px 10px", fontSize: 14, color: "#64748b", cursor: "pointer" }}>↺</button>
+                            <button onClick={startBulkSchedule}
+                              style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: "#374151", cursor: "pointer" }}>⚡ Auto-Schedule</button>
+                            <button onClick={startEpgAdd}
+                              style={{ background: "#4f46e5", border: "none", borderRadius: 7, padding: "6px 14px", fontSize: 12, fontWeight: 600, color: "#fff", cursor: "pointer" }}>+ Add Program</button>
+                          </div>
+                        </div>
+
+                        {/* Day tabs */}
+                        <div style={{ padding: "10px 18px", borderBottom: "1px solid #f1f5f9", display: "flex", gap: 4 }}>
+                          {[0, 1, 2].map(offset => {
+                            const d = new Date(); d.setDate(d.getDate() + offset);
+                            const label = offset === 0 ? "Today" : offset === 1 ? "Tomorrow" : d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+                            return (
+                              <button key={offset}
+                                onClick={() => { setEpgDayOffset(offset); loadEpgEntries(selectedChannelForEpg.id, offset); }}
+                                style={{ background: epgDayOffset === offset ? "#0f172a" : "transparent", border: `1px solid ${epgDayOffset === offset ? "#0f172a" : "transparent"}`, borderRadius: 6, padding: "5px 14px", color: epgDayOffset === offset ? "#fff" : "#6b7280", fontSize: 12, fontWeight: 500, cursor: "pointer" }}>
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Program list */}
+                        <div style={{ flex: 1, overflowY: "auto", padding: "14px 18px" }}>
+                          {epgLoading ? (
+                            <div style={{ color: "#6b7280", padding: "60px 0", textAlign: "center", fontSize: 13 }}>Loading schedule…</div>
+                          ) : epgEntries.length === 0 ? (
+                            <div style={{ padding: "48px 20px", textAlign: "center" }}>
+                              <div style={{ fontSize: 36, marginBottom: 12 }}>📅</div>
+                              <p style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 600, color: "#374151" }}>No programs yet</p>
+                              <p style={{ margin: "0 0 20px", fontSize: 13, color: "#9ca3af" }}>Import an XML file to auto-fill this channel's guide, or add programs manually.</p>
+                              <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+                                <button
+                                  onClick={() => { setXmltvOpen(true); setXmltvParsed(null); setXmltvChannelMap({}); setXmltvError(""); setXmltvImportDone(null); setXmltvUrl(""); setXmltvFileName(""); setXmltvRawText(""); setXmltvRawOpen(false); }}
+                                  style={{ background: "#0f172a", color: "#fff", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                                  📡 Import XMLTV
+                                </button>
+                                <button onClick={startEpgAdd}
+                                  style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 600, color: "#374151", cursor: "pointer" }}>
+                                  + Add Program
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              {epgEntries.map(entry => {
+                                const start = new Date(entry.start_time);
+                                const end = new Date(entry.end_time);
+                                const durationMins = Math.round((end - start) / 60000);
+                                const isNow = start <= new Date() && end > new Date();
+                                return (
+                                  <div key={entry.id}
+                                    onClick={() => setEpgDetailEntry(entry)}
+                                    style={{ background: isNow ? "rgba(79,70,229,0.04)" : "#fff", border: `1px solid ${isNow ? "rgba(79,70,229,0.3)" : "#e2e8f0"}`, borderRadius: 10, padding: "12px 16px", marginBottom: 8, display: "flex", gap: 12, alignItems: "center", cursor: "pointer", transition: "box-shadow 0.15s" }}
+                                    onMouseEnter={e => e.currentTarget.style.boxShadow = "0 2px 10px rgba(0,0,0,0.06)"}
+                                    onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
+                                    {entry.thumbnail && (
+                                      <img src={entry.thumbnail} alt="" style={{ width: 64, height: 36, objectFit: "cover", borderRadius: 5, flexShrink: 0 }} onError={e => e.target.style.display = "none"} />
+                                    )}
+                                    <div style={{ flexShrink: 0, minWidth: 60, textAlign: "right" }}>
+                                      <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: "#0f172a" }}>{start.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}</p>
+                                      <p style={{ margin: "1px 0 0", fontSize: 11, color: "#9ca3af" }}>{durationMins}m</p>
+                                    </div>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                                        {isNow && <span style={{ background: "#ef4444", color: "#fff", fontSize: 9, fontWeight: 700, padding: "2px 5px", borderRadius: 3, letterSpacing: 0.5 }}>ON AIR</span>}
+                                        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.title}</p>
+                                      </div>
+                                      {entry.description && <p style={{ margin: 0, fontSize: 12, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.description}</p>}
+                                    </div>
+                                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                                      <button onClick={e => { e.stopPropagation(); startEpgEdit(entry); }} style={{ background: "rgba(79,70,229,0.08)", border: "1px solid rgba(79,70,229,0.2)", borderRadius: 5, padding: "4px 10px", color: "#4f46e5", fontSize: 11, cursor: "pointer" }}>Edit</button>
+                                      <button onClick={e => { e.stopPropagation(); setDeleteEpgConfirm(entry); }} style={{ background: "rgba(220,38,38,0.07)", border: "1px solid rgba(220,38,38,0.15)", borderRadius: 5, padding: "4px 10px", color: "#dc2626", fontSize: 11, cursor: "pointer" }}>Remove</button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
 
-                {/* Channel selector */}
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-                  {liveList.map(ch => {
-                    const src = epgSources[ch.id];
-                    const isSelected = selectedChannelForEpg?.id === ch.id;
-                    return (
-                      <button key={ch.id}
-                        onClick={() => {
-                          setSelectedChannelForEpg(ch);
-                          setEpgDayOffset(0);
-                          loadEpgEntries(ch.id, 0);
-                          loadContentForEpg();
-                        }}
-                        style={{ position: "relative", background: isSelected ? "#4f46e5" : "#f1f5f9", border: `1px solid ${isSelected ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 8, padding: "8px 16px", color: isSelected ? "#fff" : "#374151", fontSize: 13, fontWeight: 500, cursor: "pointer", transition: "all 0.15s" }}>
-                        {ch.channel_number ? `CH ${ch.channel_number} · ` : ""}{ch.title}
-                        {src && (
-                          <span style={{ position: "absolute", top: -4, right: -4, width: 10, height: 10, borderRadius: "50%", background: "#22c55e", border: "2px solid #fff" }} title={`EPG: ${src.source_name}`} />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Source info strip for selected channel */}
-                {selectedChannelForEpg && (() => {
-                  const src = epgSources[selectedChannelForEpg.id];
-                  return (
-                    <div style={{ marginBottom: 16, padding: "10px 14px", borderRadius: 8, background: src ? "#f0fdf4" : "#f8fafc", border: `1px solid ${src ? "#bbf7d0" : "#e2e8f0"}`, display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ fontSize: 16 }}>{src ? "📡" : "○"}</span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        {src ? (
-                          <>
-                            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#15803d", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{src.source_name}</p>
-                            <p style={{ margin: 0, fontSize: 11, color: "#6b7280" }}>
-                              {src.program_count != null ? `${src.program_count} programs · ` : ""}Imported {new Date(src.imported_at).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
-                            </p>
-                          </>
-                        ) : (
-                          <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>No XML import recorded for this channel</p>
-                        )}
+                {deleteEpgConfirm && (
+                  <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+                      <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "#0f172a" }}>Remove "{deleteEpgConfirm.title}"?</p>
+                      <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 20 }}>This will remove it from the schedule.</p>
+                      <div style={{ display: "flex", gap: 10 }}>
+                        <button onClick={() => setDeleteEpgConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                        <button onClick={() => deleteEpgEntry(deleteEpgConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Remove</button>
                       </div>
                     </div>
-                  );
-                })()}
-
-                {selectedChannelForEpg && (
-                  <>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                      <div style={{ display: "flex", gap: 4 }}>
-                        {[0, 1, 2].map(offset => {
-                          const d = new Date(); d.setDate(d.getDate() + offset);
-                          const label = offset === 0 ? "Today" : offset === 1 ? "Tomorrow" : d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-                          return (
-                            <button key={offset}
-                              onClick={() => { setEpgDayOffset(offset); loadEpgEntries(selectedChannelForEpg.id, offset); }}
-                              style={{ background: epgDayOffset === offset ? "#0f172a" : "#f1f5f9", border: `1px solid ${epgDayOffset === offset ? "#0f172a" : "#e2e8f0"}`, borderRadius: 6, padding: "6px 14px", color: epgDayOffset === offset ? "#fff" : "#374151", fontSize: 12, fontWeight: 500, cursor: "pointer" }}>
-                              {label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button
-                          onClick={startBulkSchedule}
-                          style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 16px", color: "#374151", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-                          ⚡ Auto-Schedule
-                        </button>
-                        <button
-                          onClick={() => { setXmltvOpen(true); setXmltvParsed(null); setXmltvChannelMap({}); setXmltvError(""); setXmltvImportDone(null); setXmltvUrl(""); setXmltvFileName(""); }}
-                          style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 16px", color: "#374151", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-                          📡 Import XMLTV
-                        </button>
-                        <button
-                          onClick={startEpgAdd}
-                          style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-                          + Add Program
-                        </button>
-                      </div>
-                    </div>
-
-                    {epgLoading ? (
-                      <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>Loading schedule…</div>
-                    ) : epgEntries.length === 0 ? (
-                      <div style={{ color: "#6b7280", padding: 40, textAlign: "center", border: "1px dashed #e2e8f0", borderRadius: 10, fontSize: 14 }}>
-                        No programs scheduled for this day. Hit <strong>+ Add Program</strong> to start building the guide.
-                      </div>
-                    ) : (
-                      <div>
-                        {epgEntries.map(entry => {
-                          const start = new Date(entry.start_time);
-                          const end = new Date(entry.end_time);
-                          const durationMins = Math.round((end - start) / 60000);
-                          const now = new Date();
-                          const isNow = start <= now && end > now;
-                          return (
-                            <div key={entry.id}
-                              onClick={() => setEpgDetailEntry(entry)}
-                              style={{ background: isNow ? "rgba(79,70,229,0.04)" : "#fff", border: `1px solid ${isNow ? "rgba(79,70,229,0.3)" : "#e2e8f0"}`, borderRadius: 10, padding: "14px 18px", marginBottom: 8, display: "flex", gap: 14, alignItems: "center", cursor: "pointer", transition: "box-shadow 0.15s" }}
-                              onMouseEnter={e => e.currentTarget.style.boxShadow = "0 2px 12px rgba(0,0,0,0.07)"}
-                              onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
-                              {entry.thumbnail && (
-                                <img src={entry.thumbnail} alt="" style={{ width: 72, height: 40, objectFit: "cover", borderRadius: 6, flexShrink: 0 }} onError={e => e.target.style.display = "none"} />
-                              )}
-                              <div style={{ flexShrink: 0, textAlign: "right", minWidth: 72 }}>
-                                <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{start.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}</p>
-                                <p style={{ margin: "1px 0 0", fontSize: 11, color: "#9ca3af" }}>{durationMins}m</p>
-                              </div>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-                                  {isNow && <span style={{ background: "#ef4444", color: "#fff", fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 3, letterSpacing: 0.5, flexShrink: 0 }}>ON AIR</span>}
-                                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.title}</p>
-                                </div>
-                                {entry.description && <p style={{ margin: 0, fontSize: 12, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.description}</p>}
-                              </div>
-                              <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                                <button onClick={e => { e.stopPropagation(); startEpgEdit(entry); }} style={{ background: "rgba(79,70,229,0.08)", border: "1px solid rgba(79,70,229,0.2)", borderRadius: 5, padding: "5px 10px", color: "#4f46e5", fontSize: 11, cursor: "pointer" }}>Edit</button>
-                                <button onClick={e => { e.stopPropagation(); setDeleteEpgConfirm(entry); }} style={{ background: "rgba(220,38,38,0.07)", border: "1px solid rgba(220,38,38,0.15)", borderRadius: 5, padding: "5px 10px", color: "#dc2626", fontSize: 11, cursor: "pointer" }}>Remove</button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {deleteEpgConfirm && (
-                      <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
-                          <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "#0f172a" }}>Remove "{deleteEpgConfirm.title}"?</p>
-                          <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 20 }}>This will remove it from the schedule.</p>
-                          <div style={{ display: "flex", gap: 10 }}>
-                            <button onClick={() => setDeleteEpgConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
-                            <button onClick={() => deleteEpgEntry(deleteEpgConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Remove</button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </>
+                  </div>
                 )}
               </div>
             )}
@@ -3235,6 +3290,35 @@ export function CMS({ onExit }) {
       );
     })()}
 
+    {/* ── EPG SOURCE XML VIEWER MODAL ── */}
+    {epgSourceXmlModal && (
+      <div style={{ position: "fixed", inset: 0, zIndex: 450, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+        onClick={e => { if (e.target === e.currentTarget) setEpgSourceXmlModal(null); }}>
+        <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 700, maxHeight: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 80px rgba(0,0,0,0.25)" }}>
+          <div style={{ padding: "16px 20px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 16 }}>📄</span>
+              <span style={{ fontSize: 15, fontWeight: 700, color: "#0f172a" }}>{epgSourceXmlModal.source_name}</span>
+            </div>
+            <button onClick={() => setEpgSourceXmlModal(null)} style={{ background: "none", border: "none", fontSize: 20, color: "#9ca3af", cursor: "pointer", lineHeight: 1, padding: 4 }}>✕</button>
+          </div>
+          <div style={{ flex: 1, overflow: "auto" }}>
+            {epgSourceXmlModal.xml_content ? (
+              <pre style={{ margin: 0, padding: 20, fontSize: 11, lineHeight: 1.7, color: "#334155", fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                {epgSourceXmlModal.xml_content}
+              </pre>
+            ) : (
+              <div style={{ padding: 48, textAlign: "center", color: "#9ca3af", fontSize: 14 }}>
+                <p style={{ margin: "0 0 8px", fontSize: 32 }}>📭</p>
+                <p style={{ margin: 0 }}>No XML content saved for this import.</p>
+                <p style={{ margin: "6px 0 0", fontSize: 12 }}>Re-import the file to enable XML viewing.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+
     {/* ── XMLTV IMPORT MODAL ── */}
     {xmltvOpen && (
       <div style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
@@ -3275,13 +3359,25 @@ export function CMS({ onExit }) {
                       style={{ display: "none" }}
                       onChange={e => { if (e.target.files[0]) loadXmltvFile(e.target.files[0]); }}
                     />
-                    <button onClick={() => xmltvFileRef.current?.click()}
-                      style={{ background: xmltvFileName ? "#f0fdf4" : "#f1f5f9", border: `1px solid ${xmltvFileName ? "#86efac" : "#e2e8f0"}`, borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, color: xmltvFileName ? "#15803d" : "#374151", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", gap: 6, maxWidth: 220, overflow: "hidden" }}>
-                      <span style={{ flexShrink: 0 }}>{xmltvFileName ? "📄" : "📂"}</span>
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {xmltvFileName || "Upload .xml file"}
-                      </span>
-                    </button>
+                    {xmltvFileName ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, maxWidth: 260 }}>
+                        <button onClick={() => setXmltvRawOpen(o => !o)}
+                          style={{ background: xmltvRawOpen ? "#0f172a" : "#f0fdf4", border: `1px solid ${xmltvRawOpen ? "#0f172a" : "#86efac"}`, borderRadius: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, color: xmltvRawOpen ? "#fff" : "#15803d", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, minWidth: 0, overflow: "hidden" }}>
+                          <span style={{ flexShrink: 0 }}>📄</span>
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{xmltvFileName}</span>
+                        </button>
+                        <button onClick={() => xmltvFileRef.current?.click()}
+                          style={{ background: "none", border: "none", fontSize: 12, color: "#9ca3af", cursor: "pointer", padding: "2px 4px", flexShrink: 0, textDecoration: "underline" }}>
+                          Change
+                        </button>
+                      </div>
+                    ) : (
+                      <button onClick={() => xmltvFileRef.current?.click()}
+                        style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, color: "#374151", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}>
+                        <span>📂</span>
+                        <span>Upload .xml file</span>
+                      </button>
+                    )}
                     <span style={{ color: "#9ca3af", display: "flex", alignItems: "center", fontSize: 13, flexShrink: 0 }}>or</span>
                     <input
                       value={xmltvUrl}
@@ -3297,6 +3393,17 @@ export function CMS({ onExit }) {
                   </div>
                   {xmltvError && <p style={{ margin: 0, fontSize: 13, color: "#ef4444" }}>{xmltvError}</p>}
                   {xmltvLoading && !xmltvParsed && <p style={{ margin: 0, fontSize: 13, color: "#6b7280" }}>Parsing…</p>}
+                  {xmltvRawOpen && xmltvRawText && (
+                    <div style={{ marginTop: 10, border: "1px solid #e2e8f0", borderRadius: 10, overflow: "hidden" }}>
+                      <div style={{ background: "#0f172a", padding: "8px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: "#94a3b8", fontFamily: "monospace" }}>{xmltvFileName || xmltvUrl}</span>
+                        <button onClick={() => setXmltvRawOpen(false)} style={{ background: "none", border: "none", color: "#64748b", fontSize: 16, cursor: "pointer", lineHeight: 1, padding: 0 }}>✕</button>
+                      </div>
+                      <pre style={{ margin: 0, padding: 16, maxHeight: 360, overflowY: "auto", fontSize: 11, lineHeight: 1.6, color: "#334155", background: "#f8fafc", fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                        {xmltvRawText}
+                      </pre>
+                    </div>
+                  )}
                 </div>
 
                 {/* Step 2: channel mapping */}

@@ -762,7 +762,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       )}
 
       {/* Content rows (Home / My List / New & Popular / Podcasts) */}
-      {activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "Live TV" && !loading && (allContent.length > 0 || podcasts.length > 0 || liveStreams.filter(s => s.is_live).length > 0 || continueWatching.length > 0) && (
+      {activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "Live TV" && !loading && (allContent.length > 0 || podcasts.length > 0 || liveStreams.length > 0 || continueWatching.length > 0) && (
         <div style={{ position: "relative", zIndex: 1, marginTop: activeNav === "Podcasts" ? 0 : -60, paddingBottom: 80 }}>
           {activeNav === "Podcasts" && (
             <div style={{ padding: `48px ${PAD} 0` }}>
@@ -770,8 +770,8 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
               <p style={{ margin: "8px 0 0", fontSize: 14, color: "#555" }}>{podcasts.length} show{podcasts.length !== 1 ? "s" : ""}</p>
             </div>
           )}
-          {liveStreams.filter(s => s.is_live).length > 0 && activeNav === "Home" && (
-            <LiveSection streams={liveStreams.filter(s => s.is_live)} onPlay={onPlay} />
+          {liveStreams.length > 0 && activeNav === "Home" && (
+            <LiveSection streams={liveStreams} onPlay={onPlay} />
           )}
           {continueWatching.length > 0 && activeNav === "Home" && (
             <ContinueWatchingRow items={continueWatching} onPlay={onPlay} onRemove={handleRemoveCW} />
@@ -1339,8 +1339,6 @@ function LiveTVPage({ streams, epgEntries, onPlay }) {
   }
 
   const sortedStreams = [...streams].sort((a, b) => (a.channel_number ?? 999) - (b.channel_number ?? 999));
-  const liveNow = sortedStreams.filter(s => s.is_live);
-  const offline = sortedStreams.filter(s => !s.is_live);
 
   const enriched = (list) => list.map(s => ({
     ...s,
@@ -1353,47 +1351,25 @@ function LiveTVPage({ streams, epgEntries, onPlay }) {
       <style>{`@keyframes livepulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.4; transform:scale(1.3); } }`}</style>
 
       <div style={{ padding: `0 ${PAD} 40px` }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-          {liveNow.length > 0 && <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite" }} />}
-          <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(28px, 4vw, 48px)", fontWeight: 400, margin: 0, color: "#fff" }}>Live TV</h1>
-        </div>
+        <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(28px, 4vw, 48px)", fontWeight: 400, margin: "0 0 8px", color: "#fff" }}>Live TV</h1>
         <p style={{ margin: 0, fontSize: 14, color: "#555" }}>
-          {liveNow.length > 0 ? `${liveNow.length} channel${liveNow.length !== 1 ? "s" : ""} on air` : "No channels live right now"}
+          {sortedStreams.length > 0 ? `${sortedStreams.length} channel${sortedStreams.length !== 1 ? "s" : ""}` : "No channels set up yet."}
         </p>
       </div>
 
-      {streams.length === 0 && (
-        <div style={{ padding: "80px 0", textAlign: "center", color: "#444", fontSize: 15 }}>No channels set up yet.</div>
-      )}
-
-      {liveNow.length > 0 && (
+      {sortedStreams.length > 0 && (
         <div style={{ padding: `0 ${PAD}`, marginBottom: 56 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite" }} />
-            <h2 style={{ margin: 0, fontSize: "clamp(15px, 1.3vw, 19px)", fontWeight: 600, color: "#e5e5e5" }}>On Air Now</h2>
-          </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 20 }}>
-            {enriched(liveNow).map(s => (
+            {enriched(sortedStreams).map(s => (
               <LiveChannelCard key={s.id} stream={s} onTuneIn={tuneIn} tuning={tuningIn === s.id} />
             ))}
           </div>
         </div>
       )}
 
-      {streams.length > 0 && (
+      {sortedStreams.length > 0 && (
         <div style={{ padding: `0 ${PAD}`, marginBottom: 56 }}>
           <EpgGrid channels={sortedStreams} epgEntries={epgEntries} onTuneIn={tuneIn} now={now} />
-        </div>
-      )}
-
-      {offline.length > 0 && (
-        <div style={{ padding: `0 ${PAD}` }}>
-          <h2 style={{ margin: "0 0 20px", fontSize: "clamp(12px, 1vw, 15px)", fontWeight: 600, color: "#333", textTransform: "uppercase", letterSpacing: 1.2 }}>Offline</h2>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 20, opacity: 0.4 }}>
-            {enriched(offline).map(s => (
-              <LiveChannelCard key={s.id} stream={s} onTuneIn={tuneIn} tuning={false} />
-            ))}
-          </div>
         </div>
       )}
     </div>
@@ -1407,10 +1383,10 @@ function LiveChannelCard({ stream, onTuneIn, tuning }) {
 
   return (
     <div
-      onClick={() => stream.is_live && onTuneIn(stream)}
+      onClick={() => onTuneIn(stream)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{ cursor: stream.is_live ? "pointer" : "default", borderRadius: 12, overflow: "hidden", background: "#141414", border: `1px solid ${hovered && stream.is_live ? "#ef4444" : "#1e1e1e"}`, transform: hovered && stream.is_live ? "scale(1.02)" : "scale(1)", transition: "all 0.2s", boxShadow: hovered && stream.is_live ? "0 8px 32px rgba(239,68,68,0.2)" : "none" }}>
+      style={{ cursor: "pointer", borderRadius: 12, overflow: "hidden", background: "#141414", border: `1px solid ${hovered ? "#ef4444" : "#1e1e1e"}`, transform: hovered ? "scale(1.02)" : "scale(1)", transition: "all 0.2s", boxShadow: hovered ? "0 8px 32px rgba(239,68,68,0.2)" : "none" }}>
       <div style={{ position: "relative", aspectRatio: "16/9", overflow: "hidden" }}>
         {stream.thumbnail
           ? <img src={stream.thumbnail} alt={stream.title} style={{ width: "100%", height: "100%", objectFit: "cover", filter: hovered ? "brightness(0.55)" : "brightness(0.8)", transition: "filter 0.2s" }} />
@@ -1435,7 +1411,7 @@ function LiveChannelCard({ stream, onTuneIn, tuning }) {
             <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
           </div>
         )}
-        {hovered && stream.is_live && !tuning && (
+        {hovered && !tuning && (
           <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <div style={{ width: 52, height: 52, borderRadius: "50%", background: "rgba(239,68,68,0.9)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 20px rgba(239,68,68,0.5)" }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><polygon points="5,3 19,12 5,21" /></svg>
