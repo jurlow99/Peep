@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "../supabase";
 import { ImageUploader } from "./ImageUploader";
 
@@ -163,6 +163,16 @@ export function CMS({ onExit }) {
   const [allVideosForEpg, setAllVideosForEpg] = useState([]);
   const [allEpisodesForEpg, setAllEpisodesForEpg] = useState([]);
 
+  // Bulk auto-scheduler state
+  const [bulkContentType, setBulkContentType] = useState("episode");
+  const [bulkShowId, setBulkShowId] = useState("");
+  const [bulkSelectedEps, setBulkSelectedEps] = useState(new Set());
+  const [bulkSelectedMovies, setBulkSelectedMovies] = useState(new Set());
+  const [bulkMovieSearch, setBulkMovieSearch] = useState("");
+  const [bulkStartTime, setBulkStartTime] = useState("");
+  const [bulkDefaultMins, setBulkDefaultMins] = useState(45);
+  const [bulkSaving, setBulkSaving] = useState(false);
+
   const [heroConfirm, setHeroConfirm] = useState(null); // { current, next, type: "video"|"show" }
 
   // Reports state
@@ -205,6 +215,10 @@ export function CMS({ onExit }) {
   function closeDrawer() {
     setDrawerOpen(false);
     setDrawerFormType(null);
+    setBulkShowId("");
+    setBulkSelectedEps(new Set());
+    setBulkSelectedMovies(new Set());
+    setBulkMovieSearch("");
   }
 
   useEffect(() => {
@@ -898,6 +912,16 @@ export function CMS({ onExit }) {
 
   // ──── EPG ────
 
+  function parseDurationSecs(dur) {
+    if (!dur) return 0;
+    if (typeof dur === "number") return dur;
+    if (typeof dur === "string" && dur.includes(":")) {
+      const parts = dur.split(":").map(Number);
+      return parts.length === 2 ? parts[0] * 60 + parts[1] : parts[0] * 3600 + parts[1] * 60 + (parts[2] || 0);
+    }
+    return parseInt(dur) || 0;
+  }
+
   async function loadEpgEntries(channelId, dayOffset = 0) {
     setEpgLoading(true);
     const dayStart = new Date();
@@ -918,7 +942,7 @@ export function CMS({ onExit }) {
     if (allVideosForEpg.length > 0) return;
     const [vRes, eRes, sRes] = await Promise.all([
       supabase.from("videos").select("id, title, duration, thumbnail").order("title"),
-      supabase.from("episodes").select("id, title, duration, thumbnail, show_id, season, episode_number").order("season").order("episode_number"),
+      supabase.from("episodes").select("id, title, duration, thumbnail, url, show_id, season, episode_number").order("season").order("episode_number"),
       supabase.from("shows").select("id, title").order("title"),
     ]);
     const showNameMap = {};
@@ -928,11 +952,164 @@ export function CMS({ onExit }) {
     setAllEpisodesForEpg(eps);
   }
 
-  function startEpgAdd() {
+  async function startEpgAdd() {
     setEditingEpgId(null);
-    setEpgForm({ content_id: "", content_type: "movie", title: "", description: "", start_time: "", end_time: "" });
+    let defaultStart = "";
+    if (selectedChannelForEpg) {
+      const { data } = await supabase
+        .from("epg_entries").select("end_time")
+        .eq("channel_id", selectedChannelForEpg.id)
+        .gte("end_time", new Date().toISOString())
+        .order("end_time", { ascending: false })
+        .limit(1).single();
+      if (data?.end_time) defaultStart = data.end_time.slice(0, 16);
+    }
+    if (!defaultStart) {
+      const d = new Date();
+      d.setUTCMinutes(0, 0, 0);
+      d.setUTCHours(d.getUTCHours() + 1);
+      defaultStart = d.toISOString().slice(0, 16);
+    }
+    setEpgForm({ content_id: "", content_type: "movie", title: "", description: "", start_time: defaultStart, end_time: "" });
     setDrawerFormType("epg");
     setDrawerOpen(true);
+  }
+
+  async function startBulkSchedule() {
+    // Fetch everything in one shot so all state lands in a single React render
+    const [lastEntry, vRes, eRes, sRes] = await Promise.all([
+      selectedChannelForEpg
+        ? supabase.from("epg_entries").select("end_time")
+            .eq("channel_id", selectedChannelForEpg.id)
+            .gte("end_time", new Date().toISOString())
+            .order("end_time", { ascending: false }).limit(1).single()
+        : Promise.resolve({ data: null }),
+      supabase.from("videos").select("id, title, duration, thumbnail").order("title"),
+      supabase.from("episodes").select("id, title, duration, thumbnail, url, show_id, season, episode_number").order("season").order("episode_number"),
+      supabase.from("shows").select("id, title").order("title"),
+    ]);
+
+    let defaultStart = lastEntry.data?.end_time?.slice(0, 16) || "";
+    if (!defaultStart) {
+      const d = new Date();
+      d.setUTCMinutes(0, 0, 0);
+      d.setUTCHours(d.getUTCHours() + 1);
+      defaultStart = d.toISOString().slice(0, 16);
+    }
+
+    const showNameMap = {};
+    (sRes.data || []).forEach(s => { showNameMap[s.id] = s.title; });
+    const eps = (eRes.data || []).map(ep => ({ ...ep, _showTitle: showNameMap[ep.show_id] || "Unknown Show" }));
+
+    // All these setState calls are after a single await — React batches them into one render
+    setAllVideosForEpg(vRes.data || []);
+    setAllEpisodesForEpg(eps);
+    setBulkContentType("episode");
+    setBulkShowId("");
+    setBulkSelectedEps(new Set());
+    setBulkSelectedMovies(new Set());
+    setBulkMovieSearch("");
+    setBulkStartTime(defaultStart);
+    setDrawerFormType("bulk");
+    setDrawerOpen(true);
+  }
+
+  const [bulkScanning, setBulkScanning] = useState(false);
+  const [bulkScanProgress, setBulkScanProgress] = useState({ done: 0, total: 0 });
+
+  function detectVideoDuration(url) {
+    return new Promise(resolve => {
+      if (!url) return resolve(null);
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      video.crossOrigin = "anonymous";
+      video.style.cssText = "position:fixed;visibility:hidden;pointer-events:none;width:1px;height:1px;";
+      document.body.appendChild(video);
+      let settled = false;
+      const done = (result) => {
+        if (settled) return;
+        settled = true;
+        video.src = "";
+        video.remove();
+        resolve(result);
+      };
+      video.onloadedmetadata = () => {
+        const dur = video.duration;
+        done(Number.isFinite(dur) && dur > 0 ? Math.round(dur) : null);
+      };
+      video.onerror = () => done(null);
+      video.src = url;
+      video.load();
+      setTimeout(() => done(null), 12000);
+    });
+  }
+
+  async function scanEpisodeDurations() {
+    if (!bulkShowId) return;
+    const eps = allEpisodesForEpg.filter(ep => ep.show_id === Number(bulkShowId) && !parseDurationSecs(ep.duration));
+    if (eps.length === 0) return;
+    setBulkScanning(true);
+    setBulkScanProgress({ done: 0, total: eps.length });
+    const updates = [];
+    for (let i = 0; i < eps.length; i++) {
+      const ep = eps[i];
+      if (ep.url) {
+        const secs = await detectVideoDuration(ep.url);
+        if (secs && secs > 0) {
+          await supabase.from("episodes").update({ duration: secs }).eq("id", ep.id);
+          updates.push({ id: ep.id, duration: secs });
+        }
+      }
+      setBulkScanProgress({ done: i + 1, total: eps.length });
+    }
+    if (updates.length > 0) {
+      setAllEpisodesForEpg(prev => prev.map(ep => {
+        const u = updates.find(u => u.id === ep.id);
+        return u ? { ...ep, duration: u.duration } : ep;
+      }));
+      showToast(`Found durations for ${updates.length} episode${updates.length !== 1 ? "s" : ""}`);
+    } else {
+      showToast("Couldn't detect durations — videos may not be direct URLs or are inaccessible", "error");
+    }
+    setBulkScanning(false);
+  }
+
+  async function saveBulkSchedule() {
+    if (!selectedChannelForEpg || !bulkStartTime) return;
+    setBulkSaving(true);
+    const items = bulkContentType === "movie"
+      ? allVideosForEpg.filter(v => bulkSelectedMovies.has(v.id))
+      : allEpisodesForEpg
+          .filter(ep => bulkSelectedEps.has(ep.id))
+          .sort((a, b) => a.season - b.season || a.episode_number - b.episode_number);
+    if (items.length === 0) { setBulkSaving(false); return; }
+    let current = new Date(bulkStartTime);
+    const fallbackSecs = Math.max(1, Number(bulkDefaultMins) || 30) * 60;
+    const entries = items.map(item => {
+      const secs = parseDurationSecs(item.duration);
+      const dur = secs > 0 ? secs : fallbackSecs;
+      const start = new Date(current);
+      current = new Date(current.getTime() + dur * 1000);
+      return {
+        channel_id: selectedChannelForEpg.id,
+        content_id: item.id,
+        content_type: bulkContentType === "movie" ? "movie" : "episode",
+        title: bulkContentType === "episode"
+          ? `${item.title} · S${item.season}E${item.episode_number}`
+          : item.title,
+        description: null,
+        start_time: start.toISOString(),
+        end_time: current.toISOString(),
+      };
+    });
+    const { error } = await supabase.from("epg_entries").insert(entries);
+    if (error) showToast("Error: " + error.message, "error");
+    else {
+      showToast(`${entries.length} program${entries.length !== 1 ? "s" : ""} scheduled!`);
+      closeDrawer();
+      await loadEpgEntries(selectedChannelForEpg.id, epgDayOffset);
+    }
+    setBulkSaving(false);
   }
 
   function startEpgEdit(entry) {
@@ -1642,11 +1819,18 @@ export function CMS({ onExit }) {
                           );
                         })}
                       </div>
-                      <button
-                        onClick={startEpgAdd}
-                        style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-                        + Add Program
-                      </button>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          onClick={startBulkSchedule}
+                          style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 16px", color: "#374151", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                          ⚡ Auto-Schedule
+                        </button>
+                        <button
+                          onClick={startEpgAdd}
+                          style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                          + Add Program
+                        </button>
+                      </div>
                     </div>
 
                     {epgLoading ? (
@@ -2092,6 +2276,25 @@ export function CMS({ onExit }) {
           s.has(page) ? s.delete(page) : s.add(page);
           setCarouselForm(f => ({ ...f, pages: [...s].join(",") }));
         };
+        // Bulk auto-schedule preview (computed only when bulk drawer is open)
+        const bulkPreviewItems = (() => {
+          if (drawerFormType !== "bulk" || !bulkStartTime) return [];
+          const items = bulkContentType === "movie"
+            ? allVideosForEpg.filter(v => bulkSelectedMovies.has(v.id))
+            : allEpisodesForEpg
+                .filter(ep => bulkSelectedEps.has(ep.id))
+                .sort((a, b) => a.season - b.season || a.episode_number - b.episode_number);
+          const fallbackSecs = Math.max(1, Number(bulkDefaultMins) || 30) * 60;
+          let current = new Date(bulkStartTime);
+          return items.map(item => {
+            const secs = parseDurationSecs(item.duration);
+            const hasDuration = secs > 0;
+            const dur = hasDuration ? secs : fallbackSecs;
+            const start = new Date(current);
+            current = new Date(current.getTime() + dur * 1000);
+            return { item, start, end: new Date(current), hasDuration };
+          });
+        })();
         return (
           <>
             {/* Backdrop */}
@@ -2119,8 +2322,9 @@ export function CMS({ onExit }) {
                   {tab === "videos" && videoSubTab === "episodes" && (editingEpisodeId ? "Edit Episode" : "Add Episode")}
                   {tab === "videos" && videoSubTab === "podcasts" && (editingPodcastId ? "Edit Podcast" : "Add Podcast")}
                   {tab === "carousels" && (editingCarouselId ? "Edit Carousel" : "Add Carousel")}
-                  {tab === "live" && drawerFormType !== "epg" && (editingLiveId ? "Edit Stream" : "Add Stream")}
+                  {tab === "live" && drawerFormType !== "epg" && drawerFormType !== "bulk" && (editingLiveId ? "Edit Stream" : "Add Stream")}
                   {tab === "live" && drawerFormType === "epg" && (editingEpgId ? "Edit Program" : "Add Program")}
+                  {tab === "live" && drawerFormType === "bulk" && "Auto-Schedule Block"}
                 </h2>
                 <button
                   onClick={closeDrawer}
@@ -2463,7 +2667,7 @@ export function CMS({ onExit }) {
                 )}
 
                 {/* ── LIVE FORM ── */}
-                {tab === "live" && drawerFormType !== "epg" && (
+                {tab === "live" && drawerFormType !== "epg" && drawerFormType !== "bulk" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <FieldInput label="Channel Number" value={liveForm.channel_number} onChange={v => setLiveForm(f => ({ ...f, channel_number: v }))} placeholder="e.g. 1" type="number" />
                     <FieldInput label="Title *" value={liveForm.title} onChange={v => setLiveForm(f => ({ ...f, title: v }))} placeholder="e.g. Peep News Network" />
@@ -2544,7 +2748,20 @@ export function CMS({ onExit }) {
                     <FieldInput label="Description" value={epgForm.description} onChange={v => setEpgForm(f => ({ ...f, description: v }))} placeholder="Short description..." />
 
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                      <FieldInput label="Start Time *" value={epgForm.start_time} onChange={v => setEpgForm(f => ({ ...f, start_time: v }))} type="datetime-local" />
+                      <FieldInput label="Start Time *" value={epgForm.start_time} onChange={v => {
+                        setEpgForm(f => {
+                          const content = f.content_id
+                            ? (f.content_type === "movie"
+                                ? allVideosForEpg.find(c => c.id === Number(f.content_id))
+                                : allEpisodesForEpg.find(c => c.id === Number(f.content_id)))
+                            : null;
+                          const secs = content ? parseDurationSecs(content.duration) : 0;
+                          const endTime = secs > 0 && v
+                            ? new Date(new Date(v).getTime() + secs * 1000).toISOString().slice(0, 16)
+                            : f.end_time;
+                          return { ...f, start_time: v, end_time: endTime };
+                        });
+                      }} type="datetime-local" />
                       <FieldInput label="End Time *" value={epgForm.end_time} onChange={v => setEpgForm(f => ({ ...f, end_time: v }))} type="datetime-local" />
                     </div>
                     {epgForm.start_time && epgForm.end_time && new Date(epgForm.end_time) > new Date(epgForm.start_time) && (
@@ -2566,6 +2783,195 @@ export function CMS({ onExit }) {
                     </div>
                   </div>
                 )}
+
+                {/* ── BULK AUTO-SCHEDULE FORM ── */}
+                {tab === "live" && drawerFormType === "bulk" && (() => {
+                  const uniqueShows = [...new Map(allEpisodesForEpg.map(ep => [ep.show_id, { id: ep.show_id, title: ep._showTitle }])).values()].sort((a, b) => a.title.localeCompare(b.title));
+                  const showEps = bulkShowId
+                    ? allEpisodesForEpg.filter(ep => ep.show_id === Number(bulkShowId)).sort((a, b) => a.season - b.season || a.episode_number - b.episode_number)
+                    : [];
+                  const seasons = [...new Set(showEps.map(ep => ep.season))].sort((a, b) => a - b);
+                  const allEpsSelected = showEps.length > 0 && showEps.every(ep => bulkSelectedEps.has(ep.id));
+                  const filteredMovies = allVideosForEpg.filter(v => !bulkMovieSearch || v.title.toLowerCase().includes(bulkMovieSearch.toLowerCase()));
+                  return (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+                      {/* Content type toggle */}
+                      <div>
+                        <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.7 }}>Schedule Type</label>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          {["episode", "movie"].map(t => (
+                            <button key={t} onClick={() => { setBulkContentType(t); setBulkSelectedEps(new Set()); setBulkSelectedMovies(new Set()); }}
+                              style={{ flex: 1, background: bulkContentType === t ? "#4f46e5" : "#f1f5f9", border: `1px solid ${bulkContentType === t ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 7, padding: "9px", color: bulkContentType === t ? "#fff" : "#374151", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>
+                              {t === "episode" ? "TV Episodes" : "Movies"}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Episode picker */}
+                      {bulkContentType === "episode" && (
+                        <>
+                          <div>
+                            <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Show</label>
+                            <select value={bulkShowId} onChange={e => { setBulkShowId(e.target.value); setBulkSelectedEps(new Set()); }}
+                              style={{ width: "100%", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: bulkShowId ? "#0f172a" : "#9ca3af", fontSize: 13, outline: "none", cursor: "pointer" }}>
+                              <option value="">— Select a show —</option>
+                              {uniqueShows.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
+                            </select>
+                          </div>
+                          {bulkShowId && showEps.length > 0 && (
+                            <div>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                                <label style={{ fontSize: 12, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.7 }}>
+                                  Episodes <span style={{ color: "#4f46e5", fontWeight: 700 }}>{bulkSelectedEps.size > 0 ? `(${bulkSelectedEps.size} selected)` : ""}</span>
+                                </label>
+                                <button onClick={() => setBulkSelectedEps(allEpsSelected ? new Set() : new Set(showEps.map(ep => ep.id)))}
+                                  style={{ background: "none", border: "none", color: "#4f46e5", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}>
+                                  {allEpsSelected ? "Clear All" : "Select All"}
+                                </button>
+                              </div>
+                              <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid #e2e8f0", borderRadius: 8, background: "#fff" }}>
+                                {seasons.map(season => (
+                                  <div key={season}>
+                                    <div style={{ padding: "6px 12px", background: "#f8fafc", borderBottom: "1px solid #e2e8f0", fontSize: 11, fontWeight: 700, color: "#64748b", letterSpacing: 0.5, textTransform: "uppercase" }}>
+                                      Season {season}
+                                    </div>
+                                    {showEps.filter(ep => ep.season === season).map((ep, i, arr) => {
+                                      const checked = bulkSelectedEps.has(ep.id);
+                                      const dur = parseDurationSecs(ep.duration);
+                                      return (
+                                        <label key={ep.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", cursor: "pointer", borderBottom: i < arr.length - 1 ? "1px solid #f1f5f9" : "none", background: checked ? "rgba(79,70,229,0.05)" : "#fff" }}>
+                                          <input type="checkbox" checked={checked} onChange={() => setBulkSelectedEps(prev => { const n = new Set(prev); checked ? n.delete(ep.id) : n.add(ep.id); return n; })}
+                                            style={{ accentColor: "#4f46e5", width: 15, height: 15, flexShrink: 0, cursor: "pointer" }} />
+                                          <span style={{ flex: 1, fontSize: 13, color: "#0f172a", fontWeight: checked ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                            E{ep.episode_number} · {ep.title}
+                                          </span>
+                                          <span style={{ fontSize: 11, flexShrink: 0, color: dur > 0 ? "#9ca3af" : "#f59e0b" }}>
+                                            {dur > 0 ? `${Math.round(dur / 60)}m` : `~${bulkDefaultMins}m`}
+                                          </span>
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {/* Movie picker */}
+                      {bulkContentType === "movie" && (
+                        <div>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                            <label style={{ fontSize: 12, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.7 }}>
+                              Movies <span style={{ color: "#4f46e5", fontWeight: 700 }}>{bulkSelectedMovies.size > 0 ? `(${bulkSelectedMovies.size} selected)` : ""}</span>
+                            </label>
+                            <button onClick={() => setBulkSelectedMovies(bulkSelectedMovies.size > 0 ? new Set() : new Set(allVideosForEpg.map(v => v.id)))}
+                              style={{ background: "none", border: "none", color: "#4f46e5", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}>
+                              {bulkSelectedMovies.size > 0 ? "Clear All" : "Select All"}
+                            </button>
+                          </div>
+                          <input type="text" placeholder="Search movies..." value={bulkMovieSearch} onChange={e => setBulkMovieSearch(e.target.value)}
+                            style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 7, padding: "9px 12px", color: "#0f172a", fontSize: 13, outline: "none", marginBottom: 8, boxSizing: "border-box" }} />
+                          <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid #e2e8f0", borderRadius: 8, background: "#fff" }}>
+                            {filteredMovies.map((v, i, arr) => {
+                              const checked = bulkSelectedMovies.has(v.id);
+                              const dur = parseDurationSecs(v.duration);
+                              return (
+                                <label key={v.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", cursor: "pointer", borderBottom: i < arr.length - 1 ? "1px solid #f1f5f9" : "none", background: checked ? "rgba(79,70,229,0.05)" : "#fff" }}>
+                                  <input type="checkbox" checked={checked} onChange={() => setBulkSelectedMovies(prev => { const n = new Set(prev); checked ? n.delete(v.id) : n.add(v.id); return n; })}
+                                    style={{ accentColor: "#4f46e5", width: 15, height: 15, flexShrink: 0, cursor: "pointer" }} />
+                                  <span style={{ flex: 1, fontSize: 13, color: "#0f172a", fontWeight: checked ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {v.title}
+                                  </span>
+                                  <span style={{ fontSize: 11, flexShrink: 0, color: dur > 0 ? "#9ca3af" : "#f59e0b" }}>
+                                    {dur > 0 ? `${Math.round(dur / 60)}m` : "⚠ no dur"}
+                                  </span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Scan durations button — shown when episodes are missing durations */}
+                      {bulkContentType === "episode" && bulkShowId && (() => {
+                        const showEpsAll = allEpisodesForEpg.filter(ep => ep.show_id === Number(bulkShowId));
+                        const missingCount = showEpsAll.filter(ep => !parseDurationSecs(ep.duration)).length;
+                        if (missingCount === 0) return null;
+                        return (
+                          <div style={{ background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: 8, padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                            <div>
+                              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#92400e" }}>
+                                {missingCount} episode{missingCount !== 1 ? "s" : ""} missing duration
+                              </p>
+                              <p style={{ margin: "2px 0 0", fontSize: 11, color: "#b45309" }}>
+                                {bulkScanning ? `Scanning… ${bulkScanProgress.done}/${bulkScanProgress.total}` : "Auto-detect from video files"}
+                              </p>
+                            </div>
+                            <button onClick={scanEpisodeDurations} disabled={bulkScanning}
+                              style={{ background: "#f59e0b", border: "none", borderRadius: 7, padding: "8px 16px", color: "#fff", fontSize: 12, fontWeight: 700, cursor: bulkScanning ? "not-allowed" : "pointer", opacity: bulkScanning ? 0.6 : 1, flexShrink: 0, whiteSpace: "nowrap" }}>
+                              {bulkScanning ? "Scanning…" : "Scan Durations"}
+                            </button>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Start time */}
+                      <div>
+                        <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Start Time *</label>
+                        <input type="datetime-local" value={bulkStartTime} onChange={e => setBulkStartTime(e.target.value)}
+                          style={{ width: "100%", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                          onFocus={e => (e.target.style.borderColor = "#4f46e5")}
+                          onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                        <p style={{ margin: "4px 0 0", fontSize: 11, color: "#94a3b8" }}>Pre-filled from the last scheduled entry — adjust if needed.</p>
+                      </div>
+
+                      {/* Schedule preview */}
+                      {bulkPreviewItems.length > 0 && (
+                        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden" }}>
+                          <div style={{ padding: "9px 12px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: "#374151" }}>Schedule Preview</span>
+                            <span style={{ fontSize: 11, color: "#6b7280" }}>
+                              {bulkPreviewItems.length} programs · {Math.round(bulkPreviewItems.reduce((s, p) => s + (p.end - p.start), 0) / 60000)}m total
+                            </span>
+                          </div>
+                          <div style={{ maxHeight: 190, overflowY: "auto" }}>
+                            {bulkPreviewItems.map((p, i) => (
+                              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", borderBottom: i < bulkPreviewItems.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <span style={{ fontSize: 12, color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
+                                    {bulkContentType === "episode" ? `E${p.item.episode_number} · ${p.item.title}` : p.item.title}
+                                  </span>
+                                </div>
+                                <span style={{ fontSize: 11, color: "#6b7280", flexShrink: 0, whiteSpace: "nowrap" }}>
+                                  {p.start.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })} – {p.end.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
+                                </span>
+                                {!p.hasDuration && <span style={{ fontSize: 10, color: "#f59e0b", flexShrink: 0 }}>~{bulkDefaultMins}m</span>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Action buttons */}
+                      <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+                        <button onClick={saveBulkSchedule}
+                          disabled={bulkSaving || bulkPreviewItems.length === 0}
+                          style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 8, padding: "13px", color: "#fff", fontSize: 14, fontWeight: 700, cursor: (bulkSaving || bulkPreviewItems.length === 0) ? "not-allowed" : "pointer", opacity: (bulkSaving || bulkPreviewItems.length === 0) ? 0.5 : 1 }}>
+                          {bulkSaving ? "Scheduling…" : bulkPreviewItems.length > 0 ? `Schedule ${bulkPreviewItems.length} Programs` : "Select programs above"}
+                        </button>
+                        <button onClick={closeDrawer}
+                          style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "13px 20px", color: "#374151", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                          Cancel
+                        </button>
+                      </div>
+
+                    </div>
+                  );
+                })()}
 
               </div>
             </div>

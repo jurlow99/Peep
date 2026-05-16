@@ -315,8 +315,8 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
   }, [searchQuery]);
 
   async function fetchAll() {
-    const epgWindowStart = new Date(Date.now() - 30 * 60 * 1000);
-    const epgWindowEnd = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    const epgWindowStart = new Date(Date.now() - 60 * 60 * 1000);
+    const epgWindowEnd = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const [videosRes, showsRes, carouselsRes, podcastsRes, liveRes, epgRes] = await Promise.all([
       supabase.from("videos").select("*").order("id", { ascending: true }),
       supabase.from("shows").select("*").order("id", { ascending: true }),
@@ -1313,7 +1313,7 @@ function LiveTVPage({ streams, epgEntries, onPlay }) {
         setTuningIn(null);
         onPlay({
           ...data,
-          url: data.video_url,
+          url: data.url || data.video_url,
           _type: "live_epg",
           _elapsed: elapsed,
           _channel: channel,
