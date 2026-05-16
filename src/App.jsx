@@ -444,6 +444,18 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
   const featured = featuredVideo ?? featuredShow ?? videos[0] ?? shows[0] ?? null;
   const featuredIsShow = featured !== null && featured === (featuredShow ?? null) && !featuredVideo;
 
+  const featuredCategoryRank = useMemo(() => {
+    if (!featured?.category) return null;
+    const cat = featured.category.toLowerCase();
+    const allInCat = [
+      ...videos.filter(v => v.category?.toLowerCase() === cat).map(v => ({ id: v.id, _type: "movie", score: v.score || 0 })),
+      ...shows.filter(s => s.category?.toLowerCase() === cat).map(s => ({ id: s.id, _type: "show", score: s.score || 0 })),
+    ].sort((a, b) => b.score - a.score);
+    const featuredType = featuredIsShow ? "show" : "movie";
+    const rank = allInCat.findIndex(v => v.id === featured.id && v._type === featuredType) + 1;
+    return rank > 0 ? rank : null;
+  }, [featured, featuredIsShow, videos, shows]);
+
   const visibleCarousels = useMemo(() => carousels.filter(c => {
     if (!c.enabled) return false;
     const pages = (c.pages || "home").split(",").map(p => p.trim());
@@ -702,7 +714,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         loading ? (
           <div style={{ height: "85vh", display: "flex", alignItems: "center", justifyContent: "center" }}><Spinner /></div>
         ) : featured ? (
-          <HeroBanner video={featured} onPlay={featuredIsShow ? onShowSelect : onPlay} isShow={featuredIsShow} myList={myList} onToggleList={onToggleList} />
+          <HeroBanner video={featured} onPlay={featuredIsShow ? onShowSelect : onPlay} isShow={featuredIsShow} myList={myList} onToggleList={onToggleList} categoryRank={featuredCategoryRank} />
         ) : (
           <div style={{ height: "85vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <p style={{ color: "#555", fontSize: 15 }}>No content yet.</p>
@@ -947,7 +959,7 @@ function CatalogCard({ item, onClick, myList, onToggleList }) {
 
 // ─── Hero Banner ──────────────────────────────────────────────────────────────
 
-function HeroBanner({ video, onPlay, isShow, myList, onToggleList }) {
+function HeroBanner({ video, onPlay, isShow, myList, onToggleList, categoryRank }) {
   const [trailerOpen, setTrailerOpen] = useState(false);
   const [bgPlaying, setBgPlaying] = useState(false);
   const [muted, setMuted] = useState(true);
@@ -1017,7 +1029,7 @@ function HeroBanner({ video, onPlay, isShow, myList, onToggleList }) {
             ? <span style={{ background: "#3b82f6", color: "#fff", fontSize: 10, fontWeight: 700, padding: "4px 12px", borderRadius: 4, letterSpacing: 1.5, textTransform: "uppercase" }}>Series</span>
             : <span style={{ background: "#facc15", color: "#0a0a0a", fontSize: 10, fontWeight: 700, padding: "4px 12px", borderRadius: 4, letterSpacing: 1.5, textTransform: "uppercase" }}>Peep Original</span>
           }
-          {video.category && <span style={{ background: "rgba(255,255,255,0.08)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.14)", color: "#fff", fontSize: 10, fontWeight: 600, padding: "4px 12px", borderRadius: 4, letterSpacing: 1, textTransform: "uppercase" }}>#1 in {video.category}</span>}
+          {video.category && categoryRank && <span style={{ background: "rgba(255,255,255,0.08)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.14)", color: "#fff", fontSize: 10, fontWeight: 600, padding: "4px 12px", borderRadius: 4, letterSpacing: 1, textTransform: "uppercase" }}>#{categoryRank} in {video.category}</span>}
         </div>
         <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(42px, 5vw, 80px)", lineHeight: 1.0, margin: "0 0 18px", fontWeight: 400, textShadow: "0 2px 24px rgba(0,0,0,0.5)" }}>{video.title}</h1>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22, flexWrap: "wrap" }}>
