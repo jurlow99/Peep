@@ -475,9 +475,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
   }), [carousels, activeNav]);
 
   const sections = useMemo(() => activeNav === "My List"
-    ? [{ id: "mylist", title: "My List", videos: allContent.filter(v => myList?.[`${v._type}_${v.id}`]) }]
-    : activeNav === "New & Popular"
-    ? [{ id: "new", title: "New & Popular", videos: [...allContent].sort((a, b) => (b.year || 0) - (a.year || 0)) }]
+    ? []
     : activeNav === "Live TV"
     ? []
     : activeNav === "Podcasts"
@@ -584,7 +582,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           </span>
           {!isMobile && (
             <div style={{ display: "flex", gap: 4 }}>
-              {["Home", "Movies", "Series", "Live TV", "Podcasts", "New & Popular"].map(label => {
+              {["Home", "Movies", "Series", "Live TV", "Podcasts"].map(label => {
                 const active = activeNav === label;
                 return (
                   <span key={label} onClick={() => setActiveNav(label)} style={{ fontSize: 13.5, padding: "6px 12px", borderRadius: 6, color: active ? "#fff" : "rgba(255,255,255,0.55)", fontWeight: active ? 600 : 400, cursor: "pointer", background: active ? "rgba(250,204,21,0.12)" : "transparent", transition: "color 0.2s, background 0.2s" }}
@@ -749,8 +747,39 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         <LiveTVPage streams={liveStreams} epgEntries={epgEntries} onPlay={onPlay} />
       )}
 
-      {/* Content rows (Home / My List / New & Popular / Podcasts) */}
-      {activeNav !== "Movies" && activeNav !== "Series" && !loading && (allContent.length > 0 || podcasts.length > 0 || continueWatching.length > 0) && (
+      {/* My List — full grid */}
+      {activeNav === "My List" && !loading && (
+        <div style={{ position: "relative", zIndex: 1, paddingTop: 100, paddingBottom: 80 }}>
+          <div style={{ padding: `0 ${PAD} 32px` }}>
+            <h1 style={{ margin: "0 0 6px", fontFamily: "'DM Serif Display', serif", fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 400, color: "#fff" }}>My List</h1>
+            {(() => {
+              const items = allContent.filter(v => myList?.[`${v._type}_${v.id}`]);
+              return <p style={{ margin: 0, fontSize: 14, color: "#555" }}>{items.length} title{items.length !== 1 ? "s" : ""} saved</p>;
+            })()}
+          </div>
+          {(() => {
+            const items = allContent.filter(v => myList?.[`${v._type}_${v.id}`]);
+            if (items.length === 0) return (
+              <div style={{ padding: "80px 0", textAlign: "center", color: "#444", fontSize: 15 }}>
+                <p style={{ marginBottom: 8 }}>Nothing saved yet.</p>
+                <p style={{ fontSize: 13, color: "#333" }}>Browse content and hit + My List to save titles here.</p>
+              </div>
+            );
+            return (
+              <div style={{ padding: `0 ${PAD}`, display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? 130 : 160}px, 1fr))`, gap: isMobile ? 12 : 16 }}>
+                {items.map(item => (
+                  <CatalogCard key={item.id + item._type} item={item}
+                    onClick={() => item._type === "show" ? onShowSelect(item) : onPlay(item)}
+                    myList={myList} onToggleList={onToggleList} />
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* Content rows (Home / Podcasts / catalog pages) */}
+      {activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "My List" && !loading && (allContent.length > 0 || podcasts.length > 0 || continueWatching.length > 0) && (
         <div style={{ position: "relative", zIndex: 1, marginTop: activeNav === "Podcasts" ? 0 : -60, paddingBottom: 80 }}>
           {activeNav === "Podcasts" && (
             <div style={{ padding: `48px ${PAD} 0` }}>
@@ -761,7 +790,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           {continueWatching.length > 0 && activeNav === "Home" && (
             <ContinueWatchingRow items={continueWatching} onPlay={onPlay} onRemove={handleRemoveCW} />
           )}
-          {filteredContent.length === 0 && activeNav !== "My List" && activeNav !== "Podcasts" ? (
+          {filteredContent.length === 0 && activeNav !== "Podcasts" ? (
             <div style={{ padding: "100px 0", textAlign: "center", color: "#444", fontSize: 15 }}>
               No {activeNav.toLowerCase()} yet.
             </div>
@@ -770,11 +799,6 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           ) : section.videos.length > 0 ? (
             <ContentRow key={section.id} section={section} onPlay={onPlay} onShowSelect={onShowSelect} myList={myList} onToggleList={onToggleList} />
           ) : null)}
-          {activeNav === "My List" && sections[0]?.videos.length === 0 && (
-            <div style={{ padding: "100px 0", textAlign: "center", color: "#444", fontSize: 15 }}>
-              Your list is empty — browse content and hit + List to save titles.
-            </div>
-          )}
           {activeNav === "Podcasts" && podcasts.length === 0 && (
             <div style={{ padding: "100px 0", textAlign: "center", color: "#444", fontSize: 15 }}>
               No podcasts yet — add one from the admin panel.
