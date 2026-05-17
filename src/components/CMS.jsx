@@ -212,6 +212,7 @@ export function CMS({ onExit }) {
   const [adSaving, setAdSaving] = useState(false);
   const [deleteAdConfirm, setDeleteAdConfirm] = useState(null);
   const [adTableMissing, setAdTableMissing] = useState(false);
+  const [adAnalytics, setAdAnalytics] = useState(null);
 
   // Reports state
   const [reportData, setReportData] = useState(null);
@@ -239,6 +240,7 @@ export function CMS({ onExit }) {
     loadPodcasts();
     loadLiveStreams();
     loadAds();
+    loadAdAnalytics();
 
     return () => {
       if (subscriptionRef.current) subscriptionRef.current.unsubscribe();
@@ -1075,6 +1077,49 @@ export function CMS({ onExit }) {
     else { showToast("Ad tag deleted"); setDeleteAdConfirm(null); await loadAds(); }
   }
 
+  async function loadAdAnalytics() {
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const { data } = await supabase.from("ad_impressions")
+      .select("vast_tag_id, event, created_at, user_id")
+      .gte("created_at", since);
+    if (!data) return;
+
+    const impressions = data.filter(r => r.event === "impression").length;
+    const completes   = data.filter(r => r.event === "complete").length;
+    const skips       = data.filter(r => r.event === "skip").length;
+    const errors      = data.filter(r => r.event === "error").length;
+
+    const completionRate = impressions > 0 ? Math.round(completes / impressions * 100) : null;
+    const fillRate = (impressions + errors) > 0 ? Math.round(impressions / (impressions + errors) * 100) : null;
+    const uniqueViewers = new Set(data.filter(r => r.event === "impression" && r.user_id).map(r => r.user_id)).size;
+
+    // Last 14 days bucketed
+    const today = new Date();
+    const dayBuckets = {};
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(today); d.setDate(d.getDate() - i);
+      dayBuckets[d.toISOString().slice(0, 10)] = 0;
+    }
+    data.filter(r => r.event === "impression").forEach(r => {
+      const key = r.created_at.slice(0, 10);
+      if (key in dayBuckets) dayBuckets[key]++;
+    });
+    const dailyData = Object.entries(dayBuckets).map(([date, count]) => ({ date, count }));
+
+    // Per-tag stats
+    const tagStats = {};
+    data.forEach(r => {
+      const tid = r.vast_tag_id;
+      if (!tagStats[tid]) tagStats[tid] = { impressions: 0, completes: 0, skips: 0, errors: 0 };
+      if (r.event === "impression") tagStats[tid].impressions++;
+      if (r.event === "complete")   tagStats[tid].completes++;
+      if (r.event === "skip")       tagStats[tid].skips++;
+      if (r.event === "error")      tagStats[tid].errors++;
+    });
+
+    setAdAnalytics({ impressions, completionRate, fillRate, skips, uniqueViewers, dailyData, tagStats });
+  }
+
   // ──── LIVE STREAMS ────
 
   async function loadLiveStreams() {
@@ -1632,10 +1677,7 @@ export function CMS({ onExit }) {
       <div style={{ borderBottom: "1px solid #e2e8f0", padding: `0 ${PAD}`, display: "flex", alignItems: "center", justifyContent: "space-between", height: "auto", minHeight: 68, flexWrap: "wrap", gap: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
           <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22 }}>
-            <span style={{ color: "#4f46e5" }}>peep.</span>
-          </span>
-          <span style={{ fontSize: 13, color: "#6b7280", borderLeft: "1px solid #e2e8f0", paddingLeft: 24 }}>
-            Content Management System
+            <span style={{ color: "#facc15" }}>peep.</span><span style={{ color: "#4f46e5", fontSize: 13, fontFamily: "sans-serif", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginLeft: 6 }}>admin</span>
           </span>
         </div>
         <button
@@ -2515,6 +2557,86 @@ export function CMS({ onExit }) {
         {/* ────── ADS TAB ────── */}
         {tab === "ads" && (
           <div>
+
+            {/* ── Ad Performance ── */}
+            {adAnalytics && (
+              <div style={{ marginBottom: 36 }}>
+                <h2 style={{ margin: "0 0 18px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Ad Performance <span style={{ fontSize: 12, fontWeight: 400, color: "#9ca3af" }}>last 30 days</span></h2>
+
+                {/* Summary cards */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 16, marginBottom: 28 }}>
+                  {[
+                    { label: "Impressions", value: adAnalytics.impressions.toLocaleString(), color: "#6366f1", hint: "How many times an ad started playing" },
+                    { label: "Unique Viewers", value: adAnalytics.uniqueViewers.toLocaleString(), color: "#8b5cf6", hint: "Distinct logged-in users who saw at least one ad" },
+                    { label: "Skips", value: adAnalytics.skips.toLocaleString(), color: "#64748b", hint: "How many viewers skipped the ad before it finished" },
+                    { label: "Completion Rate", value: adAnalytics.completionRate !== null ? adAnalytics.completionRate + "%" : "—", color: "#22c55e", hint: "% of viewers who watched the full ad without skipping. 70%+ is good." },
+                    { label: "Fill Rate", value: adAnalytics.fillRate !== null ? adAnalytics.fillRate + "%" : "—", color: "#f59e0b", hint: "How often the ad server had an ad ready. Dropping fill rate means your tag may be broken or inventory is low." },
+                  ].map(({ label, value, color, hint }) => (
+                    <div key={label} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                      <div style={{ fontSize: 12, color: "#6b7280", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 6 }}>{label}</div>
+                      <div style={{ fontSize: 28, fontWeight: 700, color, marginBottom: 8 }}>{value}</div>
+                      <div style={{ fontSize: 11, color: "#9ca3af", lineHeight: 1.5 }}>{hint}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Daily impressions chart */}
+                {(() => {
+                  const max = Math.max(...adAnalytics.dailyData.map(d => d.count), 1);
+                  return (
+                    <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", marginBottom: 28, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 16 }}>Impressions / Day (last 14 days)</div>
+                      <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 80 }}>
+                        {adAnalytics.dailyData.map(({ date, count }) => (
+                          <div key={date} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                            <div title={`${date}: ${count}`} style={{ width: "100%", background: count > 0 ? "#6366f1" : "#e2e8f0", borderRadius: "3px 3px 0 0", height: Math.max(count / max * 68, count > 0 ? 4 : 2), transition: "height 0.3s" }} />
+                            <div style={{ fontSize: 9, color: "#9ca3af", transform: "rotate(-45deg)", transformOrigin: "top center", whiteSpace: "nowrap" }}>
+                              {new Date(date + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Per-tag breakdown */}
+                {adList.length > 0 && Object.keys(adAnalytics.tagStats).length > 0 && (
+                  <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden", marginBottom: 28, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
+                          {["Tag", "Impressions", "Completions", "Skips", "Completion %"].map(h => (
+                            <th key={h} style={{ padding: "11px 16px", textAlign: "left", color: "#6b7280", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.7 }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {adList.map((ad, i) => {
+                          const s = adAnalytics.tagStats[ad.id];
+                          if (!s) return null;
+                          const pct = s.impressions > 0 ? Math.round(s.completes / s.impressions * 100) : null;
+                          return (
+                            <tr key={ad.id} style={{ borderBottom: i < adList.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                              <td style={{ padding: "11px 16px", fontWeight: 600, color: "#0f172a" }}>{ad.name}</td>
+                              <td style={{ padding: "11px 16px", color: "#6366f1", fontWeight: 600 }}>{s.impressions.toLocaleString()}</td>
+                              <td style={{ padding: "11px 16px", color: "#374151" }}>{s.completes.toLocaleString()}</td>
+                              <td style={{ padding: "11px 16px", color: "#374151" }}>{s.skips.toLocaleString()}</td>
+                              <td style={{ padding: "11px 16px" }}>
+                                {pct !== null ? (
+                                  <span style={{ background: pct >= 70 ? "rgba(34,197,94,0.1)" : pct >= 40 ? "rgba(245,158,11,0.1)" : "rgba(239,68,68,0.1)", color: pct >= 70 ? "#15803d" : pct >= 40 ? "#92400e" : "#dc2626", borderRadius: 5, padding: "2px 8px", fontWeight: 600 }}>{pct}%</span>
+                                ) : "—"}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
               <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a" }}>VAST Ad Tags</h2>
               {!adTableMissing && (
@@ -2687,23 +2809,40 @@ export function CMS({ onExit }) {
                       );
                     })()}
 
-                    {reportData.userGrowth.length > 0 && (
-                      <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-                        <p style={{ margin: "0 0 20px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>User Signups by Month</p>
-                        <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 80 }}>
-                          {(() => {
-                            const max = Math.max(...reportData.userGrowth.map(([, c]) => c));
-                            return reportData.userGrowth.map(([month, count]) => (
-                              <div key={month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                                <span style={{ fontSize: 10, color: "#34d399", fontWeight: 600 }}>{count}</span>
-                                <div style={{ width: "100%", background: "rgba(52,211,153,0.2)", borderRadius: 4, height: `${Math.round((count / max) * 52) + 4}px`, minHeight: 4, transition: "height 0.4s ease" }} />
-                                <span style={{ fontSize: 9, color: "#9ca3af", whiteSpace: "nowrap" }}>{month.slice(5)}</span>
+                    {reportData.userGrowth.length > 0 && (() => {
+                      const max = Math.max(...reportData.userGrowth.map(([, c]) => c), 1);
+                      const total = reportData.userGrowth.reduce((s, [, c]) => s + c, 0);
+                      const MONTH_NAMES = { "01":"Jan","02":"Feb","03":"Mar","04":"Apr","05":"May","06":"Jun","07":"Jul","08":"Aug","09":"Sep","10":"Oct","11":"Nov","12":"Dec" };
+                      return (
+                        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "24px 28px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+                            <div>
+                              <p style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 700, color: "#0f172a" }}>User Signups</p>
+                              <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>New accounts by month</p>
+                            </div>
+                            <div style={{ textAlign: "right" }}>
+                              <p style={{ margin: "0 0 2px", fontSize: 22, fontWeight: 700, color: "#0f172a" }}>{total.toLocaleString()}</p>
+                              <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>total signups</p>
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 120, borderBottom: "1px solid #f1f5f9", paddingBottom: 8, marginBottom: 8 }}>
+                            {reportData.userGrowth.map(([month, count]) => (
+                              <div key={month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 4, height: "100%" }}>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: count === max ? "#0f172a" : "#6b7280" }}>{count}</span>
+                                <div style={{ width: "100%", background: count === max ? "#6366f1" : "rgba(99,102,241,0.15)", borderRadius: "4px 4px 0 0", height: `${Math.round((count / max) * 90)}px`, minHeight: 4, transition: "height 0.4s ease" }} />
                               </div>
-                            ));
-                          })()}
+                            ))}
+                          </div>
+                          <div style={{ display: "flex", gap: 6 }}>
+                            {reportData.userGrowth.map(([month]) => (
+                              <div key={month} style={{ flex: 1, textAlign: "center", fontSize: 11, color: "#9ca3af", fontWeight: 500 }}>
+                                {MONTH_NAMES[month.slice(5)] || month.slice(5)}
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
                   </>
                 )}
 

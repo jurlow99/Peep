@@ -1910,6 +1910,7 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
   const countdownTimerRef = useRef(null);
   const adContainerRef = useRef(null);
   const adsManagerRef = useRef(null);
+  const midRollFiredRef = useRef(false);
   const [adPlaying, setAdPlaying] = useState(false);
   const [adVastUrl, setAdVastUrl] = useState(null);
 
@@ -2049,32 +2050,36 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
     let cancelled = false;
 
     async function runAd() {
-      console.log("[IMA] runAd started, video:", video.id);
+      // One pre-roll per session, 30-min cooldown
+      const lastAd = sessionStorage.getItem("lastAdAt");
+      if (lastAd && Date.now() - Number(lastAd) < 30 * 60 * 1000) return;
+
       // Wait up to 3s for IMA SDK script to load
       let waited = 0;
       while (!window.google?.ima && waited < 3000) {
         await new Promise(r => setTimeout(r, 100));
         waited += 100;
       }
-      console.log("[IMA] SDK available:", !!window.google?.ima, "waited:", waited + "ms");
       if (cancelled || !window.google?.ima) return;
 
       // Fetch best matching pre-roll tag
       const contentScope = isEpisode ? "episode" : "movie";
-      const { data, error } = await supabase.from("vast_tags")
-        .select("tag_url, scope, content_id")
+      const { data } = await supabase.from("vast_tags")
+        .select("id, tag_url, scope, content_id")
         .eq("active", true)
         .eq("ad_type", "pre_roll")
         .or(`scope.eq.global,scope.eq.${contentScope}`);
-      console.log("[IMA] VAST fetch:", { rows: data?.length, error: error?.message, data });
       if (cancelled || !data || data.length === 0) return;
 
       const exact = data.find(t => t.content_id === video.id);
       const typed = data.find(t => t.scope === contentScope && !t.content_id);
       const glob  = data.find(t => t.scope === "global");
       const tag = exact || typed || glob;
-      console.log("[IMA] Tag selected:", tag);
       if (!tag) return;
+
+      const logAdEvent = (event) => {
+        supabase.from("ad_impressions").insert({ vast_tag_id: tag.id, video_id: video.id, event, user_id: user?.id ?? null }).then(() => {});
+      };
 
       const ima = window.google.ima;
       const videoEl = videoRef.current;
@@ -2086,11 +2091,9 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
       setAdPlaying(true);
       setAdVastUrl(tag.tag_url);
 
-      console.log("[IMA] Initializing display container, video size:", videoEl.clientWidth, "x", videoEl.clientHeight);
       const displayContainer = new ima.AdDisplayContainer(adContainer, videoEl);
       displayContainer.initialize();
       const adsLoader = new ima.AdsLoader(displayContainer);
-      console.log("[IMA] Requesting ads:", tag.tag_url);
 
       const resume = () => {
         setAdPlaying(false);
@@ -2098,14 +2101,16 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
       };
 
       adsLoader.addEventListener(ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED, (e) => {
-        console.log("[IMA] ADS_MANAGER_LOADED");
         if (cancelled) return;
         const mgr = e.getAdsManager(videoEl);
         adsManagerRef.current = mgr;
 
         mgr.addEventListener(ima.AdEvent.Type.CONTENT_PAUSE_REQUESTED, () => { videoEl.pause(); setAdPlaying(true); });
         mgr.addEventListener(ima.AdEvent.Type.CONTENT_RESUME_REQUESTED, resume);
-        mgr.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, () => { mgr.destroy(); adsManagerRef.current = null; resume(); });
+        mgr.addEventListener(ima.AdEvent.Type.STARTED, () => { sessionStorage.setItem("lastAdAt", Date.now()); logAdEvent("impression"); });
+        mgr.addEventListener(ima.AdEvent.Type.COMPLETE, () => logAdEvent("complete"));
+        mgr.addEventListener(ima.AdEvent.Type.SKIPPED, () => logAdEvent("skip"));
+        mgr.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, () => { logAdEvent("error"); mgr.destroy(); adsManagerRef.current = null; resume(); });
 
         try {
           const w = videoEl.clientWidth || 640;
@@ -2119,7 +2124,7 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
         }
       });
 
-      adsLoader.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, (e) => { console.log("[IMA] AdsLoader AD_ERROR:", e.getError()?.toString()); resume(); });
+      adsLoader.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, () => { logAdEvent("error"); resume(); });
 
       const req = new ima.AdsRequest();
       req.adTagUrl = tag.tag_url;
@@ -2132,6 +2137,7 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
 
     return () => {
       cancelled = true;
+      midRollFiredRef.current = false;
       adsManagerRef.current?.destroy();
       adsManagerRef.current = null;
     };
@@ -2183,14 +2189,77 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
   }
 
   function handleTimeUpdate(e) {
-    if (!nextEpisode || countdownGuardRef.current) return;
-    if (localStorage.getItem(PREF_AUTOPLAY_NEXT) === "false") return;
     const { currentTime, duration } = e.currentTarget;
     if (!duration || isNaN(duration)) return;
+
+    // Mid-roll: fire once at 50% for videos over 20 minutes
+    if (!midRollFiredRef.current && !getEmbedUrl(video.url) && duration >= 1200 && currentTime / duration >= 0.5) {
+      midRollFiredRef.current = true;
+      playMidRoll();
+    }
+
+    if (!nextEpisode || countdownGuardRef.current) return;
+    if (localStorage.getItem(PREF_AUTOPLAY_NEXT) === "false") return;
     if (duration - currentTime <= 10) {
       countdownGuardRef.current = true;
       startCountdown(duration - currentTime);
     }
+  }
+
+  async function playMidRoll() {
+    if (!window.google?.ima) return;
+    const contentScope = isEpisode ? "episode" : "movie";
+    const { data } = await supabase.from("vast_tags")
+      .select("id, tag_url, scope, content_id")
+      .eq("active", true)
+      .eq("ad_type", "mid_roll")
+      .or(`scope.eq.global,scope.eq.${contentScope}`);
+    if (!data || data.length === 0) return;
+
+    const exact = data.find(t => t.content_id === video.id);
+    const typed = data.find(t => t.scope === contentScope && !t.content_id);
+    const glob  = data.find(t => t.scope === "global");
+    const tag = exact || typed || glob;
+    if (!tag) return;
+
+    const logAdEvent = (event) => {
+      supabase.from("ad_impressions").insert({ vast_tag_id: tag.id, video_id: video.id, event, user_id: user?.id ?? null }).then(() => {});
+    };
+
+    const ima = window.google.ima;
+    const videoEl = videoRef.current;
+    const adContainer = adContainerRef.current;
+    if (!videoEl || !adContainer) return;
+
+    videoEl.pause();
+    setAdPlaying(true);
+
+    const displayContainer = new ima.AdDisplayContainer(adContainer, videoEl);
+    displayContainer.initialize();
+    const adsLoader = new ima.AdsLoader(displayContainer);
+
+    const resume = () => { setAdPlaying(false); videoEl.play().catch(() => {}); };
+
+    adsLoader.addEventListener(ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED, (e) => {
+      const mgr = e.getAdsManager(videoEl);
+      mgr.addEventListener(ima.AdEvent.Type.CONTENT_PAUSE_REQUESTED, () => { videoEl.pause(); setAdPlaying(true); });
+      mgr.addEventListener(ima.AdEvent.Type.CONTENT_RESUME_REQUESTED, resume);
+      mgr.addEventListener(ima.AdEvent.Type.STARTED, () => logAdEvent("impression"));
+      mgr.addEventListener(ima.AdEvent.Type.COMPLETE, () => logAdEvent("complete"));
+      mgr.addEventListener(ima.AdEvent.Type.SKIPPED, () => logAdEvent("skip"));
+      mgr.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, () => { logAdEvent("error"); mgr.destroy(); resume(); });
+      try {
+        mgr.init(videoEl.clientWidth || 640, videoEl.clientHeight || 360, ima.ViewMode.NORMAL);
+        mgr.start();
+      } catch { mgr.destroy(); resume(); }
+    });
+    adsLoader.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, () => { logAdEvent("error"); resume(); });
+
+    const req = new ima.AdsRequest();
+    req.adTagUrl = tag.tag_url;
+    req.linearAdSlotWidth = videoEl.clientWidth || 640;
+    req.linearAdSlotHeight = videoEl.clientHeight || 360;
+    adsLoader.requestAds(req);
   }
 
   async function handleEnded() {
@@ -2304,12 +2373,11 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
             <div ref={adContainerRef} style={{ position: "absolute", inset: 0, zIndex: 10, pointerEvents: adPlaying ? "auto" : "none" }} />
           </div>
           {!getEmbedUrl(video.url) && (
-            <button onClick={toggleFullscreen} style={{ position: "absolute", bottom: isFullscreen ? 60 : 12, right: 16, zIndex: 1000, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 7, padding: "7px 12px", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600 }}>
+            <button onClick={toggleFullscreen} title={isFullscreen ? "Exit fullscreen" : "Fullscreen"} style={{ position: "absolute", bottom: isFullscreen ? 60 : 12, right: 16, zIndex: 1000, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 7, padding: "7px 9px", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center" }}>
               {isFullscreen
-                ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/></svg>
-                : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+                ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/></svg>
+                : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
               }
-              {isFullscreen ? "Exit" : "Fullscreen"}
             </button>
           )}
           {countdownActive && nextEpisode && (
