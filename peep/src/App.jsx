@@ -1401,23 +1401,74 @@ function LiveTVPage({ streams, epgEntries, onPlay }) {
 
 function LiveChannelCard({ stream, onTuneIn, tuning }) {
   const [hovered, setHovered] = useState(false);
+  const [previewReady, setPreviewReady] = useState(false);
+  const previewRef = useRef(null);
+  const hlsPreviewRef = useRef(null);
+  const hoverTimerRef = useRef(null);
+
   const nowAiring = stream._nowAiring;
   const upNext = stream._upNext;
   const nowTitle = nowAiring?.title || stream.now_airing;
   const upNextTitle = upNext?.title || stream.up_next;
+  const hasStream = !!stream.stream_url;
+
+  useEffect(() => {
+    if (!hovered || !hasStream || !previewRef.current) return;
+    const videoEl = previewRef.current;
+    setPreviewReady(false);
+
+    if (isHlsUrl(stream.stream_url)) {
+      if (Hls.isSupported()) {
+        const hls = new Hls({ enableWorker: false, maxBufferLength: 8, maxMaxBufferLength: 16 });
+        hls.loadSource(stream.stream_url);
+        hls.attachMedia(videoEl);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          videoEl.play().catch(() => {});
+        });
+        hlsPreviewRef.current = hls;
+      } else if (videoEl.canPlayType("application/vnd.apple.mpegurl")) {
+        videoEl.src = stream.stream_url;
+        videoEl.play().catch(() => {});
+      }
+    } else {
+      videoEl.src = stream.stream_url;
+      videoEl.play().catch(() => {});
+    }
+
+    const onPlaying = () => setPreviewReady(true);
+    videoEl.addEventListener("playing", onPlaying);
+
+    return () => {
+      videoEl.removeEventListener("playing", onPlaying);
+      videoEl.pause();
+      videoEl.src = "";
+      if (hlsPreviewRef.current) { hlsPreviewRef.current.destroy(); hlsPreviewRef.current = null; }
+      setPreviewReady(false);
+    };
+  }, [hovered, stream.stream_url]);
+
+  function handleMouseEnter() {
+    hoverTimerRef.current = setTimeout(() => setHovered(true), 300);
+  }
+  function handleMouseLeave() {
+    clearTimeout(hoverTimerRef.current);
+    setHovered(false);
+  }
 
   return (
     <div
       onClick={() => onTuneIn(stream)}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{ cursor: "pointer", borderRadius: 10, overflow: "hidden", background: "#111", border: `1px solid ${hovered ? "rgba(239,68,68,0.5)" : "#1e1e1e"}`, transform: hovered ? "translateY(-2px)" : "none", transition: "all 0.18s", boxShadow: hovered ? "0 8px 24px rgba(0,0,0,0.5)" : "0 2px 8px rgba(0,0,0,0.3)" }}>
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      style={{ cursor: "pointer", borderRadius: 10, overflow: "hidden", background: "#111", border: `1px solid ${hovered ? "rgba(239,68,68,0.4)" : "#1e1e1e"}`, transform: hovered ? "translateY(-3px)" : "none", transition: "all 0.2s", boxShadow: hovered ? "0 12px 32px rgba(0,0,0,0.6)" : "0 2px 8px rgba(0,0,0,0.3)" }}>
 
-      {/* Thumbnail / placeholder */}
+      {/* Thumbnail area */}
       <div style={{ position: "relative", aspectRatio: "16/9", overflow: "hidden", background: "#0a0a0a" }}>
+
+        {/* Static thumbnail or placeholder */}
         {stream.thumbnail
-          ? <img src={stream.thumbnail} alt={stream.title} style={{ width: "100%", height: "100%", objectFit: "cover", filter: hovered ? "brightness(0.5)" : "brightness(0.85)", transition: "filter 0.18s" }} />
-          : <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6 }}>
+          ? <img src={stream.thumbnail} alt={stream.title} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: previewReady ? 0 : 1, transition: "opacity 0.4s" }} />
+          : <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, opacity: previewReady ? 0 : 1, transition: "opacity 0.4s" }}>
               {stream.channel_number != null && stream.channel_number !== "" && (
                 <span style={{ fontSize: 28, fontWeight: 800, color: "#222", letterSpacing: -1 }}>{stream.channel_number}</span>
               )}
@@ -1425,30 +1476,38 @@ function LiveChannelCard({ stream, onTuneIn, tuning }) {
             </div>
         }
 
+        {/* Live preview video */}
+        <video
+          ref={previewRef}
+          muted
+          playsInline
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: previewReady ? 1 : 0, transition: "opacity 0.4s" }}
+        />
+
         {/* LIVE badge */}
         {stream.is_live && (
-          <div style={{ position: "absolute", top: 8, left: 8, display: "flex", alignItems: "center", gap: 4, background: "#ef4444", borderRadius: 4, padding: "3px 8px" }}>
+          <div style={{ position: "absolute", top: 8, left: 8, display: "flex", alignItems: "center", gap: 4, background: "#ef4444", borderRadius: 4, padding: "3px 8px", zIndex: 2 }}>
             <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#fff", animation: "livepulse 1.5s infinite" }} />
             <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", letterSpacing: 0.5 }}>{stream.badge_text || "LIVE"}</span>
           </div>
         )}
 
         {/* CH number */}
-        {stream.channel_number != null && stream.channel_number !== "" && stream.thumbnail && (
-          <div style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", borderRadius: 4, padding: "3px 7px", fontSize: 10, fontWeight: 700, color: "#fff" }}>
+        {stream.channel_number != null && stream.channel_number !== "" && (
+          <div style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", borderRadius: 4, padding: "3px 7px", fontSize: 10, fontWeight: 700, color: "#fff", zIndex: 2 }}>
             CH {stream.channel_number}
           </div>
         )}
 
-        {/* Tune in overlay */}
+        {/* Tune-in / play overlay */}
         {tuning ? (
-          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 3 }}>
             <div style={{ width: 28, height: 28, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.2)", borderTopColor: "#fff", animation: "spin 0.8s linear infinite" }} />
             <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
           </div>
         ) : hovered && (
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(239,68,68,0.9)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ position: "absolute", inset: 0, background: previewReady ? "rgba(0,0,0,0)" : "rgba(0,0,0,0.2)", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.3s", zIndex: 3 }}>
+            <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(239,68,68,0.9)", display: "flex", alignItems: "center", justifyContent: "center", opacity: previewReady ? 0.85 : 1, transition: "opacity 0.3s" }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><polygon points="5,3 19,12 5,21" /></svg>
             </div>
           </div>
