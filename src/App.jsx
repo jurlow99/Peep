@@ -2049,27 +2049,31 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
     let cancelled = false;
 
     async function runAd() {
+      console.log("[IMA] runAd started, video:", video.id);
       // Wait up to 3s for IMA SDK script to load
       let waited = 0;
       while (!window.google?.ima && waited < 3000) {
         await new Promise(r => setTimeout(r, 100));
         waited += 100;
       }
+      console.log("[IMA] SDK available:", !!window.google?.ima, "waited:", waited + "ms");
       if (cancelled || !window.google?.ima) return;
 
       // Fetch best matching pre-roll tag
       const contentScope = isEpisode ? "episode" : "movie";
-      const { data } = await supabase.from("vast_tags")
+      const { data, error } = await supabase.from("vast_tags")
         .select("tag_url, scope, content_id")
         .eq("active", true)
         .eq("ad_type", "pre_roll")
         .or(`scope.eq.global,scope.eq.${contentScope}`);
+      console.log("[IMA] VAST fetch:", { rows: data?.length, error: error?.message, data });
       if (cancelled || !data || data.length === 0) return;
 
       const exact = data.find(t => t.content_id === video.id);
       const typed = data.find(t => t.scope === contentScope && !t.content_id);
       const glob  = data.find(t => t.scope === "global");
       const tag = exact || typed || glob;
+      console.log("[IMA] Tag selected:", tag);
       if (!tag) return;
 
       const ima = window.google.ima;
@@ -2082,9 +2086,11 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
       setAdPlaying(true);
       setAdVastUrl(tag.tag_url);
 
+      console.log("[IMA] Initializing display container, video size:", videoEl.clientWidth, "x", videoEl.clientHeight);
       const displayContainer = new ima.AdDisplayContainer(adContainer, videoEl);
       displayContainer.initialize();
       const adsLoader = new ima.AdsLoader(displayContainer);
+      console.log("[IMA] Requesting ads:", tag.tag_url);
 
       const resume = () => {
         setAdPlaying(false);
@@ -2092,6 +2098,7 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
       };
 
       adsLoader.addEventListener(ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED, (e) => {
+        console.log("[IMA] ADS_MANAGER_LOADED");
         if (cancelled) return;
         const mgr = e.getAdsManager(videoEl);
         adsManagerRef.current = mgr;
@@ -2112,7 +2119,7 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
         }
       });
 
-      adsLoader.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, resume);
+      adsLoader.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, (e) => { console.log("[IMA] AdsLoader AD_ERROR:", e.getError()?.toString()); resume(); });
 
       const req = new ima.AdsRequest();
       req.adTagUrl = tag.tag_url;
