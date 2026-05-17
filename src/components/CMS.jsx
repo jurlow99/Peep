@@ -2590,7 +2590,7 @@ export function CMS({ onExit }) {
                         {adAnalytics.dailyData.map(({ date, count }) => (
                           <div key={date} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
                             <div title={`${date}: ${count}`} style={{ width: "100%", background: count > 0 ? "#6366f1" : "#e2e8f0", borderRadius: "3px 3px 0 0", height: Math.max(count / max * 68, count > 0 ? 4 : 2), transition: "height 0.3s" }} />
-                            <div style={{ fontSize: 9, color: "#9ca3af", transform: "rotate(-45deg)", transformOrigin: "top center", whiteSpace: "nowrap" }}>
+                            <div style={{ fontSize: 10, color: "#374151", transform: "rotate(-45deg)", transformOrigin: "top center", whiteSpace: "nowrap", fontWeight: 500 }}>
                               {new Date(date + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                             </div>
                           </div>

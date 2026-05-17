@@ -575,7 +575,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           </span>
           {!isMobile && (
             <div style={{ display: "flex", gap: 4 }}>
-              {["Home", "Movies", "Series", "Podcasts", "New & Popular"].map(label => {
+              {["Home", "Movies", "Series", "Live TV", "Podcasts", "New & Popular"].map(label => {
                 const active = activeNav === label;
                 return (
                   <span key={label} onClick={() => setActiveNav(label)} style={{ fontSize: 13.5, padding: "6px 12px", borderRadius: 6, color: active ? "#fff" : "rgba(255,255,255,0.55)", fontWeight: active ? 600 : 400, cursor: "pointer", background: active ? "rgba(250,204,21,0.12)" : "transparent", transition: "color 0.2s, background 0.2s" }}
@@ -709,8 +709,8 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         </div>
       )}
 
-      {/* Hero — hidden on catalog pages and Podcasts */}
-      {activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "Podcasts" && (
+      {/* Hero — Home only */}
+      {activeNav === "Home" && (
         loading ? (
           <div style={{ height: "85vh", display: "flex", alignItems: "center", justifyContent: "center" }}><Spinner /></div>
         ) : featured ? (
@@ -736,7 +736,9 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         />
       )}
 
-      {/* Live TV — hidden from viewers */}
+      {activeNav === "Live TV" && (
+        <LiveTVPage streams={liveStreams} epgEntries={epgEntries} onPlay={onPlay} />
+      )}
 
       {/* Content rows (Home / My List / New & Popular / Podcasts) */}
       {activeNav !== "Movies" && activeNav !== "Series" && !loading && (allContent.length > 0 || podcasts.length > 0 || continueWatching.length > 0) && (
@@ -1346,20 +1348,31 @@ function LiveTVPage({ streams, epgEntries, onPlay }) {
     _upNext: upNextMap[s.id] ?? null,
   }));
 
+  const hasEpg = epgEntries.length > 0;
+
   return (
     <div style={{ paddingTop: 100, paddingBottom: 80, minHeight: "100vh" }}>
       <style>{`@keyframes livepulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.4; transform:scale(1.3); } }`}</style>
 
-      <div style={{ padding: `0 ${PAD} 40px` }}>
-        <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(28px, 4vw, 48px)", fontWeight: 400, margin: "0 0 8px", color: "#fff" }}>Live TV</h1>
+      {/* Header */}
+      <div style={{ padding: `0 ${PAD} 32px` }}>
+        <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(28px, 4vw, 48px)", fontWeight: 400, margin: "0 0 6px", color: "#fff" }}>Live TV</h1>
         <p style={{ margin: 0, fontSize: 14, color: "#555" }}>
           {sortedStreams.length > 0 ? `${sortedStreams.length} channel${sortedStreams.length !== 1 ? "s" : ""}` : "No channels set up yet."}
         </p>
       </div>
 
+      {sortedStreams.length === 0 && (
+        <div style={{ padding: `80px ${PAD}`, textAlign: "center", color: "#444" }}>
+          <p style={{ fontSize: 16 }}>No channels set up yet.</p>
+          <p style={{ fontSize: 13, marginTop: 8 }}>Add live streams in the admin panel.</p>
+        </div>
+      )}
+
+      {/* Channel grid */}
       {sortedStreams.length > 0 && (
         <div style={{ padding: `0 ${PAD}`, marginBottom: 56 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 20 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
             {enriched(sortedStreams).map(s => (
               <LiveChannelCard key={s.id} stream={s} onTuneIn={tuneIn} tuning={tuningIn === s.id} />
             ))}
@@ -1367,7 +1380,8 @@ function LiveTVPage({ streams, epgEntries, onPlay }) {
         </div>
       )}
 
-      {sortedStreams.length > 0 && (
+      {/* EPG */}
+      {sortedStreams.length > 0 && hasEpg && (
         <div style={{ padding: `0 ${PAD}`, marginBottom: 56 }}>
           <EpgGrid channels={sortedStreams} epgEntries={epgEntries} onTuneIn={tuneIn} now={now} />
         </div>
@@ -1380,63 +1394,67 @@ function LiveChannelCard({ stream, onTuneIn, tuning }) {
   const [hovered, setHovered] = useState(false);
   const nowAiring = stream._nowAiring;
   const upNext = stream._upNext;
+  const nowTitle = nowAiring?.title || stream.now_airing;
+  const upNextTitle = upNext?.title || stream.up_next;
 
   return (
     <div
       onClick={() => onTuneIn(stream)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{ cursor: "pointer", borderRadius: 12, overflow: "hidden", background: "#141414", border: `1px solid ${hovered ? "#ef4444" : "#1e1e1e"}`, transform: hovered ? "scale(1.02)" : "scale(1)", transition: "all 0.2s", boxShadow: hovered ? "0 8px 32px rgba(239,68,68,0.2)" : "none" }}>
-      <div style={{ position: "relative", aspectRatio: "16/9", overflow: "hidden" }}>
+      style={{ cursor: "pointer", borderRadius: 10, overflow: "hidden", background: "#111", border: `1px solid ${hovered ? "rgba(239,68,68,0.5)" : "#1e1e1e"}`, transform: hovered ? "translateY(-2px)" : "none", transition: "all 0.18s", boxShadow: hovered ? "0 8px 24px rgba(0,0,0,0.5)" : "0 2px 8px rgba(0,0,0,0.3)" }}>
+
+      {/* Thumbnail / placeholder */}
+      <div style={{ position: "relative", aspectRatio: "16/9", overflow: "hidden", background: "#0a0a0a" }}>
         {stream.thumbnail
-          ? <img src={stream.thumbnail} alt={stream.title} style={{ width: "100%", height: "100%", objectFit: "cover", filter: hovered ? "brightness(0.55)" : "brightness(0.8)", transition: "filter 0.2s" }} />
-          : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #1a0000, #3a0000)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="#ef4444" opacity="0.4"><polygon points="5,3 19,12 5,21" /></svg>
+          ? <img src={stream.thumbnail} alt={stream.title} style={{ width: "100%", height: "100%", objectFit: "cover", filter: hovered ? "brightness(0.5)" : "brightness(0.85)", transition: "filter 0.18s" }} />
+          : <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6 }}>
+              {stream.channel_number != null && stream.channel_number !== "" && (
+                <span style={{ fontSize: 28, fontWeight: 800, color: "#222", letterSpacing: -1 }}>{stream.channel_number}</span>
+              )}
+              <span style={{ fontSize: 12, fontWeight: 600, color: "#2a2a2a", textAlign: "center", padding: "0 12px" }}>{stream.title}</span>
             </div>
         }
+
+        {/* LIVE badge */}
         {stream.is_live && (
-          <div style={{ position: "absolute", top: 10, left: 10, display: "flex", alignItems: "center", gap: 5, background: "#ef4444", borderRadius: 5, padding: "4px 10px" }}>
-            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#fff", animation: "livepulse 1.5s infinite" }} />
-            <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 0.5 }}>{stream.badge_text || "LIVE"}</span>
+          <div style={{ position: "absolute", top: 8, left: 8, display: "flex", alignItems: "center", gap: 4, background: "#ef4444", borderRadius: 4, padding: "3px 8px" }}>
+            <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#fff", animation: "livepulse 1.5s infinite" }} />
+            <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", letterSpacing: 0.5 }}>{stream.badge_text || "LIVE"}</span>
           </div>
         )}
-        {stream.channel_number != null && stream.channel_number !== "" && (
-          <div style={{ position: "absolute", top: 10, right: 10, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)", borderRadius: 5, padding: "4px 8px", fontSize: 11, fontWeight: 700, color: "#fff" }}>
+
+        {/* CH number */}
+        {stream.channel_number != null && stream.channel_number !== "" && stream.thumbnail && (
+          <div style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", borderRadius: 4, padding: "3px 7px", fontSize: 10, fontWeight: 700, color: "#fff" }}>
             CH {stream.channel_number}
           </div>
         )}
-        {tuning && (
+
+        {/* Tune in overlay */}
+        {tuning ? (
           <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div style={{ width: 36, height: 36, borderRadius: "50%", border: "3px solid rgba(255,255,255,0.2)", borderTopColor: "#fff", animation: "spin 0.8s linear infinite" }} />
+            <div style={{ width: 28, height: 28, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.2)", borderTopColor: "#fff", animation: "spin 0.8s linear infinite" }} />
             <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
           </div>
-        )}
-        {hovered && !tuning && (
+        ) : hovered && (
           <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div style={{ width: 52, height: 52, borderRadius: "50%", background: "rgba(239,68,68,0.9)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 20px rgba(239,68,68,0.5)" }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><polygon points="5,3 19,12 5,21" /></svg>
+            <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(239,68,68,0.9)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><polygon points="5,3 19,12 5,21" /></svg>
             </div>
           </div>
         )}
       </div>
-      <div style={{ padding: "14px 16px" }}>
-        <p style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 600, color: "#fff" }}>{stream.title}</p>
-        {nowAiring ? (
-          <>
-            <p style={{ margin: "0 0 3px", fontSize: 12, color: "#ef4444", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              Now: {nowAiring.title}
-            </p>
-            {upNext && (
-              <p style={{ margin: 0, fontSize: 11, color: "#555", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                Up Next: {upNext.title}
-              </p>
-            )}
-          </>
-        ) : (
-          <>
-            {stream.now_airing && <p style={{ margin: "0 0 3px", fontSize: 12, color: "#ef4444", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Now: {stream.now_airing}</p>}
-            {stream.up_next && <p style={{ margin: 0, fontSize: 11, color: "#555", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Up Next: {stream.up_next}</p>}
-          </>
+
+      {/* Info */}
+      <div style={{ padding: "10px 12px" }}>
+        <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 700, color: "#e5e5e5" }}>{stream.title}</p>
+        {nowTitle
+          ? <p style={{ margin: "0 0 2px", fontSize: 11, color: "#ef4444", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Now: {nowTitle}</p>
+          : <p style={{ margin: "0 0 2px", fontSize: 11, color: "#333" }}>No program info</p>
+        }
+        {upNextTitle && (
+          <p style={{ margin: 0, fontSize: 11, color: "#444", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Up Next: {upNextTitle}</p>
         )}
       </div>
     </div>
