@@ -1463,9 +1463,11 @@ function LiveChannelCard({ stream, onTuneIn, tuning }) {
 
 // ─── EPG Grid ─────────────────────────────────────────────────────────────────
 
-const PX_PER_MIN = 5;
+const PX_PER_MIN = 6;
 const EPG_WINDOW_MINS = 5 * 60;
-const EPG_CH_COL_W = 130;
+const EPG_CH_COL_W = 148;
+const EPG_ROW_H = 72;
+const EPG_HDR_H = 40;
 
 function EpgGrid({ channels, epgEntries, onTuneIn, now }) {
   const scrollRef = useRef(null);
@@ -1479,7 +1481,7 @@ function EpgGrid({ channels, epgEntries, onTuneIn, now }) {
 
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollLeft = nowOffsetPx - scrollRef.current.clientWidth * 0.35;
+      scrollRef.current.scrollLeft = nowOffsetPx - scrollRef.current.clientWidth * 0.3;
     }
   }, []);
 
@@ -1494,88 +1496,140 @@ function EpgGrid({ channels, epgEntries, onTuneIn, now }) {
     byChannel[e.channel_id].push(e);
   });
 
-  const ROW_H = 68;
-
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <h2 style={{ margin: 0, fontSize: "clamp(15px, 1.3vw, 19px)", fontWeight: 600, color: "#e5e5e5" }}>Program Guide</h2>
-        <button onClick={() => { if (scrollRef.current) scrollRef.current.scrollLeft = nowOffsetPx - scrollRef.current.clientWidth * 0.35; }}
-          style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 6, padding: "6px 14px", color: "#f87171", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-          {"●"} Now
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+        <div>
+          <h2 style={{ margin: "0 0 2px", fontSize: 18, fontWeight: 700, color: "#fff", letterSpacing: "-0.3px" }}>Program Guide</h2>
+          <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Scroll to browse · click a live program to watch</p>
+        </div>
+        <button onClick={() => { if (scrollRef.current) scrollRef.current.scrollLeft = nowOffsetPx - scrollRef.current.clientWidth * 0.3; }}
+          style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 8, padding: "7px 14px", color: "#f87171", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "background 0.15s" }}
+          onMouseEnter={e => e.currentTarget.style.background = "rgba(239,68,68,0.22)"}
+          onMouseLeave={e => e.currentTarget.style.background = "rgba(239,68,68,0.12)"}>
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", display: "inline-block", animation: "livepulse 1.5s ease-in-out infinite" }} />
+          Live Now
         </button>
       </div>
-      <div style={{ display: "flex", borderRadius: 12, overflow: "hidden", border: "1px solid #1e1e1e" }}>
+
+      <div style={{ display: "flex", borderRadius: 14, overflow: "hidden", border: "1px solid rgba(255,255,255,0.07)", boxShadow: "0 4px 32px rgba(0,0,0,0.5)" }}>
         {/* Fixed channel column */}
-        <div style={{ flexShrink: 0, width: EPG_CH_COL_W, background: "#0f0f0f", borderRight: "1px solid #1e1e1e" }}>
-          <div style={{ height: 36, borderBottom: "1px solid #1e1e1e" }} />
-          {channels.map(ch => (
-            <div key={ch.id} style={{ height: ROW_H, display: "flex", alignItems: "center", padding: "0 12px", borderBottom: "1px solid #111", gap: 6 }}>
+        <div style={{ flexShrink: 0, width: EPG_CH_COL_W, background: "#0c0c0e", borderRight: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ height: EPG_HDR_H, borderBottom: "1px solid rgba(255,255,255,0.06)", background: "#0c0c0e" }} />
+          {channels.map((ch, i) => (
+            <div key={ch.id} style={{ height: EPG_ROW_H, display: "flex", alignItems: "center", padding: "0 14px", borderBottom: i < channels.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none", gap: 8, background: i % 2 === 0 ? "#0c0c0e" : "#0e0e11" }}>
               {ch.channel_number != null && ch.channel_number !== "" && (
-                <span style={{ fontSize: 10, color: "#555", fontWeight: 700, flexShrink: 0 }}>CH{ch.channel_number}</span>
+                <span style={{ fontSize: 9, color: "#3a3a4a", fontWeight: 700, flexShrink: 0, letterSpacing: "0.5px", textTransform: "uppercase" }}>CH{ch.channel_number}</span>
               )}
-              <span style={{ fontSize: 12, fontWeight: 600, color: "#ccc", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch.title}</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.3 }}>{ch.title}</span>
             </div>
           ))}
         </div>
 
         {/* Scrollable grid */}
         <div ref={scrollRef} className="scroll-row" style={{ flex: 1, overflowX: "auto", scrollbarWidth: "none", position: "relative" }}>
-          {/* Time labels */}
-          <div style={{ position: "relative", width: totalPx, height: 36, background: "#0a0a0a", borderBottom: "1px solid #1e1e1e", flexShrink: 0 }}>
+          {/* Time ruler */}
+          <div style={{ position: "sticky", top: 0, zIndex: 10, width: totalPx, height: EPG_HDR_H, background: "#0c0c0e", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
             {timeLabels.map(({ label, left }, i) => (
-              <div key={i} style={{ position: "absolute", left, top: 0, height: "100%", display: "flex", alignItems: "center", paddingLeft: 8, borderLeft: "1px solid #1a1a1a" }}>
-                <span style={{ fontSize: 11, color: "#444", whiteSpace: "nowrap" }}>
+              <div key={i} style={{ position: "absolute", left, top: 0, height: "100%", display: "flex", alignItems: "center", paddingLeft: 10, borderLeft: left === 0 ? "none" : "1px solid rgba(255,255,255,0.04)" }}>
+                <span style={{ fontSize: 11, fontWeight: 500, color: "#4b5563", whiteSpace: "nowrap", letterSpacing: "0.2px" }}>
                   {label.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
                 </span>
               </div>
             ))}
-            <div style={{ position: "absolute", top: 0, bottom: 0, left: nowOffsetPx, width: 2, background: "#ef4444", zIndex: 5 }} />
+            {/* Now marker in header */}
+            <div style={{ position: "absolute", top: 0, bottom: 0, left: nowOffsetPx - 1, width: 2, background: "linear-gradient(to bottom, #ef4444, rgba(239,68,68,0.4))", zIndex: 6 }} />
           </div>
 
           {/* Channel rows */}
-          {channels.map(ch => {
+          {channels.map((ch, ci) => {
             const entries = (byChannel[ch.id] || []).filter(e =>
               new Date(e.end_time) > windowStart && new Date(e.start_time) < windowEnd
             );
+            const rowBg = ci % 2 === 0 ? "#0c0c0e" : "#0e0e11";
             return (
-              <div key={ch.id} style={{ position: "relative", width: totalPx, height: ROW_H, borderBottom: "1px solid #111", background: "#0a0a0a" }}>
-                <div style={{ position: "absolute", top: 0, bottom: 0, left: nowOffsetPx, width: 2, background: "rgba(239,68,68,0.25)", zIndex: 2, pointerEvents: "none" }} />
+              <div key={ch.id} style={{ position: "relative", width: totalPx, height: EPG_ROW_H, borderBottom: ci < channels.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none", background: rowBg }}>
+                {/* Past overlay */}
+                <div style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: Math.min(nowOffsetPx, totalPx), background: "rgba(0,0,0,0.25)", zIndex: 1, pointerEvents: "none" }} />
+                {/* Now line */}
+                <div style={{ position: "absolute", top: 0, bottom: 0, left: nowOffsetPx - 1, width: 2, background: "rgba(239,68,68,0.6)", zIndex: 4, pointerEvents: "none" }} />
                 {entries.map(entry => {
                   const eStart = new Date(entry.start_time);
                   const eEnd = new Date(entry.end_time);
                   const leftPx = Math.max(0, (eStart - windowStart) / 60000 * PX_PER_MIN);
                   const rightPx = Math.min(totalPx, (eEnd - windowStart) / 60000 * PX_PER_MIN);
                   const widthPx = rightPx - leftPx;
+                  const isPast = eEnd <= now;
                   const isNow = eStart <= now && eEnd > now;
-                  if (widthPx < 4) return null;
+                  const isFuture = eStart > now;
+                  if (widthPx < 3) return null;
+
+                  const GAP = 3;
                   return (
                     <div key={entry.id}
                       onClick={() => isNow && ch.is_live && onTuneIn(ch)}
                       style={{
                         position: "absolute",
-                        left: leftPx + 2,
-                        width: widthPx - 4,
+                        left: leftPx + GAP,
+                        width: Math.max(0, widthPx - GAP * 2),
                         top: 6,
-                        height: ROW_H - 12,
-                        background: isNow ? "rgba(79,70,229,0.22)" : "rgba(255,255,255,0.03)",
-                        border: `1px solid ${isNow ? "rgba(99,102,241,0.5)" : "rgba(255,255,255,0.06)"}`,
-                        borderRadius: 6,
+                        height: EPG_ROW_H - 12,
+                        borderRadius: 8,
                         overflow: "hidden",
                         cursor: isNow && ch.is_live ? "pointer" : "default",
-                        padding: "6px 10px",
+                        padding: widthPx > 60 ? "7px 11px" : "7px 7px",
                         display: "flex",
                         flexDirection: "column",
                         justifyContent: "center",
-                        zIndex: 3,
-                        transition: "background 0.15s",
+                        zIndex: isNow ? 3 : 2,
+                        transition: "background 0.15s, box-shadow 0.15s",
+                        background: isNow
+                          ? "linear-gradient(135deg, rgba(99,102,241,0.28) 0%, rgba(79,70,229,0.18) 100%)"
+                          : isFuture
+                            ? "rgba(255,255,255,0.03)"
+                            : "transparent",
+                        border: isNow
+                          ? "1px solid rgba(99,102,241,0.45)"
+                          : isFuture
+                            ? "1px solid rgba(255,255,255,0.06)"
+                            : "1px solid transparent",
+                        boxShadow: isNow ? "0 2px 16px rgba(79,70,229,0.15)" : "none",
                       }}
-                      onMouseEnter={e => { if (isNow && ch.is_live) e.currentTarget.style.background = "rgba(79,70,229,0.35)"; }}
-                      onMouseLeave={e => { if (isNow && ch.is_live) e.currentTarget.style.background = "rgba(79,70,229,0.22)"; }}
+                      onMouseEnter={e => {
+                        if (isNow && ch.is_live) {
+                          e.currentTarget.style.background = "linear-gradient(135deg, rgba(99,102,241,0.42) 0%, rgba(79,70,229,0.28) 100%)";
+                          e.currentTarget.style.boxShadow = "0 4px 24px rgba(79,70,229,0.25)";
+                        }
+                      }}
+                      onMouseLeave={e => {
+                        if (isNow && ch.is_live) {
+                          e.currentTarget.style.background = "linear-gradient(135deg, rgba(99,102,241,0.28) 0%, rgba(79,70,229,0.18) 100%)";
+                          e.currentTarget.style.boxShadow = "0 2px 16px rgba(79,70,229,0.15)";
+                        }
+                      }}
                     >
-                      <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: isNow ? "#a5b4fc" : "#444", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.title}</p>
-                      {widthPx > 80 && (
-                        <p style={{ margin: "2px 0 0", fontSize: 10, color: isNow ? "#6366f1" : "#2a2a2a", whiteSpace: "nowrap" }}>
+                      {isNow && (
+                        <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: "linear-gradient(to bottom, #818cf8, #6366f1)", borderRadius: "8px 0 0 8px" }} />
+                      )}
+                      <p style={{
+                        margin: 0,
+                        fontSize: widthPx > 100 ? 12 : 11,
+                        fontWeight: 600,
+                        color: isNow ? "#e0e7ff" : isPast ? "#2e2e3a" : "#6b7280",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        paddingLeft: isNow ? 6 : 0,
+                      }}>{entry.title}</p>
+                      {widthPx > 90 && (
+                        <p style={{
+                          margin: "2px 0 0",
+                          fontSize: 10,
+                          fontWeight: 500,
+                          color: isNow ? "#6366f1" : isPast ? "#1e1e28" : "#374151",
+                          whiteSpace: "nowrap",
+                          paddingLeft: isNow ? 6 : 0,
+                        }}>
                           {eStart.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
                           {" – "}
                           {eEnd.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
