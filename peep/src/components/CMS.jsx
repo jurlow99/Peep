@@ -2887,6 +2887,11 @@ export function CMS({ onExit }) {
                 {/* ── OVERVIEW ── */}
                 {reportSection === "overview" && (
                   <>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+                      <div style={{ height: 1, flex: 1, background: "#e2e8f0" }} />
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 1, whiteSpace: "nowrap" }}>All-Time Platform Stats</span>
+                      <div style={{ height: 1, flex: 1, background: "#e2e8f0" }} />
+                    </div>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 24 }}>
                       {[
                         { label: "Total Users", value: reportData.userCount, color: "#34d399", desc: "Registered accounts across all profiles" },
