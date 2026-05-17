@@ -37,7 +37,10 @@ function useIsMobile() {
 }
 
 export default function App() {
-  const [page, setPage] = useState("home");
+  const [page, setPage] = useState(() => {
+    const saved = sessionStorage.getItem("peep_page");
+    return (saved === "settings" || saved === "profile") ? saved : "home";
+  });
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [selectedShow, setSelectedShow] = useState(null);
   const [selectedPodcast, setSelectedPodcast] = useState(null);
@@ -283,10 +286,13 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
   const [activeNav, setActiveNav] = useState(() => {
     const goto = sessionStorage.getItem("peep_goto_nav");
     if (goto) { sessionStorage.removeItem("peep_goto_nav"); return goto; }
-    return "Home";
+    return sessionStorage.getItem("peep_nav") || "Home";
   });
   const [footerModal, setFooterModal] = useState(null);
   const isMobile = useIsMobile();
+
+  useEffect(() => { sessionStorage.setItem("peep_nav", activeNav); }, [activeNav]);
+  useEffect(() => { sessionStorage.setItem("peep_page", page); }, [page]);
 
   useEffect(() => {
     fetchAll();
