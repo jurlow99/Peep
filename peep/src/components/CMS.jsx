@@ -225,6 +225,7 @@ export function CMS({ onExit }) {
   const [reportSection, setReportSection] = useState("overview");
   const [todayStats, setTodayStats] = useState(null);
   const [adminStats, setAdminStats] = useState(null);
+  const [onlineUsers, setOnlineUsers] = useState([]);
   const [userSearch, setUserSearch] = useState("");
   const [userSearchResults, setUserSearchResults] = useState([]);
   const [selectedUserStats, setSelectedUserStats] = useState(null);
@@ -275,7 +276,7 @@ export function CMS({ onExit }) {
   }
 
   useEffect(() => {
-    if (tab === "reports") { loadReports(); loadTodayStats(); loadAdminStats(); }
+    if (tab === "reports") { loadReports(); loadTodayStats(); loadAdminStats(); loadOnlineUsers(); }
     if (tab === "ads") { loadAdAnalytics(); loadTodayStats(); }
   }, [tab]);
 
@@ -285,7 +286,7 @@ export function CMS({ onExit }) {
       if (tab === "ads") loadAdAnalytics();
       if (tab === "reports") { loadReports(); loadTodayStats(); loadAdminStats(); }
     }, 5 * 60 * 1000);
-    const oneMin = (tab === "reports" || tab === "ads") ? setInterval(loadTodayStats, 60 * 1000) : null;
+    const oneMin = (tab === "reports" || tab === "ads") ? setInterval(() => { loadTodayStats(); if (tab === "reports") loadOnlineUsers(); }, 60 * 1000) : null;
     return () => { clearInterval(fiveMin); if (oneMin) clearInterval(oneMin); };
   }, [tab]);
 
@@ -392,6 +393,20 @@ export function CMS({ onExit }) {
       setTodayStats({ sessionsToday, hoursToday, adImpressionsToday, adSkipsToday, newUsers: newUsers || 0, liveNow: liveCount || 0 });
     } catch (err) {
       console.error("loadTodayStats error:", err);
+    }
+  }
+
+  async function loadOnlineUsers() {
+    try {
+      const cutoff = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+      const { data } = await supabase
+        .from("user_presence")
+        .select("user_id, last_seen, current_page, profile_id, profiles(email, username)")
+        .gte("last_seen", cutoff)
+        .order("last_seen", { ascending: false });
+      setOnlineUsers(data || []);
+    } catch (err) {
+      console.error("loadOnlineUsers error:", err);
     }
   }
 
@@ -3070,6 +3085,7 @@ export function CMS({ onExit }) {
                 { label: "Ad Skips", value: todayStats.adSkipsToday.toLocaleString(), color: "#94a3b8", hint: "Ads that were skipped before completing" },
                 { label: "New Signups", value: todayStats.newUsers.toLocaleString(), color: "#22c55e", hint: "New accounts created today" },
                 { label: "Watching Live Now", value: todayStats.liveNow.toLocaleString(), color: "#ef4444", hint: "Active live viewers (last 90 sec heartbeat)", pulse: todayStats.liveNow > 0 },
+                { label: "Users Online Now", value: onlineUsers.length.toLocaleString(), color: "#10b981", hint: "Browsing the app in the last 3 minutes", pulse: onlineUsers.length > 0 },
               ];
               return (
                 <div style={{ marginBottom: 32 }}>
@@ -3094,6 +3110,43 @@ export function CMS({ onExit }) {
                 </div>
               );
             })()}
+
+            {/* ── Online Now ── */}
+            <div style={{ marginBottom: 32, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden" }}>
+              <div style={{ padding: "14px 20px", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#10b981", display: "inline-block", animation: onlineUsers.length > 0 ? "adpulse 2s ease-in-out infinite" : "none" }} />
+                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#0f172a" }}>Online Now</h3>
+                <span style={{ fontSize: 12, color: "#6b7280", marginLeft: 2 }}>{onlineUsers.length} user{onlineUsers.length !== 1 ? "s" : ""} active in the last 3 min</span>
+                <button onClick={loadOnlineUsers} style={{ marginLeft: "auto", background: "transparent", border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 10px", fontSize: 11, color: "#6b7280", cursor: "pointer" }}>Refresh</button>
+              </div>
+              {onlineUsers.length === 0 ? (
+                <div style={{ padding: "24px 20px", color: "#9ca3af", fontSize: 13, textAlign: "center" }}>No users active in the last 3 minutes</div>
+              ) : (
+                <div>
+                  {onlineUsers.map((u, i) => {
+                    const email = u.profiles?.email || u.user_id;
+                    const username = u.profiles?.username;
+                    const pageLabel = { home: "Home", movies: "Movies", series: "Series", podcasts: "Podcasts", live: "Live TV", "new-popular": "New & Popular", mylist: "My List", profile: "Profile", settings: "Settings" }[u.current_page] || u.current_page || "—";
+                    const secsAgo = Math.floor((Date.now() - new Date(u.last_seen).getTime()) / 1000);
+                    const agoLabel = secsAgo < 60 ? "just now" : `${Math.floor(secsAgo / 60)}m ago`;
+                    return (
+                      <div key={u.user_id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 20px", borderBottom: i < onlineUsers.length - 1 ? "1px solid #f8fafc" : "none", background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                        <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "#fff", fontWeight: 700, flexShrink: 0 }}>
+                          {(username || email || "?")[0].toUpperCase()}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{username || email}</div>
+                          {username && <div style={{ fontSize: 11, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{email}</div>}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#6366f1", background: "#eef2ff", borderRadius: 5, padding: "2px 8px", whiteSpace: "nowrap" }}>{pageLabel}</div>
+                        <div style={{ fontSize: 11, color: "#9ca3af", whiteSpace: "nowrap" }}>{agoLabel}</div>
+                        <div style={{ width: 7, height: 7, borderRadius: "50%", background: secsAgo < 90 ? "#10b981" : "#fbbf24", flexShrink: 0 }} title={secsAgo < 90 ? "Active" : "Idle"} />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             {/* ── Admin Account Detail ── */}
             {adminStats && (() => {

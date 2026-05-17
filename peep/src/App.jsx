@@ -86,6 +86,18 @@ export default function App() {
     loadMyList(user.id, activeProfile.id);
   }, [user?.id, activeProfile?.id]);
 
+  // Presence heartbeat — mark this user online while browsing
+  useEffect(() => {
+    if (!user) return;
+    const ping = () => supabase.from("user_presence").upsert(
+      { user_id: user.id, last_seen: new Date().toISOString(), current_page: page, profile_id: activeProfile?.id ?? null },
+      { onConflict: "user_id" }
+    ).then(() => {});
+    ping();
+    const t = setInterval(ping, 60000);
+    return () => clearInterval(t);
+  }, [user?.id, page, activeProfile?.id]);
+
   function selectProfile(profile) {
     setActiveProfile(profile);
     localStorage.setItem(`peep_profile_${user.id}`, JSON.stringify(profile));
