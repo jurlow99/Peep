@@ -3068,43 +3068,31 @@ export function CMS({ onExit }) {
                       </div>
                     )}
 
-                    {/* Sessions + hours trend (last 30 days, side by side) */}
+                    {/* Sessions + hours trend (last 30 days, stacked full-width) */}
                     {(reportData.sessionTrend.length > 0 || reportData.hoursTrend.length > 0) && (
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
-                        {reportData.sessionTrend.length > 0 && (
-                          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-                            <p style={{ margin: "0 0 20px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>Sessions — Last 30 Days</p>
-                            <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 72 }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 24 }}>
+                        {[
+                          { data: reportData.sessionTrend, label: "Sessions — Last 30 Days", color: "rgba(96,165,250,0.5)", suffix: " sessions", statLabel: "active days" },
+                          { data: reportData.hoursTrend, label: "Hours Watched — Last 30 Days", color: "rgba(244,114,182,0.5)", suffix: "h", statLabel: "active days" },
+                        ].map(({ data, label, color, suffix, statLabel }) => data.length > 0 && (
+                          <div key={label} style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 16 }}>
+                              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{label}</p>
+                              <span style={{ fontSize: 11, color: "#9ca3af" }}>{data.length} {statLabel}</span>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 96 }}>
                               {(() => {
-                                const max = Math.max(...reportData.sessionTrend.map(([, c]) => c), 1);
-                                return reportData.sessionTrend.map(([day, count]) => (
-                                  <div key={day} title={`${day}: ${count} sessions`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "default" }}>
-                                    <div style={{ width: "100%", background: "rgba(96,165,250,0.3)", borderRadius: 3, height: `${Math.round((count / max) * 52) + 4}px`, minHeight: 4 }} />
-                                    {reportData.sessionTrend.length <= 14 && <span style={{ fontSize: 9, color: "#9ca3af" }}>{day.slice(8)}</span>}
+                                const max = Math.max(...data.map(([, v]) => v), 1);
+                                return data.map(([day, val]) => (
+                                  <div key={day} title={`${day}: ${val}${suffix}`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, cursor: "default", minWidth: 0 }}>
+                                    <div style={{ width: "100%", background: color, borderRadius: "3px 3px 0 0", height: `${Math.round((val / max) * 80) + 4}px`, minHeight: 4, transition: "height 0.3s" }} />
+                                    <span style={{ fontSize: 9, color: "#9ca3af", whiteSpace: "nowrap" }}>{day.slice(5)}</span>
                                   </div>
                                 ));
                               })()}
                             </div>
-                            <p style={{ margin: "10px 0 0", fontSize: 11, color: "#9ca3af" }}>{reportData.sessionTrend.length} active days</p>
                           </div>
-                        )}
-                        {reportData.hoursTrend.length > 0 && (
-                          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-                            <p style={{ margin: "0 0 20px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>Hours Watched — Last 30 Days</p>
-                            <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 72 }}>
-                              {(() => {
-                                const max = Math.max(...reportData.hoursTrend.map(([, h]) => h), 1);
-                                return reportData.hoursTrend.map(([day, hours]) => (
-                                  <div key={day} title={`${day}: ${hours}h`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "default" }}>
-                                    <div style={{ width: "100%", background: "rgba(244,114,182,0.3)", borderRadius: 3, height: `${Math.round((hours / max) * 52) + 4}px`, minHeight: 4 }} />
-                                    {reportData.hoursTrend.length <= 14 && <span style={{ fontSize: 9, color: "#9ca3af" }}>{day.slice(8)}</span>}
-                                  </div>
-                                ));
-                              })()}
-                            </div>
-                            <p style={{ margin: "10px 0 0", fontSize: 11, color: "#9ca3af" }}>{reportData.hoursTrend.length} active days</p>
-                          </div>
-                        )}
+                        ))}
                       </div>
                     )}
 
