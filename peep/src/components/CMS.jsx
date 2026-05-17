@@ -301,21 +301,27 @@ export function CMS({ onExit }) {
       supabase.from("ratings").select("content_id, content_type, rating, created_at").eq("user_id", uid),
       supabase.from("user_list").select("content_id, content_type, created_at").eq("user_id", uid),
     ]);
-    const movieIds = [...new Set([...(watchRows || []).filter(w => w.content_type === "movie").map(w => w.content_id), ...(listRows || []).filter(l => l.content_type === "movie").map(l => l.content_id)])];
-    const epIds = [...new Set([...(watchRows || []).filter(w => w.content_type === "episode").map(w => w.content_id), ...(listRows || []).filter(l => l.content_type === "episode").map(l => l.content_id)])];
-    const [{ data: movTitles }, { data: epTitles }, { data: tagNames }] = await Promise.all([
+    const allRows = [...(watchRows || []), ...(listRows || [])];
+    const idsFor = type => [...new Set(allRows.filter(r => r.content_type === type).map(r => r.content_id))];
+    const movieIds = idsFor("movie");
+    const epIds = idsFor("episode");
+    const podEpIds = idsFor("podcast_episode");
+    const [{ data: movTitles }, { data: epTitles }, { data: podEpTitles }, { data: tagNames }] = await Promise.all([
       movieIds.length ? supabase.from("videos").select("id, title").in("id", movieIds) : { data: [] },
       epIds.length ? supabase.from("episodes").select("id, title").in("id", epIds) : { data: [] },
+      podEpIds.length ? supabase.from("podcast_episodes").select("id, title").in("id", podEpIds) : { data: [] },
       supabase.from("vast_tags").select("id, name"),
     ]);
     const titleMap = {};
     (movTitles || []).forEach(v => { titleMap[`movie:${v.id}`] = v.title; });
     (epTitles || []).forEach(e => { titleMap[`episode:${e.id}`] = e.title; });
+    (podEpTitles || []).forEach(e => { titleMap[`podcast_episode:${e.id}`] = e.title; });
     const tagMap = {};
     (tagNames || []).forEach(t => { tagMap[t.id] = t.name; });
-    const watchHistory = (watchRows || []).map(w => ({ ...w, title: titleMap[`${w.content_type}:${w.content_id}`] || `${w.content_type} #${w.content_id}`, pct: w.duration_seconds > 0 ? Math.round((w.progress_seconds / w.duration_seconds) * 100) : null }));
+    const typeLabel = t => ({ movie: "Movie", episode: "Episode", podcast_episode: "Podcast Ep" }[t] || t);
+    const watchHistory = (watchRows || []).map(w => ({ ...w, title: titleMap[`${w.content_type}:${w.content_id}`] || null, pct: w.duration_seconds > 0 ? Math.round((w.progress_seconds / w.duration_seconds) * 100) : null })).filter(w => w.title);
     const adHistory = (adRows || []).map(r => ({ ...r, tagName: tagMap[r.vast_tag_id] || "Unknown Tag" }));
-    const myList = (listRows || []).map(l => ({ ...l, title: titleMap[`${l.content_type}:${l.content_id}`] || `${l.content_type} #${l.content_id}` }));
+    const myList = (listRows || []).map(l => ({ ...l, title: titleMap[`${l.content_type}:${l.content_id}`] || null })).filter(l => l.title);
     const thirtyAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const byDay = {};
     (watchRows || []).filter(w => w.last_watched_at >= thirtyAgo).forEach(w => { const d = w.last_watched_at.slice(0, 10); byDay[d] = (byDay[d] || 0) + 1; });
@@ -2998,7 +3004,7 @@ export function CMS({ onExit }) {
                           <div style={{ display: "flex", flexDirection: "column", gap: 1, borderRadius: 8, overflow: "hidden", border: "1px solid #e2e8f0" }}>
                             {watchHistory.slice(0, 15).map((w, i) => (
                               <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: i % 2 === 0 ? "#f8fafc" : "#fff" }}>
-                                <span style={{ fontSize: 10, color: "#9ca3af", width: 55, flexShrink: 0 }}>{w.content_type}</span>
+                                <span style={{ fontSize: 10, color: "#9ca3af", width: 55, flexShrink: 0 }}>{typeLabel(w.content_type)}</span>
                                 <span style={{ flex: 1, fontSize: 12, color: "#0f172a", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.title}</span>
                                 {w.pct !== null && <div style={{ width: 70, height: 3, background: "#e2e8f0", borderRadius: 2, flexShrink: 0 }}><div style={{ height: "100%", width: `${Math.min(w.pct, 100)}%`, background: w.completed ? "#22c55e" : "#6366f1", borderRadius: 2 }} /></div>}
                                 <span style={{ fontSize: 11, color: w.completed ? "#22c55e" : "#6b7280", width: 32, textAlign: "right", flexShrink: 0 }}>{w.pct !== null ? w.pct + "%" : "—"}</span>
@@ -3109,7 +3115,7 @@ export function CMS({ onExit }) {
                         <div style={{ display: "flex", flexDirection: "column", gap: 1, borderRadius: 8, overflow: "hidden", border: "1px solid #e2e8f0" }}>
                           {watchHistory.slice(0, 15).map((w, i) => (
                             <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 14px", background: i % 2 === 0 ? "#f8fafc" : "#fff" }}>
-                              <span style={{ fontSize: 10, color: "#9ca3af", width: 60, flexShrink: 0 }}>{w.content_type}</span>
+                              <span style={{ fontSize: 10, color: "#9ca3af", width: 60, flexShrink: 0 }}>{typeLabel(w.content_type)}</span>
                               <span style={{ flex: 1, fontSize: 13, color: "#0f172a", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.title}</span>
                               {w.pct !== null && (
                                 <div style={{ width: 80, height: 4, background: "#e2e8f0", borderRadius: 2, flexShrink: 0 }}>
