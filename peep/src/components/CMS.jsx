@@ -290,90 +290,114 @@ export function CMS({ onExit }) {
   }, [tab]);
 
   async function fetchUserStatsForProfile(profile) {
-    const uid = profile.id;
-    const [
-      { data: watchRows },
-      { data: adRows },
-      { data: ratingRows },
-      { data: listRows },
-    ] = await Promise.all([
-      supabase.from("watch_progress").select("content_id, content_type, progress_seconds, duration_seconds, completed, last_watched_at").eq("user_id", uid).order("last_watched_at", { ascending: false }),
-      supabase.from("ad_impressions").select("event, created_at, vast_tag_id").eq("user_id", uid).order("created_at", { ascending: false }),
-      supabase.from("ratings").select("content_id, content_type, rating, created_at").eq("user_id", uid),
-      supabase.from("user_list").select("content_id, content_type, created_at").eq("user_id", uid),
-    ]);
-    const allRows = [...(watchRows || []), ...(listRows || [])];
-    const idsFor = type => [...new Set(allRows.filter(r => r.content_type === type).map(r => r.content_id))];
-    const movieIds = idsFor("movie");
-    const epIds = idsFor("episode");
-    const podEpIds = idsFor("podcast_episode");
-    const [{ data: movTitles }, { data: epTitles }, { data: podEpTitles }, { data: tagNames }] = await Promise.all([
-      movieIds.length ? supabase.from("videos").select("id, title").in("id", movieIds) : { data: [] },
-      epIds.length ? supabase.from("episodes").select("id, title").in("id", epIds) : { data: [] },
-      podEpIds.length ? supabase.from("podcast_episodes").select("id, title").in("id", podEpIds) : { data: [] },
-      supabase.from("vast_tags").select("id, name"),
-    ]);
-    const titleMap = {};
-    (movTitles || []).forEach(v => { titleMap[`movie:${v.id}`] = v.title; });
-    (epTitles || []).forEach(e => { titleMap[`episode:${e.id}`] = e.title; });
-    (podEpTitles || []).forEach(e => { titleMap[`podcast_episode:${e.id}`] = e.title; });
-    const tagMap = {};
-    (tagNames || []).forEach(t => { tagMap[t.id] = t.name; });
-    const watchHistory = (watchRows || []).map(w => ({ ...w, title: titleMap[`${w.content_type}:${w.content_id}`] || null, pct: w.duration_seconds > 0 ? Math.round((w.progress_seconds / w.duration_seconds) * 100) : null })).filter(w => w.title);
-    const adHistory = (adRows || []).map(r => ({ ...r, tagName: tagMap[r.vast_tag_id] || "Unknown Tag" }));
-    const myList = (listRows || []).map(l => ({ ...l, title: titleMap[`${l.content_type}:${l.content_id}`] || null })).filter(l => l.title);
-    const thirtyAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const byDay = {};
-    (watchRows || []).filter(w => w.last_watched_at >= thirtyAgo).forEach(w => { const d = w.last_watched_at.slice(0, 10); byDay[d] = (byDay[d] || 0) + 1; });
-    const sessionTimeline = Object.entries(byDay).sort((a, b) => a[0].localeCompare(b[0]));
-    return { profile, watchHistory, adHistory, myList, ratingRows: ratingRows || [], sessionTimeline };
+    try {
+      const uid = profile.id;
+      const [
+        { data: watchRows },
+        { data: adRows },
+        { data: ratingRows },
+        { data: listRows },
+      ] = await Promise.all([
+        supabase.from("watch_progress").select("content_id, content_type, progress_seconds, duration_seconds, completed, last_watched_at").eq("user_id", uid).order("last_watched_at", { ascending: false }),
+        supabase.from("ad_impressions").select("event, created_at, vast_tag_id").eq("user_id", uid).order("created_at", { ascending: false }),
+        supabase.from("ratings").select("*").eq("user_id", uid),
+        supabase.from("user_list").select("content_id, content_type").eq("user_id", uid),
+      ]);
+      const allRows = [...(watchRows || []), ...(listRows || [])];
+      const idsFor = type => [...new Set(allRows.filter(r => r.content_type === type).map(r => r.content_id))];
+      const movieIds = idsFor("movie");
+      const epIds = idsFor("episode");
+      const podEpIds = idsFor("podcast_episode");
+      const [{ data: movTitles }, { data: epTitles }, { data: podEpTitles }, { data: tagNames }] = await Promise.all([
+        movieIds.length ? supabase.from("videos").select("id, title").in("id", movieIds) : { data: [] },
+        epIds.length ? supabase.from("episodes").select("id, title").in("id", epIds) : { data: [] },
+        podEpIds.length ? supabase.from("podcast_episodes").select("id, title").in("id", podEpIds) : { data: [] },
+        supabase.from("vast_tags").select("id, name"),
+      ]);
+      const titleMap = {};
+      (movTitles || []).forEach(v => { titleMap[`movie:${v.id}`] = v.title; });
+      (epTitles || []).forEach(e => { titleMap[`episode:${e.id}`] = e.title; });
+      (podEpTitles || []).forEach(e => { titleMap[`podcast_episode:${e.id}`] = e.title; });
+      const tagMap = {};
+      (tagNames || []).forEach(t => { tagMap[t.id] = t.name; });
+      const watchHistory = (watchRows || []).map(w => ({ ...w, title: titleMap[`${w.content_type}:${w.content_id}`] || null, pct: w.duration_seconds > 0 ? Math.round((w.progress_seconds / w.duration_seconds) * 100) : null })).filter(w => w.title);
+      const adHistory = (adRows || []).map(r => ({ ...r, tagName: tagMap[r.vast_tag_id] || "Unknown Tag" }));
+      const myList = (listRows || []).map(l => ({ ...l, title: titleMap[`${l.content_type}:${l.content_id}`] || null })).filter(l => l.title);
+      const thirtyAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const byDay = {};
+      (watchRows || []).filter(w => w.last_watched_at >= thirtyAgo).forEach(w => { const d = w.last_watched_at.slice(0, 10); byDay[d] = (byDay[d] || 0) + 1; });
+      const sessionTimeline = Object.entries(byDay).sort((a, b) => a[0].localeCompare(b[0]));
+      return { profile, watchHistory, adHistory, myList, ratingRows: ratingRows || [], sessionTimeline };
+    } catch (err) {
+      console.error("fetchUserStatsForProfile error:", err);
+      return { profile, watchHistory: [], adHistory: [], myList: [], ratingRows: [], sessionTimeline: [] };
+    }
   }
 
   async function searchUsers(query) {
     if (!query.trim()) { setUserSearchResults([]); return; }
-    const { data } = await supabase.from("profiles").select("id, username, email, created_at, is_admin").or(`email.ilike.%${query}%,username.ilike.%${query}%`).limit(10);
-    setUserSearchResults(data || []);
+    try {
+      const { data } = await supabase.from("profiles").select("id, username, email, created_at, is_admin").or(`email.ilike.%${query}%,username.ilike.%${query}%`).limit(10);
+      setUserSearchResults(data || []);
+    } catch (err) {
+      console.error("searchUsers error:", err);
+      setUserSearchResults([]);
+    }
   }
 
   async function loadSelectedUserStats(profile) {
     setUserStatsLoading(true);
     setSelectedUserStats(null);
-    const stats = await fetchUserStatsForProfile(profile);
-    setSelectedUserStats(stats);
+    try {
+      const stats = await fetchUserStatsForProfile(profile);
+      setSelectedUserStats(stats);
+    } catch (err) {
+      console.error("loadSelectedUserStats error:", err);
+      showToast("Failed to load user stats", "error");
+    }
     setUserStatsLoading(false);
   }
 
   async function loadAdminStats() {
-    const { data: adminProfile } = await supabase.from("profiles").select("id, username, email, created_at, is_admin").eq("is_admin", true).single();
-    if (!adminProfile) return;
-    const stats = await fetchUserStatsForProfile(adminProfile);
-    setAdminStats(stats);
+    try {
+      const { data: adminProfile } = await supabase.from("profiles").select("id, username, email, created_at, is_admin").eq("is_admin", true).single();
+      if (!adminProfile) return;
+      const stats = await fetchUserStatsForProfile(adminProfile);
+      setAdminStats(stats);
+    } catch (err) {
+      console.error("loadAdminStats error:", err);
+    }
   }
 
   async function loadTodayStats() {
-    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-    const todayISO = todayStart.toISOString();
-    const liveISO = new Date(Date.now() - 90 * 1000).toISOString();
-    const [
-      { data: watchToday },
-      { data: adsToday },
-      { count: newUsers },
-      { data: liveNow },
-    ] = await Promise.all([
-      supabase.from("watch_progress").select("progress_seconds").gte("last_watched_at", todayISO),
-      supabase.from("ad_impressions").select("event").gte("created_at", todayISO),
-      supabase.from("profiles").select("*", { count: "exact", head: true }).gte("created_at", todayISO),
-      supabase.from("live_viewers").select("session_id").gte("last_ping", liveISO),
-    ]);
-    const sessionsToday = (watchToday || []).length;
-    const hoursToday = +((watchToday || []).reduce((s, w) => s + (w.progress_seconds || 0), 0) / 3600).toFixed(1);
-    const adImpressionsToday = (adsToday || []).filter(r => r.event === "impression").length;
-    const adSkipsToday = (adsToday || []).filter(r => r.event === "skip").length;
-    setTodayStats({ sessionsToday, hoursToday, adImpressionsToday, adSkipsToday, newUsers: newUsers || 0, liveNow: (liveNow || []).length });
+    try {
+      const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+      const todayISO = todayStart.toISOString();
+      const liveISO = new Date(Date.now() - 90 * 1000).toISOString();
+      const [
+        { data: watchToday },
+        { data: adsToday },
+        { count: newUsers },
+        { data: liveNow },
+      ] = await Promise.all([
+        supabase.from("watch_progress").select("progress_seconds").gte("last_watched_at", todayISO),
+        supabase.from("ad_impressions").select("event").gte("created_at", todayISO),
+        supabase.from("profiles").select("*", { count: "exact", head: true }).gte("created_at", todayISO),
+        supabase.from("live_viewers").select("session_id").gte("last_ping", liveISO),
+      ]);
+      const sessionsToday = (watchToday || []).length;
+      const hoursToday = +((watchToday || []).reduce((s, w) => s + (w.progress_seconds || 0), 0) / 3600).toFixed(1);
+      const adImpressionsToday = (adsToday || []).filter(r => r.event === "impression").length;
+      const adSkipsToday = (adsToday || []).filter(r => r.event === "skip").length;
+      setTodayStats({ sessionsToday, hoursToday, adImpressionsToday, adSkipsToday, newUsers: newUsers || 0, liveNow: (liveNow || []).length });
+    } catch (err) {
+      console.error("loadTodayStats error:", err);
+    }
   }
 
   async function loadReports() {
     setReportLoading(true);
+    try {
     const [
       { count: userCount },
       { count: videoCount },
@@ -391,7 +415,7 @@ export function CMS({ onExit }) {
       supabase.from("shows").select("*", { count: "exact", head: true }),
       supabase.from("episodes").select("*", { count: "exact", head: true }),
       supabase.from("watch_progress").select("user_id, content_id, content_type, completed, progress_seconds, duration_seconds, last_watched_at"),
-      supabase.from("ratings").select("user_id, content_id, content_type, rating"),
+      supabase.from("ratings").select("user_id, content_id, rating"),
       supabase.from("user_list").select("user_id, content_id, content_type"),
       supabase.from("profiles").select("id, username, email, created_at").order("created_at", { ascending: true }),
       supabase.from("videos").select("id, category"),
@@ -417,9 +441,17 @@ export function CMS({ onExit }) {
       .map(([key, secs]) => { const [type, id] = key.split(":"); return { type, id: parseInt(id), secs }; });
 
     // Build raw rated + saved before title fetch so all IDs are included
+    // Cross-reference content_type from watch_progress since ratings table may not have it
+    const watchTypeMap = {};
+    (watchData || []).forEach(w => { if (w.content_id && w.content_type) watchTypeMap[w.content_id] = w.content_type; });
     const ratingMap = {};
     (ratingsData || []).forEach(r => {
-      if (r.rating === 1) { const key = `${r.content_type}:${r.content_id}`; ratingMap[key] = (ratingMap[key] || 0) + 1; }
+      if (r.rating === 1) {
+        const ctype = r.content_type || watchTypeMap[r.content_id] || null;
+        if (!ctype) return;
+        const key = `${ctype}:${r.content_id}`;
+        ratingMap[key] = (ratingMap[key] || 0) + 1;
+      }
     });
     const topRatedRaw = Object.entries(ratingMap)
       .sort((a, b) => b[1] - a[1]).slice(0, 10)
@@ -645,7 +677,12 @@ export function CMS({ onExit }) {
       categoryStats, subscriberFunnel, depthBuckets, hourStats,
     });
     setReportLastFetched(new Date());
-    setReportLoading(false);
+    } catch (err) {
+      console.error("loadReports error:", err);
+      showToast("Failed to load reports: " + err.message, "error");
+    } finally {
+      setReportLoading(false);
+    }
   }
 
   // ──── VIDEOS ────
