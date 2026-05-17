@@ -84,6 +84,15 @@ const EMPTY_PODCAST_EPISODE = {
   thumbnail: "",
 };
 
+const EMPTY_AD = {
+  name: "",
+  tag_url: "",
+  ad_type: "pre_roll",
+  scope: "global",
+  content_id: "",
+  active: true,
+};
+
 export function CMS({ onExit }) {
   const [tab, setTab] = useState("videos");
   const [videoSubTab, setVideoSubTab] = useState("movies"); // "movies" | "series" | "episodes"
@@ -195,6 +204,16 @@ export function CMS({ onExit }) {
 
   const [heroConfirm, setHeroConfirm] = useState(null); // { current, next, type: "video"|"show" }
 
+  // Ads state
+  const [adList, setAdList] = useState([]);
+  const [adLoading, setAdLoading] = useState(false);
+  const [editingAdId, setEditingAdId] = useState(null);
+  const [adForm, setAdForm] = useState(EMPTY_AD);
+  const [adSaving, setAdSaving] = useState(false);
+  const [deleteAdConfirm, setDeleteAdConfirm] = useState(null);
+  const [adTableMissing, setAdTableMissing] = useState(false);
+  const [adAnalytics, setAdAnalytics] = useState(null);
+
   // Reports state
   const [reportData, setReportData] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -220,6 +239,8 @@ export function CMS({ onExit }) {
     loadShows();
     loadPodcasts();
     loadLiveStreams();
+    loadAds();
+    loadAdAnalytics();
 
     return () => {
       if (subscriptionRef.current) subscriptionRef.current.unsubscribe();
@@ -257,6 +278,8 @@ export function CMS({ onExit }) {
       { data: ratingsData },
       { data: listData },
       { data: profilesData },
+      { data: videoCatData },
+      { data: showCatData },
     ] = await Promise.all([
       supabase.from("profiles").select("*", { count: "exact", head: true }),
       supabase.from("videos").select("*", { count: "exact", head: true }),
@@ -266,6 +289,8 @@ export function CMS({ onExit }) {
       supabase.from("ratings").select("user_id, content_id, content_type, rating"),
       supabase.from("user_list").select("user_id, content_id, content_type"),
       supabase.from("profiles").select("id, username, email, created_at").order("created_at", { ascending: true }),
+      supabase.from("videos").select("id, category"),
+      supabase.from("shows").select("id, category"),
     ]);
 
     // Group watch sessions by content, also accumulate watch time
@@ -304,11 +329,13 @@ export function CMS({ onExit }) {
     const allItems = [...topWatchedRaw, ...topByTimeRaw, ...topRatedRaw, ...topSavedRaw];
     const allKeys = [...new Set(allItems.map(t => `${t.type}:${t.id}`))];
     const idsFor = (prefix) => allKeys.filter(k => k.startsWith(prefix + ":")).map(k => parseInt(k.split(":")[1]));
-    const [movTitles, epTitles, podEpTitles, showTitles] = await Promise.all([
+    const allEpIds = [...new Set((watchData || []).filter(w => w.content_type === "episode").map(w => w.content_id))];
+    const [movTitles, epTitles, podEpTitles, showTitles, epShowRes] = await Promise.all([
       idsFor("movie").length ? supabase.from("videos").select("id, title").in("id", idsFor("movie")) : { data: [] },
       idsFor("episode").length ? supabase.from("episodes").select("id, title").in("id", idsFor("episode")) : { data: [] },
       idsFor("podcast_episode").length ? supabase.from("podcast_episodes").select("id, title").in("id", idsFor("podcast_episode")) : { data: [] },
       idsFor("show").length ? supabase.from("shows").select("id, title").in("id", idsFor("show")) : { data: [] },
+      allEpIds.length ? supabase.from("episodes").select("id, show_id").in("id", allEpIds) : { data: [] },
     ]);
     const titleMap = {};
     (movTitles.data || []).forEach(v => { titleMap[`movie:${v.id}`] = v.title; });
@@ -392,6 +419,110 @@ export function CMS({ onExit }) {
     });
     const sessionTrend = Object.entries(sessionsByDay).sort((a, b) => a[0].localeCompare(b[0]));
 
+    // Category performance (movies by videos.category, episodes/shows by shows.category)
+    const movieCatMap = {};
+    (videoCatData || []).forEach(v => { if (v.category) movieCatMap[v.id] = v.category; });
+    const showCatMap = {};
+    (showCatData || []).forEach(s => { if (s.category) showCatMap[s.id] = s.category; });
+    const epShowMap = {};
+    (epShowRes.data || []).forEach(e => { epShowMap[e.id] = e.show_id; });
+    const catMap = {};
+    (watchData || []).forEach(w => {
+      let cat = null;
+      if (w.content_type === "movie") cat = movieCatMap[w.content_id];
+      else if (w.content_type === "show") cat = showCatMap[w.content_id];
+      else if (w.content_type === "episode") { const sid = epShowMap[w.content_id]; cat = sid ? showCatMap[sid] : null; }
+      if (!cat) return;
+      if (!catMap[cat]) catMap[cat] = { sessions: 0, completed: 0, seconds: 0 };
+      catMap[cat].sessions++;
+      if (w.completed) catMap[cat].completed++;
+      if (w.progress_seconds) catMap[cat].seconds += w.progress_seconds;
+    });
+    const categoryStats = Object.entries(catMap)
+      .map(([cat, d]) => ({
+        cat,
+        sessions: d.sessions,
+        completedPct: d.sessions > 0 ? Math.round(d.completed / d.sessions * 100) : 0,
+        hours: Math.round(d.seconds / 3600 * 10) / 10,
+      }))
+      .sort((a, b) => b.sessions - a.sessions);
+
+    // Subscriber funnel — computed after userEngagement is built
+    const watchedCount = userEngagement.filter(u => u.sessions > 0).length;
+    const completedCount = userEngagement.filter(u => u.completed > 0).length;
+    const subscriberFunnel = [
+      { label: "Registered", count: userCount ?? 0 },
+      { label: "Watched ≥1", count: watchedCount },
+      { label: "Completed ≥1", count: completedCount },
+      { label: "Active (7d)", count: activeUsers7d },
+    ];
+
+    // Watch depth distribution (progress_seconds / duration_seconds buckets)
+    const depthBuckets = [
+      { label: "< 25%", count: 0, color: "#f87171" },
+      { label: "25–50%", count: 0, color: "#fb923c" },
+      { label: "50–75%", count: 0, color: "#facc15" },
+      { label: "75–100%", count: 0, color: "#34d399" },
+    ];
+    (watchData || []).forEach(w => {
+      if (!w.duration_seconds) return;
+      const pct = (w.progress_seconds || 0) / w.duration_seconds;
+      if (pct < 0.25) depthBuckets[0].count++;
+      else if (pct < 0.5) depthBuckets[1].count++;
+      else if (pct < 0.75) depthBuckets[2].count++;
+      else depthBuckets[3].count++;
+    });
+
+    // Hour-of-day activity (all-time)
+    const hourMap = Array(24).fill(0);
+    (watchData || []).forEach(w => {
+      if (!w.last_watched_at) return;
+      hourMap[new Date(w.last_watched_at).getHours()]++;
+    });
+    const hourStats = hourMap.map((count, h) => ({
+      label: h === 0 ? "12a" : h < 12 ? `${h}a` : h === 12 ? "12p" : `${h - 12}p`,
+      count,
+    }));
+
+    // Watch hours over time (by day, last 30 days)
+    const hoursByDay = {};
+    (watchData || []).forEach(w => {
+      if (!w.last_watched_at || w.last_watched_at < thirtyDaysAgo || !w.progress_seconds) return;
+      const day = w.last_watched_at.slice(0, 10);
+      hoursByDay[day] = (hoursByDay[day] || 0) + w.progress_seconds / 3600;
+    });
+    const hoursTrend = Object.entries(hoursByDay)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([day, h]) => [day, Math.round(h * 10) / 10]);
+
+    // Sessions by content type (with completion rate and hours)
+    const typeMap = {};
+    (watchData || []).forEach(w => {
+      const t = w.content_type || "unknown";
+      if (!typeMap[t]) typeMap[t] = { sessions: 0, completed: 0, seconds: 0 };
+      typeMap[t].sessions++;
+      if (w.completed) typeMap[t].completed++;
+      if (w.progress_seconds) typeMap[t].seconds += w.progress_seconds;
+    });
+    const TYPE_LABELS = { movie: "Movies", episode: "TV Episodes", podcast_episode: "Podcasts", show: "Shows" };
+    const contentTypeStats = Object.entries(typeMap)
+      .map(([type, d]) => ({
+        type,
+        label: TYPE_LABELS[type] || type,
+        sessions: d.sessions,
+        completedPct: d.sessions > 0 ? Math.round((d.completed / d.sessions) * 100) : 0,
+        hours: Math.round(d.seconds / 3600 * 10) / 10,
+      }))
+      .sort((a, b) => b.sessions - a.sessions);
+
+    // Day-of-week activity pattern (all time)
+    const dowMap = [0, 0, 0, 0, 0, 0, 0];
+    (watchData || []).forEach(w => {
+      if (!w.last_watched_at) return;
+      dowMap[new Date(w.last_watched_at).getDay()]++;
+    });
+    const dowStats = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((label, i) => ({ label, count: dowMap[i] }));
+
     setReportData({
       userCount: userCount ?? 0,
       videoCount: videoCount ?? 0,
@@ -405,6 +536,8 @@ export function CMS({ onExit }) {
       topWatched, topRated, topSaved, topByTime, userGrowth,
       userEngagement, activeUsers30d, activeUsers7d,
       neverWatchedUsers, avgSessionsPerUser, sessionTrend,
+      hoursTrend, contentTypeStats, dowStats,
+      categoryStats, subscriberFunnel, depthBuckets, hourStats,
     });
     setReportLoading(false);
   }
@@ -887,6 +1020,104 @@ export function CMS({ onExit }) {
     const { error } = await supabase.from("podcast_episodes").delete().eq("id", id);
     if (error) showToast("Delete failed: " + error.message, "error");
     else { showToast("Episode deleted"); setDeletePodEpConfirm(null); await loadPodEpisodes(selectedPodcastForEp.id); }
+  }
+
+  // ──── ADS / VAST TAGS ────
+
+  async function loadAds() {
+    setAdLoading(true);
+    const { data, error } = await supabase.from("vast_tags").select("*").order("id", { ascending: true });
+    if (error) {
+      if (error.code === "42P01") setAdTableMissing(true);
+      else showToast("Failed to load ads: " + error.message, "error");
+    } else {
+      setAdTableMissing(false);
+      setAdList(data || []);
+    }
+    setAdLoading(false);
+  }
+
+  function startAdEdit(ad) {
+    setEditingAdId(ad.id);
+    setAdForm({ name: ad.name ?? "", tag_url: ad.tag_url ?? "", ad_type: ad.ad_type ?? "pre_roll", scope: ad.scope ?? "global", content_id: ad.content_id ?? "", active: ad.active ?? true });
+    setDrawerOpen(true);
+  }
+
+  function cancelAdEdit() { setEditingAdId(null); setAdForm(EMPTY_AD); setDrawerOpen(false); }
+
+  async function saveAd() {
+    if (!adForm.name.trim()) { showToast("Name is required.", "error"); return; }
+    if (!adForm.tag_url.trim()) { showToast("VAST tag URL is required.", "error"); return; }
+    setAdSaving(true);
+    const payload = { name: adForm.name.trim(), tag_url: adForm.tag_url.trim(), ad_type: adForm.ad_type, scope: adForm.scope, content_id: adForm.scope !== "global" && adForm.content_id !== "" ? Number(adForm.content_id) : null, active: adForm.active };
+    try {
+      if (editingAdId) {
+        const { error } = await supabase.from("vast_tags").update(payload).eq("id", editingAdId);
+        if (error) throw error;
+        showToast("Ad tag updated"); cancelAdEdit();
+      } else {
+        const { error } = await supabase.from("vast_tags").insert([payload]);
+        if (error) throw error;
+        showToast("Ad tag added"); setAdForm(EMPTY_AD); setDrawerOpen(false);
+      }
+      await loadAds();
+    } catch (error) { showToast("Save failed: " + error.message, "error"); }
+    setAdSaving(false);
+  }
+
+  async function toggleAdActive(ad) {
+    const { error } = await supabase.from("vast_tags").update({ active: !ad.active }).eq("id", ad.id);
+    if (error) showToast("Update failed: " + error.message, "error");
+    else await loadAds();
+  }
+
+  async function deleteAd(id) {
+    const { error } = await supabase.from("vast_tags").delete().eq("id", id);
+    if (error) showToast("Delete failed: " + error.message, "error");
+    else { showToast("Ad tag deleted"); setDeleteAdConfirm(null); await loadAds(); }
+  }
+
+  async function loadAdAnalytics() {
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const { data } = await supabase.from("ad_impressions")
+      .select("vast_tag_id, event, created_at, user_id")
+      .gte("created_at", since);
+    if (!data) return;
+
+    const impressions = data.filter(r => r.event === "impression").length;
+    const completes   = data.filter(r => r.event === "complete").length;
+    const skips       = data.filter(r => r.event === "skip").length;
+    const errors      = data.filter(r => r.event === "error").length;
+
+    const completionRate = impressions > 0 ? Math.round(completes / impressions * 100) : null;
+    const fillRate = (impressions + errors) > 0 ? Math.round(impressions / (impressions + errors) * 100) : null;
+    const uniqueViewers = new Set(data.filter(r => r.event === "impression" && r.user_id).map(r => r.user_id)).size;
+
+    // Last 14 days bucketed
+    const today = new Date();
+    const dayBuckets = {};
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(today); d.setDate(d.getDate() - i);
+      dayBuckets[d.toISOString().slice(0, 10)] = 0;
+    }
+    data.filter(r => r.event === "impression").forEach(r => {
+      const key = r.created_at.slice(0, 10);
+      if (key in dayBuckets) dayBuckets[key]++;
+    });
+    const dailyData = Object.entries(dayBuckets).map(([date, count]) => ({ date, count }));
+
+    // Per-tag stats
+    const tagStats = {};
+    data.forEach(r => {
+      const tid = r.vast_tag_id;
+      if (!tagStats[tid]) tagStats[tid] = { impressions: 0, completes: 0, skips: 0, errors: 0 };
+      if (r.event === "impression") tagStats[tid].impressions++;
+      if (r.event === "complete")   tagStats[tid].completes++;
+      if (r.event === "skip")       tagStats[tid].skips++;
+      if (r.event === "error")      tagStats[tid].errors++;
+    });
+
+    setAdAnalytics({ impressions, completionRate, fillRate, skips, uniqueViewers, dailyData, tagStats });
   }
 
   // ──── LIVE STREAMS ────
@@ -1446,10 +1677,7 @@ export function CMS({ onExit }) {
       <div style={{ borderBottom: "1px solid #e2e8f0", padding: `0 ${PAD}`, display: "flex", alignItems: "center", justifyContent: "space-between", height: "auto", minHeight: 68, flexWrap: "wrap", gap: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
           <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22 }}>
-            <span style={{ color: "#4f46e5" }}>peep.</span>
-          </span>
-          <span style={{ fontSize: 13, color: "#6b7280", borderLeft: "1px solid #e2e8f0", paddingLeft: 24 }}>
-            Content Management System
+            <span style={{ color: "#facc15" }}>peep.</span><span style={{ color: "#4f46e5", fontSize: 13, fontFamily: "sans-serif", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginLeft: 6 }}>admin</span>
           </span>
         </div>
         <button
@@ -1490,6 +1718,9 @@ export function CMS({ onExit }) {
         </button>
         <button onClick={() => setTab("reports")} style={{ background: "transparent", border: "none", borderBottom: tab === "reports" ? "2px solid #34d399" : "none", color: tab === "reports" ? "#34d399" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "reports" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
           Reports
+        </button>
+        <button onClick={() => setTab("ads")} style={{ background: "transparent", border: "none", borderBottom: tab === "ads" ? "2px solid #f59e0b" : "none", color: tab === "ads" ? "#f59e0b" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "ads" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
+          Ads {adList.length > 0 && `(${adList.length})`}
         </button>
       </div>
 
@@ -2323,6 +2554,194 @@ export function CMS({ onExit }) {
           </>
         )}
 
+        {/* ────── ADS TAB ────── */}
+        {tab === "ads" && (
+          <div>
+
+            {/* ── Ad Performance ── */}
+            {adAnalytics && (
+              <div style={{ marginBottom: 36 }}>
+                <h2 style={{ margin: "0 0 18px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Ad Performance <span style={{ fontSize: 12, fontWeight: 400, color: "#9ca3af" }}>last 30 days</span></h2>
+
+                {/* Summary cards */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 16, marginBottom: 28 }}>
+                  {[
+                    { label: "Impressions", value: adAnalytics.impressions.toLocaleString(), color: "#6366f1", hint: "How many times an ad started playing" },
+                    { label: "Unique Viewers", value: adAnalytics.uniqueViewers.toLocaleString(), color: "#8b5cf6", hint: "Distinct logged-in users who saw at least one ad" },
+                    { label: "Skips", value: adAnalytics.skips.toLocaleString(), color: "#64748b", hint: "How many viewers skipped the ad before it finished" },
+                    { label: "Completion Rate", value: adAnalytics.completionRate !== null ? adAnalytics.completionRate + "%" : "—", color: "#22c55e", hint: "% of viewers who watched the full ad without skipping. 70%+ is good." },
+                    { label: "Fill Rate", value: adAnalytics.fillRate !== null ? adAnalytics.fillRate + "%" : "—", color: "#f59e0b", hint: "How often the ad server had an ad ready. Dropping fill rate means your tag may be broken or inventory is low." },
+                  ].map(({ label, value, color, hint }) => (
+                    <div key={label} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                      <div style={{ fontSize: 12, color: "#6b7280", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 6 }}>{label}</div>
+                      <div style={{ fontSize: 28, fontWeight: 700, color, marginBottom: 8 }}>{value}</div>
+                      <div style={{ fontSize: 11, color: "#9ca3af", lineHeight: 1.5 }}>{hint}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Daily impressions chart */}
+                {(() => {
+                  const max = Math.max(...adAnalytics.dailyData.map(d => d.count), 1);
+                  return (
+                    <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", marginBottom: 28, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 16 }}>Impressions / Day (last 14 days)</div>
+                      <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 80 }}>
+                        {adAnalytics.dailyData.map(({ date, count }) => (
+                          <div key={date} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                            <div title={`${date}: ${count}`} style={{ width: "100%", background: count > 0 ? "#6366f1" : "#e2e8f0", borderRadius: "3px 3px 0 0", height: Math.max(count / max * 68, count > 0 ? 4 : 2), transition: "height 0.3s" }} />
+                            <div style={{ fontSize: 10, color: "#374151", transform: "rotate(-45deg)", transformOrigin: "top center", whiteSpace: "nowrap", fontWeight: 500 }}>
+                              {new Date(date + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Per-tag breakdown */}
+                {adList.length > 0 && Object.keys(adAnalytics.tagStats).length > 0 && (
+                  <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden", marginBottom: 28, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
+                          {["Tag", "Impressions", "Completions", "Skips", "Completion %"].map(h => (
+                            <th key={h} style={{ padding: "11px 16px", textAlign: "left", color: "#6b7280", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.7 }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {adList.map((ad, i) => {
+                          const s = adAnalytics.tagStats[ad.id];
+                          if (!s) return null;
+                          const pct = s.impressions > 0 ? Math.round(s.completes / s.impressions * 100) : null;
+                          return (
+                            <tr key={ad.id} style={{ borderBottom: i < adList.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                              <td style={{ padding: "11px 16px", fontWeight: 600, color: "#0f172a" }}>{ad.name}</td>
+                              <td style={{ padding: "11px 16px", color: "#6366f1", fontWeight: 600 }}>{s.impressions.toLocaleString()}</td>
+                              <td style={{ padding: "11px 16px", color: "#374151" }}>{s.completes.toLocaleString()}</td>
+                              <td style={{ padding: "11px 16px", color: "#374151" }}>{s.skips.toLocaleString()}</td>
+                              <td style={{ padding: "11px 16px" }}>
+                                {pct !== null ? (
+                                  <span style={{ background: pct >= 70 ? "rgba(34,197,94,0.1)" : pct >= 40 ? "rgba(245,158,11,0.1)" : "rgba(239,68,68,0.1)", color: pct >= 70 ? "#15803d" : pct >= 40 ? "#92400e" : "#dc2626", borderRadius: 5, padding: "2px 8px", fontWeight: 600 }}>{pct}%</span>
+                                ) : "—"}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a" }}>VAST Ad Tags</h2>
+              {!adTableMissing && (
+                <button onClick={() => { setEditingAdId(null); setAdForm(EMPTY_AD); setDrawerOpen(true); }}
+                  style={{ marginLeft: "auto", background: "#f59e0b", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  + Add Tag
+                </button>
+              )}
+            </div>
+
+            {/* SQL setup callout */}
+            {adTableMissing && (
+              <div style={{ background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 12, padding: "20px 24px", marginBottom: 24 }}>
+                <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, color: "#92400e" }}>Table setup required</p>
+                <p style={{ margin: "0 0 14px", fontSize: 13, color: "#78350f" }}>Run this SQL once in your Supabase dashboard (SQL Editor) to enable ad tag management:</p>
+                <pre style={{ margin: 0, background: "#1e293b", color: "#e2e8f0", borderRadius: 8, padding: "16px 18px", fontSize: 12, overflowX: "auto", lineHeight: 1.6 }}>{`create table vast_tags (
+  id bigserial primary key,
+  name text not null,
+  tag_url text not null,
+  ad_type text not null default 'pre_roll',
+  scope text not null default 'global',
+  content_id bigint,
+  active boolean not null default true,
+  created_at timestamptz default now()
+);`}</pre>
+                <button onClick={loadAds} style={{ marginTop: 14, background: "#f59e0b", border: "none", borderRadius: 7, padding: "9px 18px", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {adLoading && <div style={{ display: "flex", justifyContent: "center", padding: 80 }}><Spinner /></div>}
+
+            {!adLoading && !adTableMissing && adList.length === 0 && (
+              <div style={{ textAlign: "center", padding: 80, color: "#9ca3af" }}>
+                <p style={{ margin: "0 0 6px", fontSize: 16 }}>No ad tags yet</p>
+                <p style={{ margin: 0, fontSize: 13 }}>Add a VAST tag URL to start serving ads</p>
+              </div>
+            )}
+
+            {!adLoading && !adTableMissing && adList.length > 0 && (() => {
+              const AD_TYPE_LABELS = { pre_roll: "Pre-roll", mid_roll: "Mid-roll", post_roll: "Post-roll" };
+              const SCOPE_LABELS = { global: "All content", movie: "Movies", show: "TV Shows", episode: "Episodes", podcast_episode: "Podcasts" };
+              const AD_TYPE_COLORS = { pre_roll: "#6366f1", mid_roll: "#f59e0b", post_roll: "#ec4899" };
+              return (
+                <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
+                        {["Active", "Name", "Type", "Scope", "VAST Tag URL", ""].map(h => (
+                          <th key={h} style={{ padding: "11px 16px", textAlign: "left", color: "#6b7280", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.7, whiteSpace: "nowrap" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {adList.map((ad, i) => (
+                        <tr key={ad.id} style={{ borderBottom: i < adList.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                          <td style={{ padding: "12px 16px" }}>
+                            <button onClick={() => toggleAdActive(ad)}
+                              style={{ width: 36, height: 20, borderRadius: 10, border: "none", background: ad.active ? "#22c55e" : "#d1d5db", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                              <span style={{ position: "absolute", top: 2, left: ad.active ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left 0.2s", display: "block" }} />
+                            </button>
+                          </td>
+                          <td style={{ padding: "12px 16px", fontWeight: 600, color: "#0f172a" }}>{ad.name}</td>
+                          <td style={{ padding: "12px 16px" }}>
+                            <span style={{ background: `${AD_TYPE_COLORS[ad.ad_type] || "#94a3b8"}18`, border: `1px solid ${AD_TYPE_COLORS[ad.ad_type] || "#94a3b8"}40`, borderRadius: 5, padding: "2px 8px", color: AD_TYPE_COLORS[ad.ad_type] || "#94a3b8", fontSize: 11, fontWeight: 600 }}>
+                              {AD_TYPE_LABELS[ad.ad_type] || ad.ad_type}
+                            </span>
+                          </td>
+                          <td style={{ padding: "12px 16px", color: "#6b7280" }}>
+                            {SCOPE_LABELS[ad.scope] || ad.scope}{ad.content_id ? ` #${ad.content_id}` : ""}
+                          </td>
+                          <td style={{ padding: "12px 16px", color: "#6b7280", maxWidth: 320 }}>
+                            <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "monospace", fontSize: 12 }} title={ad.tag_url}>{ad.tag_url}</span>
+                          </td>
+                          <td style={{ padding: "12px 16px" }}>
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <button onClick={() => startAdEdit(ad)} style={{ background: "rgba(79,70,229,0.07)", border: "1px solid rgba(79,70,229,0.2)", borderRadius: 6, padding: "5px 12px", color: "#4f46e5", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Edit</button>
+                              <button onClick={() => setDeleteAdConfirm(ad)} style={{ background: "rgba(220,38,38,0.06)", border: "1px solid rgba(220,38,38,0.15)", borderRadius: 6, padding: "5px 12px", color: "#dc2626", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
+
+            {/* Delete confirm */}
+            {deleteAdConfirm && (
+              <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ background: "#fff", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+                  <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "#0f172a" }}>Delete ad tag?</p>
+                  <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 28 }}>"{deleteAdConfirm.name}"</p>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button onClick={() => setDeleteAdConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    <button onClick={() => deleteAd(deleteAdConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ────── REPORTS TAB ────── */}
         {tab === "reports" && (
           <div>
@@ -2390,52 +2809,126 @@ export function CMS({ onExit }) {
                       );
                     })()}
 
-                    {reportData.userGrowth.length > 0 && (
-                      <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-                        <p style={{ margin: "0 0 20px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>User Signups by Month</p>
-                        <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 80 }}>
-                          {(() => {
-                            const max = Math.max(...reportData.userGrowth.map(([, c]) => c));
-                            return reportData.userGrowth.map(([month, count]) => (
-                              <div key={month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                                <span style={{ fontSize: 10, color: "#34d399", fontWeight: 600 }}>{count}</span>
-                                <div style={{ width: "100%", background: "rgba(52,211,153,0.2)", borderRadius: 4, height: `${Math.round((count / max) * 52) + 4}px`, minHeight: 4, transition: "height 0.4s ease" }} />
-                                <span style={{ fontSize: 9, color: "#9ca3af", whiteSpace: "nowrap" }}>{month.slice(5)}</span>
+                    {reportData.userGrowth.length > 0 && (() => {
+                      const max = Math.max(...reportData.userGrowth.map(([, c]) => c), 1);
+                      const total = reportData.userGrowth.reduce((s, [, c]) => s + c, 0);
+                      const MONTH_NAMES = { "01":"Jan","02":"Feb","03":"Mar","04":"Apr","05":"May","06":"Jun","07":"Jul","08":"Aug","09":"Sep","10":"Oct","11":"Nov","12":"Dec" };
+                      return (
+                        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "24px 28px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+                            <div>
+                              <p style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 700, color: "#0f172a" }}>User Signups</p>
+                              <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>New accounts by month</p>
+                            </div>
+                            <div style={{ textAlign: "right" }}>
+                              <p style={{ margin: "0 0 2px", fontSize: 22, fontWeight: 700, color: "#0f172a" }}>{total.toLocaleString()}</p>
+                              <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>total signups</p>
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 120, borderBottom: "1px solid #f1f5f9", paddingBottom: 8, marginBottom: 8 }}>
+                            {reportData.userGrowth.map(([month, count]) => (
+                              <div key={month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 4, height: "100%" }}>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: count === max ? "#0f172a" : "#6b7280" }}>{count}</span>
+                                <div style={{ width: "100%", background: count === max ? "#6366f1" : "rgba(99,102,241,0.15)", borderRadius: "4px 4px 0 0", height: `${Math.round((count / max) * 90)}px`, minHeight: 4, transition: "height 0.4s ease" }} />
                               </div>
-                            ));
-                          })()}
+                            ))}
+                          </div>
+                          <div style={{ display: "flex", gap: 6 }}>
+                            {reportData.userGrowth.map(([month]) => (
+                              <div key={month} style={{ flex: 1, textAlign: "center", fontSize: 11, color: "#9ca3af", fontWeight: 500 }}>
+                                {MONTH_NAMES[month.slice(5)] || month.slice(5)}
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
                   </>
                 )}
 
                 {/* ── CONTENT PERFORMANCE ── */}
                 {reportSection === "content" && (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 24 }}>
-                    {[
-                      { title: "Top by Sessions", items: reportData.topWatched, valueKey: "count", valueSuffix: " plays", valueColor: "#60a5fa", emptyMsg: "No watch data yet" },
-                      { title: "Top by Watch Time", items: reportData.topByTime, valueKey: "minutes", valueSuffix: " min", valueColor: "#f472b6", emptyMsg: "No watch time data yet" },
-                      { title: "Top Rated (👍)", items: reportData.topRated, valueKey: "count", valueSuffix: "", valueColor: "#f97316", emptyMsg: "No ratings yet" },
-                      { title: "Most Saved to List", items: reportData.topSaved, valueKey: "count", valueSuffix: "", valueColor: "#a78bfa", emptyMsg: "No saves yet" },
-                    ].map(({ title, items, valueKey, valueSuffix, valueColor, emptyMsg }) => (
-                      <div key={title} style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-                        <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{title}</p>
-                        {items.length === 0 ? (
-                          <p style={{ fontSize: 13, color: "#9ca3af", textAlign: "center", padding: "20px 0" }}>{emptyMsg}</p>
-                        ) : items.map((item, i) => (
-                          <div key={`${item.type}:${item.id}`} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 0", borderBottom: i < items.length - 1 ? "1px solid #f1f5f9" : "none" }}>
-                            <span style={{ fontSize: 11, color: "#9ca3af", width: 18, textAlign: "right", flexShrink: 0 }}>{i + 1}</span>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <p style={{ margin: 0, fontSize: 13, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
-                              <span style={{ fontSize: 11, color: item.type === "movie" ? "#4f46e5" : item.type === "podcast_episode" ? "#7c3aed" : "#2563eb" }}>{item.type}</span>
+                  <>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 24, marginBottom: 24 }}>
+                      {[
+                        { title: "Top by Sessions", items: reportData.topWatched, valueKey: "count", valueSuffix: " plays", valueColor: "#60a5fa", emptyMsg: "No watch data yet" },
+                        { title: "Top by Watch Time", items: reportData.topByTime, valueKey: "minutes", valueSuffix: " min", valueColor: "#f472b6", emptyMsg: "No watch time data yet" },
+                        { title: "Top Rated (👍)", items: reportData.topRated, valueKey: "count", valueSuffix: "", valueColor: "#f97316", emptyMsg: "No ratings yet" },
+                        { title: "Most Saved to List", items: reportData.topSaved, valueKey: "count", valueSuffix: "", valueColor: "#a78bfa", emptyMsg: "No saves yet" },
+                      ].map(({ title, items, valueKey, valueSuffix, valueColor, emptyMsg }) => (
+                        <div key={title} style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                          <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{title}</p>
+                          {items.length === 0 ? (
+                            <p style={{ fontSize: 13, color: "#9ca3af", textAlign: "center", padding: "20px 0" }}>{emptyMsg}</p>
+                          ) : items.map((item, i) => (
+                            <div key={`${item.type}:${item.id}`} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 0", borderBottom: i < items.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                              <span style={{ fontSize: 11, color: "#9ca3af", width: 18, textAlign: "right", flexShrink: 0 }}>{i + 1}</span>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <p style={{ margin: 0, fontSize: 13, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
+                                <span style={{ fontSize: 11, color: item.type === "movie" ? "#4f46e5" : item.type === "podcast_episode" ? "#7c3aed" : "#2563eb" }}>{item.type}</span>
+                              </div>
+                              <span style={{ fontSize: 13, fontWeight: 600, color: valueColor, flexShrink: 0 }}>{item[valueKey].toLocaleString()}{valueSuffix}</span>
                             </div>
-                            <span style={{ fontSize: 13, fontWeight: 600, color: valueColor, flexShrink: 0 }}>{item[valueKey].toLocaleString()}{valueSuffix}</span>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Category performance */}
+                    {reportData.categoryStats.length > 0 && (
+                      <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", marginBottom: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                        <p style={{ margin: "0 0 18px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>Performance by Category</p>
+                        {(() => {
+                          const maxS = Math.max(...reportData.categoryStats.map(c => c.sessions), 1);
+                          return reportData.categoryStats.map(c => (
+                            <div key={c.cat} style={{ marginBottom: 14 }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+                                <span style={{ fontSize: 12, fontWeight: 600, color: "#0f172a" }}>{c.cat}</span>
+                                <div style={{ display: "flex", gap: 20, fontSize: 11, color: "#6b7280" }}>
+                                  <span><strong style={{ color: "#60a5fa" }}>{c.sessions.toLocaleString()}</strong> sessions</span>
+                                  <span><strong style={{ color: "#34d399" }}>{c.completedPct}%</strong> completed</span>
+                                  <span><strong style={{ color: "#f472b6" }}>{c.hours}h</strong> watched</span>
+                                </div>
+                              </div>
+                              <div style={{ height: 8, background: "#f1f5f9", borderRadius: 4, overflow: "hidden" }}>
+                                <div style={{ height: "100%", width: `${Math.max(Math.round(c.sessions / maxS * 100), 2)}%`, background: "linear-gradient(90deg, #6366f1, #8b5cf6)", borderRadius: 4 }} />
+                              </div>
+                            </div>
+                          ));
+                        })()}
                       </div>
-                    ))}
-                  </div>
+                    )}
+
+                    {/* Watch depth distribution */}
+                    {reportData.depthBuckets.some(b => b.count > 0) && (
+                      <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                        <p style={{ margin: "0 0 6px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>Watch Depth Distribution</p>
+                        <p style={{ margin: "0 0 18px", fontSize: 11, color: "#9ca3af" }}>How far into content viewers watch on average</p>
+                        {(() => {
+                          const total = reportData.depthBuckets.reduce((s, b) => s + b.count, 0);
+                          const maxB = Math.max(...reportData.depthBuckets.map(b => b.count), 1);
+                          return (
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+                              {reportData.depthBuckets.map(b => {
+                                const pct = total > 0 ? Math.round(b.count / total * 100) : 0;
+                                const barH = Math.round(b.count / maxB * 80) + 4;
+                                return (
+                                  <div key={b.label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                                    <span style={{ fontSize: 13, fontWeight: 700, color: b.color }}>{pct}%</span>
+                                    <div style={{ width: "100%", height: 88, display: "flex", alignItems: "flex-end" }}>
+                                      <div style={{ width: "100%", height: barH, background: b.color, borderRadius: "4px 4px 0 0", opacity: 0.85 }} />
+                                    </div>
+                                    <span style={{ fontSize: 11, fontWeight: 600, color: "#374151" }}>{b.label}</span>
+                                    <span style={{ fontSize: 10, color: "#9ca3af" }}>{b.count.toLocaleString()} sessions</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </>
                 )}
 
                 {/* ── USER ENGAGEMENT ── */}
@@ -2455,21 +2948,148 @@ export function CMS({ onExit }) {
                       ))}
                     </div>
 
-                    {reportData.sessionTrend.length > 0 && (
+                    {/* Subscriber funnel */}
+                    {reportData.subscriberFunnel[0].count > 0 && (
                       <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", marginBottom: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-                        <p style={{ margin: "0 0 20px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>Watch Sessions — Last 30 Days</p>
-                        <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 72 }}>
+                        <p style={{ margin: "0 0 6px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>Subscriber Funnel</p>
+                        <p style={{ margin: "0 0 20px", fontSize: 11, color: "#9ca3af" }}>Drop-off at each stage of user engagement</p>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 0 }}>
+                          {reportData.subscriberFunnel.map((step, i) => {
+                            const base = reportData.subscriberFunnel[0].count;
+                            const pct = base > 0 ? Math.round(step.count / base * 100) : 0;
+                            const dropPct = i > 0 ? Math.round(step.count / reportData.subscriberFunnel[i - 1].count * 100) : 100;
+                            const COLORS = ["#34d399", "#60a5fa", "#a78bfa", "#f472b6"];
+                            return (
+                              <div key={step.label} style={{ position: "relative", padding: "0 8px" }}>
+                                {i > 0 && (
+                                  <div style={{ position: "absolute", top: 24, left: -2, fontSize: 10, color: dropPct >= 70 ? "#34d399" : dropPct >= 40 ? "#facc15" : "#f87171", fontWeight: 600, zIndex: 1 }}>
+                                    {dropPct}%→
+                                  </div>
+                                )}
+                                <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "16px 12px", textAlign: "center" }}>
+                                  <div style={{ fontSize: 22, fontWeight: 800, color: COLORS[i], marginBottom: 4 }}>{step.count.toLocaleString()}</div>
+                                  <div style={{ fontSize: 10, color: "#6b7280", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>{step.label}</div>
+                                  <div style={{ height: 4, background: "#e2e8f0", borderRadius: 2, overflow: "hidden" }}>
+                                    <div style={{ height: "100%", width: `${pct}%`, background: COLORS[i], borderRadius: 2 }} />
+                                  </div>
+                                  <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 5 }}>{pct}% of total</div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Content type breakdown */}
+                    {reportData.contentTypeStats.length > 0 && (
+                      <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", marginBottom: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                        <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>Sessions by Content Type</p>
+                        {(() => {
+                          const maxSessions = Math.max(...reportData.contentTypeStats.map(t => t.sessions), 1);
+                          const TYPE_COLORS = { Movies: "#60a5fa", "TV Episodes": "#34d399", Podcasts: "#f472b6", Shows: "#a78bfa" };
+                          return reportData.contentTypeStats.map(t => {
+                            const barColor = TYPE_COLORS[t.label] || "#94a3b8";
+                            const barW = Math.max(Math.round((t.sessions / maxSessions) * 100), 2);
+                            return (
+                              <div key={t.type} style={{ marginBottom: 14 }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+                                  <span style={{ fontSize: 12, fontWeight: 600, color: "#0f172a" }}>{t.label}</span>
+                                  <div style={{ display: "flex", gap: 16, fontSize: 11, color: "#6b7280" }}>
+                                    <span><strong style={{ color: barColor }}>{t.sessions.toLocaleString()}</strong> sessions</span>
+                                    <span><strong style={{ color: "#34d399" }}>{t.completedPct}%</strong> completed</span>
+                                    <span><strong style={{ color: "#f472b6" }}>{t.hours}h</strong> watched</span>
+                                  </div>
+                                </div>
+                                <div style={{ height: 8, background: "#f1f5f9", borderRadius: 4, overflow: "hidden" }}>
+                                  <div style={{ height: "100%", width: `${barW}%`, background: barColor, borderRadius: 4, transition: "width 0.3s" }} />
+                                </div>
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
+                    )}
+
+                    {/* Day-of-week activity */}
+                    {reportData.dowStats.some(d => d.count > 0) && (
+                      <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", marginBottom: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                        <p style={{ margin: "0 0 20px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>Activity by Day of Week</p>
+                        <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 80 }}>
                           {(() => {
-                            const max = Math.max(...reportData.sessionTrend.map(([, c]) => c), 1);
-                            return reportData.sessionTrend.map(([day, count]) => (
-                              <div key={day} title={`${day}: ${count} sessions`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "default" }}>
-                                <div style={{ width: "100%", background: "rgba(96,165,250,0.25)", borderRadius: 3, height: `${Math.round((count / max) * 52) + 4}px`, minHeight: 4 }} />
-                                {reportData.sessionTrend.length <= 14 && <span style={{ fontSize: 9, color: "#9ca3af" }}>{day.slice(8)}</span>}
+                            const max = Math.max(...reportData.dowStats.map(d => d.count), 1);
+                            return reportData.dowStats.map(d => (
+                              <div key={d.label} title={`${d.label}: ${d.count} sessions`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, cursor: "default" }}>
+                                <div style={{ width: "100%", background: "rgba(167,139,250,0.25)", borderRadius: 4, height: `${Math.round((d.count / max) * 52) + 4}px`, minHeight: 4 }} />
+                                <span style={{ fontSize: 10, color: "#9ca3af", fontWeight: 500 }}>{d.label}</span>
                               </div>
                             ));
                           })()}
                         </div>
-                        <p style={{ margin: "10px 0 0", fontSize: 11, color: "#9ca3af" }}>{reportData.sessionTrend.length} active days · hover bars for date</p>
+                        <p style={{ margin: "8px 0 0", fontSize: 11, color: "#9ca3af" }}>All-time sessions · hover bars for count</p>
+                      </div>
+                    )}
+
+                    {/* Hour of day activity */}
+                    {reportData.hourStats.some(h => h.count > 0) && (
+                      <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", marginBottom: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                        <p style={{ margin: "0 0 6px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>Activity by Hour of Day</p>
+                        <p style={{ margin: "0 0 20px", fontSize: 11, color: "#9ca3af" }}>All-time watch sessions by local hour (viewer's timezone)</p>
+                        <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 72 }}>
+                          {(() => {
+                            const max = Math.max(...reportData.hourStats.map(h => h.count), 1);
+                            return reportData.hourStats.map((h, i) => {
+                              const isPrimetime = i >= 18 && i <= 23;
+                              return (
+                                <div key={h.label} title={`${h.label}: ${h.count} sessions`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "default" }}>
+                                  <div style={{ width: "100%", background: isPrimetime ? "rgba(251,146,60,0.35)" : "rgba(96,165,250,0.25)", borderRadius: "3px 3px 0 0", height: `${Math.round((h.count / max) * 52) + 2}px`, minHeight: 2 }} />
+                                  {i % 4 === 0 && <span style={{ fontSize: 8, color: "#9ca3af" }}>{h.label}</span>}
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
+                        <p style={{ margin: "8px 0 0", fontSize: 11, color: "#9ca3af" }}>Orange bars = 6pm–midnight · hover for exact count</p>
+                      </div>
+                    )}
+
+                    {/* Sessions + hours trend (last 30 days, side by side) */}
+                    {(reportData.sessionTrend.length > 0 || reportData.hoursTrend.length > 0) && (
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
+                        {reportData.sessionTrend.length > 0 && (
+                          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                            <p style={{ margin: "0 0 20px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>Sessions — Last 30 Days</p>
+                            <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 72 }}>
+                              {(() => {
+                                const max = Math.max(...reportData.sessionTrend.map(([, c]) => c), 1);
+                                return reportData.sessionTrend.map(([day, count]) => (
+                                  <div key={day} title={`${day}: ${count} sessions`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "default" }}>
+                                    <div style={{ width: "100%", background: "rgba(96,165,250,0.3)", borderRadius: 3, height: `${Math.round((count / max) * 52) + 4}px`, minHeight: 4 }} />
+                                    {reportData.sessionTrend.length <= 14 && <span style={{ fontSize: 9, color: "#9ca3af" }}>{day.slice(8)}</span>}
+                                  </div>
+                                ));
+                              })()}
+                            </div>
+                            <p style={{ margin: "10px 0 0", fontSize: 11, color: "#9ca3af" }}>{reportData.sessionTrend.length} active days</p>
+                          </div>
+                        )}
+                        {reportData.hoursTrend.length > 0 && (
+                          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                            <p style={{ margin: "0 0 20px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>Hours Watched — Last 30 Days</p>
+                            <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 72 }}>
+                              {(() => {
+                                const max = Math.max(...reportData.hoursTrend.map(([, h]) => h), 1);
+                                return reportData.hoursTrend.map(([day, hours]) => (
+                                  <div key={day} title={`${day}: ${hours}h`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "default" }}>
+                                    <div style={{ width: "100%", background: "rgba(244,114,182,0.3)", borderRadius: 3, height: `${Math.round((hours / max) * 52) + 4}px`, minHeight: 4 }} />
+                                    {reportData.hoursTrend.length <= 14 && <span style={{ fontSize: 9, color: "#9ca3af" }}>{day.slice(8)}</span>}
+                                  </div>
+                                ));
+                              })()}
+                            </div>
+                            <p style={{ margin: "10px 0 0", fontSize: 11, color: "#9ca3af" }}>{reportData.hoursTrend.length} active days</p>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -2601,6 +3221,7 @@ export function CMS({ onExit }) {
                   {tab === "live" && drawerFormType !== "epg" && drawerFormType !== "bulk" && (editingLiveId ? "Edit Stream" : "Add Stream")}
                   {tab === "live" && drawerFormType === "epg" && (editingEpgId ? "Edit Program" : "Add Program")}
                   {tab === "live" && drawerFormType === "bulk" && "Auto-Schedule Block"}
+                  {tab === "ads" && (editingAdId ? "Edit Ad Tag" : "Add Ad Tag")}
                 </h2>
                 <button
                   onClick={closeDrawer}
@@ -3248,6 +3869,68 @@ export function CMS({ onExit }) {
                     </div>
                   );
                 })()}
+
+                {/* ── ADS FORM ── */}
+                {tab === "ads" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Name *</label>
+                      <input value={adForm.name} onChange={e => setAdForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Global Pre-roll"
+                        style={{ width: "100%", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                        onFocus={e => (e.target.style.borderColor = "#f59e0b")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>VAST Tag URL *</label>
+                      <input value={adForm.tag_url} onChange={e => setAdForm(f => ({ ...f, tag_url: e.target.value }))} placeholder="https://..."
+                        style={{ width: "100%", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box", fontFamily: "monospace" }}
+                        onFocus={e => (e.target.style.borderColor = "#f59e0b")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Ad Position</label>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        {[{ value: "pre_roll", label: "Pre-roll" }, { value: "mid_roll", label: "Mid-roll" }, { value: "post_roll", label: "Post-roll" }].map(opt => (
+                          <button key={opt.value} onClick={() => setAdForm(f => ({ ...f, ad_type: opt.value }))}
+                            style={{ flex: 1, background: adForm.ad_type === opt.value ? "#f59e0b" : "#f1f5f9", border: `1px solid ${adForm.ad_type === opt.value ? "#f59e0b" : "#e2e8f0"}`, borderRadius: 7, padding: "9px", color: adForm.ad_type === opt.value ? "#fff" : "#374151", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Applies To</label>
+                      <select value={adForm.scope} onChange={e => setAdForm(f => ({ ...f, scope: e.target.value, content_id: "" }))}
+                        style={{ width: "100%", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", cursor: "pointer" }}
+                        onFocus={e => (e.target.style.borderColor = "#f59e0b")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")}>
+                        <option value="global">All Content</option>
+                        <option value="movie">Movies</option>
+                        <option value="show">TV Shows</option>
+                        <option value="episode">Episodes</option>
+                        <option value="podcast_episode">Podcasts</option>
+                      </select>
+                    </div>
+                    {adForm.scope !== "global" && (
+                      <div>
+                        <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Content ID <span style={{ textTransform: "none", color: "#94a3b8" }}>(leave blank for all in type)</span></label>
+                        <input value={adForm.content_id} onChange={e => setAdForm(f => ({ ...f, content_id: e.target.value }))} placeholder="e.g. 42" type="number"
+                          style={{ width: "100%", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                          onFocus={e => (e.target.style.borderColor = "#f59e0b")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                      </div>
+                    )}
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "4px 0" }}>
+                      <button onClick={() => setAdForm(f => ({ ...f, active: !f.active }))}
+                        style={{ width: 40, height: 22, borderRadius: 11, border: "none", background: adForm.active ? "#22c55e" : "#d1d5db", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                        <span style={{ position: "absolute", top: 3, left: adForm.active ? 20 : 3, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left 0.2s", display: "block" }} />
+                      </button>
+                      <span style={{ fontSize: 13, color: "#374151" }}>{adForm.active ? "Active — tag will be served" : "Inactive — tag is paused"}</span>
+                    </div>
+                    <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+                      <button onClick={saveAd} disabled={adSaving} style={{ flex: 1, background: "#f59e0b", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: adSaving ? "not-allowed" : "pointer", opacity: adSaving ? 0.7 : 1 }}>
+                        {adSaving ? "Saving…" : editingAdId ? "Save Changes" : "Add Tag"}
+                      </button>
+                      <button onClick={cancelAdEdit} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    </div>
+                  </div>
+                )}
 
               </div>
             </div>

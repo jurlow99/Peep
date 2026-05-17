@@ -275,7 +275,6 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
   const [searchTypeFilter, setSearchTypeFilter] = useState("all");
   const [recentSearches, setRecentSearches] = useState(() => { try { return JSON.parse(localStorage.getItem("peep_recent_searches") || "[]"); } catch { return []; } });
   const [activeNav, setActiveNav] = useState("Home");
-  const [menuOpen, setMenuOpen] = useState(false);
   const [footerModal, setFooterModal] = useState(null);
   const isMobile = useIsMobile();
 
@@ -445,6 +444,18 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
   const featured = featuredVideo ?? featuredShow ?? videos[0] ?? shows[0] ?? null;
   const featuredIsShow = featured !== null && featured === (featuredShow ?? null) && !featuredVideo;
 
+  const featuredCategoryRank = useMemo(() => {
+    if (!featured?.category) return null;
+    const cat = featured.category.toLowerCase();
+    const allInCat = [
+      ...videos.filter(v => v.category?.toLowerCase() === cat).map(v => ({ id: v.id, _type: "movie", views: v.view_count || 0 })),
+      ...shows.filter(s => s.category?.toLowerCase() === cat).map(s => ({ id: s.id, _type: "show", views: s.view_count || 0 })),
+    ].sort((a, b) => b.views - a.views);
+    const featuredType = featuredIsShow ? "show" : "movie";
+    const rank = allInCat.findIndex(v => v.id === featured.id && v._type === featuredType) + 1;
+    return rank > 0 ? rank : null;
+  }, [featured, featuredIsShow, videos, shows]);
+
   const visibleCarousels = useMemo(() => carousels.filter(c => {
     if (!c.enabled) return false;
     const pages = (c.pages || "home").split(",").map(p => p.trim());
@@ -553,9 +564,9 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: `0 ${PAD}`, height: 68,
-        background: scrolled || menuOpen ? "rgba(10,10,10,0.96)" : "linear-gradient(to bottom, rgba(0,0,0,0.75) 0%, transparent 100%)",
-        backdropFilter: scrolled || menuOpen ? "blur(12px)" : "none",
-        borderBottom: scrolled || menuOpen ? "1px solid rgba(255,255,255,0.05)" : "none",
+        background: scrolled ? "rgba(10,10,10,0.96)" : "linear-gradient(to bottom, rgba(0,0,0,0.75) 0%, transparent 100%)",
+        backdropFilter: scrolled ? "blur(12px)" : "none",
+        borderBottom: scrolled ? "1px solid rgba(255,255,255,0.05)" : "none",
         transition: "background 0.4s ease",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 36 }}>
@@ -564,7 +575,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           </span>
           {!isMobile && (
             <div style={{ display: "flex", gap: 4 }}>
-              {["Home", "Movies", "Series", "Podcasts", "New & Popular"].map(label => {
+              {["Home", "Movies", "Series", "Live TV", "Podcasts", "New & Popular"].map(label => {
                 const active = activeNav === label;
                 return (
                   <span key={label} onClick={() => setActiveNav(label)} style={{ fontSize: 13.5, padding: "6px 12px", borderRadius: 6, color: active ? "#fff" : "rgba(255,255,255,0.55)", fontWeight: active ? 600 : 400, cursor: "pointer", background: active ? "rgba(250,204,21,0.12)" : "transparent", transition: "color 0.2s, background 0.2s" }}
@@ -596,64 +607,25 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
             </div>
           </div>
-          {!isMobile && (user ? (() => {
+          {user ? (() => {
             const av = avatarForId(userAvatarId || activeProfile?.avatar_id);
             return (
-              <div onClick={onProfileOpen} title={activeProfile?.name ?? "Profile"} style={{ width: 36, height: 36, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg, #6366f1, #8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? 16 : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
+              <div onClick={onProfileOpen} title={activeProfile?.name ?? "Profile"} style={{ width: isMobile ? 32 : 36, height: isMobile ? 32 : 36, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg, #6366f1, #8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? (isMobile ? 14 : 16) : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
                 onMouseEnter={e => e.currentTarget.style.borderColor = "#facc15"}
                 onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}>
                 {av ? av.emoji : (activeProfile?.name?.[0] || user.email[0]).toUpperCase()}
               </div>
             );
           })() : (
-            <button onClick={onAuthOpen} style={{ background: "#facc15", border: "none", borderRadius: 6, padding: "8px 18px", color: "#0a0a0a", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Sign In</button>
-          ))}
+            <button onClick={onAuthOpen} style={{ background: "#facc15", border: "none", borderRadius: 6, padding: isMobile ? "7px 14px" : "8px 18px", color: "#0a0a0a", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Sign In</button>
+          )}
           {!isMobile && (
             <div onClick={() => window.location.href = "/admin"} title="Admin panel"
               style={{ width: 34, height: 34, borderRadius: 8, background: "linear-gradient(135deg, #fde68a, #b45309)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>P</div>
           )}
-          {isMobile && (
-            <button onClick={() => setMenuOpen(m => !m)} style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", padding: 4 }}>
-              {menuOpen
-                ? <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                : <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
-              }
-            </button>
-          )}
         </div>
       </nav>
 
-      {/* Mobile nav drawer */}
-      {isMobile && menuOpen && (
-        <div style={{ position: "fixed", top: 68, left: 0, right: 0, bottom: 0, zIndex: 98, background: "rgba(10,10,10,0.98)", backdropFilter: "blur(16px)", display: "flex", flexDirection: "column", overflowY: "auto" }}>
-          <div style={{ padding: "12px 0" }}>
-            {["Home", "Movies", "Series", "Podcasts", "New & Popular", "My List"].map(label => {
-              const active = activeNav === label;
-              return (
-                <div key={label} onClick={() => { if (label === "My List" && !user) { onAuthOpen(); setMenuOpen(false); return; } setActiveNav(label); setMenuOpen(false); }}
-                  style={{ padding: "16px 24px", fontSize: 17, fontWeight: active ? 600 : 400, color: active ? "#fff" : "rgba(255,255,255,0.6)", borderLeft: `3px solid ${active ? "#facc15" : "transparent"}`, cursor: "pointer" }}>
-                  {label}
-                </div>
-              );
-            })}
-          </div>
-          <div style={{ marginTop: "auto", padding: 24, borderTop: "1px solid #1a1a1a" }}>
-            {user ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                <div style={{ width: 42, height: 42, borderRadius: "50%", background: "linear-gradient(135deg, #6366f1, #8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
-                  {(user.user_metadata?.full_name?.[0] || user.email[0]).toUpperCase()}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ margin: "0 0 4px", fontSize: 14, color: "#fff", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.user_metadata?.full_name || user.email}</p>
-                  <button onClick={() => { supabase.auth.signOut(); setMenuOpen(false); }} style={{ background: "none", border: "none", color: "#f87171", fontSize: 12, cursor: "pointer", padding: 0 }}>Sign Out</button>
-                </div>
-              </div>
-            ) : (
-              <button onClick={() => { onAuthOpen(); setMenuOpen(false); }} style={{ width: "100%", background: "#facc15", border: "none", borderRadius: 8, padding: "14px", color: "#0a0a0a", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>Sign In</button>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Search overlay */}
       {searchOpen && (
@@ -737,12 +709,12 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         </div>
       )}
 
-      {/* Hero — hidden on catalog pages and Podcasts */}
-      {activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "Podcasts" && (
+      {/* Hero — Home only */}
+      {activeNav === "Home" && (
         loading ? (
           <div style={{ height: "85vh", display: "flex", alignItems: "center", justifyContent: "center" }}><Spinner /></div>
         ) : featured ? (
-          <HeroBanner video={featured} onPlay={featuredIsShow ? onShowSelect : onPlay} isShow={featuredIsShow} myList={myList} onToggleList={onToggleList} />
+          <HeroBanner video={featured} onPlay={featuredIsShow ? onShowSelect : onPlay} isShow={featuredIsShow} myList={myList} onToggleList={onToggleList} categoryRank={featuredCategoryRank} />
         ) : (
           <div style={{ height: "85vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <p style={{ color: "#555", fontSize: 15 }}>No content yet.</p>
@@ -764,7 +736,9 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         />
       )}
 
-      {/* Live TV — hidden from viewers */}
+      {activeNav === "Live TV" && (
+        <LiveTVPage streams={liveStreams} epgEntries={epgEntries} onPlay={onPlay} />
+      )}
 
       {/* Content rows (Home / My List / New & Popular / Podcasts) */}
       {activeNav !== "Movies" && activeNav !== "Series" && !loading && (allContent.length > 0 || podcasts.length > 0 || continueWatching.length > 0) && (
@@ -800,7 +774,31 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         </div>
       )}
 
+      {isMobile && <div style={{ height: 72 }} />}
       <Footer onNavChange={setActiveNav} onProfileOpen={onProfileOpen} onOpenModal={setFooterModal} />
+
+      {/* Mobile bottom tab bar */}
+      {isMobile && (
+        <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100, background: "rgba(10,10,10,0.97)", backdropFilter: "blur(20px)", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", height: 60, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+          {[
+            { id: "Home", label: "Home", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
+            { id: "Movies", label: "Movies", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="2"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg> },
+            { id: "Series", label: "Series", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></svg> },
+            { id: "Podcasts", label: "Podcasts", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg> },
+            { id: "My List", label: "My List", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg> },
+          ].map(tab => {
+            const active = activeNav === tab.id;
+            return (
+              <button key={tab.id}
+                onClick={() => { if (tab.id === "My List" && !user) { onAuthOpen(); return; } setActiveNav(tab.id); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, background: "none", border: "none", color: active ? "#facc15" : "#555", cursor: "pointer", padding: "6px 0", fontSize: 9.5, fontWeight: active ? 700 : 400, letterSpacing: 0.3, transition: "color 0.15s" }}>
+                {tab.icon}
+                {tab.label}
+              </button>
+            );
+          })}
+        </nav>
+      )}
       {footerModal && (
         <div onClick={() => setFooterModal(null)} style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 16, padding: "36px 40px", width: "min(560px, 100%)", maxHeight: "80vh", overflowY: "auto", fontFamily: "'Space Grotesk', sans-serif" }}>
@@ -963,7 +961,7 @@ function CatalogCard({ item, onClick, myList, onToggleList }) {
 
 // ─── Hero Banner ──────────────────────────────────────────────────────────────
 
-function HeroBanner({ video, onPlay, isShow, myList, onToggleList }) {
+function HeroBanner({ video, onPlay, isShow, myList, onToggleList, categoryRank }) {
   const [trailerOpen, setTrailerOpen] = useState(false);
   const [bgPlaying, setBgPlaying] = useState(false);
   const [muted, setMuted] = useState(true);
@@ -1033,7 +1031,7 @@ function HeroBanner({ video, onPlay, isShow, myList, onToggleList }) {
             ? <span style={{ background: "#3b82f6", color: "#fff", fontSize: 10, fontWeight: 700, padding: "4px 12px", borderRadius: 4, letterSpacing: 1.5, textTransform: "uppercase" }}>Series</span>
             : <span style={{ background: "#facc15", color: "#0a0a0a", fontSize: 10, fontWeight: 700, padding: "4px 12px", borderRadius: 4, letterSpacing: 1.5, textTransform: "uppercase" }}>Peep Original</span>
           }
-          {video.category && <span style={{ background: "rgba(255,255,255,0.08)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.14)", color: "#fff", fontSize: 10, fontWeight: 600, padding: "4px 12px", borderRadius: 4, letterSpacing: 1, textTransform: "uppercase" }}>#1 in {video.category}</span>}
+          {video.category && categoryRank && <span style={{ background: "rgba(255,255,255,0.08)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.14)", color: "#fff", fontSize: 10, fontWeight: 600, padding: "4px 12px", borderRadius: 4, letterSpacing: 1, textTransform: "uppercase" }}>#{categoryRank} in {video.category}</span>}
         </div>
         <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(42px, 5vw, 80px)", lineHeight: 1.0, margin: "0 0 18px", fontWeight: 400, textShadow: "0 2px 24px rgba(0,0,0,0.5)" }}>{video.title}</h1>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22, flexWrap: "wrap" }}>
@@ -1042,7 +1040,7 @@ function HeroBanner({ video, onPlay, isShow, myList, onToggleList }) {
           {video.rating && <span style={{ border: "1px solid rgba(255,255,255,0.28)", color: "rgba(255,255,255,0.5)", fontSize: 11, padding: "2px 7px", borderRadius: 3 }}>{video.rating}</span>}
           {video.duration && <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>{video.duration}</span>}
         </div>
-        {video.description && <p style={{ fontSize: 15.5, color: "rgba(255,255,255,0.76)", lineHeight: 1.75, margin: "0 0 34px", textShadow: "0 1px 8px rgba(0,0,0,0.4)" }}>{video.description}</p>}
+        {video.description && <p style={{ fontSize: 15.5, color: "rgba(255,255,255,0.76)", lineHeight: 1.75, margin: "0 0 34px", textShadow: "0 1px 8px rgba(0,0,0,0.4)", ...(isMobile ? { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" } : {}) }}>{video.description}</p>}
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <button onClick={() => onPlay(video)} style={{ background: "#fff", color: "#0a0a0a", border: "none", borderRadius: 7, padding: isMobile ? "12px 24px" : "14px 32px", fontSize: isMobile ? 14 : 15, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}
             onMouseEnter={e => e.currentTarget.style.background = "#e5e5e5"}
@@ -1095,6 +1093,7 @@ function HeroBanner({ video, onPlay, isShow, myList, onToggleList }) {
 
 function ContentRow({ section, onPlay, onShowSelect, myList, onToggleList }) {
   const scrollRef = useRef(null);
+  const isMobile = useIsMobile();
   const scroll = dir => scrollRef.current?.scrollBy({ left: dir * scrollRef.current.clientWidth * 0.85, behavior: "smooth" });
 
   return (
@@ -1104,8 +1103,8 @@ function ContentRow({ section, onPlay, onShowSelect, myList, onToggleList }) {
         <span style={{ fontSize: 13, color: "#facc15", cursor: "pointer", fontWeight: 500 }}>Explore All →</span>
       </div>
       <div style={{ position: "relative" }}>
-        <button onClick={() => scroll(-1)} style={{ position: "absolute", left: 0, top: 0, bottom: 0, zIndex: 10, background: "linear-gradient(to right, rgba(10,10,10,0.95), transparent)", border: "none", color: "#fff", width: 64, cursor: "pointer", fontSize: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>
-        <button onClick={() => scroll(1)} style={{ position: "absolute", right: 0, top: 0, bottom: 0, zIndex: 10, background: "linear-gradient(to left, rgba(10,10,10,0.95), transparent)", border: "none", color: "#fff", width: 64, cursor: "pointer", fontSize: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>›</button>
+        {!isMobile && <button onClick={() => scroll(-1)} style={{ position: "absolute", left: 0, top: 0, bottom: 0, zIndex: 10, background: "linear-gradient(to right, rgba(10,10,10,0.95), transparent)", border: "none", color: "#fff", width: 64, cursor: "pointer", fontSize: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>}
+        {!isMobile && <button onClick={() => scroll(1)} style={{ position: "absolute", right: 0, top: 0, bottom: 0, zIndex: 10, background: "linear-gradient(to left, rgba(10,10,10,0.95), transparent)", border: "none", color: "#fff", width: 64, cursor: "pointer", fontSize: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>›</button>}
         <div ref={scrollRef} className="scroll-row" style={{ display: "flex", gap: 12, overflowX: "auto", scrollbarWidth: "none", padding: `28px ${PAD} 32px` }}>
           {section.videos.map((video, i) => (
             <VideoCard key={video.id + (video._type || "")} video={video}
@@ -1125,6 +1124,7 @@ const PODCAST_CARD_W = "clamp(150px, 20vw, 210px)";
 
 function PodcastRow({ section, onPodcastSelect }) {
   const scrollRef = useRef(null);
+  const isMobile = useIsMobile();
   const scroll = dir => scrollRef.current?.scrollBy({ left: dir * scrollRef.current.clientWidth * 0.8, behavior: "smooth" });
 
   return (
@@ -1142,8 +1142,8 @@ function PodcastRow({ section, onPodcastSelect }) {
       </div>
       <div style={{ margin: `0 0 18px ${PAD}`, height: 1, background: "linear-gradient(to right, #818cf8, rgba(129,140,248,0.3), transparent)" }} />
       <div style={{ position: "relative" }}>
-        <button onClick={() => scroll(-1)} style={{ position: "absolute", left: 0, top: 0, bottom: 0, zIndex: 10, background: "linear-gradient(to right, rgba(10,10,10,0.95), transparent)", border: "none", color: "#fff", width: 64, cursor: "pointer", fontSize: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>
-        <button onClick={() => scroll(1)} style={{ position: "absolute", right: 0, top: 0, bottom: 0, zIndex: 10, background: "linear-gradient(to left, rgba(10,10,10,0.95), transparent)", border: "none", color: "#fff", width: 64, cursor: "pointer", fontSize: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>›</button>
+        {!isMobile && <button onClick={() => scroll(-1)} style={{ position: "absolute", left: 0, top: 0, bottom: 0, zIndex: 10, background: "linear-gradient(to right, rgba(10,10,10,0.95), transparent)", border: "none", color: "#fff", width: 64, cursor: "pointer", fontSize: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>}
+        {!isMobile && <button onClick={() => scroll(1)} style={{ position: "absolute", right: 0, top: 0, bottom: 0, zIndex: 10, background: "linear-gradient(to left, rgba(10,10,10,0.95), transparent)", border: "none", color: "#fff", width: 64, cursor: "pointer", fontSize: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>›</button>}
         <div ref={scrollRef} className="scroll-row" style={{ display: "flex", gap: 16, overflowX: "auto", scrollbarWidth: "none", padding: `28px ${PAD} 32px` }}>
           {section.podcastItems.map(podcast => (
             <PodcastCard key={podcast.id} podcast={podcast} onPodcastSelect={onPodcastSelect} />
@@ -1348,20 +1348,31 @@ function LiveTVPage({ streams, epgEntries, onPlay }) {
     _upNext: upNextMap[s.id] ?? null,
   }));
 
+  const hasEpg = epgEntries.length > 0;
+
   return (
     <div style={{ paddingTop: 100, paddingBottom: 80, minHeight: "100vh" }}>
       <style>{`@keyframes livepulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.4; transform:scale(1.3); } }`}</style>
 
-      <div style={{ padding: `0 ${PAD} 40px` }}>
-        <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(28px, 4vw, 48px)", fontWeight: 400, margin: "0 0 8px", color: "#fff" }}>Live TV</h1>
+      {/* Header */}
+      <div style={{ padding: `0 ${PAD} 32px` }}>
+        <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(28px, 4vw, 48px)", fontWeight: 400, margin: "0 0 6px", color: "#fff" }}>Live TV</h1>
         <p style={{ margin: 0, fontSize: 14, color: "#555" }}>
           {sortedStreams.length > 0 ? `${sortedStreams.length} channel${sortedStreams.length !== 1 ? "s" : ""}` : "No channels set up yet."}
         </p>
       </div>
 
+      {sortedStreams.length === 0 && (
+        <div style={{ padding: `80px ${PAD}`, textAlign: "center", color: "#444" }}>
+          <p style={{ fontSize: 16 }}>No channels set up yet.</p>
+          <p style={{ fontSize: 13, marginTop: 8 }}>Add live streams in the admin panel.</p>
+        </div>
+      )}
+
+      {/* Channel grid */}
       {sortedStreams.length > 0 && (
         <div style={{ padding: `0 ${PAD}`, marginBottom: 56 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 20 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
             {enriched(sortedStreams).map(s => (
               <LiveChannelCard key={s.id} stream={s} onTuneIn={tuneIn} tuning={tuningIn === s.id} />
             ))}
@@ -1369,7 +1380,8 @@ function LiveTVPage({ streams, epgEntries, onPlay }) {
         </div>
       )}
 
-      {sortedStreams.length > 0 && (
+      {/* EPG */}
+      {sortedStreams.length > 0 && hasEpg && (
         <div style={{ padding: `0 ${PAD}`, marginBottom: 56 }}>
           <EpgGrid channels={sortedStreams} epgEntries={epgEntries} onTuneIn={tuneIn} now={now} />
         </div>
@@ -1382,63 +1394,67 @@ function LiveChannelCard({ stream, onTuneIn, tuning }) {
   const [hovered, setHovered] = useState(false);
   const nowAiring = stream._nowAiring;
   const upNext = stream._upNext;
+  const nowTitle = nowAiring?.title || stream.now_airing;
+  const upNextTitle = upNext?.title || stream.up_next;
 
   return (
     <div
       onClick={() => onTuneIn(stream)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{ cursor: "pointer", borderRadius: 12, overflow: "hidden", background: "#141414", border: `1px solid ${hovered ? "#ef4444" : "#1e1e1e"}`, transform: hovered ? "scale(1.02)" : "scale(1)", transition: "all 0.2s", boxShadow: hovered ? "0 8px 32px rgba(239,68,68,0.2)" : "none" }}>
-      <div style={{ position: "relative", aspectRatio: "16/9", overflow: "hidden" }}>
+      style={{ cursor: "pointer", borderRadius: 10, overflow: "hidden", background: "#111", border: `1px solid ${hovered ? "rgba(239,68,68,0.5)" : "#1e1e1e"}`, transform: hovered ? "translateY(-2px)" : "none", transition: "all 0.18s", boxShadow: hovered ? "0 8px 24px rgba(0,0,0,0.5)" : "0 2px 8px rgba(0,0,0,0.3)" }}>
+
+      {/* Thumbnail / placeholder */}
+      <div style={{ position: "relative", aspectRatio: "16/9", overflow: "hidden", background: "#0a0a0a" }}>
         {stream.thumbnail
-          ? <img src={stream.thumbnail} alt={stream.title} style={{ width: "100%", height: "100%", objectFit: "cover", filter: hovered ? "brightness(0.55)" : "brightness(0.8)", transition: "filter 0.2s" }} />
-          : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #1a0000, #3a0000)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="#ef4444" opacity="0.4"><polygon points="5,3 19,12 5,21" /></svg>
+          ? <img src={stream.thumbnail} alt={stream.title} style={{ width: "100%", height: "100%", objectFit: "cover", filter: hovered ? "brightness(0.5)" : "brightness(0.85)", transition: "filter 0.18s" }} />
+          : <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6 }}>
+              {stream.channel_number != null && stream.channel_number !== "" && (
+                <span style={{ fontSize: 28, fontWeight: 800, color: "#222", letterSpacing: -1 }}>{stream.channel_number}</span>
+              )}
+              <span style={{ fontSize: 12, fontWeight: 600, color: "#2a2a2a", textAlign: "center", padding: "0 12px" }}>{stream.title}</span>
             </div>
         }
+
+        {/* LIVE badge */}
         {stream.is_live && (
-          <div style={{ position: "absolute", top: 10, left: 10, display: "flex", alignItems: "center", gap: 5, background: "#ef4444", borderRadius: 5, padding: "4px 10px" }}>
-            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#fff", animation: "livepulse 1.5s infinite" }} />
-            <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 0.5 }}>{stream.badge_text || "LIVE"}</span>
+          <div style={{ position: "absolute", top: 8, left: 8, display: "flex", alignItems: "center", gap: 4, background: "#ef4444", borderRadius: 4, padding: "3px 8px" }}>
+            <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#fff", animation: "livepulse 1.5s infinite" }} />
+            <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", letterSpacing: 0.5 }}>{stream.badge_text || "LIVE"}</span>
           </div>
         )}
-        {stream.channel_number != null && stream.channel_number !== "" && (
-          <div style={{ position: "absolute", top: 10, right: 10, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)", borderRadius: 5, padding: "4px 8px", fontSize: 11, fontWeight: 700, color: "#fff" }}>
+
+        {/* CH number */}
+        {stream.channel_number != null && stream.channel_number !== "" && stream.thumbnail && (
+          <div style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", borderRadius: 4, padding: "3px 7px", fontSize: 10, fontWeight: 700, color: "#fff" }}>
             CH {stream.channel_number}
           </div>
         )}
-        {tuning && (
+
+        {/* Tune in overlay */}
+        {tuning ? (
           <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div style={{ width: 36, height: 36, borderRadius: "50%", border: "3px solid rgba(255,255,255,0.2)", borderTopColor: "#fff", animation: "spin 0.8s linear infinite" }} />
+            <div style={{ width: 28, height: 28, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.2)", borderTopColor: "#fff", animation: "spin 0.8s linear infinite" }} />
             <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
           </div>
-        )}
-        {hovered && !tuning && (
+        ) : hovered && (
           <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div style={{ width: 52, height: 52, borderRadius: "50%", background: "rgba(239,68,68,0.9)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 20px rgba(239,68,68,0.5)" }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><polygon points="5,3 19,12 5,21" /></svg>
+            <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(239,68,68,0.9)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><polygon points="5,3 19,12 5,21" /></svg>
             </div>
           </div>
         )}
       </div>
-      <div style={{ padding: "14px 16px" }}>
-        <p style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 600, color: "#fff" }}>{stream.title}</p>
-        {nowAiring ? (
-          <>
-            <p style={{ margin: "0 0 3px", fontSize: 12, color: "#ef4444", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              Now: {nowAiring.title}
-            </p>
-            {upNext && (
-              <p style={{ margin: 0, fontSize: 11, color: "#555", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                Up Next: {upNext.title}
-              </p>
-            )}
-          </>
-        ) : (
-          <>
-            {stream.now_airing && <p style={{ margin: "0 0 3px", fontSize: 12, color: "#ef4444", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Now: {stream.now_airing}</p>}
-            {stream.up_next && <p style={{ margin: 0, fontSize: 11, color: "#555", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Up Next: {stream.up_next}</p>}
-          </>
+
+      {/* Info */}
+      <div style={{ padding: "10px 12px" }}>
+        <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 700, color: "#e5e5e5" }}>{stream.title}</p>
+        {nowTitle
+          ? <p style={{ margin: "0 0 2px", fontSize: 11, color: "#ef4444", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Now: {nowTitle}</p>
+          : <p style={{ margin: "0 0 2px", fontSize: 11, color: "#333" }}>No program info</p>
+        }
+        {upNextTitle && (
+          <p style={{ margin: 0, fontSize: 11, color: "#444", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Up Next: {upNextTitle}</p>
         )}
       </div>
     </div>
@@ -1583,6 +1599,7 @@ const CW_CARD_W = "clamp(200px, 26vw, 300px)";
 
 function ContinueWatchingRow({ items, onPlay, onRemove }) {
   const scrollRef = useRef(null);
+  const isMobile = useIsMobile();
   const scroll = dir => scrollRef.current?.scrollBy({ left: dir * scrollRef.current.clientWidth * 0.85, behavior: "smooth" });
   return (
     <div style={{ marginBottom: 8 }}>
@@ -1591,8 +1608,8 @@ function ContinueWatchingRow({ items, onPlay, onRemove }) {
         <h2 style={{ margin: 0, fontSize: "clamp(16px, 1.4vw, 20px)", fontWeight: 600, color: "#e5e5e5" }}>Continue Watching</h2>
       </div>
       <div style={{ position: "relative" }}>
-        <button onClick={() => scroll(-1)} style={{ position: "absolute", left: 0, top: 0, bottom: 0, zIndex: 10, background: "linear-gradient(to right, rgba(10,10,10,0.95), transparent)", border: "none", color: "#fff", width: 64, cursor: "pointer", fontSize: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>
-        <button onClick={() => scroll(1)} style={{ position: "absolute", right: 0, top: 0, bottom: 0, zIndex: 10, background: "linear-gradient(to left, rgba(10,10,10,0.95), transparent)", border: "none", color: "#fff", width: 64, cursor: "pointer", fontSize: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>›</button>
+        {!isMobile && <button onClick={() => scroll(-1)} style={{ position: "absolute", left: 0, top: 0, bottom: 0, zIndex: 10, background: "linear-gradient(to right, rgba(10,10,10,0.95), transparent)", border: "none", color: "#fff", width: 64, cursor: "pointer", fontSize: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>}
+        {!isMobile && <button onClick={() => scroll(1)} style={{ position: "absolute", right: 0, top: 0, bottom: 0, zIndex: 10, background: "linear-gradient(to left, rgba(10,10,10,0.95), transparent)", border: "none", color: "#fff", width: 64, cursor: "pointer", fontSize: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>›</button>}
         <div ref={scrollRef} className="scroll-row" style={{ display: "flex", gap: 14, overflowX: "auto", scrollbarWidth: "none", padding: `10px ${PAD} 28px` }}>
           {items.map(item => <ContinueWatchingCard key={`${item._type}_${item.id}`} item={item} onPlay={onPlay} onRemove={onRemove} />)}
         </div>
@@ -1899,7 +1916,8 @@ function isHlsUrl(url) {
   return !!url && (url.includes(".m3u8") || url.includes("m3u8"));
 }
 
-function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myList, onToggleList, onAuthOpen, activeProfile }) {
+function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, activeProfile }) {
+  const isMobile = useIsMobile();
   const [allVideos, setAllVideos] = useState([]);
   const [allShows, setAllShows] = useState([]);
   const [nextEpisode, setNextEpisode] = useState(null);
@@ -1908,6 +1926,11 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
   const countdownTimerRef = useRef(null);
+  const adContainerRef = useRef(null);
+  const adsManagerRef = useRef(null);
+  const midRollFiredRef = useRef(false);
+  const [adPlaying, setAdPlaying] = useState(false);
+  const [adVastUrl, setAdVastUrl] = useState(null);
 
   const isEpisode = !!video.show_id;
   const [myRating, setMyRating] = useState(null);
@@ -2039,6 +2062,105 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
 
   useEffect(() => () => { document.body.style.overflow = ""; }, []);
 
+  // Fetch VAST tag + initialize IMA pre-roll in one effect
+  useEffect(() => {
+    if (getEmbedUrl(video.url)) return;
+    let cancelled = false;
+
+    async function runAd() {
+      // One pre-roll per session, 30-min cooldown
+      const lastAd = sessionStorage.getItem("lastAdAt");
+      if (lastAd && Date.now() - Number(lastAd) < 30 * 60 * 1000) return;
+
+      // Wait up to 3s for IMA SDK script to load
+      let waited = 0;
+      while (!window.google?.ima && waited < 3000) {
+        await new Promise(r => setTimeout(r, 100));
+        waited += 100;
+      }
+      if (cancelled || !window.google?.ima) return;
+
+      // Fetch best matching pre-roll tag
+      const contentScope = isEpisode ? "episode" : "movie";
+      const { data } = await supabase.from("vast_tags")
+        .select("id, tag_url, scope, content_id")
+        .eq("active", true)
+        .eq("ad_type", "pre_roll")
+        .or(`scope.eq.global,scope.eq.${contentScope}`);
+      if (cancelled || !data || data.length === 0) return;
+
+      const exact = data.find(t => t.content_id === video.id);
+      const typed = data.find(t => t.scope === contentScope && !t.content_id);
+      const glob  = data.find(t => t.scope === "global");
+      const tag = exact || typed || glob;
+      if (!tag) return;
+
+      const logAdEvent = (event) => {
+        supabase.from("ad_impressions").insert({ vast_tag_id: tag.id, video_id: video.id, event, user_id: user?.id ?? null }).then(() => {});
+      };
+
+      const ima = window.google.ima;
+      const videoEl = videoRef.current;
+      const adContainer = adContainerRef.current;
+      if (cancelled || !videoEl || !adContainer) return;
+
+      // Pause content while ad loads
+      videoEl.pause();
+      setAdPlaying(true);
+      setAdVastUrl(tag.tag_url);
+
+      const displayContainer = new ima.AdDisplayContainer(adContainer, videoEl);
+      displayContainer.initialize();
+      const adsLoader = new ima.AdsLoader(displayContainer);
+
+      const resume = () => {
+        setAdPlaying(false);
+        if (!cancelled) videoEl.play().catch(() => {});
+      };
+
+      adsLoader.addEventListener(ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED, (e) => {
+        if (cancelled) return;
+        const mgr = e.getAdsManager(videoEl);
+        adsManagerRef.current = mgr;
+
+        mgr.addEventListener(ima.AdEvent.Type.CONTENT_PAUSE_REQUESTED, () => { videoEl.pause(); setAdPlaying(true); });
+        mgr.addEventListener(ima.AdEvent.Type.CONTENT_RESUME_REQUESTED, resume);
+        mgr.addEventListener(ima.AdEvent.Type.STARTED, () => { sessionStorage.setItem("lastAdAt", Date.now()); logAdEvent("impression"); });
+        mgr.addEventListener(ima.AdEvent.Type.COMPLETE, () => logAdEvent("complete"));
+        mgr.addEventListener(ima.AdEvent.Type.SKIPPED, () => logAdEvent("skip"));
+        mgr.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, () => { logAdEvent("error"); mgr.destroy(); adsManagerRef.current = null; resume(); });
+
+        try {
+          const w = videoEl.clientWidth || 640;
+          const h = videoEl.clientHeight || 360;
+          mgr.init(w, h, ima.ViewMode.NORMAL);
+          mgr.start();
+        } catch {
+          mgr.destroy();
+          adsManagerRef.current = null;
+          resume();
+        }
+      });
+
+      adsLoader.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, () => { logAdEvent("error"); resume(); });
+
+      const req = new ima.AdsRequest();
+      req.adTagUrl = tag.tag_url;
+      req.linearAdSlotWidth = videoEl.clientWidth || 640;
+      req.linearAdSlotHeight = videoEl.clientHeight || 360;
+      adsLoader.requestAds(req);
+    }
+
+    runAd();
+
+    return () => {
+      cancelled = true;
+      midRollFiredRef.current = false;
+      adsManagerRef.current?.destroy();
+      adsManagerRef.current = null;
+    };
+  }, [video.id]);
+
   useEffect(() => {
     if (!isFullscreen) return;
     const handler = (e) => {
@@ -2085,14 +2207,77 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
   }
 
   function handleTimeUpdate(e) {
-    if (!nextEpisode || countdownGuardRef.current) return;
-    if (localStorage.getItem(PREF_AUTOPLAY_NEXT) === "false") return;
     const { currentTime, duration } = e.currentTarget;
     if (!duration || isNaN(duration)) return;
+
+    // Mid-roll: fire once at 50% for videos over 20 minutes
+    if (!midRollFiredRef.current && !getEmbedUrl(video.url) && duration >= 1200 && currentTime / duration >= 0.5) {
+      midRollFiredRef.current = true;
+      playMidRoll();
+    }
+
+    if (!nextEpisode || countdownGuardRef.current) return;
+    if (localStorage.getItem(PREF_AUTOPLAY_NEXT) === "false") return;
     if (duration - currentTime <= 10) {
       countdownGuardRef.current = true;
       startCountdown(duration - currentTime);
     }
+  }
+
+  async function playMidRoll() {
+    if (!window.google?.ima) return;
+    const contentScope = isEpisode ? "episode" : "movie";
+    const { data } = await supabase.from("vast_tags")
+      .select("id, tag_url, scope, content_id")
+      .eq("active", true)
+      .eq("ad_type", "mid_roll")
+      .or(`scope.eq.global,scope.eq.${contentScope}`);
+    if (!data || data.length === 0) return;
+
+    const exact = data.find(t => t.content_id === video.id);
+    const typed = data.find(t => t.scope === contentScope && !t.content_id);
+    const glob  = data.find(t => t.scope === "global");
+    const tag = exact || typed || glob;
+    if (!tag) return;
+
+    const logAdEvent = (event) => {
+      supabase.from("ad_impressions").insert({ vast_tag_id: tag.id, video_id: video.id, event, user_id: user?.id ?? null }).then(() => {});
+    };
+
+    const ima = window.google.ima;
+    const videoEl = videoRef.current;
+    const adContainer = adContainerRef.current;
+    if (!videoEl || !adContainer) return;
+
+    videoEl.pause();
+    setAdPlaying(true);
+
+    const displayContainer = new ima.AdDisplayContainer(adContainer, videoEl);
+    displayContainer.initialize();
+    const adsLoader = new ima.AdsLoader(displayContainer);
+
+    const resume = () => { setAdPlaying(false); videoEl.play().catch(() => {}); };
+
+    adsLoader.addEventListener(ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED, (e) => {
+      const mgr = e.getAdsManager(videoEl);
+      mgr.addEventListener(ima.AdEvent.Type.CONTENT_PAUSE_REQUESTED, () => { videoEl.pause(); setAdPlaying(true); });
+      mgr.addEventListener(ima.AdEvent.Type.CONTENT_RESUME_REQUESTED, resume);
+      mgr.addEventListener(ima.AdEvent.Type.STARTED, () => logAdEvent("impression"));
+      mgr.addEventListener(ima.AdEvent.Type.COMPLETE, () => logAdEvent("complete"));
+      mgr.addEventListener(ima.AdEvent.Type.SKIPPED, () => logAdEvent("skip"));
+      mgr.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, () => { logAdEvent("error"); mgr.destroy(); resume(); });
+      try {
+        mgr.init(videoEl.clientWidth || 640, videoEl.clientHeight || 360, ima.ViewMode.NORMAL);
+        mgr.start();
+      } catch { mgr.destroy(); resume(); }
+    });
+    adsLoader.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, () => { logAdEvent("error"); resume(); });
+
+    const req = new ima.AdsRequest();
+    req.adTagUrl = tag.tag_url;
+    req.linearAdSlotWidth = videoEl.clientWidth || 640;
+    req.linearAdSlotHeight = videoEl.clientHeight || 360;
+    adsLoader.requestAds(req);
   }
 
   async function handleEnded() {
@@ -2166,12 +2351,24 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
       <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
-      <nav style={{ position: "sticky", top: 0, zIndex: 100, display: "flex", alignItems: "center", padding: `0 ${PAD}`, height: 68, gap: 24, background: "rgba(10,10,10,0.95)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-        <button onClick={onBack} style={{ background: "rgba(255,255,255,0.07)", border: "none", color: "#ccc", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6 }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
-          Back
-        </button>
-        <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
+      <nav style={{ position: "sticky", top: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "space-between", padding: `0 ${PAD}`, height: 68, background: "rgba(10,10,10,0.95)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+          <button onClick={onBack} style={{ background: "rgba(255,255,255,0.07)", border: "none", color: "#ccc", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
+            Back
+          </button>
+          <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
+        </div>
+        {(() => {
+          const av = avatarForId(userAvatarId || activeProfile?.avatar_id);
+          return user ? (
+            <div onClick={onProfileOpen} title={activeProfile?.name ?? "Profile"} style={{ width: 34, height: 34, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? 15 : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = "#facc15"}
+              onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}>
+              {av ? av.emoji : (activeProfile?.name?.[0] || user.email[0]).toUpperCase()}
+            </div>
+          ) : null;
+        })()}
       </nav>
 
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
@@ -2181,7 +2378,7 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
           @keyframes livepulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.4; transform:scale(1.3); } }
         `}</style>
         <div ref={playerContainerRef} style={isFullscreen ? { position: "fixed", inset: 0, zIndex: 999, background: "#000", display: "flex", alignItems: "center", justifyContent: "center" } : { position: "relative", marginBottom: 30 }}>
-          <div style={isFullscreen ? { position: "relative", width: "100%", height: "100%" } : { background: "#000", borderRadius: 14, overflow: "hidden", aspectRatio: "16/9", boxShadow: "0 32px 80px rgba(0,0,0,0.8)" }}>
+          <div style={isFullscreen ? { position: "relative", width: "100%", height: "100%" } : { background: "#000", borderRadius: 14, overflow: "hidden", aspectRatio: "16/9", boxShadow: "0 32px 80px rgba(0,0,0,0.8)", position: "relative" }}>
             {getEmbedUrl(video.url) ? (
               <iframe src={getEmbedUrl(video.url)} style={{ width: "100%", height: "100%", display: "block", border: "none" }} allowFullScreen allow="autoplay" />
             ) : (
@@ -2191,14 +2388,14 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
                 {!isHlsUrl(video.url) && <source src={video.url} type="video/mp4" />}
               </video>
             )}
+            <div ref={adContainerRef} style={{ position: "absolute", inset: 0, zIndex: 10, pointerEvents: adPlaying ? "auto" : "none" }} />
           </div>
           {!getEmbedUrl(video.url) && (
-            <button onClick={toggleFullscreen} style={{ position: "absolute", bottom: isFullscreen ? 60 : 12, right: 16, zIndex: 1000, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 7, padding: "7px 12px", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600 }}>
+            <button onClick={toggleFullscreen} title={isFullscreen ? "Exit fullscreen" : "Fullscreen"} style={{ position: "absolute", bottom: isFullscreen ? 60 : 12, right: 16, zIndex: 1000, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 7, padding: "7px 9px", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center" }}>
               {isFullscreen
-                ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/></svg>
-                : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+                ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/></svg>
+                : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
               }
-              {isFullscreen ? "Exit" : "Fullscreen"}
             </button>
           )}
           {countdownActive && nextEpisode && (
@@ -2258,7 +2455,7 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
           </div>
         )}
 
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 48 }}>
+        <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 48, gap: isMobile ? 24 : 0 }}>
           <div style={{ flex: 1, maxWidth: 700 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
               {(video._type === "live" || video._type === "live_epg") && (
@@ -2281,7 +2478,7 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
             </div>
             {video.description && <p style={{ fontSize: 15, color: "#888", lineHeight: 1.8, margin: 0 }}>{video.description}</p>}
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginLeft: 48, minWidth: 150 }}>
+          <div style={{ display: "flex", flexDirection: isMobile ? "row" : "column", flexWrap: "wrap", gap: 10, marginLeft: isMobile ? 0 : 48, minWidth: isMobile ? 0 : 150 }}>
             {(() => {
               const type = video._type || (video.show_id ? "episode" : "movie");
               const inList = type !== "episode" && myList?.[`${type}_${video.id}`];
@@ -2335,7 +2532,7 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
         {related.length > 0 && (
           <div>
             <h2 style={{ fontSize: 20, fontWeight: 600, margin: "0 0 20px", color: "#e5e5e5" }}>More Like This</h2>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? 130 : 160}px, 1fr))`, gap: isMobile ? 10 : 16 }}>
               {related.map(v => (
                 <div key={v.id + v._type} onClick={() => v._type === "show" ? onShowSelect?.(v) : onSelect(v)} style={{ cursor: "pointer", borderRadius: 10, overflow: "hidden", background: "#141414", border: "1px solid #1a1a1a", transition: "transform 0.2s, box-shadow 0.2s" }}
                   onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.03)"; e.currentTarget.style.boxShadow = "0 12px 32px rgba(0,0,0,0.6)"; }}
@@ -2409,7 +2606,7 @@ function rankRelated(source, pool, limit = 12) {
 
 // ─── Show Detail ──────────────────────────────────────────────────────────────
 
-function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen, activeProfile }) {
+function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, activeProfile }) {
   const [episodes, setEpisodes] = useState([]);
   const [selectedSeason, setSelectedSeason] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -2492,12 +2689,24 @@ function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList
         <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, rgba(10,10,10,0.97) 0%, rgba(10,10,10,0.5) 55%, transparent 85%)" }} />
 
         {/* Top nav row */}
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, display: "flex", alignItems: "center", padding: `20px ${PAD}`, gap: 24, zIndex: 10 }}>
-          <button onClick={onBack} style={{ background: "rgba(255,255,255,0.07)", border: "none", color: "#ccc", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
-            Back
-          </button>
-          <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, display: "flex", alignItems: "center", justifyContent: "space-between", padding: `20px ${PAD}`, zIndex: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+            <button onClick={onBack} style={{ background: "rgba(255,255,255,0.07)", border: "none", color: "#ccc", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
+              Back
+            </button>
+            <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
+          </div>
+          {(() => {
+            const av = avatarForId(userAvatarId || activeProfile?.avatar_id);
+            return user ? (
+              <div onClick={onProfileOpen} title={activeProfile?.name ?? "Profile"} style={{ width: 34, height: 34, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? 15 : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = "#facc15"}
+                onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}>
+                {av ? av.emoji : (activeProfile?.name?.[0] || user.email[0]).toUpperCase()}
+              </div>
+            ) : null;
+          })()}
         </div>
 
         {/* Hero content */}
@@ -2627,7 +2836,7 @@ function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList
           related.length === 0 ? (
             <p style={{ color: "#555", fontSize: 15, padding: "40px 0" }}>No similar titles found.</p>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? 130 : 160}px, 1fr))`, gap: isMobile ? 10 : 16 }}>
               {related.map(item => (
                 <CatalogCard key={item.id + item._type} item={item}
                   onClick={() => item._type === "show" ? onShowSelect?.(item) : onPlay(item)}
@@ -2697,7 +2906,7 @@ function EpisodeCard({ episode, show, onPlay, progress }) {
 
 // ─── Podcast Detail ───────────────────────────────────────────────────────────
 
-function PodcastDetail({ podcast, onBack, onGoHome, onPlay, user, activeProfile }) {
+function PodcastDetail({ podcast, onBack, onGoHome, onPlay, onProfileOpen, userAvatarId, user, activeProfile }) {
   const [episodes, setEpisodes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [watchProgress, setWatchProgress] = useState({});
@@ -2747,12 +2956,24 @@ function PodcastDetail({ podcast, onBack, onGoHome, onPlay, user, activeProfile 
         <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(10,10,10,0.4) 0%, #0a0a0a 100%)" }} />
 
         {/* Nav */}
-        <div style={{ position: "relative", display: "flex", alignItems: "center", padding: `20px ${PAD}`, gap: 24, zIndex: 10 }}>
-          <button onClick={onBack} style={{ background: "rgba(255,255,255,0.07)", border: "none", color: "#ccc", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
-            Back
-          </button>
-          <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
+        <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", padding: `20px ${PAD}`, zIndex: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+            <button onClick={onBack} style={{ background: "rgba(255,255,255,0.07)", border: "none", color: "#ccc", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
+              Back
+            </button>
+            <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
+          </div>
+          {(() => {
+            const av = avatarForId(userAvatarId || activeProfile?.avatar_id);
+            return user ? (
+              <div onClick={onProfileOpen} title={activeProfile?.name ?? "Profile"} style={{ width: 34, height: 34, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? 15 : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = "#facc15"}
+                onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}>
+                {av ? av.emoji : (activeProfile?.name?.[0] || user.email[0]).toUpperCase()}
+              </div>
+            ) : null;
+          })()}
         </div>
 
         {/* Artwork + info */}
@@ -2855,7 +3076,7 @@ function PodcastEpisodeRow({ episode, podcast, onPlay, progress }) {
 
 // ─── Podcast Player ────────────────────────────────────────────────────────────
 
-function PodcastPlayerView({ episode, podcast, onBack, onGoHome, onSelect, user, activeProfile }) {
+function PodcastPlayerView({ episode, podcast, onBack, onGoHome, onSelect, onProfileOpen, userAvatarId, user, activeProfile }) {
   const audioRef = useRef(null);
   const saveProgressRef = useRef(null);
   const progressTimerRef = useRef(null);
@@ -2922,12 +3143,24 @@ function PodcastPlayerView({ episode, podcast, onBack, onGoHome, onSelect, user,
 
       <div style={{ position: "relative", zIndex: 1, flex: 1, display: "flex", flexDirection: "column" }}>
         {/* Nav */}
-        <nav style={{ display: "flex", alignItems: "center", padding: `0 ${PAD}`, height: 68, gap: 24, background: "rgba(10,10,10,0.5)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(255,255,255,0.05)", flexShrink: 0 }}>
-          <button onClick={onBack} style={{ background: "rgba(255,255,255,0.07)", border: "none", color: "#ccc", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
-            Back
-          </button>
-          <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
+        <nav style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: `0 ${PAD}`, height: 68, background: "rgba(10,10,10,0.5)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(255,255,255,0.05)", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+            <button onClick={onBack} style={{ background: "rgba(255,255,255,0.07)", border: "none", color: "#ccc", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
+              Back
+            </button>
+            <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
+          </div>
+          {(() => {
+            const av = avatarForId(userAvatarId || activeProfile?.avatar_id);
+            return user ? (
+              <div onClick={onProfileOpen} title={activeProfile?.name ?? "Profile"} style={{ width: 34, height: 34, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? 15 : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = "#facc15"}
+                onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}>
+                {av ? av.emoji : (activeProfile?.name?.[0] || user.email[0]).toUpperCase()}
+              </div>
+            ) : null;
+          })()}
         </nav>
 
         {/* Player content */}
@@ -3506,7 +3739,7 @@ function Footer({ onNavChange, onProfileOpen, onOpenModal }) {
   }
 
   return (
-    <footer style={{ borderTop: "1px solid rgba(255,255,255,0.05)", padding: `56px ${PAD} 40px`, fontFamily: "'Space Grotesk', sans-serif" }}>
+    <footer style={{ borderTop: "1px solid rgba(255,255,255,0.05)", padding: `56px ${PAD} ${isMobile ? 100 : 40}px`, fontFamily: "'Space Grotesk', sans-serif" }}>
       <div style={{ display: "flex", gap: 28, marginBottom: 40, flexWrap: "wrap" }}>
         {SOCIAL_LINKS.map(s => (
           <a key={s.label} href={s.href} target="_blank" rel="noopener noreferrer"
