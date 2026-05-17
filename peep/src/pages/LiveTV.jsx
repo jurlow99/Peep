@@ -124,8 +124,8 @@ export function LiveTVPage({ streams, epgEntries, onPlay }) {
     _viewers: viewerCounts[s.id] ?? 0,
   }));
 
-  // Pick hero: prefer a channel with a thumbnail, fall back to first
-  const hero = enriched.find(s => s.thumbnail) ?? enriched[0] ?? null;
+  // Pick hero: admin-pinned first, then thumbnail, then first
+  const hero = enriched.find(s => s.is_hero) ?? enriched.find(s => s.thumbnail) ?? enriched[0] ?? null;
   const hasEpg = epgEntries.length > 0;
 
   // Total live viewers across all channels
@@ -175,7 +175,10 @@ export function LiveTVPage({ streams, epgEntries, onPlay }) {
               <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: "#3a3a4a", letterSpacing: "0.12em", textTransform: "uppercase" }}>All Channels</p>
               <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.04)" }} />
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fill, minmax(210px, 1fr))", gap: 14 }}>
+            <div style={isMobile
+              ? { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12 }
+              : { display: "grid", gridTemplateRows: "repeat(2, auto)", gridAutoFlow: "column", gridAutoColumns: "clamp(180px, 14vw, 230px)", gap: 14, overflowX: "auto", paddingBottom: 8 }
+            }>
               {enriched.map(s => (
                 <ChannelTile
                   key={s.id}

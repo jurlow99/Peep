@@ -57,6 +57,7 @@ const EMPTY_LIVE_STREAM = {
   stream_url: "",
   thumbnail: "",
   is_live: true,
+  is_hero: false,
   badge_text: "LIVE",
   channel_number: "",
   now_airing: "",
@@ -1141,7 +1142,7 @@ export function CMS({ onExit }) {
   function startLiveEdit(s) {
     setEditingLiveId(s.id);
     setDrawerOpen(true);
-    setLiveForm({ title: s.title ?? "", description: s.description ?? "", stream_url: s.stream_url ?? "", thumbnail: s.thumbnail ?? "", is_live: s.is_live ?? true, badge_text: s.badge_text ?? "LIVE", channel_number: s.channel_number ?? "", now_airing: s.now_airing ?? "", up_next: s.up_next ?? "" });
+    setLiveForm({ title: s.title ?? "", description: s.description ?? "", stream_url: s.stream_url ?? "", thumbnail: s.thumbnail ?? "", is_live: s.is_live ?? true, is_hero: s.is_hero ?? false, badge_text: s.badge_text ?? "LIVE", channel_number: s.channel_number ?? "", now_airing: s.now_airing ?? "", up_next: s.up_next ?? "" });
   }
 
   function cancelLiveEdit() { setEditingLiveId(null); setLiveForm(EMPTY_LIVE_STREAM); setDrawerOpen(false); }
@@ -1162,6 +1163,13 @@ export function CMS({ onExit }) {
       await loadLiveStreams();
     } catch (error) { showToast("Save failed: " + error.message, "error"); }
     setLiveSaving(false);
+  }
+
+  async function setHero(s) {
+    await supabase.from("live_streams").update({ is_hero: false }).neq("id", s.id);
+    const { error } = await supabase.from("live_streams").update({ is_hero: !s.is_hero }).eq("id", s.id);
+    if (error) showToast("Failed to update hero: " + error.message, "error");
+    else { showToast(s.is_hero ? "Hero cleared" : `${s.title} set as hero`); await loadLiveStreams(); }
   }
 
   async function toggleLive(s) {
@@ -2181,7 +2189,11 @@ export function CMS({ onExit }) {
                   </p>
                   {s.up_next && <p style={{ margin: "2px 0 0", fontSize: 11, color: "#9ca3af" }}>Up next: {s.up_next}</p>}
                 </div>
-                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
+                  <button onClick={() => setHero(s)} title={s.is_hero ? "Remove from hero" : "Set as hero"}
+                    style={{ background: s.is_hero ? "rgba(250,204,21,0.15)" : "rgba(255,255,255,0.04)", border: `1px solid ${s.is_hero ? "rgba(250,204,21,0.5)" : "#e2e8f0"}`, borderRadius: 5, padding: "5px 10px", color: s.is_hero ? "#ca8a04" : "#9ca3af", fontSize: 13, cursor: "pointer", lineHeight: 1 }}>
+                    {s.is_hero ? "★" : "☆"}
+                  </button>
                   <button onClick={() => toggleLive(s)}
                     style={{ background: s.is_live ? "rgba(107,114,128,0.1)" : "rgba(34,197,94,0.1)", border: `1px solid ${s.is_live ? "rgba(107,114,128,0.2)" : "rgba(34,197,94,0.3)"}`, borderRadius: 5, padding: "5px 10px", color: s.is_live ? "#9ca3af" : "#22c55e", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
                     {s.is_live ? "Go Offline" : "Go Live"}
