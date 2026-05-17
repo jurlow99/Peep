@@ -106,6 +106,7 @@ export function CMS({ onExit }) {
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_ROW);
+  const typeLabel = t => ({ movie: "Movie", episode: "Episode", podcast_episode: "Podcast Ep" }[t] || t);
   const [saving, setSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [toast, setToast] = useState(null);
@@ -318,7 +319,6 @@ export function CMS({ onExit }) {
     (podEpTitles || []).forEach(e => { titleMap[`podcast_episode:${e.id}`] = e.title; });
     const tagMap = {};
     (tagNames || []).forEach(t => { tagMap[t.id] = t.name; });
-    const typeLabel = t => ({ movie: "Movie", episode: "Episode", podcast_episode: "Podcast Ep" }[t] || t);
     const watchHistory = (watchRows || []).map(w => ({ ...w, title: titleMap[`${w.content_type}:${w.content_id}`] || null, pct: w.duration_seconds > 0 ? Math.round((w.progress_seconds / w.duration_seconds) * 100) : null })).filter(w => w.title);
     const adHistory = (adRows || []).map(r => ({ ...r, tagName: tagMap[r.vast_tag_id] || "Unknown Tag" }));
     const myList = (listRows || []).map(l => ({ ...l, title: titleMap[`${l.content_type}:${l.content_id}`] || null })).filter(l => l.title);
