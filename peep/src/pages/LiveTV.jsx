@@ -124,8 +124,8 @@ export function LiveTVPage({ streams, epgEntries, onPlay }) {
     _viewers: viewerCounts[s.id] ?? 0,
   }));
 
-  // Pick hero: admin-pinned first, then thumbnail, then first
-  const hero = enriched.find(s => s.is_hero) ?? enriched.find(s => s.thumbnail) ?? enriched[0] ?? null;
+  // Pick hero: admin-pinned first, then has image, then first
+  const hero = enriched.find(s => s.is_hero) ?? enriched.find(s => s.hero_image || s.thumbnail) ?? enriched[0] ?? null;
   const hasEpg = epgEntries.length > 0;
 
   // Total live viewers across all channels
@@ -238,9 +238,9 @@ function HeroChannel({ channel, onTuneIn, tuning, isMobile }) {
       }}
     >
       {/* Background */}
-      {channel.thumbnail
+      {(channel.hero_image || channel.thumbnail)
         ? <>
-            <img src={channel.thumbnail} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.5) saturate(1.1)", transform: "scale(1.04)", transition: "transform 0.6s ease" }} />
+            <img src={channel.hero_image || channel.thumbnail} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.5) saturate(1.1)", transform: "scale(1.04)", transition: "transform 0.6s ease" }} />
             <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.45) 55%, rgba(0,0,0,0.1) 100%)" }} />
             <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.65) 0%, transparent 50%)" }} />
           </>

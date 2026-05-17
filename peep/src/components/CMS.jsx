@@ -56,6 +56,7 @@ const EMPTY_LIVE_STREAM = {
   description: "",
   stream_url: "",
   thumbnail: "",
+  hero_image: "",
   is_live: true,
   is_hero: false,
   badge_text: "LIVE",
@@ -1142,7 +1143,7 @@ export function CMS({ onExit }) {
   function startLiveEdit(s) {
     setEditingLiveId(s.id);
     setDrawerOpen(true);
-    setLiveForm({ title: s.title ?? "", description: s.description ?? "", stream_url: s.stream_url ?? "", thumbnail: s.thumbnail ?? "", is_live: s.is_live ?? true, is_hero: s.is_hero ?? false, badge_text: s.badge_text ?? "LIVE", channel_number: s.channel_number ?? "", now_airing: s.now_airing ?? "", up_next: s.up_next ?? "" });
+    setLiveForm({ title: s.title ?? "", description: s.description ?? "", stream_url: s.stream_url ?? "", thumbnail: s.thumbnail ?? "", hero_image: s.hero_image ?? "", is_live: s.is_live ?? true, is_hero: s.is_hero ?? false, badge_text: s.badge_text ?? "LIVE", channel_number: s.channel_number ?? "", now_airing: s.now_airing ?? "", up_next: s.up_next ?? "" });
   }
 
   function cancelLiveEdit() { setEditingLiveId(null); setLiveForm(EMPTY_LIVE_STREAM); setDrawerOpen(false); }
@@ -3589,6 +3590,13 @@ export function CMS({ onExit }) {
                       <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Thumbnail</label>
                       <ImageUploader label="Upload Thumbnail" folder="live" onUploadSuccess={url => setLiveForm(f => ({ ...f, thumbnail: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
                       <input type="text" value={liveForm.thumbnail} onChange={e => setLiveForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 2, textTransform: "uppercase", letterSpacing: 0.7 }}>Hero Image</label>
+                      <p style={{ margin: "0 0 6px", fontSize: 11, color: "#9ca3af" }}>Wide banner shown behind the featured hero card. Recommended: 1920×1080. Keep the main subject center-right as text overlays the left.</p>
+                      <ImageUploader label="Upload Hero Image" folder="live" onUploadSuccess={url => setLiveForm(f => ({ ...f, hero_image: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
+                      <input type="text" value={liveForm.hero_image} onChange={e => setLiveForm(f => ({ ...f, hero_image: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                      {liveForm.hero_image && <img src={liveForm.hero_image} alt="" style={{ marginTop: 8, width: "100%", height: 80, objectFit: "cover", borderRadius: 6, border: "1px solid #e2e8f0" }} onError={e => { e.target.style.display = "none"; }} />}
                     </div>
                     <div>
                       <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.7 }}>Status</label>
