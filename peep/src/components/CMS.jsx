@@ -270,7 +270,7 @@ export function CMS({ onExit }) {
 
   useEffect(() => {
     if (tab === "reports") { loadReports(); loadTodayStats(); }
-    if (tab === "ads") loadAdAnalytics();
+    if (tab === "ads") { loadAdAnalytics(); loadTodayStats(); }
   }, [tab]);
 
   useEffect(() => {
@@ -279,7 +279,7 @@ export function CMS({ onExit }) {
       if (tab === "ads") loadAdAnalytics();
       if (tab === "reports") { loadReports(); loadTodayStats(); }
     }, 5 * 60 * 1000);
-    const oneMin = tab === "reports" ? setInterval(loadTodayStats, 60 * 1000) : null;
+    const oneMin = (tab === "reports" || tab === "ads") ? setInterval(loadTodayStats, 60 * 1000) : null;
     return () => { clearInterval(fiveMin); if (oneMin) clearInterval(oneMin); };
   }, [tab]);
 
@@ -2619,6 +2619,28 @@ export function CMS({ onExit }) {
                   {adLastFetched && <span style={{ fontSize: 11, color: "#9ca3af", marginLeft: "auto" }}>Updated {adLastFetched.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>}
                   <button onClick={loadAdAnalytics} style={{ background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)", borderRadius: 6, padding: "5px 12px", color: "#6366f1", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Refresh</button>
                 </div>
+
+                {/* Today row */}
+                {todayStats && (
+                  <div style={{ background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)", borderRadius: 12, padding: "16px 20px", marginBottom: 24, display: "flex", alignItems: "center", gap: 32, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#a5f3fc", display: "inline-block", animation: "adpulse 1.5s ease-in-out infinite" }} />
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "#c7d2fe", textTransform: "uppercase", letterSpacing: 0.8 }}>Today</span>
+                      <span style={{ fontSize: 11, color: "#6366f1" }}>{new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                    </div>
+                    {[
+                      { label: "Impressions", value: todayStats.adImpressionsToday },
+                      { label: "Skips", value: todayStats.adSkipsToday },
+                      { label: "Completion", value: todayStats.adImpressionsToday > 0 ? Math.round(((todayStats.adImpressionsToday - todayStats.adSkipsToday) / todayStats.adImpressionsToday) * 100) + "%" : "—" },
+                    ].map(({ label, value }) => (
+                      <div key={label}>
+                        <div style={{ fontSize: 10, color: "#818cf8", textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 2 }}>{label}</div>
+                        <div style={{ fontSize: 22, fontWeight: 700, color: "#fff" }}>{value}</div>
+                      </div>
+                    ))}
+                    <style>{`@keyframes adpulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.4;transform:scale(1.3);}}`}</style>
+                  </div>
+                )}
 
                 {/* Summary cards */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 16, marginBottom: 28 }}>
