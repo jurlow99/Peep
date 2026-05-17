@@ -124,7 +124,8 @@ export function LiveTVPage({ streams, epgEntries, onPlay }) {
     _viewers: viewerCounts[s.id] ?? 0,
   }));
 
-  const hero = enriched[0] ?? null;
+  // Pick hero: prefer a channel with a thumbnail, fall back to first
+  const hero = enriched.find(s => s.thumbnail) ?? enriched[0] ?? null;
   const hasEpg = epgEntries.length > 0;
 
   // Total live viewers across all channels
@@ -235,13 +236,23 @@ function HeroChannel({ channel, onTuneIn, tuning, isMobile }) {
     >
       {/* Background */}
       {channel.thumbnail
-        ? <img src={channel.thumbnail} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.45) saturate(1.1)", transform: "scale(1.04)", transition: "transform 0.6s ease" }} />
-        : <div style={{ position: "absolute", inset: 0, background: "linear-gradient(135deg, #0d0d14 0%, #1a1a2e 60%, #0d0d14 100%)" }} />
+        ? <>
+            <img src={channel.thumbnail} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.5) saturate(1.1)", transform: "scale(1.04)", transition: "transform 0.6s ease" }} />
+            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.45) 55%, rgba(0,0,0,0.1) 100%)" }} />
+            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.65) 0%, transparent 50%)" }} />
+          </>
+        : <>
+            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 30%, #1e1b4b 60%, #0f172a 100%)" }} />
+            <div style={{ position: "absolute", inset: 0, opacity: 0.35, backgroundImage: "radial-gradient(circle at 20% 50%, rgba(99,102,241,0.4) 0%, transparent 60%), radial-gradient(circle at 80% 20%, rgba(139,92,246,0.3) 0%, transparent 50%)" }} />
+            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 60%)" }} />
+            {/* Channel number watermark */}
+            {channel.channel_number != null && channel.channel_number !== "" && (
+              <div style={{ position: "absolute", right: "6%", top: "50%", transform: "translateY(-50%)", fontSize: "clamp(80px, 18vw, 200px)", fontWeight: 900, color: "rgba(255,255,255,0.04)", lineHeight: 1, userSelect: "none", letterSpacing: -8 }}>
+                {channel.channel_number}
+              </div>
+            )}
+          </>
       }
-
-      {/* Gradient overlays */}
-      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.55) 55%, rgba(0,0,0,0.1) 100%)" }} />
-      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 45%)" }} />
 
       {/* Content */}
       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", justifyContent: "flex-end", padding: isMobile ? "20px 22px" : "clamp(24px, 4vw, 44px)" }}>
