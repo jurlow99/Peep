@@ -378,18 +378,18 @@ export function CMS({ onExit }) {
         { data: watchToday },
         { data: adsToday },
         { count: newUsers },
-        { data: liveNow },
+        { count: liveCount },
       ] = await Promise.all([
         supabase.from("watch_progress").select("progress_seconds").gte("last_watched_at", todayISO),
         supabase.from("ad_impressions").select("event").gte("created_at", todayISO),
         supabase.from("profiles").select("*", { count: "exact", head: true }).gte("created_at", todayISO),
-        supabase.from("live_viewers").select("session_id").gte("last_ping", liveISO),
+        supabase.from("live_viewers").select("*", { count: "exact", head: true }).gte("last_ping", liveISO),
       ]);
       const sessionsToday = (watchToday || []).length;
       const hoursToday = +((watchToday || []).reduce((s, w) => s + (w.progress_seconds || 0), 0) / 3600).toFixed(1);
       const adImpressionsToday = (adsToday || []).filter(r => r.event === "impression").length;
       const adSkipsToday = (adsToday || []).filter(r => r.event === "skip").length;
-      setTodayStats({ sessionsToday, hoursToday, adImpressionsToday, adSkipsToday, newUsers: newUsers || 0, liveNow: (liveNow || []).length });
+      setTodayStats({ sessionsToday, hoursToday, adImpressionsToday, adSkipsToday, newUsers: newUsers || 0, liveNow: liveCount || 0 });
     } catch (err) {
       console.error("loadTodayStats error:", err);
     }
@@ -3064,12 +3064,12 @@ export function CMS({ onExit }) {
             {todayStats && (() => {
               const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
               const stats = [
-                { label: "Sessions Today", value: todayStats.sessionsToday.toLocaleString(), color: "#6366f1", icon: "▶", hint: "Watch sessions started today" },
-                { label: "Hours Watched", value: todayStats.hoursToday > 0 ? todayStats.hoursToday + "h" : "<1h", color: "#f472b6", icon: "⏱", hint: "Total watch time logged today" },
-                { label: "Ad Impressions", value: todayStats.adImpressionsToday.toLocaleString(), color: "#f59e0b", icon: "📣", hint: "Ads that started playing today" },
-                { label: "Ad Skips", value: todayStats.adSkipsToday.toLocaleString(), color: "#94a3b8", icon: "⏭", hint: "Ads skipped today" },
-                { label: "New Signups", value: todayStats.newUsers.toLocaleString(), color: "#22c55e", icon: "👤", hint: "Profiles created today" },
-                { label: "Watching Live Now", value: todayStats.liveNow.toLocaleString(), color: "#ef4444", icon: "🔴", hint: "Active live viewers in the last 90 seconds", pulse: todayStats.liveNow > 0 },
+                { label: "Sessions Today", value: todayStats.sessionsToday.toLocaleString(), color: "#6366f1", hint: "Content plays recorded since midnight" },
+                { label: "Hours Watched", value: todayStats.hoursToday > 0 ? todayStats.hoursToday + "h" : "<1h", color: "#f472b6", hint: "Sum of all watch progress saved today" },
+                { label: "Ad Impressions", value: todayStats.adImpressionsToday.toLocaleString(), color: "#f59e0b", hint: "Ads that started playing today" },
+                { label: "Ad Skips", value: todayStats.adSkipsToday.toLocaleString(), color: "#94a3b8", hint: "Ads that were skipped before completing" },
+                { label: "New Signups", value: todayStats.newUsers.toLocaleString(), color: "#22c55e", hint: "New accounts created today" },
+                { label: "Watching Live Now", value: todayStats.liveNow.toLocaleString(), color: "#ef4444", hint: "Active live viewers (last 90 sec heartbeat)", pulse: todayStats.liveNow > 0 },
               ];
               return (
                 <div style={{ marginBottom: 32 }}>
@@ -3080,12 +3080,13 @@ export function CMS({ onExit }) {
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
                     {stats.map(({ label, value, color, icon, hint, pulse }) => (
-                      <div key={label} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "16px 18px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }} title={hint}>
+                      <div key={label} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "16px 18px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
                         <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8, display: "flex", alignItems: "center", gap: 5 }}>
                           {pulse && <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", display: "inline-block", animation: "adpulse 1.5s ease-in-out infinite" }} />}
                           {label}
                         </div>
-                        <div style={{ fontSize: 26, fontWeight: 700, color }}>{value}</div>
+                        <div style={{ fontSize: 26, fontWeight: 700, color, marginBottom: 5 }}>{value}</div>
+                        <div style={{ fontSize: 11, color: "#9ca3af", lineHeight: 1.3 }}>{hint}</div>
                       </div>
                     ))}
                   </div>
