@@ -1818,6 +1818,7 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
   const adContainerRef = useRef(null);
   const adsManagerRef = useRef(null);
   const midRollFiredRef = useRef(false);
+  const postRollFiredRef = useRef(false);
   const [adPlaying, setAdPlaying] = useState(false);
   const [adVastUrl, setAdVastUrl] = useState(null);
   const [liveChannels, setLiveChannels] = useState([]);
@@ -2065,6 +2066,7 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
     return () => {
       cancelled = true;
       midRollFiredRef.current = false;
+      postRollFiredRef.current = false;
       adsManagerRef.current?.destroy();
       adsManagerRef.current = null;
     };
@@ -2262,6 +2264,61 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
     adsLoader.requestAds(req);
   }
 
+  function playPostRoll(onComplete) {
+    if (!window.google?.ima || postRollFiredRef.current) { onComplete(); return; }
+    postRollFiredRef.current = true;
+    const contentScope = isEpisode ? "episode" : "movie";
+    supabase.from("vast_tags")
+      .select("id, tag_url, scope, content_id")
+      .eq("active", true)
+      .eq("ad_type", "post_roll")
+      .or(`scope.eq.global,scope.eq.${contentScope}`)
+      .then(({ data }) => {
+        if (!data || data.length === 0) { onComplete(); return; }
+        const exact = data.find(t => t.content_id === video.id);
+        const typed = data.find(t => t.scope === contentScope && !t.content_id);
+        const glob  = data.find(t => t.scope === "global");
+        const tag = exact || typed || glob;
+        if (!tag) { onComplete(); return; }
+
+        const logAdEvent = (event) => {
+          supabase.from("ad_impressions").insert({ vast_tag_id: tag.id, video_id: video.id, event, user_id: user?.id ?? null }).then(() => {});
+        };
+
+        const ima = window.google.ima;
+        const videoEl = videoRef.current;
+        const adContainer = adContainerRef.current;
+        if (!videoEl || !adContainer) { onComplete(); return; }
+
+        setAdPlaying(true);
+        const displayContainer = new ima.AdDisplayContainer(adContainer, videoEl);
+        displayContainer.initialize();
+        const adsLoader = new ima.AdsLoader(displayContainer);
+        const done = () => { setAdPlaying(false); onComplete(); };
+
+        adsLoader.addEventListener(ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED, (e) => {
+          const mgr = e.getAdsManager(videoEl);
+          mgr.addEventListener(ima.AdEvent.Type.CONTENT_PAUSE_REQUESTED, () => { videoEl.pause(); setAdPlaying(true); });
+          mgr.addEventListener(ima.AdEvent.Type.CONTENT_RESUME_REQUESTED, done);
+          mgr.addEventListener(ima.AdEvent.Type.STARTED, () => logAdEvent("impression"));
+          mgr.addEventListener(ima.AdEvent.Type.COMPLETE, () => logAdEvent("complete"));
+          mgr.addEventListener(ima.AdEvent.Type.SKIPPED, () => logAdEvent("skip"));
+          mgr.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, () => { logAdEvent("error"); mgr.destroy(); done(); });
+          try {
+            mgr.init(videoEl.clientWidth || 640, videoEl.clientHeight || 360, ima.ViewMode.NORMAL);
+            mgr.start();
+          } catch { mgr.destroy(); done(); }
+        });
+        adsLoader.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, () => { logAdEvent("error"); done(); });
+
+        const req = new ima.AdsRequest();
+        req.adTagUrl = tag.tag_url;
+        req.linearAdSlotWidth = videoEl.clientWidth || 640;
+        req.linearAdSlotHeight = videoEl.clientHeight || 360;
+        adsLoader.requestAds(req);
+      });
+  }
+
   async function handleEnded() {
     if (user && activeProfile && videoRef.current && !getEmbedUrl(video.url)) {
       const { currentTime, duration } = videoRef.current;
@@ -2270,7 +2327,11 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
         await supabase.from("watch_progress").upsert({ user_id: user.id, profile_id: activeProfile.id, content_id: video.id, content_type: ct, progress_seconds: currentTime, duration_seconds: duration, completed: true, last_watched_at: new Date().toISOString() }, { onConflict: "user_id,profile_id,content_id,content_type" });
       }
     }
-    if (nextEpisode && localStorage.getItem(PREF_AUTOPLAY_NEXT) !== "false") { clearInterval(countdownTimerRef.current); onSelect(nextEpisode); }
+    const afterAd = () => {
+      if (nextEpisode && localStorage.getItem(PREF_AUTOPLAY_NEXT) !== "false") { clearInterval(countdownTimerRef.current); onSelect(nextEpisode); }
+    };
+    if (!getEmbedUrl(video.url)) playPostRoll(afterAd);
+    else afterAd();
   }
 
   function cancelCountdown() {
