@@ -111,7 +111,7 @@ export function CMS({ onExit }) {
   const [toast, setToast] = useState(null);
   const [searchFilter, setSearchFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
-  const [livePasscodeEntered, setLivePasscodeEntered] = useState(false);
+  const [livePasscodeEntered, setLivePasscodeEntered] = useState(() => sessionStorage.getItem("cms_live_unlocked") === "1");
   const [livePasscodeInput, setLivePasscodeInput] = useState("");
   
   // Carousels state
@@ -2137,16 +2137,18 @@ export function CMS({ onExit }) {
               <h2 style={{ margin: "0 0 6px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Live TV</h2>
               <p style={{ margin: "0 0 24px", fontSize: 13, color: "#6b7280" }}>Enter the passcode to access Live settings</p>
               <input
-                type="password"
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
                 value={livePasscodeInput}
                 onChange={e => setLivePasscodeInput(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter") { if (livePasscodeInput === "1234") { setLivePasscodeEntered(true); } else { setLivePasscodeInput(""); showToast("Incorrect passcode", "error"); } } }}
-                placeholder="Passcode"
+                onKeyDown={e => { if (e.key === "Enter") { if (livePasscodeInput === "1234") { setLivePasscodeEntered(true); sessionStorage.setItem("cms_live_unlocked", "1"); } else { setLivePasscodeInput(""); showToast("Incorrect passcode", "error"); } } }}
+                placeholder="····"
                 autoFocus
-                style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 14px", fontSize: 16, textAlign: "center", letterSpacing: 4, outline: "none", marginBottom: 12, boxSizing: "border-box" }}
+                style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 14px", fontSize: 24, textAlign: "center", letterSpacing: 8, outline: "none", marginBottom: 12, boxSizing: "border-box", WebkitTextSecurity: "disc" }}
               />
               <button
-                onClick={() => { if (livePasscodeInput === "1234") { setLivePasscodeEntered(true); } else { setLivePasscodeInput(""); showToast("Incorrect passcode", "error"); } }}
+                onClick={() => { if (livePasscodeInput === "1234") { setLivePasscodeEntered(true); sessionStorage.setItem("cms_live_unlocked", "1"); } else { setLivePasscodeInput(""); showToast("Incorrect passcode", "error"); } }}
                 style={{ width: "100%", background: "#0f172a", color: "#fff", border: "none", borderRadius: 8, padding: "12px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
                 Unlock
               </button>

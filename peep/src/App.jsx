@@ -37,10 +37,7 @@ function useIsMobile() {
 }
 
 export default function App() {
-  const [page, setPage] = useState(() => {
-    const saved = sessionStorage.getItem("peep_page");
-    return (saved === "settings" || saved === "profile") ? saved : "home";
-  });
+  const [page, setPage] = useState("home");
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [selectedShow, setSelectedShow] = useState(null);
   const [selectedPodcast, setSelectedPodcast] = useState(null);
@@ -292,7 +289,6 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
   const isMobile = useIsMobile();
 
   useEffect(() => { sessionStorage.setItem("peep_nav", activeNav); }, [activeNav]);
-  useEffect(() => { sessionStorage.setItem("peep_page", page); }, [page]);
 
   useEffect(() => {
     fetchAll();
