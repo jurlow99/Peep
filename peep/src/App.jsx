@@ -140,7 +140,12 @@ export default function App() {
   const profileScreenEl = profileOpen && <ProfileScreen user={user} activeProfile={activeProfile} onClose={() => setProfileOpen(false)} onAvatarChange={id => setUserAvatarId(id)} onProfileUpdate={updated => { setActiveProfile(updated); localStorage.setItem(`peep_profile_${user.id}`, JSON.stringify(updated)); }} onSwitchProfile={switchProfile} onViewProfile={() => { setProfileOpen(false); setPage("profile"); }} onOpenSettings={() => { setProfileOpen(false); setPage("settings"); }} />;
 
   if (page === "player" && selectedVideo) {
-    const handleBack = () => { setPage(selectedShow ? "show" : "home"); setSelectedVideo(null); };
+    const isLiveVideo = selectedVideo._type === "live" || selectedVideo._type === "live_epg";
+    const handleBack = () => {
+      if (isLiveVideo) sessionStorage.setItem("peep_goto_nav", "Live TV");
+      setPage(selectedShow ? "show" : "home");
+      setSelectedVideo(null);
+    };
     return (
       <>
         {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
@@ -274,7 +279,11 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [searchTypeFilter, setSearchTypeFilter] = useState("all");
   const [recentSearches, setRecentSearches] = useState(() => { try { return JSON.parse(localStorage.getItem("peep_recent_searches") || "[]"); } catch { return []; } });
-  const [activeNav, setActiveNav] = useState("Home");
+  const [activeNav, setActiveNav] = useState(() => {
+    const goto = sessionStorage.getItem("peep_goto_nav");
+    if (goto) { sessionStorage.removeItem("peep_goto_nav"); return goto; }
+    return "Home";
+  });
   const [footerModal, setFooterModal] = useState(null);
   const isMobile = useIsMobile();
 
