@@ -224,6 +224,10 @@ export function CMS({ onExit }) {
   const [reportSection, setReportSection] = useState("overview");
   const [todayStats, setTodayStats] = useState(null);
   const [adminStats, setAdminStats] = useState(null);
+  const [userSearch, setUserSearch] = useState("");
+  const [userSearchResults, setUserSearchResults] = useState([]);
+  const [selectedUserStats, setSelectedUserStats] = useState(null);
+  const [userStatsLoading, setUserStatsLoading] = useState(false);
 
   const subscriptionRef = useRef(null);
   const carouselSubRef = useRef(null);
@@ -284,11 +288,8 @@ export function CMS({ onExit }) {
     return () => { clearInterval(fiveMin); if (oneMin) clearInterval(oneMin); };
   }, [tab]);
 
-  async function loadAdminStats() {
-    const { data: adminProfile } = await supabase.from("profiles").select("id, username, email, created_at").eq("is_admin", true).single();
-    if (!adminProfile) return;
-
-    const uid = adminProfile.id;
+  async function fetchUserStatsForProfile(profile) {
+    const uid = profile.id;
     const [
       { data: watchRows },
       { data: adRows },
@@ -300,50 +301,47 @@ export function CMS({ onExit }) {
       supabase.from("ratings").select("content_id, content_type, rating, created_at").eq("user_id", uid),
       supabase.from("user_list").select("content_id, content_type, created_at").eq("user_id", uid),
     ]);
-
-    // Resolve content titles
-    const movieIds = (watchRows || []).filter(w => w.content_type === "movie").map(w => w.content_id);
-    const episodeIds = (watchRows || []).filter(w => w.content_type === "episode").map(w => w.content_id);
-    const listMovieIds = (listRows || []).filter(l => l.content_type === "movie").map(l => l.content_id);
-    const listEpIds = (listRows || []).filter(l => l.content_type === "episode").map(l => l.content_id);
-    const allMovieIds = [...new Set([...movieIds, ...listMovieIds])];
-    const allEpIds = [...new Set([...episodeIds, ...listEpIds])];
-
+    const movieIds = [...new Set([...(watchRows || []).filter(w => w.content_type === "movie").map(w => w.content_id), ...(listRows || []).filter(l => l.content_type === "movie").map(l => l.content_id)])];
+    const epIds = [...new Set([...(watchRows || []).filter(w => w.content_type === "episode").map(w => w.content_id), ...(listRows || []).filter(l => l.content_type === "episode").map(l => l.content_id)])];
     const [{ data: movTitles }, { data: epTitles }, { data: tagNames }] = await Promise.all([
-      allMovieIds.length ? supabase.from("videos").select("id, title").in("id", allMovieIds) : { data: [] },
-      allEpIds.length ? supabase.from("episodes").select("id, title").in("id", allEpIds) : { data: [] },
+      movieIds.length ? supabase.from("videos").select("id, title").in("id", movieIds) : { data: [] },
+      epIds.length ? supabase.from("episodes").select("id, title").in("id", epIds) : { data: [] },
       supabase.from("vast_tags").select("id, name"),
     ]);
-
     const titleMap = {};
     (movTitles || []).forEach(v => { titleMap[`movie:${v.id}`] = v.title; });
     (epTitles || []).forEach(e => { titleMap[`episode:${e.id}`] = e.title; });
     const tagMap = {};
     (tagNames || []).forEach(t => { tagMap[t.id] = t.name; });
-
-    const watchHistory = (watchRows || []).map(w => ({
-      ...w,
-      title: titleMap[`${w.content_type}:${w.content_id}`] || `${w.content_type} #${w.content_id}`,
-      pct: w.duration_seconds > 0 ? Math.round((w.progress_seconds / w.duration_seconds) * 100) : null,
-    }));
-
+    const watchHistory = (watchRows || []).map(w => ({ ...w, title: titleMap[`${w.content_type}:${w.content_id}`] || `${w.content_type} #${w.content_id}`, pct: w.duration_seconds > 0 ? Math.round((w.progress_seconds / w.duration_seconds) * 100) : null }));
     const adHistory = (adRows || []).map(r => ({ ...r, tagName: tagMap[r.vast_tag_id] || "Unknown Tag" }));
-
-    const myList = (listRows || []).map(l => ({
-      ...l,
-      title: titleMap[`${l.content_type}:${l.content_id}`] || `${l.content_type} #${l.content_id}`,
-    }));
-
-    // Session timeline — last 30 days
+    const myList = (listRows || []).map(l => ({ ...l, title: titleMap[`${l.content_type}:${l.content_id}`] || `${l.content_type} #${l.content_id}` }));
     const thirtyAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const byDay = {};
-    (watchRows || []).filter(w => w.last_watched_at >= thirtyAgo).forEach(w => {
-      const d = w.last_watched_at.slice(0, 10);
-      byDay[d] = (byDay[d] || 0) + 1;
-    });
+    (watchRows || []).filter(w => w.last_watched_at >= thirtyAgo).forEach(w => { const d = w.last_watched_at.slice(0, 10); byDay[d] = (byDay[d] || 0) + 1; });
     const sessionTimeline = Object.entries(byDay).sort((a, b) => a[0].localeCompare(b[0]));
+    return { profile, watchHistory, adHistory, myList, ratingRows: ratingRows || [], sessionTimeline };
+  }
 
-    setAdminStats({ profile: adminProfile, watchHistory, adHistory, myList, ratingRows: ratingRows || [], sessionTimeline });
+  async function searchUsers(query) {
+    if (!query.trim()) { setUserSearchResults([]); return; }
+    const { data } = await supabase.from("profiles").select("id, username, email, created_at, is_admin").or(`email.ilike.%${query}%,username.ilike.%${query}%`).limit(10);
+    setUserSearchResults(data || []);
+  }
+
+  async function loadSelectedUserStats(profile) {
+    setUserStatsLoading(true);
+    setSelectedUserStats(null);
+    const stats = await fetchUserStatsForProfile(profile);
+    setSelectedUserStats(stats);
+    setUserStatsLoading(false);
+  }
+
+  async function loadAdminStats() {
+    const { data: adminProfile } = await supabase.from("profiles").select("id, username, email, created_at, is_admin").eq("is_admin", true).single();
+    if (!adminProfile) return;
+    const stats = await fetchUserStatsForProfile(adminProfile);
+    setAdminStats(stats);
   }
 
   async function loadTodayStats() {
@@ -2903,6 +2901,120 @@ export function CMS({ onExit }) {
               <button onClick={loadReports} style={{ background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)", borderRadius: 7, padding: "8px 16px", color: "#34d399", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                 Refresh
               </button>
+            </div>
+
+            {/* ── User Search ── */}
+            <div style={{ marginBottom: 28, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, overflow: "hidden" }}>
+              <div style={{ padding: "16px 20px", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", gap: 12 }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                <input
+                  type="text"
+                  placeholder="Search users by email or username…"
+                  value={userSearch}
+                  onChange={e => { setUserSearch(e.target.value); searchUsers(e.target.value); }}
+                  style={{ flex: 1, border: "none", outline: "none", fontSize: 14, color: "#0f172a", background: "transparent" }}
+                />
+                {userSearch && <button onClick={() => { setUserSearch(""); setUserSearchResults([]); setSelectedUserStats(null); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 18, lineHeight: 1 }}>×</button>}
+              </div>
+
+              {userSearchResults.length > 0 && !selectedUserStats && (
+                <div>
+                  {userSearchResults.map(p => (
+                    <div key={p.id} onClick={() => { loadSelectedUserStats(p); setUserSearchResults([]); }}
+                      style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 20px", cursor: "pointer", borderBottom: "1px solid #f8fafc" }}
+                      onMouseEnter={e => e.currentTarget.style.background = "#f8fafc"}
+                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                      <div style={{ width: 34, height: 34, borderRadius: "50%", background: "#e0e7ff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "#4f46e5", flexShrink: 0 }}>
+                        {(p.email || p.username || "?")[0].toUpperCase()}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{p.email || p.username}</div>
+                        {p.username && p.email && <div style={{ fontSize: 11, color: "#9ca3af" }}>@{p.username}</div>}
+                      </div>
+                      {p.is_admin && <span style={{ fontSize: 10, background: "#ede9fe", color: "#7c3aed", borderRadius: 4, padding: "2px 7px", fontWeight: 700 }}>Admin</span>}
+                      <span style={{ fontSize: 11, color: "#9ca3af" }}>joined {new Date(p.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {userSearch && userSearchResults.length === 0 && !selectedUserStats && !userStatsLoading && (
+                <div style={{ padding: "20px", fontSize: 13, color: "#9ca3af", textAlign: "center" }}>No users found</div>
+              )}
+
+              {userStatsLoading && (
+                <div style={{ padding: 32, display: "flex", justifyContent: "center" }}><Spinner /></div>
+              )}
+
+              {selectedUserStats && (() => {
+                const { profile, watchHistory, adHistory, myList, ratingRows, sessionTimeline } = selectedUserStats;
+                const totalHours = +(watchHistory.reduce((s, w) => s + (w.progress_seconds || 0), 0) / 3600).toFixed(1);
+                const completed = watchHistory.filter(w => w.completed).length;
+                return (
+                  <div>
+                    <div style={{ background: "linear-gradient(135deg, #064e3b, #065f46)", padding: "16px 20px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                      <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(167,243,208,0.2)", border: "2px solid rgba(167,243,208,0.4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: "#6ee7b7" }}>
+                        {(profile.email || profile.username || "?")[0].toUpperCase()}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{profile.email || profile.username}</div>
+                        <div style={{ fontSize: 11, color: "#6ee7b7" }}>Joined {new Date(profile.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
+                      </div>
+                      <div style={{ marginLeft: "auto", display: "flex", gap: 20, flexWrap: "wrap" }}>
+                        {[
+                          { label: "Sessions", value: watchHistory.length },
+                          { label: "Completed", value: completed },
+                          { label: "Hours", value: totalHours + "h" },
+                          { label: "Ratings", value: ratingRows.length },
+                          { label: "My List", value: myList.length },
+                          { label: "Ad Views", value: adHistory.filter(r => r.event === "impression").length },
+                        ].map(({ label, value }) => (
+                          <div key={label} style={{ textAlign: "center" }}>
+                            <div style={{ fontSize: 17, fontWeight: 700, color: "#fff" }}>{value}</div>
+                            <div style={{ fontSize: 10, color: "#6ee7b7", textTransform: "uppercase", letterSpacing: 0.6 }}>{label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: 20 }}>
+                      {sessionTimeline.length > 0 && (
+                        <div>
+                          <p style={{ margin: "0 0 8px", fontSize: 11, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: 0.7 }}>Activity — Last 30 Days</p>
+                          <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 40 }}>
+                            {(() => { const max = Math.max(...sessionTimeline.map(([, c]) => c), 1); return sessionTimeline.map(([day, count]) => (
+                              <div key={day} title={`${day}: ${count}`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                                <div style={{ width: "100%", background: "rgba(16,185,129,0.5)", borderRadius: "2px 2px 0 0", height: `${Math.round((count / max) * 30) + 3}px` }} />
+                                <span style={{ fontSize: 7, color: "#9ca3af" }}>{day.slice(5)}</span>
+                              </div>
+                            )); })()}
+                          </div>
+                        </div>
+                      )}
+
+                      {watchHistory.length > 0 && (
+                        <div>
+                          <p style={{ margin: "0 0 8px", fontSize: 11, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: 0.7 }}>Watch History ({watchHistory.length})</p>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 1, borderRadius: 8, overflow: "hidden", border: "1px solid #e2e8f0" }}>
+                            {watchHistory.slice(0, 15).map((w, i) => (
+                              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: i % 2 === 0 ? "#f8fafc" : "#fff" }}>
+                                <span style={{ fontSize: 10, color: "#9ca3af", width: 55, flexShrink: 0 }}>{w.content_type}</span>
+                                <span style={{ flex: 1, fontSize: 12, color: "#0f172a", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.title}</span>
+                                {w.pct !== null && <div style={{ width: 70, height: 3, background: "#e2e8f0", borderRadius: 2, flexShrink: 0 }}><div style={{ height: "100%", width: `${Math.min(w.pct, 100)}%`, background: w.completed ? "#22c55e" : "#6366f1", borderRadius: 2 }} /></div>}
+                                <span style={{ fontSize: 11, color: w.completed ? "#22c55e" : "#6b7280", width: 32, textAlign: "right", flexShrink: 0 }}>{w.pct !== null ? w.pct + "%" : "—"}</span>
+                                <span style={{ fontSize: 10, color: "#9ca3af", width: 65, textAlign: "right", flexShrink: 0 }}>{w.last_watched_at ? new Date(w.last_watched_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : ""}</span>
+                              </div>
+                            ))}
+                            {watchHistory.length > 15 && <div style={{ padding: "6px 12px", fontSize: 11, color: "#9ca3af", background: "#f8fafc" }}>+{watchHistory.length - 15} more</div>}
+                          </div>
+                        </div>
+                      )}
+
+                      {watchHistory.length === 0 && <p style={{ margin: 0, fontSize: 13, color: "#9ca3af", textAlign: "center", padding: "20px 0" }}>No watch activity yet</p>}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* ── Today at a Glance ── */}
