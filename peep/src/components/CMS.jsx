@@ -211,6 +211,8 @@ export function CMS({ onExit }) {
   const [adLoading, setAdLoading] = useState(false);
   const [editingAdId, setEditingAdId] = useState(null);
   const [adForm, setAdForm] = useState(EMPTY_AD);
+  const [adLastFetched, setAdLastFetched] = useState(null);
+  const [reportLastFetched, setReportLastFetched] = useState(null);
   const [adSaving, setAdSaving] = useState(false);
   const [deleteAdConfirm, setDeleteAdConfirm] = useState(null);
   const [adTableMissing, setAdTableMissing] = useState(false);
@@ -267,6 +269,16 @@ export function CMS({ onExit }) {
 
   useEffect(() => {
     if (tab === "reports") loadReports();
+    if (tab === "ads") loadAdAnalytics();
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab !== "ads" && tab !== "reports") return;
+    const interval = setInterval(() => {
+      if (tab === "ads") loadAdAnalytics();
+      if (tab === "reports") loadReports();
+    }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
   }, [tab]);
 
   async function loadReports() {
@@ -541,6 +553,7 @@ export function CMS({ onExit }) {
       hoursTrend, contentTypeStats, dowStats,
       categoryStats, subscriberFunnel, depthBuckets, hourStats,
     });
+    setReportLastFetched(new Date());
     setReportLoading(false);
   }
 
@@ -1120,6 +1133,7 @@ export function CMS({ onExit }) {
     });
 
     setAdAnalytics({ impressions, completionRate, fillRate, skips, uniqueViewers, dailyData, tagStats });
+    setAdLastFetched(new Date());
   }
 
   // ──── LIVE STREAMS ────
@@ -2576,7 +2590,11 @@ export function CMS({ onExit }) {
             {/* ── Ad Performance ── */}
             {adAnalytics && (
               <div style={{ marginBottom: 36 }}>
-                <h2 style={{ margin: "0 0 18px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Ad Performance <span style={{ fontSize: 12, fontWeight: 400, color: "#9ca3af" }}>last 30 days</span></h2>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 18 }}>
+                  <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Ad Performance <span style={{ fontSize: 12, fontWeight: 400, color: "#9ca3af" }}>last 30 days</span></h2>
+                  {adLastFetched && <span style={{ fontSize: 11, color: "#9ca3af", marginLeft: "auto" }}>Updated {adLastFetched.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>}
+                  <button onClick={loadAdAnalytics} style={{ background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)", borderRadius: 6, padding: "5px 12px", color: "#6366f1", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Refresh</button>
+                </div>
 
                 {/* Summary cards */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 16, marginBottom: 28 }}>
@@ -2772,7 +2790,8 @@ export function CMS({ onExit }) {
                 <option value="content">Content Performance</option>
                 <option value="users">User Engagement</option>
               </select>
-              <button onClick={loadReports} style={{ marginLeft: "auto", background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)", borderRadius: 7, padding: "8px 16px", color: "#34d399", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              {reportLastFetched && <span style={{ fontSize: 11, color: "#9ca3af", marginLeft: "auto" }}>Updated {reportLastFetched.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>}
+              <button onClick={loadReports} style={{ background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)", borderRadius: 7, padding: "8px 16px", color: "#34d399", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                 Refresh
               </button>
             </div>
