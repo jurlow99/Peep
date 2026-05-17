@@ -59,6 +59,7 @@ export default function App() {
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      if (_event === "SIGNED_IN") sessionStorage.removeItem("lastAdAt");
       if (!session?.user) {
         setMyList({});
         setActiveProfile(null);
