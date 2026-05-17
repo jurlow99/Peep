@@ -1817,6 +1817,7 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
   const countdownTimerRef = useRef(null);
   const adContainerRef = useRef(null);
   const adsManagerRef = useRef(null);
+  const displayContainerRef = useRef(null);
   const midRollFiredRef = useRef(false);
   const postRollFiredRef = useRef(false);
   const [adPlaying, setAdPlaying] = useState(false);
@@ -2019,9 +2020,11 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
       setAdPlaying(true);
       setAdVastUrl(tag.tag_url);
 
-      const displayContainer = new ima.AdDisplayContainer(adContainer, videoEl);
-      displayContainer.initialize();
-      const adsLoader = new ima.AdsLoader(displayContainer);
+      if (!displayContainerRef.current) {
+        displayContainerRef.current = new ima.AdDisplayContainer(adContainer, videoEl);
+        displayContainerRef.current.initialize();
+      }
+      const adsLoader = new ima.AdsLoader(displayContainerRef.current);
 
       const resume = () => {
         setAdPlaying(false);
@@ -2069,6 +2072,7 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
       postRollFiredRef.current = false;
       adsManagerRef.current?.destroy();
       adsManagerRef.current = null;
+      displayContainerRef.current = null;
     };
   }, [video.id]);
 
@@ -2236,9 +2240,11 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
     videoEl.pause();
     setAdPlaying(true);
 
-    const displayContainer = new ima.AdDisplayContainer(adContainer, videoEl);
-    displayContainer.initialize();
-    const adsLoader = new ima.AdsLoader(displayContainer);
+    if (!displayContainerRef.current) {
+      displayContainerRef.current = new ima.AdDisplayContainer(adContainer, videoEl);
+      displayContainerRef.current.initialize();
+    }
+    const adsLoader = new ima.AdsLoader(displayContainerRef.current);
 
     const resume = () => { setAdPlaying(false); videoEl.play().catch(() => {}); };
 
@@ -2291,9 +2297,11 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
         if (!videoEl || !adContainer) { onComplete(); return; }
 
         setAdPlaying(true);
-        const displayContainer = new ima.AdDisplayContainer(adContainer, videoEl);
-        displayContainer.initialize();
-        const adsLoader = new ima.AdsLoader(displayContainer);
+        if (!displayContainerRef.current) {
+          displayContainerRef.current = new ima.AdDisplayContainer(adContainer, videoEl);
+          displayContainerRef.current.initialize();
+        }
+        const adsLoader = new ima.AdsLoader(displayContainerRef.current);
         const done = () => { setAdPlaying(false); onComplete(); };
 
         adsLoader.addEventListener(ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED, (e) => {
