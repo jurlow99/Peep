@@ -399,12 +399,21 @@ export function CMS({ onExit }) {
   async function loadOnlineUsers() {
     try {
       const cutoff = new Date(Date.now() - 3 * 60 * 1000).toISOString();
-      const { data } = await supabase
+      const { data: presence, error } = await supabase
         .from("user_presence")
-        .select("user_id, last_seen, current_page, profile_id, profiles(email, username)")
+        .select("user_id, last_seen, current_page")
         .gte("last_seen", cutoff)
         .order("last_seen", { ascending: false });
-      setOnlineUsers(data || []);
+      if (error) { console.error("loadOnlineUsers presence error:", error); setOnlineUsers([]); return; }
+      if (!presence || presence.length === 0) { setOnlineUsers([]); return; }
+      const ids = presence.map(r => r.user_id);
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, email, username")
+        .in("id", ids);
+      const profileMap = {};
+      (profiles || []).forEach(p => { profileMap[p.id] = p; });
+      setOnlineUsers(presence.map(r => ({ ...r, profile: profileMap[r.user_id] || null })));
     } catch (err) {
       console.error("loadOnlineUsers error:", err);
     }
@@ -3124,8 +3133,8 @@ export function CMS({ onExit }) {
               ) : (
                 <div>
                   {onlineUsers.map((u, i) => {
-                    const email = u.profiles?.email || u.user_id;
-                    const username = u.profiles?.username;
+                    const email = u.profile?.email || u.user_id;
+                    const username = u.profile?.username;
                     const pageLabel = { home: "Home", movies: "Movies", series: "Series", podcasts: "Podcasts", live: "Live TV", "new-popular": "New & Popular", mylist: "My List", profile: "Profile", settings: "Settings" }[u.current_page] || u.current_page || "—";
                     const secsAgo = Math.floor((Date.now() - new Date(u.last_seen).getTime()) / 1000);
                     const agoLabel = secsAgo < 60 ? "just now" : `${Math.floor(secsAgo / 60)}m ago`;
