@@ -1727,6 +1727,57 @@ function LiveChannelStrip({ channels, epgEntries, currentId, onSwitch }) {
   );
 }
 
+function FullscreenGuide({ channels, epgEntries, currentId, onSwitch }) {
+  const now = new Date();
+  const nowByChannel = {};
+  epgEntries.forEach(e => {
+    const s = new Date(e.start_time), en = new Date(e.end_time);
+    if (s <= now && en > now) nowByChannel[e.channel_id] = e;
+  });
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(175px, 1fr))", gap: 8, maxHeight: "42vh", overflowY: "auto" }}>
+      {channels.map(ch => {
+        const isCurrent = ch.id === currentId;
+        const nowAiring = nowByChannel[ch.id];
+        return (
+          <div
+            key={ch.id}
+            onClick={() => !isCurrent && onSwitch(ch)}
+            style={{
+              borderRadius: 8, padding: "10px 12px",
+              background: isCurrent ? "rgba(99,102,241,0.18)" : "rgba(255,255,255,0.04)",
+              border: `1px solid ${isCurrent ? "rgba(99,102,241,0.45)" : "rgba(255,255,255,0.07)"}`,
+              cursor: isCurrent ? "default" : "pointer",
+              transition: "background 0.15s, border-color 0.15s",
+              position: "relative", overflow: "hidden",
+            }}
+            onMouseEnter={e => { if (!isCurrent) { e.currentTarget.style.background = "rgba(255,255,255,0.08)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.14)"; } }}
+            onMouseLeave={e => { if (!isCurrent) { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.07)"; } }}
+          >
+            {isCurrent && <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "linear-gradient(to right, #818cf8, #6366f1)" }} />}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
+              {ch.channel_number != null && ch.channel_number !== "" && (
+                <span style={{ fontSize: 9, color: isCurrent ? "#818cf8" : "#333", fontWeight: 700, letterSpacing: 0.4 }}>CH{ch.channel_number}</span>
+              )}
+              {isCurrent && (
+                <div style={{ display: "flex", alignItems: "center", gap: 3, marginLeft: "auto" }}>
+                  <div style={{ width: 4, height: 4, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite" }} />
+                  <span style={{ fontSize: 8, color: "#ef4444", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>watching</span>
+                </div>
+              )}
+            </div>
+            <p style={{ margin: "0 0 3px", fontSize: 12, fontWeight: 700, color: isCurrent ? "#e0e7ff" : "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch.title}</p>
+            <p style={{ margin: 0, fontSize: 10, color: isCurrent ? "#6366f1" : "#2e2e3a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {nowAiring ? nowAiring.title : "No guide info"}
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function getEmbedUrl(url) {
   if (!url) return null;
   const match = url.match(/archive\.org\/download\/([^/]+)/);
@@ -1769,6 +1820,10 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
   const countdownGuardRef = useRef(false);
+  const [guideVisible, setGuideVisible] = useState(false);
+  const [guideExpanded, setGuideExpanded] = useState(false);
+  const [currentViewers, setCurrentViewers] = useState(0);
+  const guideHideRef = useRef(null);
 
   useEffect(() => {
     Promise.all([
@@ -2012,6 +2067,79 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, [isFullscreen]);
+
+  // Live viewer heartbeat — register this session while watching live
+  useEffect(() => {
+    if (!isLive || !video.id) return;
+    let sid = sessionStorage.getItem("peep_live_session");
+    if (!sid) {
+      sid = (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now();
+      sessionStorage.setItem("peep_live_session", sid);
+    }
+    const ping = () => supabase.from("live_viewers").upsert(
+      { session_id: sid, channel_id: video.id, user_id: user?.id ?? null, last_ping: new Date().toISOString() },
+      { onConflict: "session_id" }
+    ).then(() => {});
+    ping();
+    const t = setInterval(ping, 30000);
+    return () => {
+      clearInterval(t);
+      supabase.from("live_viewers").delete().eq("session_id", sid).then(() => {});
+    };
+  }, [video.id, isLive]);
+
+  // Live viewer count for current channel
+  useEffect(() => {
+    if (!isLive) return;
+    async function fetchCount() {
+      const cutoff = new Date(Date.now() - 90 * 1000).toISOString();
+      const { count } = await supabase.from("live_viewers")
+        .select("*", { count: "exact", head: true })
+        .eq("channel_id", video.id)
+        .gte("last_ping", cutoff);
+      if (count !== null) setCurrentViewers(count);
+    }
+    fetchCount();
+    const t = setInterval(fetchCount, 30000);
+    return () => { clearInterval(t); setCurrentViewers(0); };
+  }, [video.id, isLive]);
+
+  // Fullscreen guide — show on mouse move, expand on scroll down, hide on inactivity
+  useEffect(() => {
+    if (!isFullscreen || !isLive) {
+      setGuideVisible(false);
+      setGuideExpanded(false);
+      clearTimeout(guideHideRef.current);
+      return;
+    }
+    const container = playerContainerRef.current;
+    if (!container) return;
+
+    function arm(expanded) {
+      clearTimeout(guideHideRef.current);
+      setGuideVisible(true);
+      if (expanded) setGuideExpanded(true);
+      guideHideRef.current = setTimeout(() => {
+        setGuideVisible(false);
+        setGuideExpanded(false);
+      }, 4500);
+    }
+
+    const onMove = () => arm(false);
+    const onWheel = e => {
+      e.preventDefault();
+      if (e.deltaY > 0) arm(true);
+      else setGuideExpanded(false);
+    };
+
+    container.addEventListener("mousemove", onMove);
+    container.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      container.removeEventListener("mousemove", onMove);
+      container.removeEventListener("wheel", onWheel);
+      clearTimeout(guideHideRef.current);
+    };
+  }, [isFullscreen, isLive]);
 
   function toggleFullscreen() {
     setIsFullscreen(prev => {
@@ -2269,26 +2397,100 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
               </div>
             </div>
           )}
+
+          {/* ── Fullscreen channel guide overlay ── */}
+          {isFullscreen && isLive && guideVisible && (
+            <div
+              style={{
+                position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 50,
+                background: guideExpanded
+                  ? "linear-gradient(to top, rgba(0,0,0,0.97) 0%, rgba(0,0,0,0.88) 75%, transparent 100%)"
+                  : "linear-gradient(to top, rgba(0,0,0,0.88) 0%, transparent 100%)",
+                padding: guideExpanded ? "64px 36px 28px" : "48px 36px 22px",
+                transition: "padding 0.3s ease",
+                cursor: "default",
+              }}
+              onMouseEnter={() => clearTimeout(guideHideRef.current)}
+              onMouseLeave={() => {
+                guideHideRef.current = setTimeout(() => { setGuideVisible(false); setGuideExpanded(false); }, 2000);
+              }}
+            >
+              {/* Mini info bar — always visible when guide is shown */}
+              <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: guideExpanded ? 22 : 0, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 5, background: "#ef4444", borderRadius: 4, padding: "3px 8px" }}>
+                    <div style={{ width: 4, height: 4, borderRadius: "50%", background: "#fff", animation: "livepulse 1.5s infinite" }} />
+                    <span style={{ fontSize: 9, fontWeight: 800, color: "#fff", letterSpacing: 1 }}>{video.badge_text || "LIVE"}</span>
+                  </div>
+                  {video.channel_number != null && video.channel_number !== "" && (
+                    <span style={{ fontSize: 11, color: "#555", fontWeight: 600 }}>CH {video.channel_number}</span>
+                  )}
+                </div>
+                <span style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>{video.title}</span>
+                {video.now_airing && (
+                  <>
+                    <span style={{ color: "#2a2a2a", fontSize: 16 }}>·</span>
+                    <span style={{ fontSize: 14, color: "#9ca3af" }}>{video.now_airing}</span>
+                  </>
+                )}
+                {currentViewers > 0 && (
+                  <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#4b5563" }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                    {currentViewers.toLocaleString()} watching
+                  </span>
+                )}
+                {!guideExpanded && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#333", fontSize: 11, marginLeft: "auto" }}>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+                    scroll for guide
+                  </div>
+                )}
+              </div>
+
+              {/* Expanded channel grid */}
+              {guideExpanded && liveChannels.length > 0 && (
+                <FullscreenGuide
+                  channels={liveChannels}
+                  epgEntries={liveEpg}
+                  currentId={video.id}
+                  onSwitch={ch => {
+                    const now = new Date();
+                    const cur = liveEpg.find(e => e.channel_id === ch.id && new Date(e.start_time) <= now && new Date(e.end_time) > now);
+                    const upNext = liveEpg.filter(e => e.channel_id === ch.id && new Date(e.start_time) > now).sort((a, b) => new Date(a.start_time) - new Date(b.start_time))[0];
+                    onSelect({ ...ch, url: ch.stream_url, _type: "live", now_airing: cur?.title ?? ch.now_airing, up_next: upNext?.title ?? ch.up_next, badge_text: ch.badge_text || "LIVE" });
+                    setGuideVisible(false);
+                    setGuideExpanded(false);
+                  }}
+                />
+              )}
+            </div>
+          )}
         </div>
 
         {(video._type === "live" || video._type === "live_epg") && (video.now_airing || video.up_next) && (
-          <div style={{ marginBottom: 24, background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.18)", borderRadius: 12, padding: "16px 20px", display: "flex", gap: 32, flexWrap: "wrap" }}>
+          <div style={{ marginBottom: 24, background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: 12, padding: "14px 20px", display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap" }}>
             {video.now_airing && (
-              <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite", flexShrink: 0, marginTop: 5 }} />
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite", flexShrink: 0 }} />
                 <div>
-                  <p style={{ margin: "0 0 3px", fontSize: 11, color: "#666", textTransform: "uppercase", letterSpacing: 0.7, fontWeight: 600 }}>Now Airing</p>
+                  <p style={{ margin: "0 0 2px", fontSize: 10, color: "#555", textTransform: "uppercase", letterSpacing: 0.7, fontWeight: 700 }}>Now Airing</p>
                   <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#e5e5e5" }}>{video.now_airing}</p>
                 </div>
               </div>
             )}
             {video.up_next && (
-              <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#444", flexShrink: 0, marginTop: 5 }} />
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#333", flexShrink: 0 }} />
                 <div>
-                  <p style={{ margin: "0 0 3px", fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 0.7, fontWeight: 600 }}>Up Next</p>
-                  <p style={{ margin: 0, fontSize: 14, color: "#888" }}>{video.up_next}</p>
+                  <p style={{ margin: "0 0 2px", fontSize: 10, color: "#444", textTransform: "uppercase", letterSpacing: 0.7, fontWeight: 700 }}>Up Next</p>
+                  <p style={{ margin: 0, fontSize: 13, color: "#6b7280" }}>{video.up_next}</p>
                 </div>
+              </div>
+            )}
+            {currentViewers > 0 && (
+              <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#4b5563" }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                {currentViewers.toLocaleString()} watching now
               </div>
             )}
           </div>
