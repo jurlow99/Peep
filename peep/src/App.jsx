@@ -1958,6 +1958,75 @@ function TrailerModal({ url, title, onClose }) {
 
 // ─── Player View ──────────────────────────────────────────────────────────────
 
+function LiveChannelStrip({ channels, epgEntries, currentId, onSwitch }) {
+  const scrollRef = useRef(null);
+  const now = new Date();
+
+  const nowByChannel = {};
+  epgEntries.forEach(e => {
+    const s = new Date(e.start_time), en = new Date(e.end_time);
+    if (s <= now && en > now) nowByChannel[e.channel_id] = e;
+  });
+
+  const scroll = dir => scrollRef.current?.scrollBy({ left: dir * 300, behavior: "smooth" });
+
+  return (
+    <div style={{ marginBottom: 36 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: 1 }}>Channels</p>
+        <div style={{ display: "flex", gap: 6 }}>
+          {["‹", "›"].map((arrow, i) => (
+            <button key={arrow} onClick={() => scroll(i === 0 ? -1 : 1)}
+              style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, width: 28, height: 28, color: "#888", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
+              {arrow}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div ref={scrollRef} className="scroll-row" style={{ display: "flex", gap: 10, overflowX: "auto", scrollbarWidth: "none", paddingBottom: 4 }}>
+        {channels.map(ch => {
+          const isCurrent = ch.id === currentId;
+          const nowAiring = nowByChannel[ch.id];
+          return (
+            <div key={ch.id} onClick={() => !isCurrent && onSwitch(ch)}
+              style={{
+                flexShrink: 0, width: 175, borderRadius: 10, padding: "12px 14px",
+                background: isCurrent ? "rgba(99,102,241,0.18)" : "rgba(255,255,255,0.03)",
+                border: `1px solid ${isCurrent ? "rgba(99,102,241,0.5)" : "rgba(255,255,255,0.07)"}`,
+                cursor: isCurrent ? "default" : "pointer",
+                transition: "background 0.15s, border-color 0.15s",
+                position: "relative",
+                overflow: "hidden",
+              }}
+              onMouseEnter={e => { if (!isCurrent) { e.currentTarget.style.background = "rgba(255,255,255,0.07)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.14)"; } }}
+              onMouseLeave={e => { if (!isCurrent) { e.currentTarget.style.background = "rgba(255,255,255,0.03)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.07)"; } }}
+            >
+              {isCurrent && (
+                <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "linear-gradient(to right, #818cf8, #6366f1)", borderRadius: "10px 10px 0 0" }} />
+              )}
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                {ch.channel_number != null && ch.channel_number !== "" && (
+                  <span style={{ fontSize: 9, color: isCurrent ? "#818cf8" : "#444", fontWeight: 700, letterSpacing: 0.5 }}>CH{ch.channel_number}</span>
+                )}
+                {isCurrent && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginLeft: "auto" }}>
+                    <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite" }} />
+                    <span style={{ fontSize: 9, color: "#ef4444", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>Now</span>
+                  </div>
+                )}
+              </div>
+              <p style={{ margin: "0 0 4px", fontSize: 12, fontWeight: 700, color: isCurrent ? "#e0e7ff" : "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch.title}</p>
+              <p style={{ margin: 0, fontSize: 11, color: isCurrent ? "#6366f1" : "#3a3a4a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {nowAiring ? nowAiring.title : "No guide info"}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function getEmbedUrl(url) {
   if (!url) return null;
   const match = url.match(/archive\.org\/download\/([^/]+)/);
@@ -1985,7 +2054,10 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
   const midRollFiredRef = useRef(false);
   const [adPlaying, setAdPlaying] = useState(false);
   const [adVastUrl, setAdVastUrl] = useState(null);
+  const [liveChannels, setLiveChannels] = useState([]);
+  const [liveEpg, setLiveEpg] = useState([]);
 
+  const isLive = video._type === "live" || video._type === "live_epg";
   const isEpisode = !!video.show_id;
   const [myRating, setMyRating] = useState(null);
   const [ratingCounts, setRatingCounts] = useState({ up: 0, down: 0 });
@@ -2007,6 +2079,19 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
       if (sRes.data) setAllShows(sRes.data);
     });
   }, []);
+
+  useEffect(() => {
+    if (!isLive) return;
+    const epgStart = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const epgEnd = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    Promise.all([
+      supabase.from("live_streams").select("*").order("channel_number", { ascending: true }),
+      supabase.from("epg_entries").select("*").gte("end_time", epgStart).lte("start_time", epgEnd),
+    ]).then(([liveRes, epgRes]) => {
+      if (liveRes.data) setLiveChannels(liveRes.data);
+      if (epgRes.data) setLiveEpg(epgRes.data);
+    });
+  }, [isLive]);
 
   useEffect(() => {
     setNextEpisode(null);
@@ -2507,6 +2592,20 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
               </div>
             )}
           </div>
+        )}
+
+        {isLive && liveChannels.length > 0 && (
+          <LiveChannelStrip
+            channels={liveChannels}
+            epgEntries={liveEpg}
+            currentId={video.id}
+            onSwitch={ch => {
+              const now = new Date();
+              const cur = liveEpg.find(e => e.channel_id === ch.id && new Date(e.start_time) <= now && new Date(e.end_time) > now);
+              const upNext = liveEpg.filter(e => e.channel_id === ch.id && new Date(e.start_time) > now).sort((a, b) => new Date(a.start_time) - new Date(b.start_time))[0];
+              onSelect({ ...ch, url: ch.stream_url, _type: "live", now_airing: cur?.title ?? ch.now_airing, up_next: upNext?.title ?? ch.up_next, badge_text: ch.badge_text || "LIVE" });
+            }}
+          />
         )}
 
         <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 48, gap: isMobile ? 24 : 0 }}>
