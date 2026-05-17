@@ -4,12 +4,13 @@ import { CMS } from "../components/CMS";
 const ADMIN_PIN = "1234";
 
 export function AdminPage() {
-  const [authed, setAuthed] = useState(false);
+  const [authed, setAuthed] = useState(() => sessionStorage.getItem("peep_admin_auth") === "1");
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState(false);
 
   function checkPin() {
     if (pin === ADMIN_PIN) {
+      sessionStorage.setItem("peep_admin_auth", "1");
       setAuthed(true);
       setPinError(false);
     } else {
