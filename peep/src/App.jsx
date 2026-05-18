@@ -50,6 +50,11 @@ export default function App() {
   const [userAvatarId, setUserAvatarId] = useState(null);
   const [activeProfile, setActiveProfile] = useState(null);
   const userIdRef = useRef(null);
+  // Capture deep-link params before any effect clears the URL
+  const [deepLink] = useState(() => {
+    const p = new URLSearchParams(window.location.search);
+    return { v: p.get("v"), e: p.get("e"), s: p.get("s"), live: p.get("live"), podcast: p.get("podcast") };
+  });
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -142,6 +147,22 @@ export default function App() {
   }
 
   const goHome = () => { setPage("home"); setActiveNav("Home"); setSelectedVideo(null); setSelectedShow(null); setSelectedPodcast(null); setSelectedPodcastEp(null); };
+
+  // Keep URL in sync with navigation so share links work
+  useEffect(() => {
+    if (page === "player" && selectedVideo) {
+      const t = selectedVideo._type;
+      if (t === "live" || t === "live_epg") history.replaceState(null, "", `?live=${selectedVideo.id}`);
+      else if (selectedVideo.show_id) history.replaceState(null, "", `?e=${selectedVideo.id}`);
+      else history.replaceState(null, "", `?v=${selectedVideo.id}`);
+    } else if (page === "show" && selectedShow) {
+      history.replaceState(null, "", `?s=${selectedShow.id}`);
+    } else if (page === "podcast" && selectedPodcast) {
+      history.replaceState(null, "", `?podcast=${selectedPodcast.id}`);
+    } else if (page === "home") {
+      history.replaceState(null, "", "/");
+    }
+  }, [page, selectedVideo?.id, selectedShow?.id, selectedPodcast?.id]);
 
   const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true), onProfileOpen: () => setProfileOpen(true), userAvatarId, activeProfile, onSwitchProfile: switchProfile, onPodcastSelect: pod => { setSelectedPodcast(pod); setPage("podcast"); }, onViewProfile: () => setPage("profile") };
 
@@ -364,6 +385,30 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     if (liveRes.data) setLiveStreams(liveRes.data);
     if (epgRes.data) setEpgEntries(epgRes.data);
     setLoading(false);
+
+    // Resolve deep link
+    const { v, e, s, live, podcast } = deepLink;
+    if (v && videosRes.data) {
+      const vid = videosRes.data.find(x => String(x.id) === v);
+      if (vid) { setSelectedVideo({ ...vid, _type: "movie" }); setPage("player"); }
+    } else if (e) {
+      const { data: ep } = await supabase.from("episodes").select("*").eq("id", e).maybeSingle();
+      if (ep) {
+        const show = showsRes.data?.find(x => String(x.id) === String(ep.show_id));
+        if (show) setSelectedShow(show);
+        setSelectedVideo({ ...ep, _type: "episode" });
+        setPage("player");
+      }
+    } else if (s && showsRes.data) {
+      const show = showsRes.data.find(x => String(x.id) === s);
+      if (show) { setSelectedShow(show); setPage("show"); }
+    } else if (live && liveRes.data) {
+      const stream = liveRes.data.find(x => String(x.id) === live);
+      if (stream) { setSelectedVideo({ ...stream, url: stream.stream_url, _type: "live" }); setPage("player"); }
+    } else if (podcast && podcastsRes.data) {
+      const pod = podcastsRes.data.find(x => String(x.id) === podcast);
+      if (pod) { setSelectedPodcast(pod); setPage("podcast"); }
+    }
   }
 
   async function handleRemoveCW(item) {
