@@ -3124,41 +3124,79 @@ export function CMS({ onExit }) {
             })()}
 
             {/* ── Online Now ── */}
-            <div style={{ marginBottom: 32, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden" }}>
-              <div style={{ padding: "14px 20px", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#10b981", display: "inline-block", animation: onlineUsers.length > 0 ? "adpulse 2s ease-in-out infinite" : "none" }} />
-                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#0f172a" }}>Online Now</h3>
-                <span style={{ fontSize: 12, color: "#6b7280", marginLeft: 2 }}>{onlineUsers.length} user{onlineUsers.length !== 1 ? "s" : ""} active in the last 3 min</span>
-                <button onClick={loadOnlineUsers} style={{ marginLeft: "auto", background: "transparent", border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 10px", fontSize: 11, color: "#6b7280", cursor: "pointer" }}>Refresh</button>
-              </div>
-              {onlineUsers.length === 0 ? (
-                <div style={{ padding: "24px 20px", color: "#9ca3af", fontSize: 13, textAlign: "center" }}>No users active in the last 3 minutes</div>
-              ) : (
-                <div>
-                  {onlineUsers.map((u, i) => {
-                    const email = u.profile?.email || u.user_id;
-                    const username = u.profile?.username;
-                    const pageLabel = { home: "Home", movies: "Movies", series: "Series", podcasts: "Podcasts", live: "Live TV", "new-popular": "New & Popular", mylist: "My List", profile: "Profile", settings: "Settings", admin: "Admin CMS" }[u.current_page] || u.current_page || "—";
-                    const secsAgo = Math.floor((Date.now() - new Date(u.last_seen).getTime()) / 1000);
-                    const agoLabel = secsAgo < 60 ? "just now" : `${Math.floor(secsAgo / 60)}m ago`;
-                    return (
-                      <div key={u.user_id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 20px", borderBottom: i < onlineUsers.length - 1 ? "1px solid #f8fafc" : "none", background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
-                        <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "#fff", fontWeight: 700, flexShrink: 0 }}>
-                          {(username || email || "?")[0].toUpperCase()}
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{username || email}</div>
-                          {username && <div style={{ fontSize: 11, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{email}</div>}
-                        </div>
-                        <div style={{ fontSize: 12, color: "#6366f1", background: "#eef2ff", borderRadius: 5, padding: "2px 8px", whiteSpace: "nowrap" }}>{pageLabel}</div>
-                        <div style={{ fontSize: 11, color: "#9ca3af", whiteSpace: "nowrap" }}>{agoLabel}</div>
-                        <div style={{ width: 7, height: 7, borderRadius: "50%", background: secsAgo < 90 ? "#10b981" : "#fbbf24", flexShrink: 0 }} title={secsAgo < 90 ? "Active" : "Idle"} />
-                      </div>
-                    );
-                  })}
+            {(() => {
+              const viewers = onlineUsers.filter(u => u.current_page !== "admin");
+              const admins = onlineUsers.filter(u => u.current_page === "admin");
+              const pageLabels = { home: "Home", movies: "Movies", series: "Series", podcasts: "Podcasts", live: "Live TV", "new-popular": "New & Popular", mylist: "My List", profile: "Profile", settings: "Settings" };
+              const renderRow = (u, i, arr) => {
+                const email = u.profile?.email || u.user_id;
+                const username = u.profile?.username;
+                const pageLabel = pageLabels[u.current_page] || u.current_page || "—";
+                const secsAgo = Math.floor((Date.now() - new Date(u.last_seen).getTime()) / 1000);
+                const agoLabel = secsAgo < 60 ? "just now" : `${Math.floor(secsAgo / 60)}m ago`;
+                return (
+                  <div key={u.user_id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 20px", borderBottom: i < arr.length - 1 ? "1px solid #f8fafc" : "none", background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                    <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "#fff", fontWeight: 700, flexShrink: 0 }}>
+                      {(username || email || "?")[0].toUpperCase()}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{username || email}</div>
+                      {username && <div style={{ fontSize: 11, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{email}</div>}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#6366f1", background: "#eef2ff", borderRadius: 5, padding: "2px 8px", whiteSpace: "nowrap" }}>{pageLabel}</div>
+                    <div style={{ fontSize: 11, color: "#9ca3af", whiteSpace: "nowrap" }}>{agoLabel}</div>
+                    <div style={{ width: 7, height: 7, borderRadius: "50%", background: secsAgo < 90 ? "#10b981" : "#fbbf24", flexShrink: 0 }} title={secsAgo < 90 ? "Active" : "Idle"} />
+                  </div>
+                );
+              };
+              return (
+                <div style={{ marginBottom: 32, display: "flex", flexDirection: "column", gap: 16 }}>
+                  {/* Viewers */}
+                  <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden" }}>
+                    <div style={{ padding: "14px 20px", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#10b981", display: "inline-block", animation: viewers.length > 0 ? "adpulse 2s ease-in-out infinite" : "none" }} />
+                      <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#0f172a" }}>Viewers Online</h3>
+                      <span style={{ fontSize: 12, color: "#6b7280", marginLeft: 2 }}>{viewers.length} user{viewers.length !== 1 ? "s" : ""} browsing the app</span>
+                      <button onClick={loadOnlineUsers} style={{ marginLeft: "auto", background: "transparent", border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 10px", fontSize: 11, color: "#6b7280", cursor: "pointer" }}>Refresh</button>
+                    </div>
+                    {viewers.length === 0
+                      ? <div style={{ padding: "20px", color: "#9ca3af", fontSize: 13, textAlign: "center" }}>No viewers active in the last 3 minutes</div>
+                      : <div>{viewers.map((u, i) => renderRow(u, i, viewers))}</div>}
+                  </div>
+
+                  {/* Admin sessions */}
+                  <div style={{ background: "#fff", border: "1px solid #e0e7ff", borderRadius: 12, overflow: "hidden" }}>
+                    <div style={{ padding: "14px 20px", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#6366f1", display: "inline-block", animation: admins.length > 0 ? "adpulse 2s ease-in-out infinite" : "none" }} />
+                      <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#0f172a" }}>Admin Sessions</h3>
+                      <span style={{ fontSize: 12, color: "#6b7280", marginLeft: 2 }}>{admins.length} admin{admins.length !== 1 ? "s" : ""} in the CMS</span>
+                    </div>
+                    {admins.length === 0
+                      ? <div style={{ padding: "20px", color: "#9ca3af", fontSize: 13, textAlign: "center" }}>No admins currently in the CMS</div>
+                      : <div>{admins.map((u, i) => {
+                          const email = u.profile?.email || u.user_id;
+                          const username = u.profile?.username;
+                          const secsAgo = Math.floor((Date.now() - new Date(u.last_seen).getTime()) / 1000);
+                          const agoLabel = secsAgo < 60 ? "just now" : `${Math.floor(secsAgo / 60)}m ago`;
+                          return (
+                            <div key={u.user_id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 20px", borderBottom: i < admins.length - 1 ? "1px solid #f8fafc" : "none", background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                              <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg,#4f46e5,#7c3aed)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "#fff", fontWeight: 700, flexShrink: 0 }}>
+                                {(username || email || "?")[0].toUpperCase()}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{username || email}</div>
+                                {username && <div style={{ fontSize: 11, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{email}</div>}
+                              </div>
+                              <div style={{ fontSize: 12, color: "#4f46e5", background: "#eef2ff", borderRadius: 5, padding: "2px 8px" }}>Admin CMS</div>
+                              <div style={{ fontSize: 11, color: "#9ca3af", whiteSpace: "nowrap" }}>{agoLabel}</div>
+                              <div style={{ width: 7, height: 7, borderRadius: "50%", background: secsAgo < 90 ? "#10b981" : "#fbbf24", flexShrink: 0 }} />
+                            </div>
+                          );
+                        })}</div>}
+                  </div>
                 </div>
-              )}
-            </div>
+              );
+            })()}
 
 
             {reportLoading && (
