@@ -225,6 +225,7 @@ export function CMS({ onExit }) {
   const [reportSection, setReportSection] = useState("overview");
   const [todayStats, setTodayStats] = useState(null);
   const [adminStats, setAdminStats] = useState(null);
+  const [adminStatsLastFetched, setAdminStatsLastFetched] = useState(null);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [userSearch, setUserSearch] = useState("");
   const [userSearchResults, setUserSearchResults] = useState([]);
@@ -301,8 +302,9 @@ export function CMS({ onExit }) {
       if (tab === "ads") loadAdAnalytics();
       if (tab === "reports") { loadReports(); loadTodayStats(); loadAdminStats(); }
     }, 5 * 60 * 1000);
+    const twoMin = tab === "reports" ? setInterval(loadAdminStats, 2 * 60 * 1000) : null;
     const oneMin = (tab === "reports" || tab === "ads") ? setInterval(() => { loadTodayStats(); if (tab === "reports") loadOnlineUsers(); }, 60 * 1000) : null;
-    return () => { clearInterval(fiveMin); if (oneMin) clearInterval(oneMin); };
+    return () => { clearInterval(fiveMin); if (twoMin) clearInterval(twoMin); if (oneMin) clearInterval(oneMin); };
   }, [tab]);
 
   async function fetchUserStatsForProfile(profile) {
@@ -380,6 +382,7 @@ export function CMS({ onExit }) {
       if (!adminProfile) return;
       const stats = await fetchUserStatsForProfile(adminProfile);
       setAdminStats(stats);
+      setAdminStatsLastFetched(new Date());
     } catch (err) {
       console.error("loadAdminStats error:", err);
     }
@@ -3226,7 +3229,11 @@ export function CMS({ onExit }) {
                     {/* Watch history */}
                     {watchHistory.length > 0 && (
                       <div>
-                        <p style={{ margin: "0 0 10px", fontSize: 12, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: 0.7 }}>Watch History ({watchHistory.length})</p>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                          <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: 0.7 }}>Watch History ({watchHistory.length})</p>
+                          {adminStatsLastFetched && <span style={{ fontSize: 10, color: "#9ca3af" }}>Updated {adminStatsLastFetched.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>}
+                          <button onClick={loadAdminStats} style={{ marginLeft: "auto", background: "transparent", border: "1px solid #e2e8f0", borderRadius: 5, padding: "3px 10px", fontSize: 11, color: "#6b7280", cursor: "pointer" }}>↺ Refresh</button>
+                        </div>
                         <div style={{ display: "flex", flexDirection: "column", gap: 1, borderRadius: 8, overflow: "hidden", border: "1px solid #e2e8f0" }}>
                           {watchHistory.slice(0, 15).map((w, i) => (
                             <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 14px", background: i % 2 === 0 ? "#f8fafc" : "#fff" }}>
