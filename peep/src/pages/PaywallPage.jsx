@@ -28,11 +28,11 @@ export function PaywallPage({ user, onSubscribed, onSignOut }) {
       if (data.url) {
         window.location.href = data.url;
       } else {
-        setError("Something went wrong. Please try again.");
+        setError(data.error || "No checkout URL returned.");
         setLoading(false);
       }
-    } catch {
-      setError("Something went wrong. Please try again.");
+    } catch (e) {
+      setError(e.message || "Network error.");
       setLoading(false);
     }
   }
