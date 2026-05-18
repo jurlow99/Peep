@@ -275,6 +275,21 @@ export function CMS({ onExit }) {
     setBulkMovieSearch("");
   }
 
+  // Admin presence heartbeat — show admin sessions in Online Now
+  useEffect(() => {
+    const ping = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      supabase.from("user_presence").upsert(
+        { user_id: session.user.id, last_seen: new Date().toISOString(), current_page: "admin" },
+        { onConflict: "user_id" }
+      ).then(() => {});
+    };
+    ping();
+    const t = setInterval(ping, 60000);
+    return () => clearInterval(t);
+  }, []);
+
   useEffect(() => {
     if (tab === "reports") { loadReports(); loadTodayStats(); loadAdminStats(); loadOnlineUsers(); }
     if (tab === "ads") { loadAdAnalytics(); loadTodayStats(); }
@@ -3135,7 +3150,7 @@ export function CMS({ onExit }) {
                   {onlineUsers.map((u, i) => {
                     const email = u.profile?.email || u.user_id;
                     const username = u.profile?.username;
-                    const pageLabel = { home: "Home", movies: "Movies", series: "Series", podcasts: "Podcasts", live: "Live TV", "new-popular": "New & Popular", mylist: "My List", profile: "Profile", settings: "Settings" }[u.current_page] || u.current_page || "—";
+                    const pageLabel = { home: "Home", movies: "Movies", series: "Series", podcasts: "Podcasts", live: "Live TV", "new-popular": "New & Popular", mylist: "My List", profile: "Profile", settings: "Settings", admin: "Admin CMS" }[u.current_page] || u.current_page || "—";
                     const secsAgo = Math.floor((Date.now() - new Date(u.last_seen).getTime()) / 1000);
                     const agoLabel = secsAgo < 60 ? "just now" : `${Math.floor(secsAgo / 60)}m ago`;
                     return (
