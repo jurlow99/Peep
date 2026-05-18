@@ -3765,6 +3765,13 @@ function SettingsPage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, 
   const [autoplayNext, setAutoplayNext] = useState(() => getPref(PREF_AUTOPLAY_NEXT));
   const [autoplayPreviews, setAutoplayPreviews] = useState(() => getPref(PREF_AUTOPLAY_PREVIEWS));
   const [autoplayHero, setAutoplayHero] = useState(() => getPref(PREF_AUTOPLAY_HERO));
+  const [newEmail, setNewEmail] = useState("");
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [emailMsg, setEmailMsg] = useState(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordMsg, setPasswordMsg] = useState(null);
 
   const currentAv = avatarForId(avatarId);
   const initials = (activeProfile?.name?.[0] || user?.email?.[0] || "?").toUpperCase();
@@ -3789,6 +3796,28 @@ function SettingsPage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, 
     setTimeout(() => setSaved(false), 2500);
     onAvatarChange?.(avatarId);
     onProfileUpdate?.({ ...activeProfile, name: name.trim(), avatar_id: avatarId });
+  }
+
+  async function changeEmail() {
+    if (!newEmail.trim() || newEmail === user.email) return;
+    setEmailSaving(true); setEmailMsg(null);
+    const { error } = await supabase.auth.updateUser({ email: newEmail.trim() });
+    setEmailSaving(false);
+    if (error) setEmailMsg({ type: "error", text: error.message });
+    else { setEmailMsg({ type: "ok", text: "Confirmation sent to " + newEmail.trim() + ". Check your inbox." }); setNewEmail(""); }
+  }
+
+  async function changePassword() {
+    if (!newPassword || newPassword !== confirmPassword) {
+      setPasswordMsg({ type: "error", text: newPassword !== confirmPassword ? "Passwords don't match" : "Enter a new password" });
+      return;
+    }
+    if (newPassword.length < 6) { setPasswordMsg({ type: "error", text: "Password must be at least 6 characters" }); return; }
+    setPasswordSaving(true); setPasswordMsg(null);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setPasswordSaving(false);
+    if (error) setPasswordMsg({ type: "error", text: error.message });
+    else { setPasswordMsg({ type: "ok", text: "Password updated successfully" }); setNewPassword(""); setConfirmPassword(""); }
   }
 
   const sectionHead = { margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: "#555", textTransform: "uppercase", letterSpacing: 1 };
@@ -3874,9 +3903,32 @@ function SettingsPage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, 
         {/* Account section */}
         <div style={{ marginBottom: 40 }}>
           <p style={sectionHead}>Account</p>
-          <div style={{ background: "#111", border: "1px solid #1a1a1a", borderRadius: 10, padding: "14px 16px" }}>
-            <p style={{ margin: "0 0 2px", fontSize: 12, color: "#444" }}>Email</p>
-            <p style={{ margin: 0, fontSize: 14, color: "#888" }}>{user?.email}</p>
+
+          {/* Change email */}
+          <div style={{ background: "#111", border: "1px solid #1a1a1a", borderRadius: 10, padding: "18px 20px", marginBottom: 12 }}>
+            <p style={{ margin: "0 0 2px", fontSize: 11, color: "#444", textTransform: "uppercase", letterSpacing: 0.7 }}>Current Email</p>
+            <p style={{ margin: "0 0 16px", fontSize: 14, color: "#666" }}>{user?.email}</p>
+            <label style={{ display: "block", fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>New Email</label>
+            <input type="email" value={newEmail} onChange={e => { setNewEmail(e.target.value); setEmailMsg(null); }} placeholder="Enter new email" style={inputStyle} />
+            {emailMsg && <p style={{ margin: "8px 0 0", fontSize: 12, color: emailMsg.type === "ok" ? "#4ade80" : "#f87171" }}>{emailMsg.text}</p>}
+            <button onClick={changeEmail} disabled={emailSaving || !newEmail.trim()}
+              style={{ marginTop: 12, background: newEmail.trim() ? "#facc15" : "#1a1a1a", border: "none", borderRadius: 8, padding: "9px 20px", color: newEmail.trim() ? "#0a0a0a" : "#333", fontSize: 13, fontWeight: 600, cursor: newEmail.trim() ? "pointer" : "default", transition: "background 0.15s" }}>
+              {emailSaving ? "Sending…" : "Update Email"}
+            </button>
+          </div>
+
+          {/* Change password */}
+          <div style={{ background: "#111", border: "1px solid #1a1a1a", borderRadius: 10, padding: "18px 20px" }}>
+            <p style={{ margin: "0 0 14px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>Change Password</p>
+            <label style={{ display: "block", fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>New Password</label>
+            <input type="password" value={newPassword} onChange={e => { setNewPassword(e.target.value); setPasswordMsg(null); }} placeholder="At least 6 characters" style={{ ...inputStyle, marginBottom: 10 }} />
+            <label style={{ display: "block", fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Confirm Password</label>
+            <input type="password" value={confirmPassword} onChange={e => { setConfirmPassword(e.target.value); setPasswordMsg(null); }} placeholder="Repeat new password" style={inputStyle} />
+            {passwordMsg && <p style={{ margin: "8px 0 0", fontSize: 12, color: passwordMsg.type === "ok" ? "#4ade80" : "#f87171" }}>{passwordMsg.text}</p>}
+            <button onClick={changePassword} disabled={passwordSaving || !newPassword}
+              style={{ marginTop: 12, background: newPassword ? "#facc15" : "#1a1a1a", border: "none", borderRadius: 8, padding: "9px 20px", color: newPassword ? "#0a0a0a" : "#333", fontSize: 13, fontWeight: 600, cursor: newPassword ? "pointer" : "default", transition: "background 0.15s" }}>
+              {passwordSaving ? "Updating…" : "Update Password"}
+            </button>
           </div>
         </div>
 
