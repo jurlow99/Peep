@@ -98,11 +98,21 @@ export default function App() {
   // Check subscription status
   useEffect(() => {
     if (!user) { setSubscription(null); setSubChecked(false); return; }
-    // Check if returning from Stripe checkout
     const params = new URLSearchParams(window.location.search);
-    if (params.get("subscribed") === "1") history.replaceState(null, "", "/");
-    supabase.from("subscriptions").select("*").eq("user_id", user.id).maybeSingle()
-      .then(({ data }) => { setSubscription(data); setSubChecked(true); });
+    const justSubscribed = params.get("subscribed") === "1";
+    if (justSubscribed) history.replaceState(null, "", "/");
+
+    async function fetchSub(retries = 0) {
+      const { data } = await supabase.from("subscriptions").select("*").eq("user_id", user.id).maybeSingle();
+      if (!data && justSubscribed && retries < 8) {
+        // Webhook may not have fired yet — poll up to ~8s
+        await new Promise(r => setTimeout(r, 1000));
+        return fetchSub(retries + 1);
+      }
+      setSubscription(data);
+      setSubChecked(true);
+    }
+    fetchSub();
   }, [user?.id]);
 
   // Presence heartbeat — mark this user online while browsing
