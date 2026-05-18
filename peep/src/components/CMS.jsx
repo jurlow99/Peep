@@ -164,6 +164,8 @@ export function CMS({ onExit }) {
   const [liveForm, setLiveForm] = useState(EMPTY_LIVE_STREAM);
   const [liveSaving, setLiveSaving] = useState(false);
   const [deleteLiveConfirm, setDeleteLiveConfirm] = useState(null);
+  const [deletePlaylistConfirm, setDeletePlaylistConfirm] = useState(null);
+  const [deletingPlaylist, setDeletingPlaylist] = useState(false);
   const [m3uOpen, setM3uOpen] = useState(false);
   const [m3uUrl, setM3uUrl] = useState("");
   const [m3uFetching, setM3uFetching] = useState(false);
@@ -1780,6 +1782,14 @@ export function CMS({ onExit }) {
     else { showToast("Stream deleted"); setDeleteLiveConfirm(null); await loadLiveStreams(); }
   }
 
+  async function deletePlaylistSource(source) {
+    setDeletingPlaylist(true);
+    const { error } = await supabase.from("live_streams").delete().eq("playlist_source", source);
+    if (error) showToast("Delete failed: " + error.message, "error");
+    else { showToast("Playlist removed"); setDeletePlaylistConfirm(null); await loadLiveStreams(); }
+    setDeletingPlaylist(false);
+  }
+
   function parseM3U(text) {
     const lines = text.split("\n").map(l => l.trim());
     const channels = [];
@@ -2420,6 +2430,35 @@ export function CMS({ onExit }) {
               </div>
             </div>
 
+            {/* ── Imported Playlists ── */}
+            {(() => {
+              const sources = {};
+              liveList.forEach(s => { if (s.playlist_source) { sources[s.playlist_source] = (sources[s.playlist_source] || 0) + 1; } });
+              const entries = Object.entries(sources);
+              if (entries.length === 0) return null;
+              return (
+                <div style={{ marginBottom: 20, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, overflow: "hidden" }}>
+                  <div style={{ padding: "10px 16px", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: 0.6 }}>Imported Playlists</span>
+                    <span style={{ fontSize: 11, color: "#9ca3af" }}>{entries.length} source{entries.length !== 1 ? "s" : ""}</span>
+                  </div>
+                  {entries.map(([src, count]) => (
+                    <div key={src} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", borderBottom: "1px solid #f1f5f9" }}>
+                      <span style={{ fontSize: 11, color: "#6366f1" }}>📋</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, color: "#0f172a", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{src}</div>
+                        <div style={{ fontSize: 11, color: "#9ca3af" }}>{count} channel{count !== 1 ? "s" : ""}</div>
+                      </div>
+                      <button onClick={() => setDeletePlaylistConfirm({ src, count })}
+                        style={{ background: "rgba(220,38,38,0.07)", border: "1px solid rgba(220,38,38,0.15)", borderRadius: 6, padding: "5px 12px", color: "#dc2626", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                        Delete all {count}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+
             {liveLoading ? (
               <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>Loading...</div>
             ) : liveList.length === 0 ? (
@@ -2584,6 +2623,23 @@ export function CMS({ onExit }) {
                   {m3uFetching && (
                     <div style={{ padding: 48, textAlign: "center", color: "#6b7280", fontSize: 13 }}>Fetching playlist…</div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {deletePlaylistConfirm && (
+              <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "36px 40px", width: 460, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+                  <p style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, color: "#0f172a" }}>Delete entire playlist?</p>
+                  <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>This will permanently delete all <strong>{deletePlaylistConfirm.count} channels</strong> imported from:</p>
+                  <p style={{ fontSize: 11, color: "#6366f1", background: "#eef2ff", borderRadius: 6, padding: "8px 12px", marginBottom: 20, wordBreak: "break-all" }}>{deletePlaylistConfirm.src}</p>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button onClick={() => setDeletePlaylistConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    <button onClick={() => deletePlaylistSource(deletePlaylistConfirm.src)} disabled={deletingPlaylist}
+                      style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                      {deletingPlaylist ? "Deleting…" : `Delete all ${deletePlaylistConfirm.count}`}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
