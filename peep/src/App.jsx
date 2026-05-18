@@ -1845,7 +1845,7 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
   const [chatInput, setChatInput] = useState("");
   const chatBottomRef = useRef(null);
   const chatSubRef = useRef(null);
-  const chatActive = isLive && currentViewers >= 2;
+  const chatActive = isLive;
 
   useEffect(() => {
     Promise.all([
