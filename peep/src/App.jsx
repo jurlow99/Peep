@@ -1890,11 +1890,6 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
   const [guideExpanded, setGuideExpanded] = useState(false);
   const [currentViewers, setCurrentViewers] = useState(0);
   const guideHideRef = useRef(null);
-  const [chatMessages, setChatMessages] = useState([]);
-  const [chatInput, setChatInput] = useState("");
-  const chatBottomRef = useRef(null);
-  const chatSubRef = useRef(null);
-  const chatActive = isLive;
 
   useEffect(() => {
     Promise.all([
@@ -2180,43 +2175,6 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
   }, [video.id, isLive]);
 
   // Live chat — subscribe when 2+ viewers present
-  useEffect(() => {
-    if (chatSubRef.current) {
-      supabase.removeChannel(chatSubRef.current);
-      chatSubRef.current = null;
-    }
-    if (!chatActive) { setChatMessages([]); return; }
-    supabase.from("live_chat")
-      .select("id, channel_id, user_id, profile_name, message, created_at")
-      .eq("channel_id", video.id)
-      .order("created_at", { ascending: false })
-      .limit(50)
-      .then(({ data }) => { if (data) setChatMessages(data.reverse()); });
-    const ch = supabase.channel(`live_chat_${video.id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "live_chat", filter: `channel_id=eq.${video.id}` }, payload => {
-        setChatMessages(prev => [...prev.slice(-99), payload.new]);
-      })
-      .subscribe();
-    chatSubRef.current = ch;
-    return () => { supabase.removeChannel(ch); chatSubRef.current = null; };
-  }, [chatActive, video.id]);
-
-  useEffect(() => {
-    if (chatBottomRef.current) chatBottomRef.current.scrollIntoView({ behavior: "smooth" });
-  }, [chatMessages]);
-
-  async function sendChatMessage() {
-    if (!chatInput.trim() || !user) return;
-    const msg = chatInput.trim().slice(0, 200);
-    setChatInput("");
-    await supabase.from("live_chat").insert({
-      channel_id: video.id,
-      user_id: user.id,
-      profile_name: activeProfile?.name ?? user.email.split("@")[0] ?? "Viewer",
-      message: msg,
-    });
-  }
-
   // Fullscreen guide — show on mouse move, expand on scroll down, hide on inactivity
   useEffect(() => {
     if (!isFullscreen || !isLive) {
@@ -2686,53 +2644,6 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
           />
         )}
 
-        {chatActive && (
-          <div style={{ marginTop: 24, marginBottom: 8, background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, overflow: "hidden" }}>
-            <div style={{ padding: "14px 20px", borderBottom: "1px solid #1a1a1a", display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite", flexShrink: 0 }} />
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#e5e5e5" }}>Live Chat</span>
-              <span style={{ fontSize: 12, color: "#444", marginLeft: "auto" }}>{currentViewers} watching now</span>
-            </div>
-            <div style={{ height: 280, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10, scrollbarWidth: "thin", scrollbarColor: "#222 transparent" }}>
-              {chatMessages.length === 0 && (
-                <p style={{ color: "#333", fontSize: 13, textAlign: "center", margin: "auto 0" }}>No messages yet — say hello!</p>
-              )}
-              {chatMessages.map(msg => (
-                <div key={msg.id} style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "#facc15", flexShrink: 0, minWidth: 0 }}>{msg.profile_name}</span>
-                  <span style={{ fontSize: 13, color: "#ccc", lineHeight: 1.45, wordBreak: "break-word", flex: 1 }}>{msg.message}</span>
-                  <span style={{ fontSize: 10, color: "#2a2a2a", flexShrink: 0 }}>
-                    {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                  </span>
-                </div>
-              ))}
-              <div ref={chatBottomRef} />
-            </div>
-            {user ? (
-              <div style={{ borderTop: "1px solid #1a1a1a", padding: "12px 16px", display: "flex", gap: 10 }}>
-                <input
-                  value={chatInput}
-                  onChange={e => setChatInput(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && sendChatMessage()}
-                  maxLength={200}
-                  placeholder="Say something..."
-                  style={{ flex: 1, background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 8, padding: "9px 14px", color: "#fff", fontSize: 13, outline: "none", fontFamily: "inherit" }}
-                />
-                <button
-                  onClick={sendChatMessage}
-                  disabled={!chatInput.trim()}
-                  style={{ background: chatInput.trim() ? "#facc15" : "#1a1a1a", border: "none", borderRadius: 8, padding: "9px 18px", color: chatInput.trim() ? "#0a0a0a" : "#333", fontSize: 13, fontWeight: 600, cursor: chatInput.trim() ? "pointer" : "default", transition: "background 0.15s, color 0.15s" }}
-                >
-                  Send
-                </button>
-              </div>
-            ) : (
-              <p style={{ padding: "12px 20px", fontSize: 12, color: "#444", borderTop: "1px solid #1a1a1a", margin: 0 }}>
-                Sign in to join the chat
-              </p>
-            )}
-          </div>
-        )}
 
         <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 48, gap: isMobile ? 24 : 0 }}>
           <div style={{ flex: 1, maxWidth: 700 }}>

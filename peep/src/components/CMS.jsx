@@ -1785,13 +1785,6 @@ export function CMS({ onExit }) {
     else { showToast("Stream deleted"); setDeleteLiveConfirm(null); await loadLiveStreams(); }
   }
 
-  async function clearLiveChat(channelId, channelTitle) {
-    if (!window.confirm(`Clear all chat messages for "${channelTitle}"?`)) return;
-    const { error } = await supabase.from("live_chat").delete().eq("channel_id", channelId);
-    if (error) showToast("Clear failed: " + error.message, "error");
-    else showToast("Chat cleared");
-  }
-
   async function deletePlaylistSource(source) {
     setDeletingPlaylist(true);
     const { error } = await supabase.from("live_streams").delete().eq("playlist_source", source);
@@ -2541,8 +2534,7 @@ export function CMS({ onExit }) {
                     {s.is_live ? "Go Offline" : "Go Live"}
                   </button>
                   <button onClick={() => startLiveEdit(s)} style={{ background: "rgba(79,70,229,0.08)", border: "1px solid rgba(79,70,229,0.2)", borderRadius: 5, padding: "5px 10px", color: "#4f46e5", fontSize: 11, cursor: "pointer" }}>Edit</button>
-                  <button onClick={() => clearLiveChat(s.id, s.title)} style={{ background: "rgba(234,179,8,0.08)", border: "1px solid rgba(234,179,8,0.25)", borderRadius: 5, padding: "5px 10px", color: "#a16207", fontSize: 11, cursor: "pointer" }}>Clear Chat</button>
-                  <button onClick={() => setDeleteLiveConfirm(s)} style={{ background: "rgba(220,38,38,0.07)", border: "1px solid rgba(220,38,38,0.15)", borderRadius: 5, padding: "5px 10px", color: "#dc2626", fontSize: 11, cursor: "pointer" }}>Delete</button>
+<button onClick={() => setDeleteLiveConfirm(s)} style={{ background: "rgba(220,38,38,0.07)", border: "1px solid rgba(220,38,38,0.15)", borderRadius: 5, padding: "5px 10px", color: "#dc2626", fontSize: 11, cursor: "pointer" }}>Delete</button>
                 </div>
               </div>
             ))}
