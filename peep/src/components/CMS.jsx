@@ -166,6 +166,9 @@ export function CMS({ onExit }) {
   const [deleteLiveConfirm, setDeleteLiveConfirm] = useState(null);
   const [deletePlaylistConfirm, setDeletePlaylistConfirm] = useState(null);
   const [deletingPlaylist, setDeletingPlaylist] = useState(false);
+  const [channelStatuses, setChannelStatuses] = useState({});
+  const [testingChannels, setTestingChannels] = useState(false);
+  const [testProgress, setTestProgress] = useState({ done: 0, total: 0 });
   const [m3uOpen, setM3uOpen] = useState(false);
   const [m3uUrl, setM3uUrl] = useState("");
   const [m3uFetching, setM3uFetching] = useState(false);
@@ -1790,6 +1793,31 @@ export function CMS({ onExit }) {
     setDeletingPlaylist(false);
   }
 
+  async function testAllChannels() {
+    const streams = liveList.filter(s => s.stream_url);
+    if (!streams.length) return;
+    setTestingChannels(true);
+    setChannelStatuses({});
+    setTestProgress({ done: 0, total: streams.length });
+    const BATCH = 5;
+    for (let i = 0; i < streams.length; i += BATCH) {
+      const batch = streams.slice(i, i + BATCH);
+      await Promise.all(batch.map(async s => {
+        setChannelStatuses(prev => ({ ...prev, [s.id]: "testing" }));
+        try {
+          const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(s.stream_url)}`, { signal: AbortSignal.timeout(12000) });
+          const json = await res.json();
+          const ok = json.contents && json.contents.length > 10;
+          setChannelStatuses(prev => ({ ...prev, [s.id]: ok ? "ok" : "error" }));
+        } catch {
+          setChannelStatuses(prev => ({ ...prev, [s.id]: "error" }));
+        }
+      }));
+      setTestProgress({ done: Math.min(i + BATCH, streams.length), total: streams.length });
+    }
+    setTestingChannels(false);
+  }
+
   function parseM3U(text) {
     const lines = text.split("\n").map(l => l.trim());
     const channels = [];
@@ -2414,7 +2442,20 @@ export function CMS({ onExit }) {
                 <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 600, color: "#0f172a" }}>All Streams ({liveList.length})</h2>
                 <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Toggle a stream to Live to show it on the homepage "Live Now" section.</p>
               </div>
-              <div style={{ display: "flex", gap: 10 }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                {testingChannels && (
+                  <span style={{ fontSize: 12, color: "#6b7280" }}>Testing {testProgress.done}/{testProgress.total}…</span>
+                )}
+                {Object.keys(channelStatuses).length > 0 && !testingChannels && (
+                  <span style={{ fontSize: 12, color: "#6b7280" }}>
+                    ✓ {Object.values(channelStatuses).filter(s => s === "ok").length} working &nbsp;
+                    ✗ {Object.values(channelStatuses).filter(s => s === "error").length} failed
+                  </span>
+                )}
+                <button onClick={testAllChannels} disabled={testingChannels || liveList.length === 0}
+                  style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 14px", color: "#374151", fontSize: 13, fontWeight: 600, cursor: testingChannels ? "wait" : "pointer", opacity: testingChannels ? 0.6 : 1 }}>
+                  {testingChannels ? "Testing…" : "🔍 Test Channels"}
+                </button>
                 <button
                   onClick={() => { setM3uOpen(true); setM3uUrl(""); setM3uChannels([]); setM3uSelected(new Set()); setM3uError(""); setM3uSearch(""); setM3uPage(0); setM3uImportDone(null); }}
                   style={{ background: "#0f172a", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
@@ -2481,6 +2522,9 @@ export function CMS({ onExit }) {
                   {s.up_next && <p style={{ margin: "2px 0 0", fontSize: 11, color: "#9ca3af" }}>Up next: {s.up_next}</p>}
                 </div>
                 <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
+                  {channelStatuses[s.id] === "testing" && <span style={{ fontSize: 11, color: "#6b7280" }}>Testing…</span>}
+                  {channelStatuses[s.id] === "ok" && <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 600 }}>✓ Working</span>}
+                  {channelStatuses[s.id] === "error" && <span style={{ fontSize: 11, color: "#dc2626", fontWeight: 600 }}>✗ Failed</span>}
                   <button onClick={() => setHero(s)} title={s.is_hero ? "Remove from hero" : "Set as hero"}
                     style={{ background: s.is_hero ? "rgba(250,204,21,0.15)" : "rgba(255,255,255,0.04)", border: `1px solid ${s.is_hero ? "rgba(250,204,21,0.5)" : "#e2e8f0"}`, borderRadius: 5, padding: "5px 10px", color: s.is_hero ? "#ca8a04" : "#9ca3af", fontSize: 13, cursor: "pointer", lineHeight: 1 }}>
                     {s.is_hero ? "★" : "☆"}
