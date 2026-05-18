@@ -1028,22 +1028,26 @@ function CatalogCard({ item, onClick, myList, onToggleList }) {
         }
         {item.duration && <div style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(4px)", color: "#bbb", fontSize: 10.5, padding: "3px 7px", borderRadius: 4 }}>{item.duration}</div>}
 
-        {/* Hover overlay */}
+        {/* Hover overlay — play button only */}
         {hovered && (
-          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <div style={{ width: 48, height: 48, borderRadius: "50%", background: "rgba(255,255,255,0.92)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 16px rgba(0,0,0,0.5)" }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="#0a0a0a"><polygon points="5,3 19,12 5,21" /></svg>
             </div>
-            <button onClick={e => { e.stopPropagation(); onToggleList?.(item.id, item._type); }}
-              style={{ background: inList ? "rgba(250,204,21,0.2)" : "rgba(0,0,0,0.6)", border: `1px solid ${inList ? "rgba(250,204,21,0.6)" : "rgba(255,255,255,0.3)"}`, borderRadius: 20, padding: "5px 14px", color: inList ? "#facc15" : "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", backdropFilter: "blur(4px)" }}>
-              {inList ? "✓ Saved" : "+ My List"}
-            </button>
           </div>
         )}
       </div>
 
       <div style={{ padding: "10px 12px 12px", background: hovered ? "#1c1c1c" : "#141414", transition: "background 0.22s" }}>
-        <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4, gap: 6 }}>
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>{item.title}</p>
+          {hovered && (
+            <button onClick={e => { e.stopPropagation(); onToggleList?.(item.id, item._type); }}
+              style={{ flexShrink: 0, background: inList ? "rgba(250,204,21,0.15)" : "rgba(255,255,255,0.08)", border: `1px solid ${inList ? "rgba(250,204,21,0.5)" : "rgba(255,255,255,0.15)"}`, borderRadius: 20, padding: "3px 10px", color: inList ? "#facc15" : "#aaa", fontSize: 10, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+              {inList ? "✓ Saved" : "+ List"}
+            </button>
+          )}
+        </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           {item.score ? <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 600 }}>{item.score}%</span> : <span />}
           {item.year && <span style={{ fontSize: 11, color: "#555" }}>{item.year}</span>}
