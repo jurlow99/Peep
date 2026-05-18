@@ -224,8 +224,6 @@ export function CMS({ onExit }) {
   const [reportLoading, setReportLoading] = useState(false);
   const [reportSection, setReportSection] = useState("overview");
   const [todayStats, setTodayStats] = useState(null);
-  const [adminStats, setAdminStats] = useState(null);
-  const [adminStatsLastFetched, setAdminStatsLastFetched] = useState(null);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [userSearch, setUserSearch] = useState("");
   const [userSearchResults, setUserSearchResults] = useState([]);
@@ -292,7 +290,7 @@ export function CMS({ onExit }) {
   }, []);
 
   useEffect(() => {
-    if (tab === "reports") { loadReports(); loadTodayStats(); loadAdminStats(); loadOnlineUsers(); }
+    if (tab === "reports") { loadReports(); loadTodayStats(); loadOnlineUsers(); }
     if (tab === "ads") { loadAdAnalytics(); loadTodayStats(); }
   }, [tab]);
 
@@ -300,11 +298,10 @@ export function CMS({ onExit }) {
     if (tab !== "ads" && tab !== "reports") return;
     const fiveMin = setInterval(() => {
       if (tab === "ads") loadAdAnalytics();
-      if (tab === "reports") { loadReports(); loadTodayStats(); loadAdminStats(); }
+      if (tab === "reports") { loadReports(); loadTodayStats(); }
     }, 5 * 60 * 1000);
-    const twoMin = tab === "reports" ? setInterval(loadAdminStats, 2 * 60 * 1000) : null;
     const oneMin = (tab === "reports" || tab === "ads") ? setInterval(() => { loadTodayStats(); if (tab === "reports") loadOnlineUsers(); }, 60 * 1000) : null;
-    return () => { clearInterval(fiveMin); if (twoMin) clearInterval(twoMin); if (oneMin) clearInterval(oneMin); };
+    return () => { clearInterval(fiveMin); if (oneMin) clearInterval(oneMin); };
   }, [tab]);
 
   async function fetchUserStatsForProfile(profile) {
@@ -374,18 +371,6 @@ export function CMS({ onExit }) {
       showToast("Failed to load user stats", "error");
     }
     setUserStatsLoading(false);
-  }
-
-  async function loadAdminStats() {
-    try {
-      const { data: adminProfile } = await supabase.from("profiles").select("id, username, email, created_at, is_admin").eq("is_admin", true).single();
-      if (!adminProfile) return;
-      const stats = await fetchUserStatsForProfile(adminProfile);
-      setAdminStats(stats);
-      setAdminStatsLastFetched(new Date());
-    } catch (err) {
-      console.error("loadAdminStats error:", err);
-    }
   }
 
   async function loadTodayStats() {
@@ -2983,7 +2968,7 @@ export function CMS({ onExit }) {
                 <option value="users">User Engagement</option>
               </select>
               {reportLastFetched && <span style={{ fontSize: 11, color: "#9ca3af", marginLeft: "auto" }}>Updated {reportLastFetched.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>}
-              <button onClick={() => { loadReports(); loadTodayStats(); loadAdminStats(); loadOnlineUsers(); }} style={{ background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)", borderRadius: 7, padding: "8px 16px", color: "#34d399", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              <button onClick={() => { loadReports(); loadTodayStats(); loadOnlineUsers(); }} style={{ background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)", borderRadius: 7, padding: "8px 16px", color: "#34d399", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                 Refresh
               </button>
             </div>
@@ -3175,122 +3160,6 @@ export function CMS({ onExit }) {
               )}
             </div>
 
-            {/* ── Admin Account Detail ── */}
-            {adminStats && (() => {
-              const { profile, watchHistory, adHistory, myList, ratingRows, sessionTimeline } = adminStats;
-              const totalHours = +(watchHistory.reduce((s, w) => s + (w.progress_seconds || 0), 0) / 3600).toFixed(1);
-              const completed = watchHistory.filter(w => w.completed).length;
-              return (
-                <div style={{ marginBottom: 32, background: "#fff", border: "2px solid #e0e7ff", borderRadius: 14, overflow: "hidden" }}>
-                  {/* Header */}
-                  <div style={{ background: "linear-gradient(135deg, #1e1b4b, #312e81)", padding: "18px 24px", display: "flex", alignItems: "center", gap: 14 }}>
-                    <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(165,180,252,0.2)", border: "2px solid rgba(165,180,252,0.4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>👤</div>
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{profile.email}</div>
-                      <div style={{ fontSize: 11, color: "#a5b4fc" }}>Admin / Test Account · joined {new Date(profile.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
-                    </div>
-                    <div style={{ marginLeft: "auto", display: "flex", gap: 24 }}>
-                      {[
-                        { label: "Sessions", value: watchHistory.length },
-                        { label: "Completed", value: completed },
-                        { label: "Hours", value: totalHours + "h" },
-                        { label: "Ratings", value: ratingRows.length },
-                        { label: "My List", value: myList.length },
-                        { label: "Ad Views", value: adHistory.filter(r => r.event === "impression").length },
-                      ].map(({ label, value }) => (
-                        <div key={label} style={{ textAlign: "center" }}>
-                          <div style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>{value}</div>
-                          <div style={{ fontSize: 10, color: "#818cf8", textTransform: "uppercase", letterSpacing: 0.6 }}>{label}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 24 }}>
-
-                    {/* Session timeline */}
-                    {sessionTimeline.length > 0 && (
-                      <div>
-                        <p style={{ margin: "0 0 10px", fontSize: 12, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: 0.7 }}>Activity — Last 30 Days</p>
-                        <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 48 }}>
-                          {(() => {
-                            const max = Math.max(...sessionTimeline.map(([, c]) => c), 1);
-                            return sessionTimeline.map(([day, count]) => (
-                              <div key={day} title={`${day}: ${count} sessions`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-                                <div style={{ width: "100%", background: "rgba(99,102,241,0.5)", borderRadius: "2px 2px 0 0", height: `${Math.round((count / max) * 36) + 4}px` }} />
-                                <span style={{ fontSize: 8, color: "#9ca3af" }}>{day.slice(5)}</span>
-                              </div>
-                            ));
-                          })()}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Watch history */}
-                    {watchHistory.length > 0 && (
-                      <div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                          <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: 0.7 }}>Watch History ({watchHistory.length})</p>
-                          {adminStatsLastFetched && <span style={{ fontSize: 10, color: "#9ca3af" }}>Updated {adminStatsLastFetched.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>}
-                          <button onClick={loadAdminStats} style={{ marginLeft: "auto", background: "transparent", border: "1px solid #e2e8f0", borderRadius: 5, padding: "3px 10px", fontSize: 11, color: "#6b7280", cursor: "pointer" }}>↺ Refresh</button>
-                        </div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 1, borderRadius: 8, overflow: "hidden", border: "1px solid #e2e8f0" }}>
-                          {watchHistory.slice(0, 15).map((w, i) => (
-                            <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 14px", background: i % 2 === 0 ? "#f8fafc" : "#fff" }}>
-                              <span style={{ fontSize: 10, color: "#9ca3af", width: 60, flexShrink: 0 }}>{typeLabel(w.content_type)}</span>
-                              <span style={{ flex: 1, fontSize: 13, color: "#0f172a", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.title}</span>
-                              {w.pct !== null && (
-                                <div style={{ width: 80, height: 4, background: "#e2e8f0", borderRadius: 2, flexShrink: 0 }}>
-                                  <div style={{ height: "100%", width: `${Math.min(w.pct, 100)}%`, background: w.completed ? "#22c55e" : "#6366f1", borderRadius: 2 }} />
-                                </div>
-                              )}
-                              <span style={{ fontSize: 11, color: w.completed ? "#22c55e" : "#6b7280", width: 36, textAlign: "right", flexShrink: 0 }}>{w.pct !== null ? w.pct + "%" : "—"}</span>
-                              <span style={{ fontSize: 10, color: "#9ca3af", width: 70, textAlign: "right", flexShrink: 0 }}>{w.last_watched_at ? new Date(w.last_watched_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : ""}</span>
-                            </div>
-                          ))}
-                          {watchHistory.length > 15 && <div style={{ padding: "8px 14px", fontSize: 11, color: "#9ca3af", background: "#f8fafc" }}>+{watchHistory.length - 15} more</div>}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Ad history */}
-                    {adHistory.length > 0 && (
-                      <div>
-                        <p style={{ margin: "0 0 10px", fontSize: 12, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: 0.7 }}>Ad History ({adHistory.filter(r => r.event === "impression").length} impressions)</p>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 1, borderRadius: 8, overflow: "hidden", border: "1px solid #e2e8f0" }}>
-                          {adHistory.filter(r => r.event === "impression").slice(0, 10).map((r, i) => {
-                            const skip = adHistory.find(a => a.vast_tag_id === r.vast_tag_id && a.event === "skip" && Math.abs(new Date(a.created_at) - new Date(r.created_at)) < 120000);
-                            const complete = adHistory.find(a => a.vast_tag_id === r.vast_tag_id && a.event === "complete" && Math.abs(new Date(a.created_at) - new Date(r.created_at)) < 120000);
-                            return (
-                              <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 14px", background: i % 2 === 0 ? "#f8fafc" : "#fff" }}>
-                                <span style={{ flex: 1, fontSize: 13, color: "#0f172a", fontWeight: 500 }}>{r.tagName}</span>
-                                <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: complete ? "rgba(34,197,94,0.1)" : skip ? "rgba(239,68,68,0.1)" : "rgba(99,102,241,0.1)", color: complete ? "#16a34a" : skip ? "#dc2626" : "#4f46e5", fontWeight: 600 }}>
-                                  {complete ? "Completed" : skip ? "Skipped" : "Viewed"}
-                                </span>
-                                <span style={{ fontSize: 10, color: "#9ca3af" }}>{new Date(r.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* My List */}
-                    {myList.length > 0 && (
-                      <div>
-                        <p style={{ margin: "0 0 10px", fontSize: 12, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: 0.7 }}>My List ({myList.length})</p>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                          {myList.map((l, i) => (
-                            <span key={i} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 6, padding: "5px 10px", fontSize: 12, color: "#374151" }}>{l.title}</span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                  </div>
-                </div>
-              );
-            })()}
 
             {reportLoading && (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 80 }}>
