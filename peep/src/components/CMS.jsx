@@ -164,6 +164,16 @@ export function CMS({ onExit }) {
   const [liveForm, setLiveForm] = useState(EMPTY_LIVE_STREAM);
   const [liveSaving, setLiveSaving] = useState(false);
   const [deleteLiveConfirm, setDeleteLiveConfirm] = useState(null);
+  const [m3uOpen, setM3uOpen] = useState(false);
+  const [m3uUrl, setM3uUrl] = useState("");
+  const [m3uFetching, setM3uFetching] = useState(false);
+  const [m3uChannels, setM3uChannels] = useState([]);
+  const [m3uSelected, setM3uSelected] = useState(new Set());
+  const [m3uError, setM3uError] = useState("");
+  const [m3uSearch, setM3uSearch] = useState("");
+  const [m3uPage, setM3uPage] = useState(0);
+  const [m3uImporting, setM3uImporting] = useState(false);
+  const [m3uImportDone, setM3uImportDone] = useState(null);
 
   // EPG state
   const [epgEntries, setEpgEntries] = useState([]);
@@ -1770,6 +1780,68 @@ export function CMS({ onExit }) {
     else { showToast("Stream deleted"); setDeleteLiveConfirm(null); await loadLiveStreams(); }
   }
 
+  function parseM3U(text) {
+    const lines = text.split("\n").map(l => l.trim());
+    const channels = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (!lines[i].startsWith("#EXTINF")) continue;
+      const extinf = lines[i];
+      let url = "";
+      for (let j = i + 1; j < Math.min(i + 6, lines.length); j++) {
+        if (lines[j] && !lines[j].startsWith("#")) { url = lines[j]; break; }
+      }
+      if (!url) continue;
+      const commaIdx = extinf.lastIndexOf(",");
+      const name = commaIdx >= 0 ? extinf.slice(commaIdx + 1).trim() : "Unknown Channel";
+      const logoMatch = extinf.match(/tvg-logo="([^"]*)"/i);
+      const groupMatch = extinf.match(/group-title="([^"]*)"/i);
+      channels.push({ name: name || "Unknown Channel", url, logo: logoMatch?.[1] || "", group: groupMatch?.[1] || "" });
+    }
+    return channels;
+  }
+
+  async function fetchM3UPlaylist() {
+    if (!m3uUrl.trim()) return;
+    setM3uFetching(true); setM3uError(""); setM3uChannels([]); setM3uSelected(new Set()); setM3uPage(0); setM3uImportDone(null);
+    let text = "";
+    try {
+      const res = await fetch(m3uUrl.trim(), { signal: AbortSignal.timeout(15000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      text = await res.text();
+    } catch {
+      try {
+        const proxy = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(m3uUrl.trim())}`, { signal: AbortSignal.timeout(20000) });
+        const json = await proxy.json();
+        text = json.contents || "";
+      } catch {
+        setM3uError("Could not fetch the playlist. The URL may be invalid or blocked by CORS.");
+        setM3uFetching(false); return;
+      }
+    }
+    if (!text.includes("#EXTINF") && !text.includes("#EXTM3U")) {
+      setM3uError("This does not appear to be a valid M3U playlist."); setM3uFetching(false); return;
+    }
+    const channels = parseM3U(text);
+    if (channels.length === 0) { setM3uError("No channels found in this playlist."); setM3uFetching(false); return; }
+    const existingUrls = new Set(liveList.map(s => s.stream_url).filter(Boolean));
+    const tagged = channels.map(ch => ({ ...ch, duplicate: existingUrls.has(ch.url) }));
+    setM3uChannels(tagged);
+    setM3uSelected(new Set(tagged.map((ch, i) => ch.duplicate ? null : i).filter(i => i !== null)));
+    setM3uFetching(false);
+  }
+
+  async function importM3USelected() {
+    const toImport = m3uChannels.filter((ch, i) => m3uSelected.has(i) && !ch.duplicate);
+    if (toImport.length === 0) { showToast("No new channels selected", "error"); return; }
+    setM3uImporting(true);
+    const { error } = await supabase.from("live_streams").insert(
+      toImport.map(ch => ({ title: ch.name, description: ch.group || "", stream_url: ch.url, thumbnail: ch.logo || "", is_live: false, is_hero: false, badge_text: "LIVE", playlist_source: m3uUrl.trim() }))
+    );
+    if (error) { showToast("Import failed: " + error.message, "error"); }
+    else { setM3uImportDone(toImport.length); showToast(`Imported ${toImport.length} channel${toImport.length !== 1 ? "s" : ""}`); await loadLiveStreams(); }
+    setM3uImporting(false);
+  }
+
   // Filter rows
   const filteredRows = rows.filter(row => {
     const matchesSearch =
@@ -2332,12 +2404,20 @@ export function CMS({ onExit }) {
                 <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 600, color: "#0f172a" }}>All Streams ({liveList.length})</h2>
                 <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Toggle a stream to Live to show it on the homepage "Live Now" section.</p>
               </div>
-              <button
-                onClick={() => { setLiveForm(EMPTY_LIVE_STREAM); setEditingLiveId(null); setDrawerOpen(true); }}
-                style={{ background: "#ef4444", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
-              >
-                + Add Stream
-              </button>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button
+                  onClick={() => { setM3uOpen(true); setM3uUrl(""); setM3uChannels([]); setM3uSelected(new Set()); setM3uError(""); setM3uSearch(""); setM3uPage(0); setM3uImportDone(null); }}
+                  style={{ background: "#0f172a", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+                >
+                  📋 Import Playlist
+                </button>
+                <button
+                  onClick={() => { setLiveForm(EMPTY_LIVE_STREAM); setEditingLiveId(null); setDrawerOpen(true); }}
+                  style={{ background: "#ef4444", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+                >
+                  + Add Stream
+                </button>
+              </div>
             </div>
 
             {liveLoading ? (
@@ -2375,6 +2455,138 @@ export function CMS({ onExit }) {
                 </div>
               </div>
             ))}
+
+            {/* ── M3U Import Modal ── */}
+            {m3uOpen && (
+              <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+                <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 780, maxHeight: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 80px rgba(0,0,0,0.2)", overflow: "hidden" }}>
+
+                  {/* Header */}
+                  <div style={{ padding: "20px 24px", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", gap: 12 }}>
+                    <span style={{ fontSize: 20 }}>📋</span>
+                    <div>
+                      <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#0f172a" }}>Import from Playlist</h2>
+                      <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Paste an .m3u or .m3u8 playlist URL to bulk-import channels</p>
+                    </div>
+                    <button onClick={() => setM3uOpen(false)} style={{ marginLeft: "auto", background: "transparent", border: "none", fontSize: 20, color: "#9ca3af", cursor: "pointer", lineHeight: 1 }}>✕</button>
+                  </div>
+
+                  {/* URL input */}
+                  <div style={{ padding: "16px 24px", borderBottom: "1px solid #f1f5f9", display: "flex", gap: 10 }}>
+                    <input
+                      value={m3uUrl} onChange={e => setM3uUrl(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && !m3uFetching && fetchM3UPlaylist()}
+                      placeholder="https://example.com/playlist.m3u"
+                      style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#0f172a", outline: "none" }}
+                    />
+                    <button onClick={fetchM3UPlaylist} disabled={m3uFetching || !m3uUrl.trim()}
+                      style={{ background: "#0f172a", border: "none", borderRadius: 8, padding: "10px 20px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: m3uFetching ? "wait" : "pointer", opacity: !m3uUrl.trim() ? 0.5 : 1 }}>
+                      {m3uFetching ? "Fetching…" : "Fetch"}
+                    </button>
+                  </div>
+
+                  {/* Error */}
+                  {m3uError && <div style={{ padding: "12px 24px", background: "#fef2f2", borderBottom: "1px solid #fecaca", color: "#dc2626", fontSize: 13 }}>{m3uError}</div>}
+
+                  {/* Channel list */}
+                  {m3uChannels.length > 0 && (() => {
+                    const PAGE_SIZE = 50;
+                    const filtered = m3uChannels.filter(ch => !m3uSearch || ch.name.toLowerCase().includes(m3uSearch.toLowerCase()) || ch.group.toLowerCase().includes(m3uSearch.toLowerCase()));
+                    const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+                    const paginated = filtered.slice(m3uPage * PAGE_SIZE, (m3uPage + 1) * PAGE_SIZE);
+                    const selectedCount = [...m3uSelected].filter(i => !m3uChannels[i]?.duplicate).length;
+                    const allOnPageSelected = paginated.every(ch => {
+                      const idx = m3uChannels.indexOf(ch);
+                      return ch.duplicate || m3uSelected.has(idx);
+                    });
+                    return (
+                      <>
+                        {/* Toolbar */}
+                        <div style={{ padding: "10px 24px", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", gap: 10, background: "#f8fafc" }}>
+                          <input value={m3uSearch} onChange={e => { setM3uSearch(e.target.value); setM3uPage(0); }}
+                            placeholder="Search channels…"
+                            style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 7, padding: "7px 12px", fontSize: 12, outline: "none" }} />
+                          <span style={{ fontSize: 12, color: "#6b7280", whiteSpace: "nowrap" }}>{filtered.length} channel{filtered.length !== 1 ? "s" : ""}</span>
+                          <button onClick={() => {
+                            const newSel = new Set(m3uSelected);
+                            paginated.forEach(ch => { const idx = m3uChannels.indexOf(ch); if (!ch.duplicate) { if (allOnPageSelected) newSel.delete(idx); else newSel.add(idx); } });
+                            setM3uSelected(newSel);
+                          }} style={{ background: "transparent", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 12px", fontSize: 12, color: "#374151", cursor: "pointer", whiteSpace: "nowrap" }}>
+                            {allOnPageSelected ? "Deselect page" : "Select page"}
+                          </button>
+                          <button onClick={() => {
+                            const allNonDupe = new Set(m3uChannels.map((ch, i) => ch.duplicate ? null : i).filter(i => i !== null));
+                            const allSelected = allNonDupe.size === m3uSelected.size;
+                            setM3uSelected(allSelected ? new Set() : allNonDupe);
+                          }} style={{ background: "transparent", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 12px", fontSize: 12, color: "#374151", cursor: "pointer", whiteSpace: "nowrap" }}>
+                            Select all ({m3uChannels.filter(ch => !ch.duplicate).length})
+                          </button>
+                        </div>
+
+                        {/* Rows */}
+                        <div style={{ flex: 1, overflowY: "auto" }}>
+                          {paginated.map((ch) => {
+                            const idx = m3uChannels.indexOf(ch);
+                            const checked = m3uSelected.has(idx);
+                            return (
+                              <div key={idx} onClick={() => { if (ch.duplicate) return; const s = new Set(m3uSelected); checked ? s.delete(idx) : s.add(idx); setM3uSelected(s); }}
+                                style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 24px", borderBottom: "1px solid #f8fafc", background: ch.duplicate ? "#f8fafc" : checked ? "#f0fdf4" : "#fff", cursor: ch.duplicate ? "default" : "pointer" }}>
+                                <input type="checkbox" checked={checked} readOnly disabled={ch.duplicate} style={{ width: 15, height: 15, flexShrink: 0, accentColor: "#22c55e" }} />
+                                {ch.logo ? (
+                                  <img src={ch.logo} alt="" style={{ width: 36, height: 24, objectFit: "contain", borderRadius: 3, flexShrink: 0, background: "#f1f5f9" }} onError={e => { e.target.style.display = "none"; }} />
+                                ) : (
+                                  <div style={{ width: 36, height: 24, background: "#e2e8f0", borderRadius: 3, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#94a3b8" }}>CH</div>
+                                )}
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: 13, fontWeight: 600, color: ch.duplicate ? "#9ca3af" : "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch.name}</div>
+                                  <div style={{ fontSize: 11, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch.url}</div>
+                                </div>
+                                {ch.group && <span style={{ fontSize: 11, color: "#6366f1", background: "#eef2ff", borderRadius: 4, padding: "2px 7px", whiteSpace: "nowrap", flexShrink: 0 }}>{ch.group}</span>}
+                                {ch.duplicate && <span style={{ fontSize: 11, color: "#f59e0b", background: "#fefce8", border: "1px solid #fde68a", borderRadius: 4, padding: "2px 7px", whiteSpace: "nowrap", flexShrink: 0 }}>Already exists</span>}
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Pagination */}
+                        {totalPages > 1 && (
+                          <div style={{ padding: "10px 24px", borderTop: "1px solid #f1f5f9", display: "flex", alignItems: "center", gap: 8, background: "#f8fafc" }}>
+                            <button onClick={() => setM3uPage(p => Math.max(0, p - 1))} disabled={m3uPage === 0} style={{ background: "transparent", border: "1px solid #e2e8f0", borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", opacity: m3uPage === 0 ? 0.4 : 1 }}>← Prev</button>
+                            <span style={{ fontSize: 12, color: "#6b7280" }}>Page {m3uPage + 1} of {totalPages}</span>
+                            <button onClick={() => setM3uPage(p => Math.min(totalPages - 1, p + 1))} disabled={m3uPage === totalPages - 1} style={{ background: "transparent", border: "1px solid #e2e8f0", borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", opacity: m3uPage === totalPages - 1 ? 0.4 : 1 }}>Next →</button>
+                            <span style={{ marginLeft: "auto", fontSize: 12, color: "#6b7280" }}>Showing {m3uPage * PAGE_SIZE + 1}–{Math.min((m3uPage + 1) * PAGE_SIZE, filtered.length)} of {filtered.length}</span>
+                          </div>
+                        )}
+
+                        {/* Footer */}
+                        <div style={{ padding: "14px 24px", borderTop: "1px solid #e2e8f0", display: "flex", alignItems: "center", gap: 12, background: "#fff" }}>
+                          {m3uImportDone != null
+                            ? <span style={{ fontSize: 13, color: "#16a34a", fontWeight: 600 }}>✓ Imported {m3uImportDone} channel{m3uImportDone !== 1 ? "s" : ""} successfully</span>
+                            : <span style={{ fontSize: 13, color: "#6b7280" }}>{selectedCount} channel{selectedCount !== 1 ? "s" : ""} selected</span>}
+                          <div style={{ marginLeft: "auto", display: "flex", gap: 10 }}>
+                            <button onClick={() => setM3uOpen(false)} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 18px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Close</button>
+                            <button onClick={importM3USelected} disabled={m3uImporting || selectedCount === 0}
+                              style={{ background: "#22c55e", border: "none", borderRadius: 8, padding: "10px 22px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: selectedCount === 0 ? "not-allowed" : "pointer", opacity: selectedCount === 0 ? 0.5 : 1 }}>
+                              {m3uImporting ? "Importing…" : `Import ${selectedCount > 0 ? selectedCount : ""} Selected`}
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
+
+                  {/* Empty state before fetch */}
+                  {!m3uFetching && m3uChannels.length === 0 && !m3uError && (
+                    <div style={{ padding: 48, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>
+                      Paste a playlist URL above and click Fetch to preview channels
+                    </div>
+                  )}
+                  {m3uFetching && (
+                    <div style={{ padding: 48, textAlign: "center", color: "#6b7280", fontSize: 13 }}>Fetching playlist…</div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {deleteLiveConfirm && (
               <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
