@@ -3,6 +3,7 @@ import Hls from "hls.js";
 import { supabase } from "./supabase";
 import { AuthModal } from "./components/AuthModal";
 import { LandingPage } from "./pages/LandingPage";
+import { PaywallPage } from "./pages/PaywallPage";
 import { LiveTVPage } from "./pages/LiveTV";
 import { ProfileScreen, avatarForId, PRESET_AVATARS } from "./components/ProfileScreen";
 import { ProfileSelect } from "./components/ProfileSelect";
@@ -50,6 +51,8 @@ export default function App() {
   const [userAvatarId, setUserAvatarId] = useState(null);
   const [activeProfile, setActiveProfile] = useState(null);
   const userIdRef = useRef(null);
+  const [subscription, setSubscription] = useState(null);
+  const [subChecked, setSubChecked] = useState(false);
   // Capture deep-link params before any effect clears the URL
   const [deepLink] = useState(() => {
     const p = new URLSearchParams(window.location.search);
@@ -91,6 +94,16 @@ export default function App() {
     if (!user || !activeProfile) { setMyList({}); return; }
     loadMyList(user.id, activeProfile.id);
   }, [user?.id, activeProfile?.id]);
+
+  // Check subscription status
+  useEffect(() => {
+    if (!user) { setSubscription(null); setSubChecked(false); return; }
+    // Check if returning from Stripe checkout
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("subscribed") === "1") history.replaceState(null, "", "/");
+    supabase.from("subscriptions").select("*").eq("user_id", user.id).maybeSingle()
+      .then(({ data }) => { setSubscription(data); setSubChecked(true); });
+  }, [user?.id]);
 
   // Presence heartbeat — mark this user online while browsing
   useEffect(() => {
@@ -171,6 +184,9 @@ export default function App() {
   // email verification gate — re-enable once real domain is set up
   // if (!user.email_confirmed_at) return <EmailVerificationGate user={user} />;
   if (!activeProfile) return <ProfileSelect user={user} onSelect={selectProfile} />;
+  if (subChecked && (!subscription || subscription.status !== "active")) {
+    return <PaywallPage user={user} onSubscribed={() => supabase.from("subscriptions").select("*").eq("user_id", user.id).maybeSingle().then(({ data }) => setSubscription(data))} onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }} />;
+  }
 
   const profileScreenEl = profileOpen && <ProfileScreen user={user} activeProfile={activeProfile} onClose={() => setProfileOpen(false)} onAvatarChange={id => setUserAvatarId(id)} onProfileUpdate={updated => { setActiveProfile(updated); localStorage.setItem(`peep_profile_${user.id}`, JSON.stringify(updated)); }} onSwitchProfile={switchProfile} onViewProfile={() => { setProfileOpen(false); setPage("profile"); }} onOpenSettings={() => { setProfileOpen(false); setPage("settings"); }} />;
 
