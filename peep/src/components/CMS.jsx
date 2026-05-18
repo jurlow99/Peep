@@ -1864,7 +1864,7 @@ export function CMS({ onExit }) {
     const existingUrls = new Set(liveList.map(s => s.stream_url).filter(Boolean));
     const tagged = channels.map(ch => ({ ...ch, duplicate: existingUrls.has(ch.url) }));
     setM3uChannels(tagged);
-    setM3uSelected(new Set(tagged.map((ch, i) => ch.duplicate ? null : i).filter(i => i !== null)));
+    setM3uSelected(new Set());
     setM3uFetching(false);
   }
 
