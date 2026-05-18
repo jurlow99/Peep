@@ -1015,9 +1015,9 @@ function CatalogCard({ item, onClick, myList, onToggleList }) {
   const inList = myList?.[`${item._type}_${item.id}`];
 
   return (
-    <div onClick={onClick} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
+    <div onClick={onClick}
       style={{ cursor: "pointer", borderRadius: 10, overflow: "hidden", background: "#141414", transform: hovered ? "scale(1.04) translateY(-4px)" : "scale(1)", transition: "transform 0.22s ease, box-shadow 0.22s ease", boxShadow: hovered ? "0 20px 48px rgba(0,0,0,0.8)" : "0 2px 8px rgba(0,0,0,0.3)" }}>
-      <div style={{ position: "relative", aspectRatio: "2/3", overflow: "hidden" }}>
+      <div onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} style={{ position: "relative", aspectRatio: "2/3", overflow: "hidden" }}>
         <img src={item.poster || item.thumbnail} alt={item.title}
           style={{ width: "100%", height: "100%", objectFit: "cover", transition: "filter 0.22s", filter: hovered ? "brightness(0.45)" : "brightness(0.75)" }} />
 
