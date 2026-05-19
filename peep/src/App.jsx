@@ -53,11 +53,25 @@ export default function App() {
   const userIdRef = useRef(null);
   const [subscription, setSubscription] = useState(null);
   const [subChecked, setSubChecked] = useState(false);
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [banner, setBanner] = useState(null);
   // Capture deep-link params before any effect clears the URL
   const [deepLink] = useState(() => {
     const p = new URLSearchParams(window.location.search);
     return { v: p.get("v"), e: p.get("e"), s: p.get("s"), live: p.get("live"), podcast: p.get("podcast") };
   });
+
+  useEffect(() => {
+    supabase.from("app_settings").select("key, value").in("key", ["maintenance_mode", "banner_active", "banner_text", "banner_expires_at"]).then(({ data }) => {
+      const s = {};
+      (data || []).forEach(r => { s[r.key] = r.value; });
+      setMaintenanceMode(s.maintenance_mode === "true");
+      if (s.banner_active === "true" && s.banner_text) {
+        const expired = s.banner_expires_at && new Date(s.banner_expires_at) < new Date();
+        if (!expired) setBanner(s.banner_text);
+      }
+    });
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -189,6 +203,15 @@ export default function App() {
 
   const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true), onProfileOpen: () => setProfileOpen(true), userAvatarId, activeProfile, onSwitchProfile: switchProfile, onPodcastSelect: pod => { setSelectedPodcast(pod); setPage("podcast"); }, onViewProfile: () => setPage("profile") };
 
+  if (maintenanceMode) return (
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", gap: 16 }}>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&display=swap" rel="stylesheet" />
+      <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 48, color: "#facc15" }}>peep.</span>
+      <p style={{ color: "#fff", fontSize: 22, fontWeight: 600, margin: 0 }}>We'll be right back.</p>
+      <p style={{ color: "#555", fontSize: 14, margin: 0 }}>We're doing some maintenance. Check back shortly.</p>
+    </div>
+  );
+
   if (!authChecked) return null;
   if (!user) return <LandingPage />;
   // email verification gate — re-enable once real domain is set up
@@ -312,6 +335,12 @@ export default function App() {
 
   return (
     <>
+      {banner && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 9999, background: "#facc15", color: "#0a0a0a", padding: "10px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, fontWeight: 600, fontFamily: "'Space Grotesk', sans-serif" }}>
+          <span>{banner}</span>
+          <button onClick={() => setBanner(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#0a0a0a", fontSize: 18, lineHeight: 1, padding: "0 4px" }}>×</button>
+        </div>
+      )}
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
       {profileScreenEl}
       <Homepage

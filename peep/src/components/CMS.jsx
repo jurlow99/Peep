@@ -258,6 +258,10 @@ export function CMS({ onExit }) {
   const [promosLoading, setPromosLoading] = useState(false);
   const [promoForm, setPromoForm] = useState({ name: "", code: "" });
   const [promoSaving, setPromoSaving] = useState(false);
+  const [bossSettings, setBossSettings] = useState({ maintenance_mode: "false", banner_active: "false", banner_text: "", banner_expires_at: "" });
+  const [grantEmail, setGrantEmail] = useState("");
+  const [grantLoading, setGrantLoading] = useState(false);
+  const [grantResult, setGrantResult] = useState(null);
 
   const subscriptionRef = useRef(null);
   const carouselSubRef = useRef(null);
@@ -322,7 +326,7 @@ export function CMS({ onExit }) {
     if (tab === "reports") { loadReports(); loadTodayStats(); loadOnlineUsers(); }
     if (tab === "ads") { loadAdAnalytics(); loadTodayStats(); }
     if (tab === "subscriptions") loadSubscriptions();
-    if (tab === "boss") loadPromos();
+    if (tab === "boss") { loadPromos(); loadBossSettings(); }
   }, [tab]);
 
   useEffect(() => {
@@ -478,6 +482,39 @@ export function CMS({ onExit }) {
     setRevokeConfirm(null);
     loadSubscriptions();
     showToast("Subscription revoked");
+  }
+
+  async function loadBossSettings() {
+    const { data } = await supabase.from("app_settings").select("key, value");
+    const s = {};
+    (data || []).forEach(r => { s[r.key] = r.value; });
+    setBossSettings(prev => ({ ...prev, ...s }));
+  }
+
+  async function saveSetting(key, value) {
+    await supabase.from("app_settings").upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: "key" });
+    setBossSettings(prev => ({ ...prev, [key]: value }));
+  }
+
+  async function grantAccessByEmail() {
+    if (!grantEmail.trim()) return;
+    setGrantLoading(true);
+    setGrantResult(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch("https://iuozujwtuzuwubhsnhix.supabase.co/functions/v1/grant-access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
+        body: JSON.stringify({ email: grantEmail.trim() }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setGrantResult({ success: true, msg: `Access granted to ${data.email}` });
+      setGrantEmail("");
+    } catch (err) {
+      setGrantResult({ success: false, msg: err.message });
+    }
+    setGrantLoading(false);
   }
 
   async function loadPromos() {
@@ -4172,7 +4209,91 @@ export function CMS({ onExit }) {
           <div style={{ maxWidth: 700 }}>
             <div style={{ marginBottom: 32 }}>
               <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>The Boss</h2>
-              <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Manage promo codes — turn them on or off anytime.</p>
+              <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Platform controls — only you can see this.</p>
+            </div>
+
+            {/* ── Maintenance Mode ── */}
+            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+                <div>
+                  <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Maintenance Mode</p>
+                  <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Shows a "Be right back" screen to all users. Admin still works at /admin.</p>
+                </div>
+                <button
+                  onClick={() => { const next = bossSettings.maintenance_mode !== "true"; saveSetting("maintenance_mode", String(next)); showToast(next ? "Maintenance mode ON" : "Maintenance mode OFF"); }}
+                  style={{ width: 52, height: 28, borderRadius: 14, border: "none", cursor: "pointer", background: bossSettings.maintenance_mode === "true" ? "#ef4444" : "#d1d5db", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                  <span style={{ position: "absolute", top: 4, left: bossSettings.maintenance_mode === "true" ? 26 : 4, width: 20, height: 20, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.15)", transition: "left 0.2s" }} />
+                </button>
+              </div>
+              {bossSettings.maintenance_mode === "true" && (
+                <div style={{ marginTop: 12, background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#ef4444", fontWeight: 600 }}>
+                  ⚠ Maintenance mode is ON — users cannot access the app right now
+                </div>
+              )}
+            </div>
+
+            {/* ── Banner Announcement ── */}
+            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                <div>
+                  <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Banner Announcement</p>
+                  <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Shows a yellow bar at the top of the app for all users.</p>
+                </div>
+                <button
+                  onClick={() => { const next = bossSettings.banner_active !== "true"; saveSetting("banner_active", String(next)); showToast(next ? "Banner is live" : "Banner hidden"); }}
+                  style={{ width: 52, height: 28, borderRadius: 14, border: "none", cursor: "pointer", background: bossSettings.banner_active === "true" ? "#22c55e" : "#d1d5db", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                  <span style={{ position: "absolute", top: 4, left: bossSettings.banner_active === "true" ? 26 : 4, width: 20, height: 20, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.15)", transition: "left 0.2s" }} />
+                </button>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <input
+                  value={bossSettings.banner_text || ""}
+                  onChange={e => setBossSettings(p => ({ ...p, banner_text: e.target.value }))}
+                  onBlur={e => saveSetting("banner_text", e.target.value)}
+                  placeholder="e.g. New movies added every Friday — go check them out!"
+                  style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px", fontSize: 14, color: "#0f172a", outline: "none", boxSizing: "border-box" }}
+                />
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <label style={{ fontSize: 12, color: "#6b7280", whiteSpace: "nowrap" }}>Expires:</label>
+                  <input
+                    type="datetime-local"
+                    value={bossSettings.banner_expires_at || ""}
+                    onChange={e => { setBossSettings(p => ({ ...p, banner_expires_at: e.target.value })); saveSetting("banner_expires_at", e.target.value); }}
+                    style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 12px", fontSize: 13, color: "#0f172a", outline: "none", cursor: "pointer" }}
+                  />
+                  <span style={{ fontSize: 11, color: "#9ca3af" }}>Leave blank to show indefinitely</span>
+                </div>
+              </div>
+              {bossSettings.banner_active === "true" && bossSettings.banner_text && (
+                <div style={{ marginTop: 12, background: "#facc15", borderRadius: 8, padding: "10px 14px", fontSize: 13, fontWeight: 600, color: "#0a0a0a" }}>
+                  Preview: {bossSettings.banner_text}
+                </div>
+              )}
+            </div>
+
+            {/* ── Grant Access ── */}
+            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
+              <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Grant Access by Email</p>
+              <p style={{ margin: "0 0 16px", fontSize: 13, color: "#9ca3af" }}>Give any existing account free access instantly. Shows as COMP in subscriptions.</p>
+              <div style={{ display: "flex", gap: 10 }}>
+                <input
+                  value={grantEmail}
+                  onChange={e => { setGrantEmail(e.target.value); setGrantResult(null); }}
+                  onKeyDown={e => e.key === "Enter" && grantAccessByEmail()}
+                  placeholder="user@email.com"
+                  type="email"
+                  style={{ flex: 1, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px", fontSize: 14, color: "#0f172a", outline: "none" }}
+                />
+                <button onClick={grantAccessByEmail} disabled={grantLoading || !grantEmail.trim()}
+                  style={{ background: "#facc15", border: "none", borderRadius: 8, padding: "10px 24px", color: "#0a0a0a", fontSize: 14, fontWeight: 700, cursor: "pointer", opacity: grantLoading ? 0.6 : 1, whiteSpace: "nowrap" }}>
+                  {grantLoading ? "…" : "Grant Access"}
+                </button>
+              </div>
+              {grantResult && (
+                <p style={{ margin: "10px 0 0", fontSize: 13, color: grantResult.success ? "#059669" : "#dc2626", fontWeight: 500 }}>
+                  {grantResult.success ? "✓ " : "✗ "}{grantResult.msg}
+                </p>
+              )}
             </div>
 
             {/* Create new code */}
