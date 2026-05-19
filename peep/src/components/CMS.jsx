@@ -508,7 +508,22 @@ export function CMS({ onExit }) {
       supabase.from("app_settings").select("key, value").in("key", ["lockout_max_attempts", "lockout_duration_mins"]),
     ]);
     setBlockedUsers(blocked || []);
-    setActiveSessions(sessions || []);
+
+    if (sessions?.length) {
+      const userIds = sessions.map(s => s.user_id).filter(Boolean);
+      const [{ data: subData }, { data: profileData }] = await Promise.all([
+        supabase.from("subscriptions").select("user_id, email").in("user_id", userIds),
+        supabase.from("viewer_profiles").select("user_id, name").in("user_id", userIds),
+      ]);
+      const emailMap = {};
+      (subData || []).forEach(s => { emailMap[s.user_id] = s.email; });
+      const nameMap = {};
+      (profileData || []).forEach(p => { if (!nameMap[p.user_id]) nameMap[p.user_id] = p.name; });
+      setActiveSessions(sessions.map(s => ({ ...s, email: emailMap[s.user_id] || null, profileName: nameMap[s.user_id] || null })));
+    } else {
+      setActiveSessions([]);
+    }
+
     const s = {};
     (settings || []).forEach(r => { s[r.key] = r.value; });
     if (Object.keys(s).length) setLockoutSettings(prev => ({ ...prev, ...s }));
@@ -4404,7 +4419,10 @@ export function CMS({ onExit }) {
                       <div key={s.user_id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 16px", background: i % 2 === 0 ? "#fafafa" : "#fff", borderBottom: i < arr.length - 1 ? "1px solid #f1f5f9" : "none" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                           <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#22c55e", flexShrink: 0, display: "inline-block" }} />
-                          <span style={{ fontSize: 12, color: "#6b7280", fontFamily: "monospace" }}>{s.user_id?.slice(0, 20)}…</span>
+                          <div>
+                            <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: "#0f172a" }}>{s.email || <span style={{ color: "#9ca3af", fontFamily: "monospace", fontSize: 11 }}>{s.user_id?.slice(0, 16)}…</span>}</p>
+                            {s.profileName && <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>Profile: {s.profileName}</p>}
+                          </div>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                           {s.current_page && <span style={{ fontSize: 11, background: "#f1f5f9", padding: "2px 8px", borderRadius: 4, color: "#6b7280" }}>{s.current_page}</span>}
