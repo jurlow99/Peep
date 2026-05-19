@@ -136,6 +136,8 @@ export function CMS({ onExit }) {
   const [carouselForm, setCarouselForm] = useState(EMPTY_CAROUSEL);
   const [carouselSaving, setCarouselSaving] = useState(false);
   const [deleteCarouselConfirm, setDeleteCarouselConfirm] = useState(null);
+  const [handpickedSearch, setHandpickedSearch] = useState("");
+  const [handpickedSelected, setHandpickedSelected] = useState([]); // [{id, type, title, thumbnail}]
   
   // Shows state
   const [showsList, setShowsList] = useState([]);
@@ -1132,11 +1134,19 @@ export function CMS({ onExit }) {
       position: carousel.position ?? 0,
       pages: carousel.pages ?? "home",
     });
+    if (carousel.type === "handpicked") {
+      try { setHandpickedSelected(JSON.parse(carousel.filter_value || "[]")); } catch { setHandpickedSelected([]); }
+    } else {
+      setHandpickedSelected([]);
+    }
+    setHandpickedSearch("");
   }
 
   function cancelCarouselEdit() {
     setEditingCarouselId(null);
     setCarouselForm(EMPTY_CAROUSEL);
+    setHandpickedSelected([]);
+    setHandpickedSearch("");
     setDrawerOpen(false);
   }
 
@@ -1149,9 +1159,16 @@ export function CMS({ onExit }) {
       showToast("Category is required for category type.", "error");
       return;
     }
+    if (carouselForm.type === "handpicked" && handpickedSelected.length === 0) {
+      showToast("Pick at least one title.", "error");
+      return;
+    }
 
     setCarouselSaving(true);
-    const payload = { ...carouselForm, position: editingCarouselId ? carouselForm.position : carousels.length };
+    const serializedForm = carouselForm.type === "handpicked"
+      ? { ...carouselForm, filter_value: JSON.stringify(handpickedSelected.map(({ id, type }) => ({ id, type }))) }
+      : carouselForm;
+    const payload = { ...serializedForm, position: editingCarouselId ? carouselForm.position : carousels.length };
 
     try {
       if (editingCarouselId) {
@@ -2658,7 +2675,8 @@ export function CMS({ onExit }) {
                   const ct = carousel.content_type;
                   const rowPages = (carousel.pages || "home").split(",").map(p => p.trim()).filter(Boolean);
                   const contentLabel = t === "podcast" ? "Podcasts" : ct === "movies" ? "Movies only" : ct === "shows" ? "Series only" : ct === "music_videos" ? "Music Videos" : "All content";
-                  const orderLabel = t === "trending" ? "Trending" : t === "category" ? `Genre: ${carousel.filter_value || "?"}` : t === "podcast" ? (carousel.filter_value ? `Tag: ${carousel.filter_value}` : "All podcasts") : "Default order";
+                  const handpickedCount = t === "handpicked" ? (() => { try { return JSON.parse(carousel.filter_value || "[]").length; } catch { return 0; } })() : 0;
+                  const orderLabel = t === "trending" ? "Trending" : t === "handpicked" ? `${handpickedCount} hand-picked` : t === "category" ? `Genre: ${carousel.filter_value || "?"}` : t === "podcast" ? (carousel.filter_value ? `Tag: ${carousel.filter_value}` : "All podcasts") : "Default order";
                   const contentColor = t === "podcast" ? "#a78bfa" : ct === "movies" ? "#60a5fa" : ct === "shows" ? "#34d399" : ct === "music_videos" ? "#4ade80" : "#f59e0b";
                   const pageLabels = { home: "Home", movies: "Movies", series: "Series", music_videos: "Music Videos" };
                   return (
@@ -5124,9 +5142,10 @@ export function CMS({ onExit }) {
                         <p style={{ margin: "0 0 10px", fontSize: 11, color: "#6b7280" }}>How content is sorted inside this row.</p>
                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                           {[
-                            { val: "custom",   icon: "📋", label: "Show all",       desc: "All matching content, default order" },
-                            { val: "trending", icon: "🔥", label: "Trending / New", desc: "Newest added first" },
-                            { val: "category", icon: "🏷️", label: "By category",    desc: "Filter to a specific genre" },
+                            { val: "custom",      icon: "📋", label: "Show all",        desc: "All matching content, default order" },
+                            { val: "trending",    icon: "🔥", label: "Trending / New", desc: "Newest added first" },
+                            { val: "category",    icon: "🏷️", label: "By category",    desc: "Filter to a specific genre" },
+                            { val: "handpicked",  icon: "🎯", label: "Hand-pick",       desc: "Choose specific titles" },
                           ].map(({ val, icon, label, desc }) => {
                             const isActive = carouselForm.type === val;
                             return (
@@ -5156,6 +5175,114 @@ export function CMS({ onExit }) {
                             </p>
                           </div>
                         )}
+
+                        {carouselForm.type === "handpicked" && (() => {
+                          const pool = [
+                            ...rows.map(v => ({ id: v.id, type: "movie", title: v.title, subtitle: v.category, thumbnail: v.poster || v.thumbnail })),
+                            ...showsList.map(s => ({ id: s.id, type: "show", title: s.title, subtitle: "Series", thumbnail: s.poster || s.thumbnail })),
+                            ...musicVideosList.map(mv => ({ id: mv.id, type: "music_video", title: mv.title, subtitle: mv.artist, thumbnail: mv.thumbnail || mv.poster })),
+                          ];
+                          const q = handpickedSearch.toLowerCase().trim();
+                          const results = q ? pool.filter(item =>
+                            item.title?.toLowerCase().includes(q) || item.subtitle?.toLowerCase().includes(q)
+                          ).slice(0, 12) : [];
+                          const selectedKey = item => `${item.type}_${item.id}`;
+                          const selectedKeys = new Set(handpickedSelected.map(selectedKey));
+                          const typeLabel = t => t === "movie" ? "Movie" : t === "show" ? "Series" : "Music Video";
+                          const typeColor = t => t === "movie" ? "#facc15" : t === "show" ? "#60a5fa" : "#4ade80";
+
+                          return (
+                            <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+                              {/* Search input */}
+                              <input
+                                value={handpickedSearch}
+                                onChange={e => setHandpickedSearch(e.target.value)}
+                                placeholder="Search movies, series, music videos..."
+                                style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                                onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")}
+                              />
+
+                              {/* Search results */}
+                              {results.length > 0 && (
+                                <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden" }}>
+                                  {results.map(item => {
+                                    const key = selectedKey(item);
+                                    const isSelected = selectedKeys.has(key);
+                                    return (
+                                      <div key={key}
+                                        onClick={() => {
+                                          if (isSelected) setHandpickedSelected(prev => prev.filter(s => selectedKey(s) !== key));
+                                          else setHandpickedSelected(prev => [...prev, item]);
+                                        }}
+                                        style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", cursor: "pointer", borderBottom: "1px solid #f1f5f9", background: isSelected ? "rgba(79,70,229,0.06)" : "transparent", transition: "background 0.1s" }}
+                                        onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = "#f1f5f9"; }}
+                                        onMouseLeave={e => { e.currentTarget.style.background = isSelected ? "rgba(79,70,229,0.06)" : "transparent"; }}>
+                                        <div style={{ width: 36, height: 36, borderRadius: 5, overflow: "hidden", flexShrink: 0, background: "#e2e8f0" }}>
+                                          {item.thumbnail && <img src={item.thumbnail} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => { e.target.style.display = "none"; }} />}
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                          <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
+                                          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                            <span style={{ fontSize: 10, fontWeight: 700, color: typeColor(item.type) }}>{typeLabel(item.type)}</span>
+                                            {item.subtitle && <span style={{ fontSize: 11, color: "#9ca3af", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.subtitle}</span>}
+                                          </div>
+                                        </div>
+                                        <div style={{ width: 22, height: 22, borderRadius: 5, border: `2px solid ${isSelected ? "#4f46e5" : "#e2e8f0"}`, background: isSelected ? "#4f46e5" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.15s" }}>
+                                          {isSelected && <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                              {q && results.length === 0 && (
+                                <p style={{ margin: 0, fontSize: 12, color: "#9ca3af", padding: "8px 0" }}>No results for "{handpickedSearch}"</p>
+                              )}
+
+                              {/* Selected items */}
+                              {handpickedSelected.length > 0 && (
+                                <div>
+                                  <p style={{ margin: "0 0 8px", fontSize: 11, color: "#6b7280", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                                    Selected ({handpickedSelected.length}) — drag to reorder
+                                  </p>
+                                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                    {handpickedSelected.map((item, idx) => (
+                                      <div key={selectedKey(item)} style={{ display: "flex", alignItems: "center", gap: 8, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "7px 10px" }}>
+                                        <span style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600, width: 18, textAlign: "center", flexShrink: 0 }}>{idx + 1}</span>
+                                        <div style={{ width: 30, height: 30, borderRadius: 4, overflow: "hidden", flexShrink: 0, background: "#e2e8f0" }}>
+                                          {item.thumbnail && <img src={item.thumbnail} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => { e.target.style.display = "none"; }} />}
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                          <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
+                                          {item.subtitle && <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>{item.subtitle}</p>}
+                                        </div>
+                                        <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                                          <button onClick={() => {
+                                            if (idx === 0) return;
+                                            const next = [...handpickedSelected];
+                                            [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                                            setHandpickedSelected(next);
+                                          }} disabled={idx === 0} style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: 4, width: 24, height: 24, cursor: idx === 0 ? "default" : "pointer", color: idx === 0 ? "#e2e8f0" : "#6b7280", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }}>▲</button>
+                                          <button onClick={() => {
+                                            if (idx === handpickedSelected.length - 1) return;
+                                            const next = [...handpickedSelected];
+                                            [next[idx + 1], next[idx]] = [next[idx], next[idx + 1]];
+                                            setHandpickedSelected(next);
+                                          }} disabled={idx === handpickedSelected.length - 1} style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: 4, width: 24, height: 24, cursor: idx === handpickedSelected.length - 1 ? "default" : "pointer", color: idx === handpickedSelected.length - 1 ? "#e2e8f0" : "#6b7280", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }}>▼</button>
+                                          <button onClick={() => setHandpickedSelected(prev => prev.filter((_, i) => i !== idx))}
+                                            style={{ background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 4, width: 24, height: 24, cursor: "pointer", color: "#f87171", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {handpickedSelected.length === 0 && !q && (
+                                <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>Search above to add titles to this row.</p>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     ) : (
                       <div>

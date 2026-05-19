@@ -614,6 +614,8 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           ? [...musicVideos].reverse()
           : c.type === "category"
           ? musicVideos.filter(mv => Array.isArray(mv.tags) ? mv.tags.some(t => t.toLowerCase() === filterVal) : false)
+          : c.type === "handpicked"
+          ? (() => { try { const picks = JSON.parse(c.filter_value || "[]"); return picks.flatMap(p => { const found = musicVideos.find(mv => mv.id === p.id); return found ? [found] : []; }); } catch { return musicVideos; } })()
           : musicVideos;
         return { id: String(c.id), title: c.title, musicVideoItems: baseItems, isMusicVideo: true };
       }).filter(s => s.musicVideoItems.length > 0)
@@ -632,6 +634,8 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           ? [...filteredContent].reverse()
           : c.type === "category"
           ? filteredContent.filter(v => v.category?.toLowerCase() === filterVal)
+          : c.type === "handpicked"
+          ? (() => { try { const picks = JSON.parse(c.filter_value || "[]"); return picks.flatMap(p => { const found = filteredContent.find(v => v.id === p.id && v._type === p.type); return found ? [found] : []; }); } catch { return filteredContent; } })()
           : filteredContent;
         const items = c.content_type === "movies" ? baseItems.filter(v => v._type === "movie")
           : c.content_type === "shows" ? baseItems.filter(v => v._type === "show")
