@@ -1078,15 +1078,16 @@ function CatalogCard({ item, onClick, myList, onToggleList }) {
     <div onClick={onClick}
       style={{ cursor: "pointer", borderRadius: 10, overflow: "hidden", background: "#141414", transform: hovered ? "scale(1.04) translateY(-4px)" : "scale(1)", transition: "transform 0.22s ease, box-shadow 0.22s ease", boxShadow: hovered ? "0 20px 48px rgba(0,0,0,0.8)" : "0 2px 8px rgba(0,0,0,0.3)" }}>
       <div onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} style={{ position: "relative", aspectRatio: "2/3", overflow: "hidden" }}>
-        <img src={item.poster || item.thumbnail} alt={item.title}
+        <img src={item.poster || item.thumbnail || "https://iuozujwtuzuwubhsnhix.supabase.co/storage/v1/object/public/peep-media/URL%20IMAGE/peep-icon.png"} alt={item.title}
+          onError={e => { e.currentTarget.src = "https://iuozujwtuzuwubhsnhix.supabase.co/storage/v1/object/public/peep-media/URL%20IMAGE/peep-icon.png"; }}
           style={{ width: "100%", height: "100%", objectFit: "cover", transition: "filter 0.22s", filter: hovered ? "brightness(0.45)" : "brightness(0.75)" }} />
 
-        {/* Badges */}
+        {/* Badges — hover only */}
         {item._type === "show"
-          ? <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(59,130,246,0.9)", backdropFilter: "blur(4px)", color: "#fff", fontSize: 9.5, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: 0.5, textTransform: "uppercase" }}>Series</div>
-          : item.category && <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(250,204,21,0.85)", backdropFilter: "blur(4px)", color: "#0a0a0a", fontSize: 9.5, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: 0.5, textTransform: "uppercase" }}>{item.category}</div>
+          ? <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(59,130,246,0.9)", backdropFilter: "blur(4px)", color: "#fff", fontSize: 9.5, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: 0.5, textTransform: "uppercase", opacity: hovered ? 1 : 0, transition: "opacity 0.2s ease" }}>Series</div>
+          : item.category && <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(250,204,21,0.85)", backdropFilter: "blur(4px)", color: "#0a0a0a", fontSize: 9.5, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: 0.5, textTransform: "uppercase", opacity: hovered ? 1 : 0, transition: "opacity 0.2s ease" }}>{item.category}</div>
         }
-        {item.duration && <div style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(4px)", color: "#bbb", fontSize: 10.5, padding: "3px 7px", borderRadius: 4 }}>{item.duration}</div>}
+        {item.duration && <div style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(4px)", color: "#bbb", fontSize: 10.5, padding: "3px 7px", borderRadius: 4, opacity: hovered ? 1 : 0, transition: "opacity 0.2s ease" }}>{item.duration}</div>}
 
         {/* Hover overlay — play button only */}
         {hovered && (
@@ -1617,7 +1618,8 @@ function VideoCard({ video, onClick, rank, myList, onToggleList }) {
       <div onClick={onClick} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}
         style={{ cursor: "pointer", borderRadius: 10, overflow: "hidden", background: "#0f0f0f", transform: hovered ? "scale(1.03) translateY(-6px)" : "scale(1)", transformOrigin: "bottom center", transition: "transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94), box-shadow 0.3s ease", boxShadow: hovered ? "0 28px 60px rgba(0,0,0,0.85)" : "none", position: "relative", zIndex: hovered ? 10 : 1, marginLeft: rank ? 34 : 0 }}>
         <div style={{ position: "relative", aspectRatio: "2/3", overflow: "hidden" }}>
-          <img src={video.poster || video.thumbnail} alt={video.title}
+          <img src={video.poster || video.thumbnail || "https://iuozujwtuzuwubhsnhix.supabase.co/storage/v1/object/public/peep-media/URL%20IMAGE/peep-icon.png"} alt={video.title}
+            onError={e => { e.currentTarget.src = "https://iuozujwtuzuwubhsnhix.supabase.co/storage/v1/object/public/peep-media/URL%20IMAGE/peep-icon.png"; }}
             style={{ width: "100%", height: "100%", objectFit: "cover", transition: "filter 0.35s ease, transform 0.35s ease", filter: hovered ? "brightness(0.45)" : "brightness(0.82)", transform: hovered ? "scale(1.06)" : "scale(1)" }} />
 
           {/* Hover overlay */}
@@ -1630,10 +1632,10 @@ function VideoCard({ video, onClick, rank, myList, onToggleList }) {
             </div>
           )}
 
-          {/* Type badge */}
+          {/* Type badge — hover only */}
           {video._type === "show"
-            ? <div style={{ position: "absolute", top: 10, left: 10, background: "rgba(15,15,15,0.75)", backdropFilter: "blur(8px)", color: "#93c5fd", fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: 1.2, textTransform: "uppercase" }}>Series</div>
-            : video.category && <div style={{ position: "absolute", top: 10, left: 10, background: "rgba(15,15,15,0.75)", backdropFilter: "blur(8px)", color: "#d1d5db", fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: 1.2, textTransform: "uppercase" }}>{video.category}</div>
+            ? <div style={{ position: "absolute", top: 10, left: 10, background: "rgba(15,15,15,0.75)", backdropFilter: "blur(8px)", color: "#93c5fd", fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: 1.2, textTransform: "uppercase", opacity: hovered ? 1 : 0, transition: "opacity 0.2s ease" }}>Series</div>
+            : video.category && <div style={{ position: "absolute", top: 10, left: 10, background: "rgba(15,15,15,0.75)", backdropFilter: "blur(8px)", color: "#d1d5db", fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: 1.2, textTransform: "uppercase", opacity: hovered ? 1 : 0, transition: "opacity 0.2s ease" }}>{video.category}</div>
           }
 
           {/* Duration */}
