@@ -245,6 +245,11 @@ export function CMS({ onExit }) {
   const [selectedUserStats, setSelectedUserStats] = useState(null);
   const [userStatsLoading, setUserStatsLoading] = useState(false);
 
+  // Subscriptions state
+  const [subs, setSubs] = useState([]);
+  const [subsLoading, setSubsLoading] = useState(false);
+  const [revokeConfirm, setRevokeConfirm] = useState(null);
+
   const subscriptionRef = useRef(null);
   const carouselSubRef = useRef(null);
   const showSubRef = useRef(null);
@@ -307,6 +312,7 @@ export function CMS({ onExit }) {
   useEffect(() => {
     if (tab === "reports") { loadReports(); loadTodayStats(); loadOnlineUsers(); }
     if (tab === "ads") { loadAdAnalytics(); loadTodayStats(); }
+    if (tab === "subscriptions") loadSubscriptions();
   }, [tab]);
 
   useEffect(() => {
@@ -435,6 +441,20 @@ export function CMS({ onExit }) {
     } catch (err) {
       console.error("loadOnlineUsers error:", err);
     }
+  }
+
+  async function loadSubscriptions() {
+    setSubsLoading(true);
+    const { data } = await supabase.from("subscriptions").select("*").order("created_at", { ascending: false });
+    setSubs(data || []);
+    setSubsLoading(false);
+  }
+
+  async function revokeSubscription(id) {
+    await supabase.from("subscriptions").delete().eq("id", id);
+    setRevokeConfirm(null);
+    loadSubscriptions();
+    showToast("Subscription revoked");
   }
 
   async function loadReports() {
@@ -2009,6 +2029,9 @@ export function CMS({ onExit }) {
         </button>
         <button onClick={() => setTab("ads")} style={{ background: "transparent", border: "none", borderBottom: tab === "ads" ? "2px solid #f59e0b" : "none", color: tab === "ads" ? "#f59e0b" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "ads" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
           Ads {adList.length > 0 && `(${adList.length})`}
+        </button>
+        <button onClick={() => setTab("subscriptions")} style={{ background: "transparent", border: "none", borderBottom: tab === "subscriptions" ? "2px solid #818cf8" : "none", color: tab === "subscriptions" ? "#818cf8" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "subscriptions" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
+          Subscriptions {subs.length > 0 && `(${subs.length})`}
         </button>
       </div>
 
@@ -3900,6 +3923,97 @@ export function CMS({ onExit }) {
 
             {!reportLoading && !reportData && (
               <div style={{ textAlign: "center", padding: 80, color: "#9ca3af" }}>Click Refresh to load reports</div>
+            )}
+          </div>
+        )}
+
+        {/* ────── SUBSCRIPTIONS TAB ────── */}
+        {tab === "subscriptions" && (
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28, flexWrap: "wrap" }}>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Subscriptions</h2>
+              <button onClick={loadSubscriptions} style={{ background: "rgba(129,140,248,0.1)", border: "1px solid rgba(129,140,248,0.2)", borderRadius: 7, padding: "8px 16px", color: "#818cf8", fontSize: 12, fontWeight: 600, cursor: "pointer", marginLeft: "auto" }}>
+                Refresh
+              </button>
+            </div>
+
+            {/* Stats */}
+            {(() => {
+              const active = subs.filter(s => s.status === "active").length;
+              const cancelled = subs.filter(s => s.status !== "active").length;
+              const mrr = active * 10;
+              return (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16, marginBottom: 32 }}>
+                  {[
+                    { label: "Total Subscribers", value: subs.length, color: "#818cf8" },
+                    { label: "Active", value: active, color: "#34d399" },
+                    { label: "Inactive / Cancelled", value: cancelled, color: "#f87171" },
+                    { label: "MRR", value: `$${mrr}`, color: "#facc15" },
+                  ].map(({ label, value, color }) => (
+                    <div key={label} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px" }}>
+                      <p style={{ margin: "0 0 6px", fontSize: 12, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6 }}>{label}</p>
+                      <p style={{ margin: 0, fontSize: 28, fontWeight: 700, color }}>{value}</p>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+
+            {/* Table */}
+            {subsLoading ? (
+              <div style={{ textAlign: "center", padding: 60, color: "#9ca3af" }}>Loading…</div>
+            ) : subs.length === 0 ? (
+              <div style={{ textAlign: "center", padding: 60, color: "#9ca3af" }}>No subscribers yet</div>
+            ) : (
+              <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, overflow: "hidden" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                      {["Email / User ID", "Status", "Stripe Customer", "Stripe Sub", "Started", "Period Ends", ""].map(h => (
+                        <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5 }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {subs.map((s, i) => (
+                      <tr key={s.id} style={{ borderBottom: i < subs.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                        <td style={{ padding: "14px 16px", color: "#0f172a", fontWeight: 500 }}>
+                          {s.email || <span style={{ color: "#9ca3af", fontFamily: "monospace", fontSize: 11 }}>{s.user_id?.slice(0, 16)}…</span>}
+                        </td>
+                        <td style={{ padding: "14px 16px" }}>
+                          <span style={{ background: s.status === "active" ? "rgba(52,211,153,0.1)" : "rgba(248,113,113,0.1)", color: s.status === "active" ? "#059669" : "#dc2626", border: `1px solid ${s.status === "active" ? "rgba(52,211,153,0.3)" : "rgba(248,113,113,0.3)"}`, borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 600 }}>
+                            {s.status}
+                          </span>
+                        </td>
+                        <td style={{ padding: "14px 16px", color: "#6b7280", fontFamily: "monospace", fontSize: 11 }}>{s.stripe_customer_id || "—"}</td>
+                        <td style={{ padding: "14px 16px", color: "#6b7280", fontFamily: "monospace", fontSize: 11 }}>{s.stripe_subscription_id || "—"}</td>
+                        <td style={{ padding: "14px 16px", color: "#6b7280" }}>{s.created_at ? new Date(s.created_at).toLocaleDateString() : "—"}</td>
+                        <td style={{ padding: "14px 16px", color: "#6b7280" }}>{s.current_period_end ? new Date(s.current_period_end).toLocaleDateString() : "—"}</td>
+                        <td style={{ padding: "14px 16px" }}>
+                          <button onClick={() => setRevokeConfirm(s)} style={{ background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 6, padding: "5px 12px", color: "#dc2626", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                            Revoke
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Revoke confirm modal */}
+            {revokeConfirm && (
+              <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ background: "#fff", borderRadius: 16, padding: "32px 36px", maxWidth: 380, width: "90%", textAlign: "center" }}>
+                  <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "#0f172a" }}>Revoke subscription?</p>
+                  <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>{revokeConfirm.email || revokeConfirm.user_id}</p>
+                  <p style={{ fontSize: 12, color: "#9ca3af", marginBottom: 28 }}>This removes access immediately. It does not cancel billing in Stripe — do that separately.</p>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button onClick={() => setRevokeConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    <button onClick={() => revokeSubscription(revokeConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Revoke Access</button>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         )}

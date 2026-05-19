@@ -68,6 +68,7 @@ Deno.serve(async (req) => {
     );
     await supabaseClient.from("subscriptions").upsert({
       user_id,
+      email,
       stripe_customer_id: customerId,
       stripe_subscription_id: sub.id,
       status: sub.status,
