@@ -1669,6 +1669,12 @@ function VideoCard({ video, onClick, rank, myList, onToggleList }) {
         </div>
       </div>
 
+      {/* Dim backdrop */}
+      {trailerExpanded && (
+        <div onMouseEnter={handleMouseLeave}
+          style={{ position: "fixed", inset: 0, zIndex: 199, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(2px)", transition: "opacity 0.25s ease", pointerEvents: "auto" }} />
+      )}
+
       {/* Morphing trailer overlay */}
       {overlayStyle && (
         <div style={overlayStyle}
