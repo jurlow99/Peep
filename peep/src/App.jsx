@@ -1074,25 +1074,20 @@ function CatalogPage({ type, content, carousels = [], podcasts = [], onPlay, onS
         </div>
       )}
 
-      {/* Browse all grid */}
-      <div style={{ padding: `0 ${PAD}`, marginBottom: 12 }}>
-        <h2 style={{ margin: 0, fontSize: "clamp(16px, 1.4vw, 20px)", fontWeight: 600, color: "#e5e5e5" }}>
-          Browse All
-        </h2>
-      </div>
-
-      {displayed.length === 0 ? (
-        <div style={{ padding: "80px 0", textAlign: "center", color: "#444", fontSize: 15 }}>
-          No {type.toLowerCase()} in this genre yet.
-        </div>
-      ) : (
-        <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? "130px" : "160px"}, 1fr))`, gap: isMobile ? 10 : 14, padding: `0 ${PAD} 80px` }}>
-          {displayed.map(item => (
-            <CatalogCard key={item.id + item._type} item={item}
-              onClick={() => item._type === "show" ? onShowSelect(item) : onPlay(item)}
-              myList={myList} onToggleList={onToggleList} />
-          ))}
-        </div>
+      {catalogSections.length === 0 && (
+        displayed.length === 0 ? (
+          <div style={{ padding: "80px 0", textAlign: "center", color: "#444", fontSize: 15 }}>
+            No {type.toLowerCase()} in this genre yet.
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? "130px" : "160px"}, 1fr))`, gap: isMobile ? 10 : 14, padding: `0 ${PAD} 80px` }}>
+            {displayed.map(item => (
+              <CatalogCard key={item.id + item._type} item={item}
+                onClick={() => item._type === "show" ? onShowSelect(item) : onPlay(item)}
+                myList={myList} onToggleList={onToggleList} />
+            ))}
+          </div>
+        )
       )}
     </div>
   );
@@ -1113,13 +1108,13 @@ function MusicVideosPage({ musicVideos, sections = [], onPlay }) {
     <div style={{ paddingTop: 88, minHeight: "100vh" }}>
       <div style={{ padding: `0 ${PAD} 28px` }}>
         <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(32px, 4vw, 56px)", fontWeight: 400, margin: "0 0 24px", color: "#fff" }}>Music Videos</h1>
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+        {sections.length === 0 && (
           <select value={sortBy} onChange={e => setSortBy(e.target.value)}
             style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "8px 14px", color: "rgba(255,255,255,0.7)", fontSize: 13, cursor: "pointer", outline: "none" }}>
             <option value="artist">By Artist</option>
             <option value="newest">Newest First</option>
           </select>
-        </div>
+        )}
         <p style={{ margin: "16px 0 0", fontSize: 12, color: "#444" }}>
           {musicVideos.length} video{musicVideos.length !== 1 ? "s" : ""}
         </p>
@@ -1130,24 +1125,21 @@ function MusicVideosPage({ musicVideos, sections = [], onPlay }) {
         <MusicVideoRow key={section.id} section={section} onPlay={onPlay} />
       ))}
 
-      {/* Browse All grid */}
-      <div style={{ height: 1, background: "linear-gradient(to right, rgba(255,255,255,0.06), transparent)", margin: `0 ${PAD} ${sections.length > 0 ? 24 : 8}px` }} />
-      {sections.length > 0 && (
-        <div style={{ padding: `0 ${PAD} 12px` }}>
-          <h2 style={{ margin: 0, fontSize: "clamp(14px, 1.2vw, 17px)", fontWeight: 500, color: "#9ca3af", letterSpacing: "0.04em", textTransform: "uppercase" }}>Browse All</h2>
-        </div>
-      )}
-
-      {sorted.length === 0 ? (
-        <div style={{ padding: "80px 0", textAlign: "center", color: "#444", fontSize: 15 }}>
-          No music videos yet — add one from the admin panel.
-        </div>
-      ) : (
-        <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? "150px" : "200px"}, 1fr))`, gap: isMobile ? 10 : 16, padding: `0 ${PAD} 80px` }}>
-          {sorted.map(mv => (
-            <MusicVideoCard key={mv.id} item={mv} onClick={() => onPlay(mv)} />
-          ))}
-        </div>
+      {sections.length === 0 && (
+        sorted.length === 0 ? (
+          <div style={{ padding: "80px 0", textAlign: "center", color: "#444", fontSize: 15 }}>
+            No music videos yet — add one from the admin panel.
+          </div>
+        ) : (
+          <>
+            <div style={{ height: 1, background: "linear-gradient(to right, rgba(255,255,255,0.06), transparent)", margin: `0 ${PAD} 8px` }} />
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? "150px" : "200px"}, 1fr))`, gap: isMobile ? 10 : 16, padding: `0 ${PAD} 80px` }}>
+              {sorted.map(mv => (
+                <MusicVideoCard key={mv.id} item={mv} onClick={() => onPlay(mv)} />
+              ))}
+            </div>
+          </>
+        )
       )}
     </div>
   );
