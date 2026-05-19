@@ -599,6 +599,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     if (activeNav === "Home") return pages.includes("home");
     if (activeNav === "Movies") return pages.includes("movies");
     if (activeNav === "Series") return pages.includes("series");
+    if (activeNav === "Music Videos") return pages.includes("music_videos");
     return false;
   }), [carousels, activeNav]);
 
@@ -607,7 +608,15 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     : activeNav === "Live TV"
     ? []
     : activeNav === "Music Videos"
-    ? []
+    ? visibleCarousels.map(c => {
+        const filterVal = c.filter_value?.toLowerCase();
+        const baseItems = c.type === "trending"
+          ? [...musicVideos].reverse()
+          : c.type === "category"
+          ? musicVideos.filter(mv => Array.isArray(mv.tags) ? mv.tags.some(t => t.toLowerCase() === filterVal) : false)
+          : musicVideos;
+        return { id: String(c.id), title: c.title, musicVideoItems: baseItems, isMusicVideo: true };
+      }).filter(s => s.musicVideoItems.length > 0)
     : activeNav === "Podcasts"
     ? [{ id: "all-podcasts", title: "All Podcasts", isPodcast: true, videos: [], podcastItems: podcasts }]
     : visibleCarousels.length > 0
@@ -636,7 +645,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           id: cat, title: `${cat} Films`, videos: filteredContent.filter(v => v.category === cat),
         })),
       ],
-  [activeNav, allContent, filteredContent, visibleCarousels, podcasts, carousels, myList]);
+  [activeNav, allContent, filteredContent, visibleCarousels, podcasts, carousels, musicVideos, myList]);
 
   const searchPool = useMemo(() => {
     const tagsStr = (tags) => Array.isArray(tags) ? tags.join(" ") : (tags || "");
@@ -883,7 +892,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       )}
 
       {activeNav === "Music Videos" && !loading && (
-        <MusicVideosPage musicVideos={musicVideos} onPlay={handleMusicVideoPlay} />
+        <MusicVideosPage musicVideos={musicVideos} sections={sections} onPlay={handleMusicVideoPlay} />
       )}
 
       {/* My List — full grid */}
@@ -1091,7 +1100,7 @@ function CatalogPage({ type, content, carousels = [], podcasts = [], onPlay, onS
 
 // ─── Music Videos Page ────────────────────────────────────────────────────────
 
-function MusicVideosPage({ musicVideos, onPlay }) {
+function MusicVideosPage({ musicVideos, sections = [], onPlay }) {
   const [sortBy, setSortBy] = useState("artist");
   const isMobile = useIsMobile();
 
@@ -1116,7 +1125,18 @@ function MusicVideosPage({ musicVideos, onPlay }) {
         </p>
       </div>
 
-      <div style={{ height: 1, background: "linear-gradient(to right, rgba(255,255,255,0.06), transparent)", margin: `0 ${PAD} 8px` }} />
+      {/* Carousel rows */}
+      {sections.map(section => (
+        <MusicVideoRow key={section.id} section={section} onPlay={onPlay} />
+      ))}
+
+      {/* Browse All grid */}
+      <div style={{ height: 1, background: "linear-gradient(to right, rgba(255,255,255,0.06), transparent)", margin: `0 ${PAD} ${sections.length > 0 ? 24 : 8}px` }} />
+      {sections.length > 0 && (
+        <div style={{ padding: `0 ${PAD} 12px` }}>
+          <h2 style={{ margin: 0, fontSize: "clamp(14px, 1.2vw, 17px)", fontWeight: 500, color: "#9ca3af", letterSpacing: "0.04em", textTransform: "uppercase" }}>Browse All</h2>
+        </div>
+      )}
 
       {sorted.length === 0 ? (
         <div style={{ padding: "80px 0", textAlign: "center", color: "#444", fontSize: 15 }}>
@@ -1129,6 +1149,46 @@ function MusicVideosPage({ musicVideos, onPlay }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function MusicVideoRow({ section, onPlay }) {
+  const scrollRef = useRef(null);
+  const isMobile = useIsMobile();
+  const scroll = dir => scrollRef.current?.scrollBy({ left: dir * scrollRef.current.clientWidth * 0.85, behavior: "smooth" });
+
+  return (
+    <div style={{ marginBottom: 32 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: `0 ${PAD}`, marginBottom: 16 }}>
+        <h2 style={{ margin: 0, fontSize: "clamp(14px, 1.2vw, 17px)", fontWeight: 500, color: "#9ca3af", letterSpacing: "0.04em", textTransform: "uppercase" }}>{section.title}</h2>
+        {!isMobile && (
+          <div style={{ display: "flex", gap: 6 }}>
+            {[
+              <svg key="l" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>,
+              <svg key="r" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>,
+            ].map((icon, i) => (
+              <button key={i} onClick={() => scroll(i === 0 ? -1 : 1)}
+                style={{ background: "none", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, width: 30, height: 30, color: "rgba(255,255,255,0.4)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "border-color 0.15s, color 0.15s" }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.3)"; e.currentTarget.style.color = "#fff"; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"; e.currentTarget.style.color = "rgba(255,255,255,0.4)"; }}>
+                {icon}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <div style={{ position: "relative" }}>
+        {!isMobile && <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 48, background: "linear-gradient(to right, #0a0a0a, transparent)", zIndex: 5, pointerEvents: "none" }} />}
+        {!isMobile && <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 48, background: "linear-gradient(to left, #0a0a0a, transparent)", zIndex: 5, pointerEvents: "none" }} />}
+        <div ref={scrollRef} className="scroll-row" style={{ display: "flex", gap: 14, overflowX: "auto", scrollbarWidth: "none", padding: `16px ${PAD} 24px` }}>
+          {section.musicVideoItems.map(mv => (
+            <div key={mv.id} style={{ flexShrink: 0, width: "clamp(180px, 22vw, 260px)" }}>
+              <MusicVideoCard item={mv} onClick={() => onPlay(mv)} />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

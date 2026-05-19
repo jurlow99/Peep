@@ -2657,10 +2657,10 @@ export function CMS({ onExit }) {
                   const t = carousel.type;
                   const ct = carousel.content_type;
                   const rowPages = (carousel.pages || "home").split(",").map(p => p.trim()).filter(Boolean);
-                  const contentLabel = t === "podcast" ? "Podcasts" : ct === "movies" ? "Movies only" : ct === "shows" ? "Series only" : "All content";
+                  const contentLabel = t === "podcast" ? "Podcasts" : ct === "movies" ? "Movies only" : ct === "shows" ? "Series only" : ct === "music_videos" ? "Music Videos" : "All content";
                   const orderLabel = t === "trending" ? "Trending" : t === "category" ? `Genre: ${carousel.filter_value || "?"}` : t === "podcast" ? (carousel.filter_value ? `Tag: ${carousel.filter_value}` : "All podcasts") : "Default order";
-                  const contentColor = t === "podcast" ? "#a78bfa" : ct === "movies" ? "#60a5fa" : ct === "shows" ? "#34d399" : "#f59e0b";
-                  const pageLabels = { home: "Home", movies: "Movies", series: "Series" };
+                  const contentColor = t === "podcast" ? "#a78bfa" : ct === "movies" ? "#60a5fa" : ct === "shows" ? "#34d399" : ct === "music_videos" ? "#4ade80" : "#f59e0b";
+                  const pageLabels = { home: "Home", movies: "Movies", series: "Series", music_videos: "Music Videos" };
                   return (
                     <div key={carousel.id} style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
                       <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
@@ -5058,9 +5058,10 @@ export function CMS({ onExit }) {
                       <p style={{ margin: "0 0 12px", fontSize: 11, color: "#6b7280" }}>Pick every page this row should appear on.</p>
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                         {[
-                          { val: "home",   icon: "🏠", label: "Home",        desc: "The main landing page" },
-                          { val: "movies", icon: "🎬", label: "Movies tab",  desc: "The dedicated Movies browse page" },
-                          { val: "series", icon: "📺", label: "Series tab",  desc: "The dedicated Series browse page" },
+                          { val: "home",         icon: "🏠", label: "Home",             desc: "The main landing page" },
+                          { val: "movies",       icon: "🎬", label: "Movies tab",       desc: "The dedicated Movies browse page" },
+                          { val: "series",       icon: "📺", label: "Series tab",       desc: "The dedicated Series browse page" },
+                          { val: "music_videos", icon: "🎵", label: "Music Videos tab", desc: "The Music Videos page" },
                         ].map(({ val, icon, label, desc }) => {
                           const on = pagesArr.includes(val);
                           return (
@@ -5090,10 +5091,11 @@ export function CMS({ onExit }) {
                       <p style={{ margin: "0 0 10px", fontSize: 11, color: "#6b7280" }}>What kind of content fills this row.</p>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                         {[
-                          { ct: "movies", t: null,      icon: "🎬", label: "Movies only",   desc: "Only movies" },
-                          { ct: "shows",  t: null,      icon: "📺", label: "Series only",   desc: "Only TV shows & series" },
-                          { ct: "all",    t: null,      icon: "⭐", label: "Everything",    desc: "Movies + series mixed" },
-                          { ct: "all",    t: "podcast", icon: "🎙️", label: "Podcasts",      desc: "Podcast episodes" },
+                          { ct: "movies",       t: null,      icon: "🎬", label: "Movies only",    desc: "Only movies" },
+                          { ct: "shows",        t: null,      icon: "📺", label: "Series only",   desc: "Only TV shows & series" },
+                          { ct: "all",          t: null,      icon: "⭐", label: "Everything",    desc: "Movies + series mixed" },
+                          { ct: "all",          t: "podcast", icon: "🎙️", label: "Podcasts",      desc: "Podcast episodes" },
+                          { ct: "music_videos", t: null,      icon: "🎵", label: "Music Videos",  desc: "Music videos only" },
                         ].map(({ ct, t, icon, label, desc }) => {
                           const isPodcast = t === "podcast";
                           const isActive = isPodcast
@@ -5102,7 +5104,7 @@ export function CMS({ onExit }) {
                           return (
                             <button key={label} onClick={() => {
                               if (isPodcast) setCarouselForm(f => ({ ...f, type: "podcast", content_type: "all" }));
-                              else setCarouselForm(f => ({ ...f, content_type: ct, type: f.type === "podcast" ? "custom" : f.type }));
+                              else setCarouselForm(f => ({ ...f, content_type: ct, type: f.type === "podcast" ? "custom" : f.type, filter_value: ct === "music_videos" ? f.filter_value : f.filter_value }));
                             }}
                               style={{ background: isActive ? "rgba(79,70,229,0.08)" : "#f8fafc", border: `1.5px solid ${isActive ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 10, padding: "13px 12px", cursor: "pointer", textAlign: "left", transition: "border-color 0.15s, background 0.15s" }}>
                               <div style={{ fontSize: 20, marginBottom: 5 }}>{icon}</div>
@@ -5142,12 +5144,16 @@ export function CMS({ onExit }) {
                         </div>
                         {carouselForm.type === "category" && (
                           <div style={{ marginTop: 10, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "14px" }}>
-                            <label style={{ display: "block", fontSize: 11, color: "#6b7280", marginBottom: 6, fontWeight: 600 }}>Category name</label>
+                            <label style={{ display: "block", fontSize: 11, color: "#6b7280", marginBottom: 6, fontWeight: 600 }}>
+                              {carouselForm.content_type === "music_videos" ? "Genre / tag" : "Category name"}
+                            </label>
                             <input value={carouselForm.filter_value} onChange={e => setCarouselForm(f => ({ ...f, filter_value: e.target.value }))}
-                              placeholder="e.g. Horror, Comedy, Sci-Fi…"
+                              placeholder={carouselForm.content_type === "music_videos" ? "e.g. Hip Hop, Rock, Country…" : "e.g. Horror, Comedy, Sci-Fi…"}
                               style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 6, padding: "9px 12px", color: "#0f172a", fontSize: 13, outline: "none" }}
                               onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
-                            <p style={{ margin: "6px 0 0", fontSize: 11, color: "#9ca3af" }}>Must match exactly as set on your videos (case-insensitive).</p>
+                            <p style={{ margin: "6px 0 0", fontSize: 11, color: "#9ca3af" }}>
+                              {carouselForm.content_type === "music_videos" ? "Must match a tag on your music videos (case-insensitive)." : "Must match exactly as set on your videos (case-insensitive)."}
+                            </p>
                           </div>
                         )}
                       </div>
