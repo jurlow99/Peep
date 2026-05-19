@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "../supabase";
 import { ImageUploader } from "./ImageUploader";
+import { SongImporter } from "./SongImporter";
 
 const EMPTY_ROW = {
   title: "",
@@ -267,6 +268,7 @@ export function CMS({ onExit }) {
   const [songSaving, setSongSaving] = useState(false);
   const [deleteSongConfirm, setDeleteSongConfirm] = useState(null);
   const [musicSubTab, setMusicSubTab] = useState("videos"); // "videos" | "songs"
+  const [songImporterOpen, setSongImporterOpen] = useState(false);
 
   // Ads state
   const [adList, setAdList] = useState([]);
@@ -3501,10 +3503,17 @@ export function CMS({ onExit }) {
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
                   <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Songs ({songsList.length})</h2>
-                  <button onClick={() => { setSongForm(EMPTY_SONG); setEditingSongId(null); setDrawerOpen(true); }}
-                    style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                    + Add Song
-                  </button>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => setSongImporterOpen(true)}
+                      style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 16px", color: "#374151", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                      Import Files
+                    </button>
+                    <button onClick={() => { setSongForm(EMPTY_SONG); setEditingSongId(null); setDrawerOpen(true); }}
+                      style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                      + Add Song
+                    </button>
+                  </div>
                 </div>
                 {songsLoading ? (
                   <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>Loading...</div>
@@ -3564,6 +3573,13 @@ export function CMS({ onExit }) {
                   </div>
                 </div>
               </div>
+            )}
+
+            {songImporterOpen && (
+              <SongImporter
+                onClose={() => setSongImporterOpen(false)}
+                onImported={() => { loadSongs(); setSongImporterOpen(false); }}
+              />
             )}
           </>
         )}
