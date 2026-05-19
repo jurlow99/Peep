@@ -1578,7 +1578,7 @@ function VideoCard({ video, onClick, rank, myList, onToggleList }) {
         setCardRect(rect);
         setTrailerMounted(true);
         requestAnimationFrame(() => requestAnimationFrame(() => setTrailerExpanded(true)));
-      }, 400);
+      }, 180);
     }
   }
 
@@ -1606,7 +1606,7 @@ function VideoCard({ video, onClick, rank, myList, onToggleList }) {
       zIndex: 200,
       overflow: "hidden",
       background: "#141414",
-      transition: "left 0.2s ease, top 0.2s ease, width 0.2s ease, height 0.2s ease, border-radius 0.2s ease, box-shadow 0.2s ease",
+      transition: "left 0.15s ease, top 0.15s ease, width 0.15s ease, height 0.15s ease, border-radius 0.15s ease, box-shadow 0.15s ease",
     };
   }
 
