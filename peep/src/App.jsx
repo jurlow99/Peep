@@ -232,6 +232,7 @@ export default function App() {
     const isLiveVideo = selectedVideo._type === "live" || selectedVideo._type === "live_epg";
     const handleBack = () => {
       if (isLiveVideo) sessionStorage.setItem("peep_goto_nav", "Live TV");
+      if (selectedVideo._type === "music_video") sessionStorage.setItem("peep_goto_nav", "Music Videos");
       setPage(selectedShow ? "show" : "home");
       setSelectedVideo(null);
     };
