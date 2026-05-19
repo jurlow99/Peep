@@ -75,7 +75,7 @@ function CheckoutForm({ user, onSignOut }) {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/redeem-promo`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
-        body: JSON.stringify({ user_id: user.id, email: user.email, code: promoCode }),
+        body: JSON.stringify({ code: promoCode }),
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);

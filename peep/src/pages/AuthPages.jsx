@@ -1,10 +1,24 @@
 import { useState, useEffect, useRef } from "react";
+import { loadStripe } from "@stripe/stripe-js";
+import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { supabase } from "../supabase";
 
 const YELLOW = "#facc15";
 const BG = "#0a0a0a";
 const CARD = "#111";
 const BORDER = "#1e1e1e";
+const SUPABASE_URL = "https://iuozujwtuzuwubhsnhix.supabase.co";
+
+const stripePromise = loadStripe("pk_test_51TYZ1FDARsmnN5Leu436JpkJ6NL9mNbqwtcvB9ueJPnbhLEJgcwfVHcnU3mQkgcAlAEOrd6Ne76UQPYIbKrAZsCo006pJcUBJ3");
+
+const CARD_OPTS = {
+  style: {
+    base: { color: "#fff", fontFamily: "'Space Grotesk', sans-serif", fontSize: "15px", fontSmoothing: "antialiased", "::placeholder": { color: "#555" } },
+    invalid: { color: "#f87171" },
+  },
+};
+
+const STEPS = ["Account", "Password", "Payment"];
 
 function Logo() {
   return (
@@ -12,6 +26,29 @@ function Logo() {
       <a href="/" style={{ textDecoration: "none" }}>
         <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 36, color: YELLOW }}>peep.</span>
       </a>
+    </div>
+  );
+}
+
+function StepBar({ step }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 32 }}>
+      {STEPS.map((label, i) => {
+        const n = i + 1;
+        const active = step === n;
+        const done = step > n;
+        return (
+          <div key={n} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div style={{ width: 26, height: 26, borderRadius: "50%", background: done || active ? YELLOW : "#1e1e1e", border: `2px solid ${done || active ? YELLOW : "#333"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: done || active ? "#0a0a0a" : "#555", transition: "all 0.2s" }}>
+                {done ? "✓" : n}
+              </div>
+              <span style={{ fontSize: 12, color: active ? "#fff" : done ? YELLOW : "#555", fontWeight: active ? 600 : 400 }}>{label}</span>
+            </div>
+            {i < STEPS.length - 1 && <div style={{ width: 24, height: 1, background: done ? YELLOW : "#1e1e1e" }} />}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -28,25 +65,11 @@ function Input({ label, type = "text", value, onChange, placeholder, autoComplet
       {label && <label style={{ fontSize: 12, color: "#666", marginBottom: 6, fontWeight: 500 }}>{label}</label>}
       <div style={{ position: "relative" }}>
         <input
-          type={type}
-          value={value}
-          onChange={onChange}
-          placeholder={placeholder}
-          autoComplete={autoComplete}
-          style={{
-            width: "100%", background: "#0d0d0d", border: `1px solid ${error ? "#f87171" : focused ? YELLOW : BORDER}`,
-            borderRadius: 10, padding: rightSlot ? "13px 44px 13px 14px" : "13px 14px",
-            color: "#fff", fontSize: 14, outline: "none", boxSizing: "border-box", transition: "border-color 0.15s",
-          }}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          {...rest}
+          type={type} value={value} onChange={onChange} placeholder={placeholder} autoComplete={autoComplete}
+          style={{ width: "100%", background: "#0d0d0d", border: `1px solid ${error ? "#f87171" : focused ? YELLOW : BORDER}`, borderRadius: 10, padding: rightSlot ? "13px 44px 13px 14px" : "13px 14px", color: "#fff", fontSize: 14, outline: "none", boxSizing: "border-box", transition: "border-color 0.15s" }}
+          onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} {...rest}
         />
-        {rightSlot && (
-          <div style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)" }}>
-            {rightSlot}
-          </div>
-        )}
+        {rightSlot && <div style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)" }}>{rightSlot}</div>}
       </div>
       <FieldError msg={error} />
     </div>
@@ -55,38 +78,20 @@ function Input({ label, type = "text", value, onChange, placeholder, autoComplet
 
 function StrengthMeter({ password }) {
   if (!password) return null;
-
-  const checks = {
-    length: password.length >= 8,
-    upper: /[A-Z]/.test(password),
-    lower: /[a-z]/.test(password),
-    number: /[0-9]/.test(password),
-    special: /[^A-Za-z0-9]/.test(password),
-  };
+  const checks = { length: password.length >= 8, upper: /[A-Z]/.test(password), lower: /[a-z]/.test(password), number: /[0-9]/.test(password), special: /[^A-Za-z0-9]/.test(password) };
   const score = Object.values(checks).filter(Boolean).length;
   const colors = ["", "#ef4444", "#f97316", "#eab308", "#22c55e", "#22c55e"];
   const labels = ["", "Weak", "Fair", "Good", "Strong", "Very Strong"];
-
   return (
     <div style={{ marginTop: 10 }}>
       <div style={{ display: "flex", gap: 4, marginBottom: 6 }}>
-        {[1, 2, 3, 4, 5].map(i => (
-          <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= score ? colors[score] : "#1e1e1e", transition: "background 0.2s" }} />
-        ))}
+        {[1,2,3,4,5].map(i => <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= score ? colors[score] : "#1e1e1e", transition: "background 0.2s" }} />)}
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-        <p style={{ margin: 0, fontSize: 12, color: colors[score] }}>{labels[score]}</p>
-      </div>
+      <p style={{ margin: "0 0 8px", fontSize: 12, color: colors[score] }}>{labels[score]}</p>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 16px" }}>
-        {[
-          [checks.length, "8+ characters"],
-          [checks.upper, "Uppercase letter"],
-          [checks.lower, "Lowercase letter"],
-          [checks.number, "Number"],
-          [checks.special, "Special character"],
-        ].map(([ok, label]) => (
-          <p key={label} style={{ margin: 0, fontSize: 12, color: ok ? "#22c55e" : "#444", display: "flex", alignItems: "center", gap: 5 }}>
-            <span style={{ fontSize: 10 }}>{ok ? "●" : "○"}</span>{label}
+        {[[checks.length,"8+ characters"],[checks.upper,"Uppercase letter"],[checks.lower,"Lowercase letter"],[checks.number,"Number"],[checks.special,"Special character"]].map(([ok, lbl]) => (
+          <p key={lbl} style={{ margin: 0, fontSize: 12, color: ok ? "#22c55e" : "#444", display: "flex", alignItems: "center", gap: 5 }}>
+            <span style={{ fontSize: 10 }}>{ok ? "●" : "○"}</span>{lbl}
           </p>
         ))}
       </div>
@@ -94,13 +99,129 @@ function StrengthMeter({ password }) {
   );
 }
 
+// ─── PAYMENT STEP (inside Elements) ───────────────────────────────────────────
+
+function PaymentStep({ email, onSuccess }) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [showPromo, setShowPromo] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoError, setPromoError] = useState(null);
+
+  async function handlePay(e) {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const { paymentMethod, error: pmError } = await stripe.createPaymentMethod({
+        type: "card",
+        card: elements.getElement(CardElement),
+        billing_details: { email },
+      });
+      if (pmError) throw new Error(pmError.message);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/create-subscription`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
+        body: JSON.stringify({ email, payment_method_id: paymentMethod.id }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      if (data.status === "requires_action" && data.client_secret) {
+        const { error: confirmError } = await stripe.confirmCardPayment(data.client_secret);
+        if (confirmError) throw new Error(confirmError.message);
+      }
+      onSuccess();
+    } catch (err) {
+      setError(err.message);
+      setLoading(false);
+    }
+  }
+
+  async function handlePromo(e) {
+    e.preventDefault();
+    if (!promoCode.trim()) return;
+    setPromoLoading(true);
+    setPromoError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/redeem-promo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
+        body: JSON.stringify({ code: promoCode }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      onSuccess();
+    } catch (err) {
+      setPromoError(err.message);
+      setPromoLoading(false);
+    }
+  }
+
+  return (
+    <div>
+      <h2 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 700 }}>Start watching</h2>
+      <p style={{ margin: "0 0 24px", fontSize: 13, color: "#555" }}>Unlimited access to everything on Peep.</p>
+
+      <div style={{ background: "#0d0d0d", border: "1px solid #1e1e1e", borderRadius: 10, padding: "14px 16px", marginBottom: 20, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontSize: 13, color: "#888" }}>Peep Monthly</span>
+        <span style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>$10 / mo</span>
+      </div>
+
+      <form onSubmit={handlePay}>
+        <label style={{ fontSize: 12, color: "#666", marginBottom: 6, fontWeight: 500, display: "block" }}>Card details</label>
+        <div style={{ background: "#0d0d0d", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "14px 16px", marginBottom: 16 }}>
+          <CardElement options={CARD_OPTS} />
+        </div>
+        {error && <p style={{ color: "#f87171", fontSize: 13, margin: "0 0 12px" }}>{error}</p>}
+        <button type="submit" disabled={loading || !stripe}
+          style={{ ...btnStyle, opacity: loading || !stripe ? 0.7 : 1, cursor: loading || !stripe ? "not-allowed" : "pointer" }}>
+          {loading ? "Processing…" : "Subscribe — $10/mo"}
+        </button>
+      </form>
+
+      <div style={{ marginTop: 16, textAlign: "center" }}>
+        {!showPromo ? (
+          <button onClick={() => setShowPromo(true)} style={{ background: "none", border: "none", color: "#444", fontSize: 12, cursor: "pointer", textDecoration: "underline" }}>
+            Have a promo code?
+          </button>
+        ) : (
+          <form onSubmit={handlePromo} style={{ display: "flex", gap: 8 }}>
+            <input
+              value={promoCode}
+              onChange={e => { setPromoCode(e.target.value); setPromoError(null); }}
+              placeholder="Enter code"
+              autoFocus
+              style={{ flex: 1, background: "#0d0d0d", border: `1px solid ${promoError ? "#f87171" : BORDER}`, borderRadius: 8, padding: "10px 14px", color: "#fff", fontSize: 13, outline: "none", textTransform: "uppercase", letterSpacing: "0.05em" }}
+            />
+            <button type="submit" disabled={promoLoading}
+              style={{ background: "#1e1e1e", border: "1px solid #2a2a2a", borderRadius: 8, padding: "10px 16px", color: YELLOW, fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+              {promoLoading ? "…" : "Apply"}
+            </button>
+          </form>
+        )}
+        {promoError && <p style={{ color: "#f87171", fontSize: 12, margin: "6px 0 0" }}>{promoError}</p>}
+      </div>
+
+      <p style={{ margin: "16px 0 0", fontSize: 11, color: "#333", textAlign: "center" }}>Cancel anytime. Billed monthly.</p>
+    </div>
+  );
+}
+
 // ─── SIGN UP PAGE ─────────────────────────────────────────────────────────────
 
 export function SignupPage() {
-  const [step, setStep] = useState(1); // 1: account info, 2: password, 3: done
+  const [step, setStep] = useState(1);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
-  const [emailStatus, setEmailStatus] = useState(null); // null | checking | taken
+  const [emailStatus, setEmailStatus] = useState(null);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -119,13 +240,14 @@ export function SignupPage() {
     return () => clearTimeout(emailTimer.current);
   }, [email]);
 
-  const pwScore = [
-    password.length >= 8,
-    /[A-Z]/.test(password),
-    /[a-z]/.test(password),
-    /[0-9]/.test(password),
-    /[^A-Za-z0-9]/.test(password),
-  ].filter(Boolean).length;
+  // Auto-redirect after success
+  useEffect(() => {
+    if (step !== 4) return;
+    const t = setTimeout(() => { window.location.href = "/"; }, 2500);
+    return () => clearTimeout(t);
+  }, [step]);
+
+  const pwScore = [password.length >= 8, /[A-Z]/.test(password), /[a-z]/.test(password), /[0-9]/.test(password), /[^A-Za-z0-9]/.test(password)].filter(Boolean).length;
 
   function validateStep1() {
     const e = {};
@@ -146,13 +268,13 @@ export function SignupPage() {
   }
 
   function nextStep() {
-    const e = step === 1 ? validateStep1() : {};
+    const e = validateStep1();
     if (Object.keys(e).length) { setErrors(e); return; }
     setErrors({});
-    setStep(s => s + 1);
+    setStep(2);
   }
 
-  async function handleSignup() {
+  async function handleCreateAccount() {
     const e = validateStep2();
     if (Object.keys(e).length) { setErrors(e); return; }
     setErrors({});
@@ -168,20 +290,20 @@ export function SignupPage() {
     }
 
     if (data.user) {
-      const { error: profileError } = await supabase.from("profiles").insert({
+      await supabase.from("profiles").insert({
         id: data.user.id,
         username: name.trim().toLowerCase().replace(/\s+/g, "_"),
         email: email.toLowerCase(),
         full_name: name.trim(),
       });
-      if (profileError) { setErrors({ submit: profileError.message }); setLoading(false); return; }
     }
+
+    // Sign in to get a live session for the payment step
+    await supabase.auth.signInWithPassword({ email, password });
 
     setLoading(false);
     setStep(3);
   }
-
-  const stepLabels = ["Account Info", "Password", "Done"];
 
   return (
     <div style={{ background: BG, minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px 16px", fontFamily: "'Space Grotesk', sans-serif" }}>
@@ -190,27 +312,7 @@ export function SignupPage() {
       <div style={{ width: "min(460px, 100%)" }}>
         <Logo />
 
-        {/* Step indicators */}
-        {step < 3 && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 32 }}>
-            {stepLabels.slice(0, 2).map((label, i) => {
-              const n = i + 1;
-              const active = step === n;
-              const done = step > n;
-              return (
-                <div key={n} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <div style={{ width: 26, height: 26, borderRadius: "50%", background: done ? YELLOW : active ? YELLOW : "#1e1e1e", border: `2px solid ${done || active ? YELLOW : "#333"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: done || active ? "#0a0a0a" : "#555", transition: "all 0.2s" }}>
-                      {done ? "✓" : n}
-                    </div>
-                    <span style={{ fontSize: 12, color: active ? "#fff" : done ? YELLOW : "#555", fontWeight: active ? 600 : 400 }}>{label}</span>
-                  </div>
-                  {i < 1 && <div style={{ width: 24, height: 1, background: done ? YELLOW : "#1e1e1e" }} />}
-                </div>
-              );
-            })}
-          </div>
-        )}
+        {step < 4 && <StepBar step={step} />}
 
         <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 16, padding: "36px clamp(20px, 6vw, 40px)" }}>
 
@@ -220,26 +322,10 @@ export function SignupPage() {
               <h2 style={{ margin: "0 0 6px", fontSize: 22, fontWeight: 700 }}>Create your account</h2>
               <p style={{ margin: "0 0 28px", fontSize: 13, color: "#555" }}>Enter your name and email to get started.</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                <Input
-                  label="Name"
-                  value={name}
-                  onChange={e => { setName(e.target.value); setErrors(prev => ({ ...prev, name: null })); }}
-                  placeholder="Your full name"
-                  autoComplete="name"
-                  error={errors.name}
-                />
-                <Input
-                  label="Email"
-                  type="email"
-                  value={email}
-                  onChange={e => { setEmail(e.target.value); setErrors(prev => ({ ...prev, email: null })); }}
-                  placeholder="you@example.com"
-                  autoComplete="email"
+                <Input label="Name" value={name} onChange={e => { setName(e.target.value); setErrors(p => ({ ...p, name: null })); }} placeholder="Your full name" autoComplete="name" error={errors.name} />
+                <Input label="Email" type="email" value={email} onChange={e => { setEmail(e.target.value); setErrors(p => ({ ...p, email: null })); }} placeholder="you@example.com" autoComplete="email"
                   error={errors.email || (emailStatus === "taken" ? "An account with that email already exists." : null)}
-                  rightSlot={
-                    emailStatus === "checking" ? <span style={{ color: "#555", fontSize: 13 }}>⋯</span> :
-                    emailStatus === "taken" ? <span style={{ color: "#f87171", fontSize: 13 }}>✗</span> : null
-                  }
+                  rightSlot={emailStatus === "checking" ? <span style={{ color: "#555", fontSize: 13 }}>⋯</span> : emailStatus === "taken" ? <span style={{ color: "#f87171", fontSize: 13 }}>✗</span> : null}
                 />
               </div>
               <button onClick={nextStep} style={btnStyle}>Continue →</button>
@@ -257,58 +343,51 @@ export function SignupPage() {
               <p style={{ margin: "0 0 28px", fontSize: 13, color: "#555" }}>Make it strong. You'll need it to sign in.</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 <div>
-                  <Input
-                    label="Password"
-                    type={showPw ? "text" : "password"}
-                    value={password}
-                    onChange={e => { setPassword(e.target.value); setErrors(prev => ({ ...prev, password: null })); }}
-                    placeholder="Create a password"
-                    autoComplete="new-password"
-                    error={errors.password}
-                    rightSlot={
-                      <button type="button" onClick={() => setShowPw(v => !v)} style={{ background: "none", border: "none", color: "#555", fontSize: 11, cursor: "pointer", fontWeight: 600, padding: 0 }}>
-                        {showPw ? "HIDE" : "SHOW"}
-                      </button>
-                    }
+                  <Input label="Password" type={showPw ? "text" : "password"} value={password}
+                    onChange={e => { setPassword(e.target.value); setErrors(p => ({ ...p, password: null })); }}
+                    placeholder="Create a password" autoComplete="new-password" error={errors.password}
+                    rightSlot={<button type="button" onClick={() => setShowPw(v => !v)} style={{ background: "none", border: "none", color: "#555", fontSize: 11, cursor: "pointer", fontWeight: 600, padding: 0 }}>{showPw ? "HIDE" : "SHOW"}</button>}
                   />
                   <StrengthMeter password={password} />
                 </div>
-                <Input
-                  label="Confirm password"
-                  type={showPw ? "text" : "password"}
-                  value={confirm}
-                  onChange={e => { setConfirm(e.target.value); setErrors(prev => ({ ...prev, confirm: null })); }}
-                  placeholder="Repeat your password"
-                  autoComplete="new-password"
+                <Input label="Confirm password" type={showPw ? "text" : "password"} value={confirm}
+                  onChange={e => { setConfirm(e.target.value); setErrors(p => ({ ...p, confirm: null })); }}
+                  placeholder="Repeat your password" autoComplete="new-password"
                   error={errors.confirm || (confirm && confirm !== password ? "Passwords don't match" : null)}
                 />
               </div>
               {errors.submit && <p style={{ color: "#f87171", fontSize: 13, margin: "16px 0 0" }}>{errors.submit}</p>}
               <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
-                <button onClick={() => setStep(1)} style={{ ...btnStyle, background: "#1a1a1a", color: "#ccc", flex: "0 0 auto", width: "auto", padding: "13px 20px" }}>← Back</button>
-                <button onClick={handleSignup} disabled={loading} style={{ ...btnStyle, flex: 1, margin: 0, opacity: loading ? 0.7 : 1, cursor: loading ? "not-allowed" : "pointer" }}>
-                  {loading ? "Creating account…" : "Create Account"}
+                <button onClick={() => setStep(1)} style={{ ...btnStyle, background: "#1a1a1a", color: "#ccc", flex: "0 0 auto", width: "auto", padding: "13px 20px", margin: 0 }}>← Back</button>
+                <button onClick={handleCreateAccount} disabled={loading} style={{ ...btnStyle, flex: 1, margin: 0, opacity: loading ? 0.7 : 1, cursor: loading ? "not-allowed" : "pointer" }}>
+                  {loading ? "Setting up…" : "Continue →"}
                 </button>
               </div>
             </>
           )}
 
-          {/* Step 3: Done */}
+          {/* Step 3: Payment */}
           {step === 3 && (
-            <div style={{ textAlign: "center", padding: "8px 0" }}>
-              <div style={{ width: 60, height: 60, borderRadius: "50%", background: "#0d2010", border: "2px solid #22c55e", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 26 }}>
-                ✓
+            <Elements stripe={stripePromise}>
+              <PaymentStep email={email} onSuccess={() => setStep(4)} />
+            </Elements>
+          )}
+
+          {/* Step 4: Success */}
+          {step === 4 && (
+            <div style={{ textAlign: "center", padding: "16px 0" }}>
+              <div style={{ width: 64, height: 64, borderRadius: "50%", background: "rgba(250,204,21,0.1)", border: "2px solid rgba(250,204,21,0.3)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px", fontSize: 28 }}>
+                🎬
               </div>
-              <h2 style={{ margin: "0 0 10px", fontSize: 22, fontWeight: 700 }}>You're all set!</h2>
-              <p style={{ margin: "0 0 8px", fontSize: 14, color: "#888", lineHeight: 1.6 }}>
-                We sent a confirmation email to <strong style={{ color: "#ccc" }}>{email}</strong>.
-              </p>
-              <p style={{ margin: "0 0 28px", fontSize: 13, color: "#555", lineHeight: 1.6 }}>
-                Click the link in your email to verify your account, then sign in.
-              </p>
-              <a href="/signin" style={{ display: "block", background: YELLOW, borderRadius: 10, padding: "13px", color: "#0a0a0a", fontSize: 14, fontWeight: 700, textDecoration: "none", textAlign: "center" }}>
-                Go to Sign In →
-              </a>
+              <h2 style={{ margin: "0 0 10px", fontSize: 24, fontWeight: 700 }}>You're in!</h2>
+              <p style={{ margin: "0 0 6px", fontSize: 14, color: "#888" }}>Welcome to Peep, {name.split(" ")[0]}.</p>
+              <p style={{ margin: "0 0 28px", fontSize: 13, color: "#555" }}>Taking you to the app…</p>
+              <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
+                {[0,1,2].map(i => (
+                  <div key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: YELLOW, opacity: 0.4, animation: `pulse 1.2s ${i * 0.2}s infinite` }} />
+                ))}
+              </div>
+              <style>{`@keyframes pulse { 0%,100%{opacity:0.3;transform:scale(0.8)} 50%{opacity:1;transform:scale(1)} }`}</style>
             </div>
           )}
         </div>
@@ -348,33 +427,12 @@ export function SigninPage() {
 
           <form onSubmit={handleSubmit}>
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <Input
-                label="Email"
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                autoComplete="email"
-                required
-              />
-              <Input
-                label="Password"
-                type={showPw ? "text" : "password"}
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="Your password"
-                autoComplete="current-password"
-                required
-                rightSlot={
-                  <button type="button" onClick={() => setShowPw(v => !v)} style={{ background: "none", border: "none", color: "#555", fontSize: 11, cursor: "pointer", fontWeight: 600, padding: 0 }}>
-                    {showPw ? "HIDE" : "SHOW"}
-                  </button>
-                }
+              <Input label="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" required />
+              <Input label="Password" type={showPw ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="Your password" autoComplete="current-password" required
+                rightSlot={<button type="button" onClick={() => setShowPw(v => !v)} style={{ background: "none", border: "none", color: "#555", fontSize: 11, cursor: "pointer", fontWeight: 600, padding: 0 }}>{showPw ? "HIDE" : "SHOW"}</button>}
               />
             </div>
-
             {error && <p style={{ color: "#f87171", fontSize: 13, margin: "14px 0 0" }}>{error}</p>}
-
             <button type="submit" disabled={loading} style={{ ...btnStyle, opacity: loading ? 0.7 : 1, cursor: loading ? "not-allowed" : "pointer" }}>
               {loading ? "Signing in…" : "Sign In"}
             </button>
