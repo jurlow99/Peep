@@ -366,6 +366,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
   const [podcasts, setPodcasts] = useState([]);
   const [liveStreams, setLiveStreams] = useState([]);
   const [epgEntries, setEpgEntries] = useState([]);
+  const [musicVideos, setMusicVideos] = useState([]);
   const [continueWatching, setContinueWatching] = useState([]);
   const [loading, setLoading] = useState(true);
   const [scrolled, setScrolled] = useState(false);
@@ -405,6 +406,9 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     const epgChannel = supabase.channel("epg-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "epg_entries" }, fetchAll)
       .subscribe();
+    const musicChannel = supabase.channel("music-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "music_videos" }, fetchAll)
+      .subscribe();
 
     const handler = () => setScrolled(window.scrollY > 60);
     window.addEventListener("scroll", handler);
@@ -416,6 +420,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       supabase.removeChannel(podcastChannel);
       supabase.removeChannel(liveChannel);
       supabase.removeChannel(epgChannel);
+      supabase.removeChannel(musicChannel);
       window.removeEventListener("scroll", handler);
     };
   }, []);
@@ -430,13 +435,14 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
   async function fetchAll() {
     const epgWindowStart = new Date(Date.now() - 60 * 60 * 1000);
     const epgWindowEnd = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    const [videosRes, showsRes, carouselsRes, podcastsRes, liveRes, epgRes] = await Promise.all([
+    const [videosRes, showsRes, carouselsRes, podcastsRes, liveRes, epgRes, musicRes] = await Promise.all([
       supabase.from("videos").select("*").order("id", { ascending: true }),
       supabase.from("shows").select("*").order("id", { ascending: true }),
       supabase.from("carousels").select("*").eq("enabled", true).order("position", { ascending: true }),
       supabase.from("podcasts").select("*").order("id", { ascending: true }),
       supabase.from("live_streams").select("*").order("id", { ascending: true }),
       supabase.from("epg_entries").select("*").gte("end_time", epgWindowStart.toISOString()).lte("start_time", epgWindowEnd.toISOString()).order("start_time", { ascending: true }),
+      supabase.from("music_videos").select("*").eq("enabled", true).order("artist", { ascending: true }),
     ]);
     if (videosRes.data) setVideos(videosRes.data);
     if (showsRes.data) setShows(showsRes.data);
@@ -444,6 +450,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     if (podcastsRes.data) setPodcasts(podcastsRes.data.filter(p => p.enabled !== false));
     if (liveRes.data) setLiveStreams(liveRes.data);
     if (epgRes.data) setEpgEntries(epgRes.data);
+    if (musicRes.data) setMusicVideos(musicRes.data);
     setLoading(false);
 
     // Resolve deep link
@@ -599,6 +606,8 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     ? []
     : activeNav === "Live TV"
     ? []
+    : activeNav === "Music Videos"
+    ? []
     : activeNav === "Podcasts"
     ? [{ id: "all-podcasts", title: "All Podcasts", isPodcast: true, videos: [], podcastItems: podcasts }]
     : visibleCarousels.length > 0
@@ -635,8 +644,9 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       ...videos.map(v => ({ ...v, _type: "movie", _tagsStr: tagsStr(v.tags) })),
       ...shows.map(s => ({ ...s, _type: "show", _tagsStr: tagsStr(s.tags) })),
       ...podcasts.map(p => ({ ...p, _type: "podcast", _tagsStr: tagsStr(p.tags) })),
+      ...musicVideos.map(mv => ({ ...mv, _type: "music_video", _tagsStr: tagsStr(mv.tags) })),
     ];
-  }, [videos, shows, podcasts]);
+  }, [videos, shows, podcasts, musicVideos]);
 
   const searchResults = useMemo(() => {
     if (!debouncedQuery || !debouncedQuery.trim()) return [];
@@ -678,6 +688,10 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     else onPlay(item);
   }
 
+  function handleMusicVideoPlay(mv) {
+    onPlay({ ...mv, _type: "music_video" });
+  }
+
   function handleClick(item) {
     item._type === "show" ? onShowSelect(item) : onPlay(item);
   }
@@ -703,7 +717,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           </span>
           {!isMobile && (
             <div style={{ display: "flex", gap: 4 }}>
-              {["Home", "Movies", "Series", "Live TV", "Podcasts"].map(label => {
+              {["Home", "Movies", "Series", "Music Videos", "Live TV", "Podcasts"].map(label => {
                 const active = activeNav === label;
                 return (
                   <span key={label} onClick={() => setActiveNav(label)} style={{ fontSize: 13.5, padding: "6px 12px", borderRadius: 6, color: active ? "#fff" : "rgba(255,255,255,0.55)", fontWeight: active ? 600 : 400, cursor: "pointer", background: active ? "rgba(250,204,21,0.12)" : "transparent", transition: "color 0.2s, background 0.2s" }}
@@ -797,10 +811,10 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                     {searchResults.map(v => {
-                      const typeColor = v._type === "movie" ? "#facc15" : v._type === "show" ? "#60a5fa" : "#a78bfa";
-                      const typeLabel = v._type === "movie" ? "Movie" : v._type === "show" ? "Series" : "Podcast";
+                      const typeColor = v._type === "movie" ? "#facc15" : v._type === "show" ? "#60a5fa" : v._type === "music_video" ? "#4ade80" : "#a78bfa";
+                      const typeLabel = v._type === "movie" ? "Movie" : v._type === "show" ? "Series" : v._type === "music_video" ? "Music Video" : "Podcast";
                       const thumb = v.poster || v.thumbnail || v.artwork_url;
-                      const meta = v._type === "podcast" ? v._tagsStr : v.category;
+                      const meta = v._type === "podcast" ? v._tagsStr : v._type === "music_video" ? v.artist : v.category;
                       return (
                         <div key={v.id + v._type}
                           onMouseDown={e => e.preventDefault()}
@@ -868,6 +882,10 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         <LiveTVPage streams={liveStreams} epgEntries={epgEntries} onPlay={onPlay} />
       )}
 
+      {activeNav === "Music Videos" && !loading && (
+        <MusicVideosPage musicVideos={musicVideos} onPlay={handleMusicVideoPlay} />
+      )}
+
       {/* My List — full grid */}
       {activeNav === "My List" && !loading && (
         <div style={{ position: "relative", zIndex: 1, paddingTop: 100, paddingBottom: 80 }}>
@@ -900,7 +918,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       )}
 
       {/* Content rows (Home / Podcasts / catalog pages) */}
-      {activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "My List" && !loading && (allContent.length > 0 || podcasts.length > 0 || continueWatching.length > 0) && (
+      {activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "My List" && activeNav !== "Music Videos" && !loading && (allContent.length > 0 || podcasts.length > 0 || continueWatching.length > 0) && (
         <div style={{ position: "relative", zIndex: 1, marginTop: activeNav === "Podcasts" ? 0 : -40, paddingBottom: 80 }}>
           {activeNav === "Podcasts" && (
             <div style={{ padding: `48px ${PAD} 0` }}>
@@ -938,6 +956,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
             { id: "Home", label: "Home", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
             { id: "Movies", label: "Movies", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="2"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg> },
             { id: "Series", label: "Series", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></svg> },
+            { id: "Music Videos", label: "Music", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg> },
             { id: "Live TV", label: "Live TV", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="15" rx="2"/><path d="M17 2l-5 5-5-5"/><circle cx="12" cy="14.5" r="2"/><path d="M9 14.5H7M15 14.5h2"/></svg> },
             { id: "My List", label: "My List", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg> },
           ].map(tab => {
@@ -1066,6 +1085,82 @@ function CatalogPage({ type, content, carousels = [], podcasts = [], onPlay, onS
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Music Videos Page ────────────────────────────────────────────────────────
+
+function MusicVideosPage({ musicVideos, onPlay }) {
+  const [sortBy, setSortBy] = useState("artist");
+  const isMobile = useIsMobile();
+
+  const sorted = useMemo(() => {
+    if (sortBy === "newest") return [...musicVideos].sort((a, b) => b.id - a.id);
+    return [...musicVideos].sort((a, b) => (a.artist || "").localeCompare(b.artist || ""));
+  }, [musicVideos, sortBy]);
+
+  return (
+    <div style={{ paddingTop: 88, minHeight: "100vh" }}>
+      <div style={{ padding: `0 ${PAD} 28px` }}>
+        <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(32px, 4vw, 56px)", fontWeight: 400, margin: "0 0 24px", color: "#fff" }}>Music Videos</h1>
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+            style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "8px 14px", color: "rgba(255,255,255,0.7)", fontSize: 13, cursor: "pointer", outline: "none" }}>
+            <option value="artist">By Artist</option>
+            <option value="newest">Newest First</option>
+          </select>
+        </div>
+        <p style={{ margin: "16px 0 0", fontSize: 12, color: "#444" }}>
+          {musicVideos.length} video{musicVideos.length !== 1 ? "s" : ""}
+        </p>
+      </div>
+
+      <div style={{ height: 1, background: "linear-gradient(to right, rgba(255,255,255,0.06), transparent)", margin: `0 ${PAD} 8px` }} />
+
+      {sorted.length === 0 ? (
+        <div style={{ padding: "80px 0", textAlign: "center", color: "#444", fontSize: 15 }}>
+          No music videos yet — add one from the admin panel.
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? "150px" : "200px"}, 1fr))`, gap: isMobile ? 10 : 16, padding: `0 ${PAD} 80px` }}>
+          {sorted.map(mv => (
+            <MusicVideoCard key={mv.id} item={mv} onClick={() => onPlay(mv)} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MusicVideoCard({ item, onClick }) {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <div onClick={onClick}
+      style={{ cursor: "pointer", borderRadius: 10, overflow: "hidden", background: "#141414", transform: hovered ? "scale(1.04) translateY(-4px)" : "scale(1)", transition: "transform 0.22s ease, box-shadow 0.22s ease", boxShadow: hovered ? "0 20px 48px rgba(0,0,0,0.8)" : "0 2px 8px rgba(0,0,0,0.3)" }}>
+      <div onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
+        style={{ position: "relative", aspectRatio: "16/9", overflow: "hidden", background: "#0a0a0a" }}>
+        {(item.thumbnail || item.poster)
+          ? <img src={item.thumbnail || item.poster} alt={item.title} style={{ width: "100%", height: "100%", objectFit: "cover", transition: "filter 0.22s", filter: hovered ? "brightness(0.45)" : "brightness(0.75)" }} />
+          : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#1a1a2e,#16213e)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            </div>
+        }
+        {hovered && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ width: 48, height: 48, borderRadius: "50%", background: "rgba(255,255,255,0.92)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 16px rgba(0,0,0,0.5)" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="#0a0a0a"><polygon points="5,3 19,12 5,21" /></svg>
+            </div>
+          </div>
+        )}
+        {item.duration && <div style={{ position: "absolute", bottom: 8, right: 8, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(4px)", color: "#bbb", fontSize: 10.5, padding: "3px 7px", borderRadius: 4 }}>{item.duration}</div>}
+      </div>
+      <div style={{ padding: "10px 12px 12px", background: hovered ? "#1c1c1c" : "#141414", transition: "background 0.22s" }}>
+        <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 700, color: "#facc15", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.artist}</p>
+        <p style={{ margin: "0 0 4px", fontSize: 12, color: "#aaa", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
+        {item.year && <span style={{ fontSize: 11, color: "#555" }}>{item.year}</span>}
+      </div>
     </div>
   );
 }
