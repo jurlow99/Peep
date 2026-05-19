@@ -99,28 +99,14 @@ function StrengthMeter({ password }) {
 export function SignupPage() {
   const [step, setStep] = useState(1); // 1: account info, 2: password, 3: done
   const [email, setEmail] = useState("");
-  const [username, setUsername] = useState("");
-  const [usernameStatus, setUsernameStatus] = useState(null); // null | checking | available | taken | invalid
+  const [name, setName] = useState("");
   const [emailStatus, setEmailStatus] = useState(null); // null | checking | taken
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
-  const usernameTimer = useRef(null);
   const emailTimer = useRef(null);
-
-  useEffect(() => {
-    if (!username) { setUsernameStatus(null); return; }
-    if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) { setUsernameStatus("invalid"); return; }
-    setUsernameStatus("checking");
-    clearTimeout(usernameTimer.current);
-    usernameTimer.current = setTimeout(async () => {
-      const { data } = await supabase.from("profiles").select("username").eq("username", username.toLowerCase()).maybeSingle();
-      setUsernameStatus(data ? "taken" : "available");
-    }, 400);
-    return () => clearTimeout(usernameTimer.current);
-  }, [username]);
 
   useEffect(() => {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setEmailStatus(null); return; }
@@ -143,14 +129,12 @@ export function SignupPage() {
 
   function validateStep1() {
     const e = {};
+    if (!name.trim()) e.name = "Name is required.";
+    else if (name.trim().length < 2) e.name = "Name must be at least 2 characters.";
     if (!email) e.email = "Email is required.";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) e.email = "Enter a valid email.";
     else if (emailStatus === "checking") e.email = "Checking email…";
     else if (emailStatus === "taken") e.email = "An account with that email already exists.";
-    if (!username) e.username = "Username is required.";
-    else if (usernameStatus === "invalid") e.username = "3–20 chars, letters/numbers/underscores only.";
-    else if (usernameStatus === "taken") e.username = "Username already taken.";
-    else if (usernameStatus === "checking") e.username = "Still checking availability…";
     return e;
   }
 
@@ -186,9 +170,9 @@ export function SignupPage() {
     if (data.user) {
       const { error: profileError } = await supabase.from("profiles").insert({
         id: data.user.id,
-        username: username.toLowerCase(),
+        username: name.trim().toLowerCase().replace(/\s+/g, "_"),
         email: email.toLowerCase(),
-        full_name: "",
+        full_name: name.trim(),
       });
       if (profileError) { setErrors({ submit: profileError.message }); setLoading(false); return; }
     }
@@ -234,25 +218,15 @@ export function SignupPage() {
           {step === 1 && (
             <>
               <h2 style={{ margin: "0 0 6px", fontSize: 22, fontWeight: 700 }}>Create your account</h2>
-              <p style={{ margin: "0 0 28px", fontSize: 13, color: "#555" }}>Choose a username and enter your email.</p>
+              <p style={{ margin: "0 0 28px", fontSize: 13, color: "#555" }}>Enter your name and email to get started.</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 <Input
-                  label="Username"
-                  value={username}
-                  onChange={e => { setUsername(e.target.value); setErrors(prev => ({ ...prev, username: null })); }}
-                  placeholder="yourname"
-                  autoComplete="username"
-                  error={errors.username}
-                  rightSlot={
-                    username ? (
-                      <span style={{ fontSize: 13 }}>
-                        {usernameStatus === "checking" && <span style={{ color: "#555" }}>⋯</span>}
-                        {usernameStatus === "available" && <span style={{ color: "#22c55e" }}>✓</span>}
-                        {usernameStatus === "taken" && <span style={{ color: "#f87171" }}>✗</span>}
-                        {usernameStatus === "invalid" && <span style={{ color: "#f97316" }}>!</span>}
-                      </span>
-                    ) : null
-                  }
+                  label="Name"
+                  value={name}
+                  onChange={e => { setName(e.target.value); setErrors(prev => ({ ...prev, name: null })); }}
+                  placeholder="Your full name"
+                  autoComplete="name"
+                  error={errors.name}
                 />
                 <Input
                   label="Email"

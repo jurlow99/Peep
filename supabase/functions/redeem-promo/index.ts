@@ -10,20 +10,17 @@ Deno.serve(async (req) => {
   try {
     const { code } = await req.json();
 
-    // Verify the user from their JWT — never trust client-sent user_id
     const authHeader = req.headers.get("Authorization") || "";
-    const userClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
-    const { data: { user }, error: userErr } = await userClient.auth.getUser();
-    if (!user || userErr) throw new Error("Not authenticated");
+    const token = authHeader.replace("Bearer ", "").trim();
+    if (!token) throw new Error("Not authenticated");
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SERVICE_ROLE_KEY")!
     );
+
+    const { data: { user }, error: userErr } = await supabase.auth.getUser(token);
+    if (!user || userErr) throw new Error("Not authenticated");
 
     const { data: promo } = await supabase
       .from("promo_codes")

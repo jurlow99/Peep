@@ -1,4 +1,4 @@
-const PRICE_ID = "price_1TYZ4ADARsmnN5LeEIZnYYgB";
+const PRICE_ID = "price_1TYZ4ADARsmnN5LeElZnYYgB";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {

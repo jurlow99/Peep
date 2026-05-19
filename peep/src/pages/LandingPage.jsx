@@ -65,7 +65,7 @@ export function LandingPage() {
 
           <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
             <a href="/signup" style={{ background: YELLOW, color: "#0a0a0a", fontSize: 15, fontWeight: 700, textDecoration: "none", padding: "14px 32px", borderRadius: 10, display: "inline-block" }}>
-              Create free account
+              Start Watching — $10/mo
             </a>
             <a href="/signin" style={{ background: "rgba(255,255,255,0.06)", color: "#fff", fontSize: 15, fontWeight: 600, textDecoration: "none", padding: "14px 32px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.1)", display: "inline-block" }}>
               Sign in
@@ -93,9 +93,9 @@ export function LandingPage() {
       {/* CTA strip */}
       <section style={{ padding: "80px clamp(20px, 8vw, 120px)", textAlign: "center", borderTop: "1px solid #111" }}>
         <h2 style={{ margin: "0 0 12px", fontSize: "clamp(22px, 4vw, 36px)", fontWeight: 700 }}>Ready to start watching?</h2>
-        <p style={{ margin: "0 0 32px", fontSize: 15, color: "#555" }}>Free to join. Start streaming in seconds.</p>
+        <p style={{ margin: "0 0 32px", fontSize: 15, color: "#555" }}>$10/month. Cancel anytime. Start streaming in seconds.</p>
         <a href="/signup" style={{ background: YELLOW, color: "#0a0a0a", fontSize: 15, fontWeight: 700, textDecoration: "none", padding: "14px 40px", borderRadius: 10, display: "inline-block" }}>
-          Create your account →
+          Get Started →
         </a>
       </section>
 

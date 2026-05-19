@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabase";
 import { PRESET_AVATARS } from "./ProfileScreen";
 
@@ -16,8 +16,13 @@ export function ProfileSelect({ user, onSelect }) {
   const [newName, setNewName] = useState("");
   const [newAvatar, setNewAvatar] = useState("a1");
   const [saving, setSaving] = useState(false);
+  const initRan = useRef(false);
 
-  useEffect(() => { init(); }, []);
+  useEffect(() => {
+    if (initRan.current) return;
+    initRan.current = true;
+    init();
+  }, []);
 
   async function init() {
     const { data } = await supabase
@@ -29,7 +34,8 @@ export function ProfileSelect({ user, onSelect }) {
     let list = data || [];
 
     if (list.length === 0) {
-      const defaultName = user.email?.split("@")[0] || "Main";
+      const { data: profile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
+      const defaultName = profile?.full_name || user.email?.split("@")[0] || "Main";
       const { data: created } = await supabase
         .from("viewer_profiles")
         .insert({ user_id: user.id, name: defaultName, avatar_id: "a1" })
