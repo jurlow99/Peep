@@ -74,9 +74,14 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        const { data: blocked } = await supabase.from("blocked_users").select("id").eq("email", session.user.email).maybeSingle();
+        if (blocked) { await supabase.auth.signOut(); setAuthChecked(true); return; }
+        loadAvatarId(session.user.id);
+        userIdRef.current = session.user.id;
+      }
       setUser(session?.user ?? null);
-      if (session?.user) { loadAvatarId(session.user.id); userIdRef.current = session.user.id; }
       setAuthChecked(true);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
