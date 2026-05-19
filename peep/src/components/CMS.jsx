@@ -5184,7 +5184,7 @@ export function CMS({ onExit }) {
                           ];
                           const q = handpickedSearch.toLowerCase().trim();
                           const results = q ? pool.filter(item =>
-                            item.title?.toLowerCase().includes(q)
+                            item.title?.toLowerCase().startsWith(q)
                           ).slice(0, 12) : [];
                           const selectedKey = item => `${item.type}_${item.id}`;
                           const selectedKeys = new Set(handpickedSelected.map(selectedKey));
