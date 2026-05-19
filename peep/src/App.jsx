@@ -232,7 +232,7 @@ export default function App() {
     const isLiveVideo = selectedVideo._type === "live" || selectedVideo._type === "live_epg";
     const handleBack = () => {
       if (isLiveVideo) sessionStorage.setItem("peep_goto_nav", "Live TV");
-      if (selectedVideo._type === "music_video") sessionStorage.setItem("peep_goto_nav", "Music Videos");
+      if (selectedVideo._type === "music_video") sessionStorage.setItem("peep_goto_nav", "Music");
       setPage(selectedShow ? "show" : "home");
       setSelectedVideo(null);
     };
@@ -368,6 +368,8 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
   const [liveStreams, setLiveStreams] = useState([]);
   const [epgEntries, setEpgEntries] = useState([]);
   const [musicVideos, setMusicVideos] = useState([]);
+  const [songs, setSongs] = useState([]);
+  const [playingSong, setPlayingSong] = useState(null);
   const [continueWatching, setContinueWatching] = useState([]);
   const [loading, setLoading] = useState(true);
   const [scrolled, setScrolled] = useState(false);
@@ -410,6 +412,9 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     const musicChannel = supabase.channel("music-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "music_videos" }, fetchAll)
       .subscribe();
+    const songsChannel = supabase.channel("songs-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "songs" }, fetchAll)
+      .subscribe();
 
     const handler = () => setScrolled(window.scrollY > 60);
     window.addEventListener("scroll", handler);
@@ -422,6 +427,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       supabase.removeChannel(liveChannel);
       supabase.removeChannel(epgChannel);
       supabase.removeChannel(musicChannel);
+      supabase.removeChannel(songsChannel);
       window.removeEventListener("scroll", handler);
     };
   }, []);
@@ -436,7 +442,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
   async function fetchAll() {
     const epgWindowStart = new Date(Date.now() - 60 * 60 * 1000);
     const epgWindowEnd = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    const [videosRes, showsRes, carouselsRes, podcastsRes, liveRes, epgRes, musicRes] = await Promise.all([
+    const [videosRes, showsRes, carouselsRes, podcastsRes, liveRes, epgRes, musicRes, songsRes] = await Promise.all([
       supabase.from("videos").select("*").order("id", { ascending: true }),
       supabase.from("shows").select("*").order("id", { ascending: true }),
       supabase.from("carousels").select("*").eq("enabled", true).order("position", { ascending: true }),
@@ -444,6 +450,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       supabase.from("live_streams").select("*").order("id", { ascending: true }),
       supabase.from("epg_entries").select("*").gte("end_time", epgWindowStart.toISOString()).lte("start_time", epgWindowEnd.toISOString()).order("start_time", { ascending: true }),
       supabase.from("music_videos").select("*").eq("enabled", true).order("artist", { ascending: true }),
+      supabase.from("songs").select("*").eq("enabled", true).order("artist", { ascending: true }),
     ]);
     if (videosRes.data) setVideos(videosRes.data);
     if (showsRes.data) setShows(showsRes.data);
@@ -452,6 +459,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     if (liveRes.data) setLiveStreams(liveRes.data);
     if (epgRes.data) setEpgEntries(epgRes.data);
     if (musicRes.data) setMusicVideos(musicRes.data);
+    if (songsRes.data) setSongs(songsRes.data);
     setLoading(false);
 
     // Resolve deep link
@@ -600,7 +608,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     if (activeNav === "Home") return pages.includes("home");
     if (activeNav === "Movies") return pages.includes("movies");
     if (activeNav === "Series") return pages.includes("series");
-    if (activeNav === "Music Videos") return pages.includes("music_videos");
+    if (activeNav === "Music") return pages.includes("music") || pages.includes("music_videos");
     return false;
   }), [carousels, activeNav]);
 
@@ -608,9 +616,19 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     ? []
     : activeNav === "Live TV"
     ? []
-    : activeNav === "Music Videos"
-    ? visibleCarousels.map(c => {
+    : activeNav === "Music"
+    ? visibleCarousels.flatMap(c => {
         const filterVal = c.filter_value?.toLowerCase();
+        if (c.content_type === "songs") {
+          const baseItems = c.type === "trending"
+            ? [...songs].reverse()
+            : c.type === "category"
+            ? songs.filter(s => Array.isArray(s.tags) ? s.tags.some(t => t.toLowerCase() === filterVal) : s.tags?.toLowerCase().includes(filterVal))
+            : c.type === "handpicked"
+            ? (() => { try { const picks = JSON.parse(c.filter_value || "[]"); return picks.flatMap(p => { const found = songs.find(s => s.id === p.id); return found ? [found] : []; }); } catch { return songs; } })()
+            : songs;
+          return baseItems.length === 0 ? [] : [{ id: String(c.id), title: c.title, songItems: baseItems, isSong: true }];
+        }
         const baseItems = c.type === "trending"
           ? [...musicVideos].reverse()
           : c.type === "category"
@@ -618,8 +636,8 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           : c.type === "handpicked"
           ? (() => { try { const picks = JSON.parse(c.filter_value || "[]"); return picks.flatMap(p => { const found = musicVideos.find(mv => mv.id === p.id); return found ? [found] : []; }); } catch { return musicVideos; } })()
           : musicVideos;
-        return { id: String(c.id), title: c.title, musicVideoItems: baseItems, isMusicVideo: true };
-      }).filter(s => s.musicVideoItems.length > 0)
+        return baseItems.length === 0 ? [] : [{ id: String(c.id), title: c.title, musicVideoItems: baseItems, isMusicVideo: true }];
+      })
     : activeNav === "Podcasts"
     ? [{ id: "all-podcasts", title: "All Podcasts", isPodcast: true, videos: [], podcastItems: podcasts }]
     : visibleCarousels.length > 0
@@ -650,7 +668,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           id: cat, title: `${cat} Films`, videos: filteredContent.filter(v => v.category === cat),
         })),
       ],
-  [activeNav, allContent, filteredContent, visibleCarousels, podcasts, carousels, musicVideos, myList]);
+  [activeNav, allContent, filteredContent, visibleCarousels, podcasts, carousels, musicVideos, songs, myList]);
 
   const searchPool = useMemo(() => {
     const tagsStr = (tags) => Array.isArray(tags) ? tags.join(" ") : (tags || "");
@@ -659,14 +677,18 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       ...shows.map(s => ({ ...s, _type: "show", _tagsStr: tagsStr(s.tags) })),
       ...podcasts.map(p => ({ ...p, _type: "podcast", _tagsStr: tagsStr(p.tags) })),
       ...musicVideos.map(mv => ({ ...mv, _type: "music_video", _tagsStr: tagsStr(mv.tags) })),
+      ...songs.map(s => ({ ...s, _type: "song", _tagsStr: tagsStr(s.tags) })),
     ];
-  }, [videos, shows, podcasts, musicVideos]);
+  }, [videos, shows, podcasts, musicVideos, songs]);
 
   const searchResults = useMemo(() => {
     if (!debouncedQuery || !debouncedQuery.trim()) return [];
     const q = debouncedQuery.toLowerCase().trim();
     return searchPool.filter(v => {
-      if (searchTypeFilter !== "all" && v._type !== searchTypeFilter) return false;
+      if (searchTypeFilter !== "all") {
+        if (searchTypeFilter === "music" && v._type !== "music_video" && v._type !== "song") return false;
+        if (searchTypeFilter !== "music" && v._type !== searchTypeFilter) return false;
+      }
       const titleWords = v.title?.toLowerCase().split(/\s+/) || [];
       const titleMatch = titleWords.some(w => w.startsWith(q));
       if (q.length < 2) return titleMatch;
@@ -731,7 +753,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           </span>
           {!isMobile && (
             <div style={{ display: "flex", gap: 4 }}>
-              {["Home", "Movies", "Series", "Music Videos", "Live TV", "Podcasts"].map(label => {
+              {["Home", "Movies", "Series", "Music", "Live TV", "Podcasts"].map(label => {
                 const active = activeNav === label;
                 return (
                   <span key={label} onClick={() => setActiveNav(label)} style={{ fontSize: 13.5, padding: "6px 12px", borderRadius: 6, color: active ? "#fff" : "rgba(255,255,255,0.55)", fontWeight: active ? 600 : 400, cursor: "pointer", background: active ? "rgba(250,204,21,0.12)" : "transparent", transition: "color 0.2s, background 0.2s" }}
@@ -789,7 +811,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           <div style={{ padding: `20px ${PAD} 32px` }}>
             {/* Type filter chips */}
             <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-              {[{ id: "all", label: "All" }, { id: "movie", label: "Movies" }, { id: "show", label: "Series" }, { id: "podcast", label: "Podcasts" }].map(f => (
+              {[{ id: "all", label: "All" }, { id: "movie", label: "Movies" }, { id: "show", label: "Series" }, { id: "music", label: "Music" }, { id: "podcast", label: "Podcasts" }].map(f => (
                 <button key={f.id}
                   onMouseDown={e => e.preventDefault()}
                   onClick={() => setSearchTypeFilter(f.id)}
@@ -825,10 +847,10 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                     {searchResults.map(v => {
-                      const typeColor = v._type === "movie" ? "#facc15" : v._type === "show" ? "#60a5fa" : v._type === "music_video" ? "#4ade80" : "#a78bfa";
-                      const typeLabel = v._type === "movie" ? "Movie" : v._type === "show" ? "Series" : v._type === "music_video" ? "Music Video" : "Podcast";
+                      const typeColor = v._type === "movie" ? "#facc15" : v._type === "show" ? "#60a5fa" : v._type === "music_video" || v._type === "song" ? "#4ade80" : "#a78bfa";
+                      const typeLabel = v._type === "movie" ? "Movie" : v._type === "show" ? "Series" : v._type === "music_video" ? "Music Video" : v._type === "song" ? "Song" : "Podcast";
                       const thumb = v.poster || v.thumbnail || v.artwork_url;
-                      const meta = v._type === "podcast" ? v._tagsStr : v._type === "music_video" ? v.artist : v.category;
+                      const meta = v._type === "podcast" ? v._tagsStr : v._type === "music_video" || v._type === "song" ? v.artist : v.category;
                       return (
                         <div key={v.id + v._type}
                           onMouseDown={e => e.preventDefault()}
@@ -896,8 +918,8 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         <LiveTVPage streams={liveStreams} epgEntries={epgEntries} onPlay={onPlay} />
       )}
 
-      {activeNav === "Music Videos" && !loading && (
-        <MusicVideosPage musicVideos={musicVideos} sections={sections} onPlay={handleMusicVideoPlay} />
+      {activeNav === "Music" && !loading && (
+        <MusicPage musicVideos={musicVideos} songs={songs} sections={sections} onPlay={handleMusicVideoPlay} onPlaySong={setPlayingSong} />
       )}
 
       {/* My List — full grid */}
@@ -932,7 +954,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       )}
 
       {/* Content rows (Home / Podcasts / catalog pages) */}
-      {activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "My List" && activeNav !== "Music Videos" && !loading && (allContent.length > 0 || podcasts.length > 0 || continueWatching.length > 0) && (
+      {activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "My List" && activeNav !== "Music" && !loading && (allContent.length > 0 || podcasts.length > 0 || continueWatching.length > 0) && (
         <div style={{ position: "relative", zIndex: 1, marginTop: activeNav === "Podcasts" ? 0 : -40, paddingBottom: 80 }}>
           {activeNav === "Podcasts" && (
             <div style={{ padding: `48px ${PAD} 0` }}>
@@ -960,7 +982,9 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         </div>
       )}
 
-      {isMobile && <div style={{ height: 72 }} />}
+      {playingSong && <MiniPlayer song={playingSong} onClose={() => setPlayingSong(null)} isMobile={isMobile} />}
+      {isMobile && <div style={{ height: playingSong ? 152 : 72 }} />}
+      {!isMobile && playingSong && <div style={{ height: 80 }} />}
       <Footer onNavChange={setActiveNav} onProfileOpen={onProfileOpen} onOpenModal={setFooterModal} />
 
       {/* Mobile bottom tab bar */}
@@ -970,7 +994,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
             { id: "Home", label: "Home", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
             { id: "Movies", label: "Movies", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="2"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg> },
             { id: "Series", label: "Series", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></svg> },
-            { id: "Music Videos", label: "Music", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg> },
+            { id: "Music", label: "Music", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg> },
             { id: "Live TV", label: "Live TV", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="15" rx="2"/><path d="M17 2l-5 5-5-5"/><circle cx="12" cy="14.5" r="2"/><path d="M9 14.5H7M15 14.5h2"/></svg> },
             { id: "My List", label: "My List", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg> },
           ].map(tab => {
@@ -1098,54 +1122,253 @@ function CatalogPage({ type, content, carousels = [], podcasts = [], onPlay, onS
   );
 }
 
-// ─── Music Videos Page ────────────────────────────────────────────────────────
+// ─── Music Page (Videos + Songs) ─────────────────────────────────────────────
 
-function MusicVideosPage({ musicVideos, sections = [], onPlay }) {
-  const [sortBy, setSortBy] = useState("artist");
+function MusicPage({ musicVideos, songs, sections = [], onPlay, onPlaySong }) {
+  const [mvSort, setMvSort] = useState("artist");
+  const [songSort, setSongSort] = useState("artist");
   const isMobile = useIsMobile();
 
-  const sorted = useMemo(() => {
-    if (sortBy === "newest") return [...musicVideos].sort((a, b) => b.id - a.id);
+  const mvSections = sections.filter(s => s.isMusicVideo);
+  const songSections = sections.filter(s => s.isSong);
+
+  const sortedMv = useMemo(() => {
+    if (mvSort === "newest") return [...musicVideos].sort((a, b) => b.id - a.id);
     return [...musicVideos].sort((a, b) => (a.artist || "").localeCompare(b.artist || ""));
-  }, [musicVideos, sortBy]);
+  }, [musicVideos, mvSort]);
+
+  const sortedSongs = useMemo(() => {
+    if (songSort === "newest") return [...songs].sort((a, b) => b.id - a.id);
+    return [...songs].sort((a, b) => (a.artist || "").localeCompare(b.artist || ""));
+  }, [songs, songSort]);
+
+  const hasAny = musicVideos.length > 0 || songs.length > 0;
 
   return (
     <div style={{ paddingTop: 88, minHeight: "100vh" }}>
       <div style={{ padding: `0 ${PAD} 28px` }}>
-        <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(32px, 4vw, 56px)", fontWeight: 400, margin: "0 0 24px", color: "#fff" }}>Music Videos</h1>
-        {sections.length === 0 && (
-          <select value={sortBy} onChange={e => setSortBy(e.target.value)}
-            style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "8px 14px", color: "rgba(255,255,255,0.7)", fontSize: 13, cursor: "pointer", outline: "none" }}>
-            <option value="artist">By Artist</option>
-            <option value="newest">Newest First</option>
-          </select>
-        )}
-        <p style={{ margin: "16px 0 0", fontSize: 12, color: "#444" }}>
-          {musicVideos.length} video{musicVideos.length !== 1 ? "s" : ""}
-        </p>
+        <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(32px, 4vw, 56px)", fontWeight: 400, margin: 0, color: "#fff" }}>Music</h1>
       </div>
 
-      {/* Carousel rows */}
-      {sections.map(section => (
-        <MusicVideoRow key={section.id} section={section} onPlay={onPlay} />
-      ))}
-
-      {sections.length === 0 && (
-        sorted.length === 0 ? (
-          <div style={{ padding: "80px 0", textAlign: "center", color: "#444", fontSize: 15 }}>
-            No music videos yet — add one from the admin panel.
-          </div>
-        ) : (
-          <>
-            <div style={{ height: 1, background: "linear-gradient(to right, rgba(255,255,255,0.06), transparent)", margin: `0 ${PAD} 8px` }} />
-            <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? "150px" : "200px"}, 1fr))`, gap: isMobile ? 10 : 16, padding: `0 ${PAD} 80px` }}>
-              {sorted.map(mv => (
-                <MusicVideoCard key={mv.id} item={mv} onClick={() => onPlay(mv)} />
-              ))}
-            </div>
-          </>
-        )
+      {!hasAny && (
+        <div style={{ padding: "80px 0", textAlign: "center", color: "#444", fontSize: 15 }}>
+          No music yet — add content from the admin panel.
+        </div>
       )}
+
+      {/* Music Videos section */}
+      {(musicVideos.length > 0 || mvSections.length > 0) && (
+        <>
+          <div style={{ padding: `0 ${PAD}`, marginBottom: 16, display: "flex", alignItems: "baseline", gap: 16 }}>
+            <h2 style={{ margin: 0, fontFamily: "'DM Serif Display', serif", fontSize: "clamp(22px, 2.5vw, 32px)", fontWeight: 400, color: "#fff" }}>Music Videos</h2>
+            {mvSections.length === 0 && musicVideos.length > 0 && (
+              <select value={mvSort} onChange={e => setMvSort(e.target.value)}
+                style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "6px 12px", color: "rgba(255,255,255,0.6)", fontSize: 12, cursor: "pointer", outline: "none" }}>
+                <option value="artist">By Artist</option>
+                <option value="newest">Newest First</option>
+              </select>
+            )}
+          </div>
+          {mvSections.map(s => <MusicVideoRow key={s.id} section={s} onPlay={onPlay} />)}
+          {mvSections.length === 0 && sortedMv.length > 0 && (
+            <>
+              <div style={{ height: 1, background: "linear-gradient(to right, rgba(255,255,255,0.06), transparent)", margin: `0 ${PAD} 8px` }} />
+              <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? "150px" : "200px"}, 1fr))`, gap: isMobile ? 10 : 16, padding: `0 ${PAD} 32px` }}>
+                {sortedMv.map(mv => <MusicVideoCard key={mv.id} item={mv} onClick={() => onPlay(mv)} />)}
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+      {/* Songs section */}
+      {(songs.length > 0 || songSections.length > 0) && (
+        <>
+          <div style={{ height: 1, background: "linear-gradient(to right, rgba(255,255,255,0.04), transparent)", margin: `0 ${PAD} 24px` }} />
+          <div style={{ padding: `0 ${PAD}`, marginBottom: 16, display: "flex", alignItems: "baseline", gap: 16 }}>
+            <h2 style={{ margin: 0, fontFamily: "'DM Serif Display', serif", fontSize: "clamp(22px, 2.5vw, 32px)", fontWeight: 400, color: "#fff" }}>Songs</h2>
+            {songSections.length === 0 && songs.length > 0 && (
+              <select value={songSort} onChange={e => setSongSort(e.target.value)}
+                style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "6px 12px", color: "rgba(255,255,255,0.6)", fontSize: 12, cursor: "pointer", outline: "none" }}>
+                <option value="artist">By Artist</option>
+                <option value="newest">Newest First</option>
+              </select>
+            )}
+          </div>
+          {songSections.map(s => <SongRow key={s.id} section={s} onPlay={onPlaySong} />)}
+          {songSections.length === 0 && sortedSongs.length > 0 && (
+            <>
+              <div style={{ height: 1, background: "linear-gradient(to right, rgba(255,255,255,0.06), transparent)", margin: `0 ${PAD} 8px` }} />
+              <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? "130px" : "160px"}, 1fr))`, gap: isMobile ? 10 : 14, padding: `0 ${PAD} 80px` }}>
+                {sortedSongs.map(s => <SongCard key={s.id} item={s} onClick={() => onPlaySong(s)} />)}
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function SongRow({ section, onPlay }) {
+  const scrollRef = useRef(null);
+  const isMobile = useIsMobile();
+  const scroll = dir => scrollRef.current?.scrollBy({ left: dir * scrollRef.current.clientWidth * 0.85, behavior: "smooth" });
+
+  return (
+    <div style={{ marginBottom: 32 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: `0 ${PAD}`, marginBottom: 16 }}>
+        <h2 style={{ margin: 0, fontSize: "clamp(14px, 1.2vw, 17px)", fontWeight: 500, color: "#9ca3af", letterSpacing: "0.04em", textTransform: "uppercase" }}>{section.title}</h2>
+        {!isMobile && (
+          <div style={{ display: "flex", gap: 6 }}>
+            {[
+              <svg key="l" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>,
+              <svg key="r" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>,
+            ].map((icon, i) => (
+              <button key={i} onClick={() => scroll(i === 0 ? -1 : 1)}
+                style={{ background: "none", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, width: 30, height: 30, color: "rgba(255,255,255,0.4)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "border-color 0.15s, color 0.15s" }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.3)"; e.currentTarget.style.color = "#fff"; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"; e.currentTarget.style.color = "rgba(255,255,255,0.4)"; }}>
+                {icon}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <div style={{ position: "relative" }}>
+        {!isMobile && <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 48, background: "linear-gradient(to right, #0a0a0a, transparent)", zIndex: 5, pointerEvents: "none" }} />}
+        {!isMobile && <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 48, background: "linear-gradient(to left, #0a0a0a, transparent)", zIndex: 5, pointerEvents: "none" }} />}
+        <div ref={scrollRef} className="scroll-row" style={{ display: "flex", gap: 12, overflowX: "auto", scrollbarWidth: "none", padding: `8px ${PAD} 24px` }}>
+          {section.songItems.map(s => (
+            <div key={s.id} style={{ flexShrink: 0, width: "clamp(130px, 16vw, 180px)" }}>
+              <SongCard item={s} onClick={() => onPlay(s)} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SongCard({ item, onClick }) {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <div onClick={onClick} style={{ cursor: "pointer", borderRadius: 10, overflow: "hidden", background: "#141414", transform: hovered ? "scale(1.04) translateY(-4px)" : "scale(1)", transition: "transform 0.22s ease, box-shadow 0.22s ease", boxShadow: hovered ? "0 20px 48px rgba(0,0,0,0.8)" : "0 2px 8px rgba(0,0,0,0.3)" }}>
+      <div onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
+        style={{ position: "relative", aspectRatio: "1", overflow: "hidden", background: "#0a0a0a" }}>
+        {item.thumbnail
+          ? <img src={item.thumbnail} alt={item.title} style={{ width: "100%", height: "100%", objectFit: "cover", transition: "filter 0.22s", filter: hovered ? "brightness(0.45)" : "brightness(0.82)" }} />
+          : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #1a1a2e, #16213e)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            </div>
+        }
+        {hovered && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ width: 48, height: 48, borderRadius: "50%", background: "rgba(250,204,21,0.92)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 16px rgba(0,0,0,0.5)" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="#0a0a0a"><polygon points="5,3 19,12 5,21" /></svg>
+            </div>
+          </div>
+        )}
+      </div>
+      <div style={{ padding: "10px 12px 12px", background: hovered ? "#1c1c1c" : "#141414", transition: "background 0.22s" }}>
+        <p style={{ margin: "0 0 2px", fontSize: 12, fontWeight: 700, color: "#facc15", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.artist}</p>
+        <p style={{ margin: "0 0 4px", fontSize: 12, color: "#aaa", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
+        {item.album && <p style={{ margin: 0, fontSize: 11, color: "#555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.album}</p>}
+      </div>
+    </div>
+  );
+}
+
+function MiniPlayer({ song, onClose, isMobile }) {
+  const audioRef = useRef(null);
+  const [paused, setPaused] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  useEffect(() => {
+    if (!song?.url || !audioRef.current) return;
+    audioRef.current.src = song.url;
+    audioRef.current.play().catch(() => {});
+    setPaused(false);
+    setCurrentTime(0);
+    setDuration(0);
+  }, [song?.id]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const onTime = () => setCurrentTime(audio.currentTime);
+    const onDur = () => setDuration(audio.duration || 0);
+    const onEnd = () => setPaused(true);
+    audio.addEventListener("timeupdate", onTime);
+    audio.addEventListener("durationchange", onDur);
+    audio.addEventListener("ended", onEnd);
+    return () => { audio.removeEventListener("timeupdate", onTime); audio.removeEventListener("durationchange", onDur); audio.removeEventListener("ended", onEnd); };
+  }, []);
+
+  function togglePlay() {
+    if (!audioRef.current) return;
+    if (paused) { audioRef.current.play().catch(() => {}); setPaused(false); }
+    else { audioRef.current.pause(); setPaused(true); }
+  }
+
+  function seek(e) {
+    if (!audioRef.current || !duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    audioRef.current.currentTime = ((e.clientX - rect.left) / rect.width) * duration;
+  }
+
+  function fmt(s) {
+    if (!s || !isFinite(s)) return "–:––";
+    const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+    return `${m}:${String(sec).padStart(2, "0")}`;
+  }
+
+  const progress = duration > 0 ? currentTime / duration : 0;
+
+  return (
+    <div style={{ position: "fixed", bottom: isMobile ? 60 : 0, left: 0, right: 0, zIndex: 200, background: "rgba(12,12,12,0.97)", backdropFilter: "blur(20px)", borderTop: "1px solid rgba(255,255,255,0.08)", fontFamily: "'Space Grotesk', sans-serif" }}>
+      <audio ref={audioRef} />
+      {/* Progress bar */}
+      <div onClick={seek} style={{ height: 3, background: "rgba(255,255,255,0.08)", cursor: "pointer", position: "relative" }}>
+        <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${progress * 100}%`, background: "#facc15", transition: "width 0.5s linear" }} />
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "10px 20px", height: 68 }}>
+        {/* Album art */}
+        <div style={{ width: 44, height: 44, borderRadius: 6, overflow: "hidden", flexShrink: 0, background: "#1a1a1a" }}>
+          {song.thumbnail
+            ? <img src={song.thumbnail} alt={song.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#1a1a2e,#16213e)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+              </div>
+          }
+        </div>
+        {/* Info */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ margin: "0 0 1px", fontSize: 13, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{song.title}</p>
+          <p style={{ margin: 0, fontSize: 11, color: "#facc15", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{song.artist}</p>
+        </div>
+        {/* Time */}
+        {!isMobile && (
+          <span style={{ fontSize: 11, color: "#555", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+            {fmt(currentTime)} / {fmt(duration)}
+          </span>
+        )}
+        {/* Play/Pause */}
+        <button onClick={togglePlay} style={{ width: 40, height: 40, borderRadius: "50%", background: "#facc15", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "transform 0.15s" }}
+          onMouseEnter={e => e.currentTarget.style.transform = "scale(1.08)"}
+          onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}>
+          {paused
+            ? <svg width="14" height="14" viewBox="0 0 24 24" fill="#0a0a0a"><polygon points="5,3 19,12 5,21" /></svg>
+            : <svg width="14" height="14" viewBox="0 0 24 24" fill="#0a0a0a"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+          }
+        </button>
+        {/* Close */}
+        <button onClick={onClose} style={{ background: "none", border: "none", color: "#555", fontSize: 20, cursor: "pointer", padding: "0 4px", lineHeight: 1, flexShrink: 0 }}
+          onMouseEnter={e => e.currentTarget.style.color = "#aaa"}
+          onMouseLeave={e => e.currentTarget.style.color = "#555"}>×</button>
+      </div>
     </div>
   );
 }

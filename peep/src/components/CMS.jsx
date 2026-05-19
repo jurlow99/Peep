@@ -100,6 +100,19 @@ const EMPTY_MUSIC_VIDEO = {
   enabled: true,
 };
 
+const EMPTY_SONG = {
+  title: "",
+  artist: "",
+  album: "",
+  url: "",
+  thumbnail: "",
+  duration: "",
+  year: "",
+  description: "",
+  tags: "",
+  enabled: true,
+};
+
 const EMPTY_AD = {
   name: "",
   tag_url: "",
@@ -246,6 +259,15 @@ export function CMS({ onExit }) {
   const [musicVideoSaving, setMusicVideoSaving] = useState(false);
   const [deleteMusicVideoConfirm, setDeleteMusicVideoConfirm] = useState(null);
 
+  // Songs state
+  const [songsList, setSongsList] = useState([]);
+  const [songsLoading, setSongsLoading] = useState(false);
+  const [editingSongId, setEditingSongId] = useState(null);
+  const [songForm, setSongForm] = useState(EMPTY_SONG);
+  const [songSaving, setSongSaving] = useState(false);
+  const [deleteSongConfirm, setDeleteSongConfirm] = useState(null);
+  const [musicSubTab, setMusicSubTab] = useState("videos"); // "videos" | "songs"
+
   // Ads state
   const [adList, setAdList] = useState([]);
   const [adLoading, setAdLoading] = useState(false);
@@ -319,6 +341,7 @@ export function CMS({ onExit }) {
     loadPodcasts();
     loadLiveStreams();
     loadMusicVideos();
+    loadSongs();
     loadAds();
     loadAdAnalytics();
 
@@ -1504,6 +1527,67 @@ export function CMS({ onExit }) {
     else { showToast("Music video deleted"); setDeleteMusicVideoConfirm(null); await loadMusicVideos(); }
   }
 
+  // ──── SONGS ────
+
+  async function loadSongs() {
+    setSongsLoading(true);
+    const { data, error } = await supabase.from("songs").select("*").order("artist", { ascending: true });
+    if (error) showToast("Failed to load songs: " + error.message, "error");
+    else setSongsList(data || []);
+    setSongsLoading(false);
+  }
+
+  function startSongEdit(song) {
+    setEditingSongId(song.id);
+    setSongForm({
+      title: song.title ?? "", artist: song.artist ?? "", album: song.album ?? "",
+      url: song.url ?? "", thumbnail: song.thumbnail ?? "",
+      duration: song.duration ?? "", year: song.year ? String(song.year) : "",
+      description: song.description ?? "", tags: Array.isArray(song.tags) ? song.tags.join(", ") : (song.tags ?? ""),
+      enabled: song.enabled !== false,
+    });
+    setDrawerOpen(true);
+  }
+
+  function cancelSongEdit() {
+    setEditingSongId(null);
+    setSongForm(EMPTY_SONG);
+    setDrawerOpen(false);
+  }
+
+  async function saveSong() {
+    if (!songForm.title.trim()) { showToast("Title is required.", "error"); return; }
+    if (!songForm.artist.trim()) { showToast("Artist is required.", "error"); return; }
+    setSongSaving(true);
+    const tagsArr = songForm.tags ? songForm.tags.split(",").map(t => t.trim()).filter(Boolean) : [];
+    const payload = {
+      title: songForm.title.trim(), artist: songForm.artist.trim(), album: songForm.album.trim(),
+      url: songForm.url.trim(), thumbnail: songForm.thumbnail.trim(),
+      duration: songForm.duration.trim(), year: songForm.year ? Number(songForm.year) : null,
+      description: songForm.description.trim(), tags: tagsArr, enabled: songForm.enabled,
+    };
+    try {
+      if (editingSongId) {
+        const { error } = await supabase.from("songs").update(payload).eq("id", editingSongId);
+        if (error) throw error;
+        showToast("Song updated");
+      } else {
+        const { error } = await supabase.from("songs").insert([payload]);
+        if (error) throw error;
+        showToast("Song added");
+      }
+      cancelSongEdit();
+      await loadSongs();
+    } catch (err) { showToast("Save failed: " + err.message, "error"); }
+    setSongSaving(false);
+  }
+
+  async function deleteSong(id) {
+    const { error } = await supabase.from("songs").delete().eq("id", id);
+    if (error) showToast("Delete failed: " + error.message, "error");
+    else { showToast("Song deleted"); setDeleteSongConfirm(null); await loadSongs(); }
+  }
+
   // ──── ADS / VAST TAGS ────
 
   async function loadAds() {
@@ -2325,7 +2409,7 @@ export function CMS({ onExit }) {
               { key: "series", label: "Series", count: showsList.length },
               { key: "episodes", label: "Episodes", count: null },
               { key: "podcasts", label: "Podcasts", count: podcastsList.length },
-              { key: "music", label: "Music Videos", count: musicVideosList.length },
+              { key: "music", label: "Music", count: musicVideosList.length + songsList.length },
             ].map(({ key, label, count }) => (
               <button key={key} onClick={() => setVideoSubTab(key)} style={{ background: videoSubTab === key ? "rgba(79,70,229,0.08)" : "transparent", border: `1px solid ${videoSubTab === key ? "rgba(79,70,229,0.3)" : "#e2e8f0"}`, borderRadius: 8, padding: "7px 16px", color: videoSubTab === key ? "#4f46e5" : "#6b7280", fontSize: 13, fontWeight: videoSubTab === key ? 600 : 400, cursor: "pointer", transition: "all 0.15s" }}>
                 {label}{count !== null ? ` (${count})` : ""}
@@ -2674,11 +2758,11 @@ export function CMS({ onExit }) {
                   const t = carousel.type;
                   const ct = carousel.content_type;
                   const rowPages = (carousel.pages || "home").split(",").map(p => p.trim()).filter(Boolean);
-                  const contentLabel = t === "podcast" ? "Podcasts" : ct === "movies" ? "Movies only" : ct === "shows" ? "Series only" : ct === "music_videos" ? "Music Videos" : "All content";
+                  const contentLabel = t === "podcast" ? "Podcasts" : ct === "movies" ? "Movies only" : ct === "shows" ? "Series only" : ct === "music_videos" ? "Music Videos" : ct === "songs" ? "Songs" : "All content";
                   const handpickedCount = t === "handpicked" ? (() => { try { return JSON.parse(carousel.filter_value || "[]").length; } catch { return 0; } })() : 0;
                   const orderLabel = t === "trending" ? "Trending" : t === "handpicked" ? `${handpickedCount} hand-picked` : t === "category" ? `Genre: ${carousel.filter_value || "?"}` : t === "podcast" ? (carousel.filter_value ? `Tag: ${carousel.filter_value}` : "All podcasts") : "Default order";
-                  const contentColor = t === "podcast" ? "#a78bfa" : ct === "movies" ? "#60a5fa" : ct === "shows" ? "#34d399" : ct === "music_videos" ? "#4ade80" : "#f59e0b";
-                  const pageLabels = { home: "Home", movies: "Movies", series: "Series", music_videos: "Music Videos" };
+                  const contentColor = t === "podcast" ? "#a78bfa" : ct === "movies" ? "#60a5fa" : ct === "shows" ? "#34d399" : ct === "music_videos" || ct === "songs" ? "#4ade80" : "#f59e0b";
+                  const pageLabels = { home: "Home", movies: "Movies", series: "Series", music: "Music", music_videos: "Music" };
                   return (
                     <div key={carousel.id} style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
                       <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
@@ -3355,52 +3439,106 @@ export function CMS({ onExit }) {
           </>
         )}
 
-        {/* ────── MUSIC VIDEOS TAB ────── */}
+        {/* ────── MUSIC TAB ────── */}
         {tab === "videos" && videoSubTab === "music" && (
           <>
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Music Videos ({musicVideosList.length})</h2>
-                <button
-                  onClick={() => { setMusicVideoForm(EMPTY_MUSIC_VIDEO); setEditingMusicVideoId(null); setDrawerOpen(true); }}
-                  style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
-                >
-                  + Add Music Video
+            {/* Music sub-tab toggle */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
+              {[{ id: "videos", label: `Music Videos (${musicVideosList.length})` }, { id: "songs", label: `Songs (${songsList.length})` }].map(t => (
+                <button key={t.id} onClick={() => setMusicSubTab(t.id)}
+                  style={{ background: musicSubTab === t.id ? "rgba(79,70,229,0.08)" : "transparent", border: `1px solid ${musicSubTab === t.id ? "rgba(79,70,229,0.3)" : "#e2e8f0"}`, borderRadius: 8, padding: "7px 16px", color: musicSubTab === t.id ? "#4f46e5" : "#6b7280", fontSize: 13, fontWeight: musicSubTab === t.id ? 600 : 400, cursor: "pointer" }}>
+                  {t.label}
                 </button>
-              </div>
-
-              {musicVideosLoading ? (
-                <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>Loading...</div>
-              ) : musicVideosList.length === 0 ? (
-                <div style={{ padding: 32, textAlign: "center", border: "1px dashed #e2e8f0", borderRadius: 10 }}>
-                  <p style={{ color: "#6b7280", margin: 0, fontSize: 14 }}>No music videos yet. Add one using the button above.</p>
-                </div>
-              ) : musicVideosList.map(mv => (
-                <div key={mv.id} style={{ background: "#ffffff", border: `1px solid ${editingMusicVideoId === mv.id ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 10, padding: "12px 14px", marginBottom: 10, display: "flex", gap: 12, alignItems: "center", borderLeft: `3px solid ${editingMusicVideoId === mv.id ? "#4f46e5" : "transparent"}` }}>
-                  {(mv.thumbnail || mv.poster) ? (
-                    <img src={mv.thumbnail || mv.poster} alt={mv.title} style={{ width: 72, height: 40, objectFit: "cover", borderRadius: 6, flexShrink: 0 }} onError={e => { e.target.style.display = "none"; }} />
-                  ) : (
-                    <div style={{ width: 72, height: 40, borderRadius: 6, background: "linear-gradient(135deg, #e0e7ff, #c7d2fe)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-                    </div>
-                  )}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{mv.artist} — {mv.title}</p>
-                    <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>
-                      {mv.duration && <span>{mv.duration}</span>}
-                      {mv.duration && mv.year && " · "}
-                      {mv.year && <span>{mv.year}</span>}
-                      {(mv.duration || mv.year) && " · "}
-                      <span style={{ color: mv.enabled ? "#4ade80" : "#f87171" }}>{mv.enabled ? "Enabled" : "Disabled"}</span>
-                    </p>
-                  </div>
-                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                    <button onClick={() => startMusicVideoEdit(mv)} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 5, padding: "5px 10px", color: "#374151", fontSize: 11, cursor: "pointer" }}>Edit</button>
-                    <button onClick={() => setDeleteMusicVideoConfirm(mv)} style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 5, padding: "5px 10px", color: "#f87171", fontSize: 11, cursor: "pointer" }}>Delete</button>
-                  </div>
-                </div>
               ))}
             </div>
+
+            {/* Music Videos list */}
+            {musicSubTab === "videos" && (
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                  <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Music Videos ({musicVideosList.length})</h2>
+                  <button onClick={() => { setMusicVideoForm(EMPTY_MUSIC_VIDEO); setEditingMusicVideoId(null); setDrawerOpen(true); }}
+                    style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                    + Add Music Video
+                  </button>
+                </div>
+                {musicVideosLoading ? (
+                  <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>Loading...</div>
+                ) : musicVideosList.length === 0 ? (
+                  <div style={{ padding: 32, textAlign: "center", border: "1px dashed #e2e8f0", borderRadius: 10 }}>
+                    <p style={{ color: "#6b7280", margin: 0, fontSize: 14 }}>No music videos yet.</p>
+                  </div>
+                ) : musicVideosList.map(mv => (
+                  <div key={mv.id} style={{ background: "#ffffff", border: `1px solid ${editingMusicVideoId === mv.id ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 10, padding: "12px 14px", marginBottom: 10, display: "flex", gap: 12, alignItems: "center", borderLeft: `3px solid ${editingMusicVideoId === mv.id ? "#4f46e5" : "transparent"}` }}>
+                    {(mv.thumbnail || mv.poster) ? (
+                      <img src={mv.thumbnail || mv.poster} alt={mv.title} style={{ width: 72, height: 40, objectFit: "cover", borderRadius: 6, flexShrink: 0 }} onError={e => { e.target.style.display = "none"; }} />
+                    ) : (
+                      <div style={{ width: 72, height: 40, borderRadius: 6, background: "linear-gradient(135deg, #e0e7ff, #c7d2fe)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                      </div>
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{mv.artist} — {mv.title}</p>
+                      <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>
+                        {mv.duration && <span>{mv.duration}</span>}
+                        {mv.duration && mv.year && " · "}
+                        {mv.year && <span>{mv.year}</span>}
+                        {(mv.duration || mv.year) && " · "}
+                        <span style={{ color: mv.enabled ? "#4ade80" : "#f87171" }}>{mv.enabled ? "Enabled" : "Disabled"}</span>
+                      </p>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                      <button onClick={() => startMusicVideoEdit(mv)} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 5, padding: "5px 10px", color: "#374151", fontSize: 11, cursor: "pointer" }}>Edit</button>
+                      <button onClick={() => setDeleteMusicVideoConfirm(mv)} style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 5, padding: "5px 10px", color: "#f87171", fontSize: 11, cursor: "pointer" }}>Delete</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Songs list */}
+            {musicSubTab === "songs" && (
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                  <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Songs ({songsList.length})</h2>
+                  <button onClick={() => { setSongForm(EMPTY_SONG); setEditingSongId(null); setDrawerOpen(true); }}
+                    style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                    + Add Song
+                  </button>
+                </div>
+                {songsLoading ? (
+                  <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>Loading...</div>
+                ) : songsList.length === 0 ? (
+                  <div style={{ padding: 32, textAlign: "center", border: "1px dashed #e2e8f0", borderRadius: 10 }}>
+                    <p style={{ color: "#6b7280", margin: 0, fontSize: 14 }}>No songs yet.</p>
+                  </div>
+                ) : songsList.map(s => (
+                  <div key={s.id} style={{ background: "#ffffff", border: `1px solid ${editingSongId === s.id ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 10, padding: "12px 14px", marginBottom: 10, display: "flex", gap: 12, alignItems: "center", borderLeft: `3px solid ${editingSongId === s.id ? "#4f46e5" : "transparent"}` }}>
+                    {s.thumbnail ? (
+                      <img src={s.thumbnail} alt={s.title} style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 6, flexShrink: 0 }} onError={e => { e.target.style.display = "none"; }} />
+                    ) : (
+                      <div style={{ width: 40, height: 40, borderRadius: 6, background: "linear-gradient(135deg, #e0e7ff, #c7d2fe)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                      </div>
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.artist} — {s.title}</p>
+                      <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>
+                        {s.album && <span>{s.album}</span>}
+                        {s.album && s.year && " · "}
+                        {s.year && <span>{s.year}</span>}
+                        {(s.album || s.year) && " · "}
+                        <span style={{ color: s.enabled ? "#4ade80" : "#f87171" }}>{s.enabled ? "Enabled" : "Disabled"}</span>
+                      </p>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                      <button onClick={() => startSongEdit(s)} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 5, padding: "5px 10px", color: "#374151", fontSize: 11, cursor: "pointer" }}>Edit</button>
+                      <button onClick={() => setDeleteSongConfirm(s)} style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 5, padding: "5px 10px", color: "#f87171", fontSize: 11, cursor: "pointer" }}>Delete</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {deleteMusicVideoConfirm && (
               <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -3410,6 +3548,19 @@ export function CMS({ onExit }) {
                   <div style={{ display: "flex", gap: 10 }}>
                     <button onClick={() => setDeleteMusicVideoConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
                     <button onClick={() => deleteMusicVideo(deleteMusicVideoConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {deleteSongConfirm && (
+              <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+                  <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "#0f172a" }}>Delete "{deleteSongConfirm.artist} — {deleteSongConfirm.title}"?</p>
+                  <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 28 }}>This song will be permanently removed.</p>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button onClick={() => setDeleteSongConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    <button onClick={() => deleteSong(deleteSongConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
                   </div>
                 </div>
               </div>
@@ -4809,7 +4960,8 @@ export function CMS({ onExit }) {
                   {tab === "videos" && videoSubTab === "series" && (editingShowId ? "Edit Series" : "Add Series")}
                   {tab === "videos" && videoSubTab === "episodes" && (editingEpisodeId ? "Edit Episode" : "Add Episode")}
                   {tab === "videos" && videoSubTab === "podcasts" && (editingPodcastId ? "Edit Podcast" : "Add Podcast")}
-                  {tab === "videos" && videoSubTab === "music" && (editingMusicVideoId ? "Edit Music Video" : "Add Music Video")}
+                  {tab === "videos" && videoSubTab === "music" && musicSubTab === "videos" && (editingMusicVideoId ? "Edit Music Video" : "Add Music Video")}
+                  {tab === "videos" && videoSubTab === "music" && musicSubTab === "songs" && (editingSongId ? "Edit Song" : "Add Song")}
                   {tab === "carousels" && (editingCarouselId ? "Edit Carousel" : "Add Carousel")}
                   {tab === "live" && drawerFormType !== "epg" && drawerFormType !== "bulk" && (editingLiveId ? "Edit Stream" : "Add Stream")}
                   {tab === "live" && drawerFormType === "epg" && (editingEpgId ? "Edit Program" : "Add Program")}
@@ -5013,7 +5165,7 @@ export function CMS({ onExit }) {
                 )}
 
                 {/* ── MUSIC VIDEO FORM ── */}
-                {tab === "videos" && videoSubTab === "music" && (
+                {tab === "videos" && videoSubTab === "music" && musicSubTab === "videos" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <FieldInput label="Artist *" value={musicVideoForm.artist} onChange={v => setMusicVideoForm(f => ({ ...f, artist: v }))} placeholder="e.g. Daft Punk" />
                     <FieldInput label="Title *" value={musicVideoForm.title} onChange={v => setMusicVideoForm(f => ({ ...f, title: v }))} placeholder="e.g. Get Lucky" />
@@ -5059,6 +5211,78 @@ export function CMS({ onExit }) {
                   </div>
                 )}
 
+                {/* ── SONG FORM ── */}
+                {tab === "videos" && videoSubTab === "music" && musicSubTab === "songs" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                    {[
+                      { label: "Artist *", key: "artist", placeholder: "e.g. Doja Cat" },
+                      { label: "Title *", key: "title", placeholder: "e.g. Say So" },
+                      { label: "Album", key: "album", placeholder: "e.g. Hot Pink" },
+                    ].map(({ label, key, placeholder }) => (
+                      <div key={key}>
+                        <label style={{ display: "block", fontSize: 11, color: "#6b7280", marginBottom: 4, fontWeight: 600 }}>{label}</label>
+                        <input value={songForm[key]} onChange={e => setSongForm(f => ({ ...f, [key]: e.target.value }))}
+                          placeholder={placeholder}
+                          style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 7, padding: "9px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                          onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                      </div>
+                    ))}
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      {[{ label: "Year", key: "year", placeholder: "2024" }, { label: "Duration", key: "duration", placeholder: "3:45" }].map(({ label, key, placeholder }) => (
+                        <div key={key}>
+                          <label style={{ display: "block", fontSize: 11, color: "#6b7280", marginBottom: 4, fontWeight: 600 }}>{label}</label>
+                          <input value={songForm[key]} onChange={e => setSongForm(f => ({ ...f, [key]: e.target.value }))} placeholder={placeholder}
+                            style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 7, padding: "9px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                            onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                        </div>
+                      ))}
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, color: "#6b7280", marginBottom: 4, fontWeight: 600 }}>Album Art URL</label>
+                      <ImageUploader value={songForm.thumbnail} onChange={url => setSongForm(f => ({ ...f, thumbnail: url }))} label="album art" />
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, color: "#6b7280", marginBottom: 4, fontWeight: 600 }}>Audio URL *</label>
+                      <input value={songForm.url} onChange={e => setSongForm(f => ({ ...f, url: e.target.value }))} placeholder="https://…/song.mp3"
+                        style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 7, padding: "9px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box", fontFamily: "monospace" }}
+                        onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, color: "#6b7280", marginBottom: 4, fontWeight: 600 }}>Tags</label>
+                      <input value={songForm.tags} onChange={e => setSongForm(f => ({ ...f, tags: e.target.value }))} placeholder="Pop, Hip Hop, R&B"
+                        style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 7, padding: "9px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                        onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                      <p style={{ margin: "4px 0 0", fontSize: 11, color: "#9ca3af" }}>Comma-separated — used for carousel genre filtering</p>
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, color: "#6b7280", marginBottom: 4, fontWeight: 600 }}>Description</label>
+                      <textarea value={songForm.description} onChange={e => setSongForm(f => ({ ...f, description: e.target.value }))} placeholder="Optional description…" rows={3}
+                        style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 7, padding: "9px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box", resize: "vertical" }}
+                        onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <button onClick={() => setSongForm(f => ({ ...f, enabled: !f.enabled }))}
+                        style={{ width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer", background: songForm.enabled ? "#22c55e" : "#d1d5db", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                        <span style={{ position: "absolute", top: 3, left: songForm.enabled ? 22 : 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.2)", transition: "left 0.2s" }} />
+                      </button>
+                      <span style={{ fontSize: 13, color: "#374151" }}>{songForm.enabled ? "Enabled (visible on Music page)" : "Disabled (hidden from users)"}</span>
+                    </div>
+
+                    <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+                      <button onClick={saveSong} disabled={songSaving} style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: songSaving ? "not-allowed" : "pointer", opacity: songSaving ? 0.7 : 1 }}>
+                        {songSaving ? "Saving…" : editingSongId ? "Save Changes" : "Add Song"}
+                      </button>
+                      <button onClick={cancelSongEdit} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+
                 {/* ── CAROUSELS FORM ── */}
                 {tab === "carousels" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -5079,7 +5303,7 @@ export function CMS({ onExit }) {
                           { val: "home",         icon: "🏠", label: "Home",             desc: "The main landing page" },
                           { val: "movies",       icon: "🎬", label: "Movies tab",       desc: "The dedicated Movies browse page" },
                           { val: "series",       icon: "📺", label: "Series tab",       desc: "The dedicated Series browse page" },
-                          { val: "music_videos", icon: "🎵", label: "Music Videos tab", desc: "The Music Videos page" },
+                          { val: "music", icon: "🎵", label: "Music tab", desc: "The Music page (videos + songs)" },
                         ].map(({ val, icon, label, desc }) => {
                           const on = pagesArr.includes(val);
                           return (
@@ -5113,7 +5337,8 @@ export function CMS({ onExit }) {
                           { ct: "shows",        t: null,      icon: "📺", label: "Series only",   desc: "Only TV shows & series" },
                           { ct: "all",          t: null,      icon: "⭐", label: "Everything",    desc: "Movies + series mixed" },
                           { ct: "all",          t: "podcast", icon: "🎙️", label: "Podcasts",      desc: "Podcast episodes" },
-                          { ct: "music_videos", t: null,      icon: "🎵", label: "Music Videos",  desc: "Music videos only" },
+                          { ct: "music_videos", t: null,      icon: "🎬", label: "Music Videos",  desc: "Music videos only" },
+                          { ct: "songs",        t: null,      icon: "🎵", label: "Songs",         desc: "Audio tracks only" },
                         ].map(({ ct, t, icon, label, desc }) => {
                           const isPodcast = t === "podcast";
                           const isActive = isPodcast
@@ -5164,14 +5389,14 @@ export function CMS({ onExit }) {
                         {carouselForm.type === "category" && (
                           <div style={{ marginTop: 10, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "14px" }}>
                             <label style={{ display: "block", fontSize: 11, color: "#6b7280", marginBottom: 6, fontWeight: 600 }}>
-                              {carouselForm.content_type === "music_videos" ? "Genre / tag" : "Category name"}
+                              {carouselForm.content_type === "music_videos" || carouselForm.content_type === "songs" ? "Genre / tag" : "Category name"}
                             </label>
                             <input value={carouselForm.filter_value} onChange={e => setCarouselForm(f => ({ ...f, filter_value: e.target.value }))}
-                              placeholder={carouselForm.content_type === "music_videos" ? "e.g. Hip Hop, Rock, Country…" : "e.g. Horror, Comedy, Sci-Fi…"}
+                              placeholder={carouselForm.content_type === "music_videos" ? "e.g. Hip Hop, Rock, Country…" : carouselForm.content_type === "songs" ? "e.g. Pop, Hip Hop, Rock…" : "e.g. Horror, Comedy, Sci-Fi…"}
                               style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 6, padding: "9px 12px", color: "#0f172a", fontSize: 13, outline: "none" }}
                               onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
                             <p style={{ margin: "6px 0 0", fontSize: 11, color: "#9ca3af" }}>
-                              {carouselForm.content_type === "music_videos" ? "Must match a tag on your music videos (case-insensitive)." : "Must match exactly as set on your videos (case-insensitive)."}
+                              {carouselForm.content_type === "music_videos" || carouselForm.content_type === "songs" ? "Must match a tag on your music content (case-insensitive)." : "Must match exactly as set on your videos (case-insensitive)."}
                             </p>
                           </div>
                         )}
@@ -5181,6 +5406,7 @@ export function CMS({ onExit }) {
                             ...rows.map(v => ({ id: v.id, type: "movie", title: v.title, subtitle: v.category, thumbnail: v.poster || v.thumbnail })),
                             ...showsList.map(s => ({ id: s.id, type: "show", title: s.title, subtitle: "Series", thumbnail: s.poster || s.thumbnail })),
                             ...musicVideosList.map(mv => ({ id: mv.id, type: "music_video", title: mv.title, subtitle: mv.artist, thumbnail: mv.thumbnail || mv.poster })),
+                            ...songsList.map(s => ({ id: s.id, type: "song", title: s.title, subtitle: s.artist, thumbnail: s.thumbnail })),
                           ];
                           const q = handpickedSearch.toLowerCase().trim();
                           const results = q ? pool.filter(item =>
@@ -5188,7 +5414,7 @@ export function CMS({ onExit }) {
                           ).slice(0, 12) : [];
                           const selectedKey = item => `${item.type}_${item.id}`;
                           const selectedKeys = new Set(handpickedSelected.map(selectedKey));
-                          const typeLabel = t => t === "movie" ? "Movie" : t === "show" ? "Series" : "Music Video";
+                          const typeLabel = t => t === "movie" ? "Movie" : t === "show" ? "Series" : t === "song" ? "Song" : "Music Video";
                           const typeColor = t => t === "movie" ? "#facc15" : t === "show" ? "#60a5fa" : "#4ade80";
 
                           return (
