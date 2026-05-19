@@ -86,6 +86,20 @@ const EMPTY_PODCAST_EPISODE = {
   thumbnail: "",
 };
 
+const EMPTY_MUSIC_VIDEO = {
+  title: "",
+  artist: "",
+  url: "",
+  thumbnail: "",
+  poster: "",
+  trailer_url: "",
+  duration: "",
+  year: "",
+  description: "",
+  tags: "",
+  enabled: true,
+};
+
 const EMPTY_AD = {
   name: "",
   tag_url: "",
@@ -222,6 +236,14 @@ export function CMS({ onExit }) {
 
   const [heroConfirm, setHeroConfirm] = useState(null); // { current, next, type: "video"|"show" }
 
+  // Music Videos state
+  const [musicVideosList, setMusicVideosList] = useState([]);
+  const [musicVideosLoading, setMusicVideosLoading] = useState(false);
+  const [editingMusicVideoId, setEditingMusicVideoId] = useState(null);
+  const [musicVideoForm, setMusicVideoForm] = useState(EMPTY_MUSIC_VIDEO);
+  const [musicVideoSaving, setMusicVideoSaving] = useState(false);
+  const [deleteMusicVideoConfirm, setDeleteMusicVideoConfirm] = useState(null);
+
   // Ads state
   const [adList, setAdList] = useState([]);
   const [adLoading, setAdLoading] = useState(false);
@@ -294,6 +316,7 @@ export function CMS({ onExit }) {
     loadShows();
     loadPodcasts();
     loadLiveStreams();
+    loadMusicVideos();
     loadAds();
     loadAdAnalytics();
 
@@ -1402,6 +1425,68 @@ export function CMS({ onExit }) {
     else { showToast("Episode deleted"); setDeletePodEpConfirm(null); await loadPodEpisodes(selectedPodcastForEp.id); }
   }
 
+  // ──── MUSIC VIDEOS ────
+
+  async function loadMusicVideos() {
+    setMusicVideosLoading(true);
+    const { data, error } = await supabase.from("music_videos").select("*").order("artist", { ascending: true });
+    if (error) showToast("Failed to load music videos: " + error.message, "error");
+    else setMusicVideosList(data || []);
+    setMusicVideosLoading(false);
+  }
+
+  function startMusicVideoEdit(mv) {
+    setEditingMusicVideoId(mv.id);
+    setMusicVideoForm({
+      title: mv.title ?? "", artist: mv.artist ?? "", url: mv.url ?? "",
+      thumbnail: mv.thumbnail ?? "", poster: mv.poster ?? "", trailer_url: mv.trailer_url ?? "",
+      duration: mv.duration ?? "", year: mv.year ? String(mv.year) : "",
+      description: mv.description ?? "", tags: Array.isArray(mv.tags) ? mv.tags.join(", ") : (mv.tags ?? ""),
+      enabled: mv.enabled !== false,
+    });
+    setDrawerOpen(true);
+  }
+
+  function cancelMusicVideoEdit() {
+    setEditingMusicVideoId(null);
+    setMusicVideoForm(EMPTY_MUSIC_VIDEO);
+    setDrawerOpen(false);
+  }
+
+  async function saveMusicVideo() {
+    if (!musicVideoForm.title.trim()) { showToast("Title is required.", "error"); return; }
+    if (!musicVideoForm.artist.trim()) { showToast("Artist is required.", "error"); return; }
+    setMusicVideoSaving(true);
+    const tagsArr = musicVideoForm.tags ? musicVideoForm.tags.split(",").map(t => t.trim()).filter(Boolean) : [];
+    const payload = {
+      title: musicVideoForm.title.trim(), artist: musicVideoForm.artist.trim(),
+      url: musicVideoForm.url.trim(), thumbnail: musicVideoForm.thumbnail.trim(),
+      poster: musicVideoForm.poster.trim(), trailer_url: musicVideoForm.trailer_url.trim(),
+      duration: musicVideoForm.duration.trim(), year: musicVideoForm.year ? Number(musicVideoForm.year) : null,
+      description: musicVideoForm.description.trim(), tags: tagsArr, enabled: musicVideoForm.enabled,
+    };
+    try {
+      if (editingMusicVideoId) {
+        const { error } = await supabase.from("music_videos").update(payload).eq("id", editingMusicVideoId);
+        if (error) throw error;
+        showToast("Music video updated");
+      } else {
+        const { error } = await supabase.from("music_videos").insert([payload]);
+        if (error) throw error;
+        showToast("Music video added");
+      }
+      cancelMusicVideoEdit();
+      await loadMusicVideos();
+    } catch (err) { showToast("Save failed: " + err.message, "error"); }
+    setMusicVideoSaving(false);
+  }
+
+  async function deleteMusicVideo(id) {
+    const { error } = await supabase.from("music_videos").delete().eq("id", id);
+    if (error) showToast("Delete failed: " + error.message, "error");
+    else { showToast("Music video deleted"); setDeleteMusicVideoConfirm(null); await loadMusicVideos(); }
+  }
+
   // ──── ADS / VAST TAGS ────
 
   async function loadAds() {
@@ -2223,6 +2308,7 @@ export function CMS({ onExit }) {
               { key: "series", label: "Series", count: showsList.length },
               { key: "episodes", label: "Episodes", count: null },
               { key: "podcasts", label: "Podcasts", count: podcastsList.length },
+              { key: "music", label: "Music Videos", count: musicVideosList.length },
             ].map(({ key, label, count }) => (
               <button key={key} onClick={() => setVideoSubTab(key)} style={{ background: videoSubTab === key ? "rgba(79,70,229,0.08)" : "transparent", border: `1px solid ${videoSubTab === key ? "rgba(79,70,229,0.3)" : "#e2e8f0"}`, borderRadius: 8, padding: "7px 16px", color: videoSubTab === key ? "#4f46e5" : "#6b7280", fontSize: 13, fontWeight: videoSubTab === key ? 600 : 400, cursor: "pointer", transition: "all 0.15s" }}>
                 {label}{count !== null ? ` (${count})` : ""}
@@ -3248,6 +3334,68 @@ export function CMS({ onExit }) {
                   </div>
                 </div>
               )}
+          </>
+        )}
+
+        {/* ────── MUSIC VIDEOS TAB ────── */}
+        {tab === "videos" && videoSubTab === "music" && (
+          <>
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Music Videos ({musicVideosList.length})</h2>
+                <button
+                  onClick={() => { setMusicVideoForm(EMPTY_MUSIC_VIDEO); setEditingMusicVideoId(null); setDrawerOpen(true); }}
+                  style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+                >
+                  + Add Music Video
+                </button>
+              </div>
+
+              {musicVideosLoading ? (
+                <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>Loading...</div>
+              ) : musicVideosList.length === 0 ? (
+                <div style={{ padding: 32, textAlign: "center", border: "1px dashed #e2e8f0", borderRadius: 10 }}>
+                  <p style={{ color: "#6b7280", margin: 0, fontSize: 14 }}>No music videos yet. Add one using the button above.</p>
+                </div>
+              ) : musicVideosList.map(mv => (
+                <div key={mv.id} style={{ background: "#ffffff", border: `1px solid ${editingMusicVideoId === mv.id ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 10, padding: "12px 14px", marginBottom: 10, display: "flex", gap: 12, alignItems: "center", borderLeft: `3px solid ${editingMusicVideoId === mv.id ? "#4f46e5" : "transparent"}` }}>
+                  {(mv.thumbnail || mv.poster) ? (
+                    <img src={mv.thumbnail || mv.poster} alt={mv.title} style={{ width: 72, height: 40, objectFit: "cover", borderRadius: 6, flexShrink: 0 }} onError={e => { e.target.style.display = "none"; }} />
+                  ) : (
+                    <div style={{ width: 72, height: 40, borderRadius: 6, background: "linear-gradient(135deg, #e0e7ff, #c7d2fe)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                    </div>
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{mv.artist} — {mv.title}</p>
+                    <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>
+                      {mv.duration && <span>{mv.duration}</span>}
+                      {mv.duration && mv.year && " · "}
+                      {mv.year && <span>{mv.year}</span>}
+                      {(mv.duration || mv.year) && " · "}
+                      <span style={{ color: mv.enabled ? "#4ade80" : "#f87171" }}>{mv.enabled ? "Enabled" : "Disabled"}</span>
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                    <button onClick={() => startMusicVideoEdit(mv)} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 5, padding: "5px 10px", color: "#374151", fontSize: 11, cursor: "pointer" }}>Edit</button>
+                    <button onClick={() => setDeleteMusicVideoConfirm(mv)} style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 5, padding: "5px 10px", color: "#f87171", fontSize: 11, cursor: "pointer" }}>Delete</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {deleteMusicVideoConfirm && (
+              <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+                  <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "#0f172a" }}>Delete "{deleteMusicVideoConfirm.artist} — {deleteMusicVideoConfirm.title}"?</p>
+                  <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 28 }}>This music video will be permanently removed.</p>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button onClick={() => setDeleteMusicVideoConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    <button onClick={() => deleteMusicVideo(deleteMusicVideoConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         )}
 
@@ -4643,6 +4791,7 @@ export function CMS({ onExit }) {
                   {tab === "videos" && videoSubTab === "series" && (editingShowId ? "Edit Series" : "Add Series")}
                   {tab === "videos" && videoSubTab === "episodes" && (editingEpisodeId ? "Edit Episode" : "Add Episode")}
                   {tab === "videos" && videoSubTab === "podcasts" && (editingPodcastId ? "Edit Podcast" : "Add Podcast")}
+                  {tab === "videos" && videoSubTab === "music" && (editingMusicVideoId ? "Edit Music Video" : "Add Music Video")}
                   {tab === "carousels" && (editingCarouselId ? "Edit Carousel" : "Add Carousel")}
                   {tab === "live" && drawerFormType !== "epg" && drawerFormType !== "bulk" && (editingLiveId ? "Edit Stream" : "Add Stream")}
                   {tab === "live" && drawerFormType === "epg" && (editingEpgId ? "Edit Program" : "Add Program")}
@@ -4841,6 +4990,53 @@ export function CMS({ onExit }) {
                         {podcastSaving ? "Saving…" : editingPodcastId ? "Save Changes" : "Add Podcast"}
                       </button>
                       <button onClick={cancelPodcastEdit} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── MUSIC VIDEO FORM ── */}
+                {tab === "videos" && videoSubTab === "music" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                    <FieldInput label="Artist *" value={musicVideoForm.artist} onChange={v => setMusicVideoForm(f => ({ ...f, artist: v }))} placeholder="e.g. Daft Punk" />
+                    <FieldInput label="Title *" value={musicVideoForm.title} onChange={v => setMusicVideoForm(f => ({ ...f, title: v }))} placeholder="e.g. Get Lucky" />
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      <FieldInput label="Year" value={musicVideoForm.year} onChange={v => setMusicVideoForm(f => ({ ...f, year: v }))} placeholder="2013" type="number" />
+                      <FieldInput label="Duration" value={musicVideoForm.duration} onChange={v => setMusicVideoForm(f => ({ ...f, duration: v }))} placeholder="4:09" />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Thumbnail (16:9)</label>
+                      <ImageUploader label="Upload Thumbnail (JPG/PNG)" folder="music-thumbs" onUploadSuccess={url => setMusicVideoForm(f => ({ ...f, thumbnail: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "8px 0" }}>
+                        <div style={{ flex: 1, height: 1, background: "#e2e8f0" }} />
+                        <span style={{ fontSize: 11, color: "#9ca3af" }}>or paste URL</span>
+                        <div style={{ flex: 1, height: 1, background: "#e2e8f0" }} />
+                      </div>
+                      <input type="text" value={musicVideoForm.thumbnail} onChange={e => setMusicVideoForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="https://..." style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                      {musicVideoForm.thumbnail && (
+                        <div style={{ marginTop: 8, borderRadius: 6, overflow: "hidden", border: "1px solid #e2e8f0" }}>
+                          <img src={musicVideoForm.thumbnail} alt="" style={{ width: "100%", height: 90, objectFit: "cover" }} onError={e => { e.target.style.display = "none"; }} />
+                        </div>
+                      )}
+                    </div>
+                    <FieldInput label="Video URL *" value={musicVideoForm.url} onChange={v => setMusicVideoForm(f => ({ ...f, url: v }))} placeholder="https://..." />
+                    <FieldInput label="Trailer URL (optional)" value={musicVideoForm.trailer_url} onChange={v => setMusicVideoForm(f => ({ ...f, trailer_url: v }))} placeholder="https://youtube.com/watch?v=..." />
+                    <FieldInput label="Tags (comma-separated)" value={musicVideoForm.tags} onChange={v => setMusicVideoForm(f => ({ ...f, tags: v }))} placeholder="Pop, Electronic, 2013" />
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Description</label>
+                      <textarea value={musicVideoForm.description} onChange={e => setMusicVideoForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Short description..." style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.7 }}>Status</label>
+                      <button onClick={() => setMusicVideoForm(f => ({ ...f, enabled: !f.enabled }))}
+                        style={{ width: "100%", background: musicVideoForm.enabled ? "rgba(79,70,229,0.08)" : "rgba(107,114,128,0.08)", border: `1px solid ${musicVideoForm.enabled ? "rgba(79,70,229,0.3)" : "#e2e8f0"}`, borderRadius: 7, padding: "10px 12px", color: musicVideoForm.enabled ? "#4f46e5" : "#6b7280", fontSize: 13, cursor: "pointer", fontWeight: 500 }}>
+                        {musicVideoForm.enabled ? "✓ Enabled" : "○ Disabled"}
+                      </button>
+                    </div>
+                    <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+                      <button onClick={saveMusicVideo} disabled={musicVideoSaving} style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: musicVideoSaving ? "not-allowed" : "pointer", opacity: musicVideoSaving ? 0.7 : 1 }}>
+                        {musicVideoSaving ? "Saving…" : editingMusicVideoId ? "Save Changes" : "Add Music Video"}
+                      </button>
+                      <button onClick={cancelMusicVideoEdit} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
                     </div>
                   </div>
                 )}
