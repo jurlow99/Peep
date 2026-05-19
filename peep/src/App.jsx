@@ -1616,7 +1616,7 @@ function VideoCard({ video, onClick, rank, myList, onToggleList }) {
         <div style={{ position: "absolute", left: -8, bottom: 24, fontFamily: "'DM Serif Display', serif", fontSize: 88, lineHeight: 1, fontWeight: 400, color: "transparent", WebkitTextStroke: "1px rgba(255,255,255,0.08)", userSelect: "none", zIndex: 0, pointerEvents: "none" }}>{rank}</div>
       )}
       <div onClick={onClick} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}
-        style={{ cursor: "pointer", borderRadius: 10, overflow: "hidden", background: "#0f0f0f", transform: hovered ? "scale(1.03) translateY(-6px)" : "scale(1)", transformOrigin: "bottom center", transition: "transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94), box-shadow 0.3s ease", boxShadow: hovered ? "0 28px 60px rgba(0,0,0,0.85)" : "none", position: "relative", zIndex: hovered ? 10 : 1, marginLeft: rank ? 34 : 0 }}>
+        style={{ cursor: "pointer", borderRadius: 10, overflow: "hidden", background: "#0f0f0f", transform: (hovered || trailerMounted) ? "scale(1.03) translateY(-6px)" : "scale(1)", transformOrigin: "bottom center", transition: "transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94), box-shadow 0.3s ease", boxShadow: (hovered || trailerMounted) ? "0 28px 60px rgba(0,0,0,0.85)" : "none", position: "relative", zIndex: (hovered || trailerMounted) ? 10 : 1, marginLeft: rank ? 34 : 0 }}>
         <div style={{ position: "relative", aspectRatio: "2/3", overflow: "hidden" }}>
           <img src={video.poster || video.thumbnail || "https://iuozujwtuzuwubhsnhix.supabase.co/storage/v1/object/public/peep-media/URL%20IMAGE/peep-icon.png"} alt={video.title}
             onError={e => { e.currentTarget.src = "https://iuozujwtuzuwubhsnhix.supabase.co/storage/v1/object/public/peep-media/URL%20IMAGE/peep-icon.png"; }}
@@ -1634,8 +1634,8 @@ function VideoCard({ video, onClick, rank, myList, onToggleList }) {
 
           {/* Type badge — hover only */}
           {video._type === "show"
-            ? <div style={{ position: "absolute", top: 10, left: 10, background: "rgba(15,15,15,0.75)", backdropFilter: "blur(8px)", color: "#93c5fd", fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: 1.2, textTransform: "uppercase", opacity: hovered ? 1 : 0, transition: "opacity 0.2s ease" }}>Series</div>
-            : video.category && <div style={{ position: "absolute", top: 10, left: 10, background: "rgba(15,15,15,0.75)", backdropFilter: "blur(8px)", color: "#d1d5db", fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: 1.2, textTransform: "uppercase", opacity: hovered ? 1 : 0, transition: "opacity 0.2s ease" }}>{video.category}</div>
+            ? <div style={{ position: "absolute", top: 10, left: 10, background: "rgba(15,15,15,0.75)", backdropFilter: "blur(8px)", color: "#93c5fd", fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: 1.2, textTransform: "uppercase", opacity: (hovered || trailerMounted) ? 1 : 0, transition: "opacity 0.2s ease" }}>Series</div>
+            : video.category && <div style={{ position: "absolute", top: 10, left: 10, background: "rgba(15,15,15,0.75)", backdropFilter: "blur(8px)", color: "#d1d5db", fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: 1.2, textTransform: "uppercase", opacity: (hovered || trailerMounted) ? 1 : 0, transition: "opacity 0.2s ease" }}>{video.category}</div>
           }
 
           {/* Duration */}
