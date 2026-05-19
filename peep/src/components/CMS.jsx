@@ -254,6 +254,9 @@ export function CMS({ onExit }) {
   const [subSort, setSubSort] = useState({ col: "created_at", dir: "desc" });
 
   // The Boss state
+  const [bossAuthed, setBossAuthed] = useState(() => sessionStorage.getItem("peep_boss_auth") === "1");
+  const [bossPinInput, setBossPinInput] = useState("");
+  const [bossPinError, setBossPinError] = useState(false);
   const [promos, setPromos] = useState([]);
   const [promosLoading, setPromosLoading] = useState(false);
   const [promoForm, setPromoForm] = useState({ name: "", code: "" });
@@ -4205,7 +4208,40 @@ export function CMS({ onExit }) {
         })()}
 
         {/* ────── THE BOSS TAB ────── */}
-        {tab === "boss" && (
+        {tab === "boss" && !bossAuthed && (
+          <div style={{ display: "flex", justifyContent: "center", paddingTop: 80 }}>
+            <div style={{ width: 320, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "40px 36px", textAlign: "center" }}>
+              <p style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>The Boss</p>
+              <p style={{ margin: "0 0 24px", fontSize: 13, color: "#9ca3af" }}>Enter your access code</p>
+              <input
+                type="password"
+                maxLength={8}
+                value={bossPinInput}
+                autoFocus
+                onChange={e => { setBossPinInput(e.target.value); setBossPinError(false); }}
+                onKeyDown={e => {
+                  if (e.key === "Enter") {
+                    if (bossPinInput === "0319") { sessionStorage.setItem("peep_boss_auth", "1"); setBossAuthed(true); loadPromos(); loadBossSettings(); }
+                    else { setBossPinError(true); setBossPinInput(""); }
+                  }
+                }}
+                placeholder="••••"
+                style={{ width: "100%", background: "#f8fafc", border: `1px solid ${bossPinError ? "#ef4444" : "#e2e8f0"}`, borderRadius: 8, padding: "12px 16px", fontSize: 18, color: "#0f172a", outline: "none", textAlign: "center", letterSpacing: "0.3em", boxSizing: "border-box" }}
+              />
+              {bossPinError && <p style={{ margin: "8px 0 0", fontSize: 12, color: "#ef4444" }}>Incorrect code</p>}
+              <button
+                onClick={() => {
+                  if (bossPinInput === "0319") { sessionStorage.setItem("peep_boss_auth", "1"); setBossAuthed(true); loadPromos(); loadBossSettings(); }
+                  else { setBossPinError(true); setBossPinInput(""); }
+                }}
+                style={{ width: "100%", marginTop: 16, background: "#facc15", border: "none", borderRadius: 8, padding: "12px", color: "#0a0a0a", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                Enter
+              </button>
+            </div>
+          </div>
+        )}
+
+        {tab === "boss" && bossAuthed && (
           <div style={{ maxWidth: 700 }}>
             <div style={{ marginBottom: 32 }}>
               <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>The Boss</h2>
