@@ -8,7 +8,17 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { user_id, email, code } = await req.json();
+    const { code } = await req.json();
+
+    // Verify the user from their JWT — never trust client-sent user_id
+    const authHeader = req.headers.get("Authorization") || "";
+    const userClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+    const { data: { user }, error: userErr } = await userClient.auth.getUser();
+    if (!user || userErr) throw new Error("Not authenticated");
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -32,8 +42,8 @@ Deno.serve(async (req) => {
     await supabase.from("promo_codes").update({ uses: promo.uses + 1 }).eq("id", promo.id);
 
     const { error } = await supabase.from("subscriptions").upsert({
-      user_id,
-      email,
+      user_id: user.id,
+      email: user.email,
       status: "active",
       plan: "comp",
       stripe_customer_id: null,
