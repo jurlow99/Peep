@@ -4268,44 +4268,6 @@ export function CMS({ onExit }) {
               )}
             </div>
 
-            {/* ── Banner Announcement ── */}
-            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-                <div>
-                  <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Banner Announcement</p>
-                  <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Shows a yellow bar at the top of the app for all users.</p>
-                </div>
-                <button
-                  onClick={() => { const next = bossSettings.banner_active !== "true"; saveSetting("banner_active", String(next)); showToast(next ? "Banner is live" : "Banner hidden"); }}
-                  style={{ width: 52, height: 28, borderRadius: 14, border: "none", cursor: "pointer", background: bossSettings.banner_active === "true" ? "#22c55e" : "#d1d5db", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
-                  <span style={{ position: "absolute", top: 4, left: bossSettings.banner_active === "true" ? 26 : 4, width: 20, height: 20, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.15)", transition: "left 0.2s" }} />
-                </button>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <input
-                  value={bossSettings.banner_text || ""}
-                  onChange={e => setBossSettings(p => ({ ...p, banner_text: e.target.value }))}
-                  onBlur={e => saveSetting("banner_text", e.target.value)}
-                  placeholder="e.g. New movies added every Friday — go check them out!"
-                  style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px", fontSize: 14, color: "#0f172a", outline: "none", boxSizing: "border-box" }}
-                />
-                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                  <label style={{ fontSize: 12, color: "#6b7280", whiteSpace: "nowrap" }}>Expires:</label>
-                  <input
-                    type="datetime-local"
-                    value={bossSettings.banner_expires_at || ""}
-                    onChange={e => { setBossSettings(p => ({ ...p, banner_expires_at: e.target.value })); saveSetting("banner_expires_at", e.target.value); }}
-                    style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 12px", fontSize: 13, color: "#0f172a", outline: "none", cursor: "pointer" }}
-                  />
-                  <span style={{ fontSize: 11, color: "#9ca3af" }}>Leave blank to show indefinitely</span>
-                </div>
-              </div>
-              {bossSettings.banner_active === "true" && bossSettings.banner_text && (
-                <div style={{ marginTop: 12, background: "#facc15", borderRadius: 8, padding: "10px 14px", fontSize: 13, fontWeight: 600, color: "#0a0a0a" }}>
-                  Preview: {bossSettings.banner_text}
-                </div>
-              )}
-            </div>
 
             {/* ── Grant Access ── */}
             <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { CMS } from "../components/CMS";
 
 const ADMIN_PIN = "1234";
+const BOSS_PIN = "0319";
 
 export function AdminPage() {
   const [authed, setAuthed] = useState(() => sessionStorage.getItem("peep_admin_auth") === "1");
@@ -9,8 +10,9 @@ export function AdminPage() {
   const [pinError, setPinError] = useState(false);
 
   function checkPin() {
-    if (pin === ADMIN_PIN) {
+    if (pin === ADMIN_PIN || pin === BOSS_PIN) {
       sessionStorage.setItem("peep_admin_auth", "1");
+      if (pin === BOSS_PIN) sessionStorage.setItem("peep_boss_auth", "1");
       setAuthed(true);
       setPinError(false);
     } else {
