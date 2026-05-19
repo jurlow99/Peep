@@ -105,9 +105,20 @@ const EMPTY_SONG = {
   title: "",
   artist: "",
   album: "",
+  album_id: null,
   url: "",
   thumbnail: "",
   duration: "",
+  year: "",
+  description: "",
+  tags: "",
+  enabled: true,
+};
+
+const EMPTY_ALBUM = {
+  title: "",
+  artist: "",
+  artwork_url: "",
   year: "",
   description: "",
   tags: "",
@@ -267,8 +278,16 @@ export function CMS({ onExit }) {
   const [songForm, setSongForm] = useState(EMPTY_SONG);
   const [songSaving, setSongSaving] = useState(false);
   const [deleteSongConfirm, setDeleteSongConfirm] = useState(null);
-  const [musicSubTab, setMusicSubTab] = useState("videos"); // "videos" | "songs"
+  const [musicSubTab, setMusicSubTab] = useState("videos"); // "videos" | "songs" | "albums"
   const [songImporterOpen, setSongImporterOpen] = useState(false);
+
+  // Albums state
+  const [albumsList, setAlbumsList] = useState([]);
+  const [albumsLoading, setAlbumsLoading] = useState(false);
+  const [editingAlbumId, setEditingAlbumId] = useState(null);
+  const [albumForm, setAlbumForm] = useState(EMPTY_ALBUM);
+  const [albumSaving, setAlbumSaving] = useState(false);
+  const [deleteAlbumConfirm, setDeleteAlbumConfirm] = useState(null);
 
   // Ads state
   const [adList, setAdList] = useState([]);
@@ -344,6 +363,7 @@ export function CMS({ onExit }) {
     loadLiveStreams();
     loadMusicVideos();
     loadSongs();
+    loadAlbums();
     loadAds();
     loadAdAnalytics();
 
@@ -1543,6 +1563,7 @@ export function CMS({ onExit }) {
     setEditingSongId(song.id);
     setSongForm({
       title: song.title ?? "", artist: song.artist ?? "", album: song.album ?? "",
+      album_id: song.album_id ?? null,
       url: song.url ?? "", thumbnail: song.thumbnail ?? "",
       duration: song.duration ?? "", year: song.year ? String(song.year) : "",
       description: song.description ?? "", tags: Array.isArray(song.tags) ? song.tags.join(", ") : (song.tags ?? ""),
@@ -1564,6 +1585,7 @@ export function CMS({ onExit }) {
     const tagsArr = songForm.tags ? songForm.tags.split(",").map(t => t.trim()).filter(Boolean) : [];
     const payload = {
       title: songForm.title.trim(), artist: songForm.artist.trim(), album: songForm.album.trim(),
+      album_id: songForm.album_id || null,
       url: songForm.url.trim(), thumbnail: songForm.thumbnail.trim(),
       duration: songForm.duration.trim(), year: songForm.year ? Number(songForm.year) : null,
       description: songForm.description.trim(), tags: tagsArr, enabled: songForm.enabled,
@@ -1588,6 +1610,66 @@ export function CMS({ onExit }) {
     const { error } = await supabase.from("songs").delete().eq("id", id);
     if (error) showToast("Delete failed: " + error.message, "error");
     else { showToast("Song deleted"); setDeleteSongConfirm(null); await loadSongs(); }
+  }
+
+  // ──── ALBUMS ────
+
+  async function loadAlbums() {
+    setAlbumsLoading(true);
+    const { data, error } = await supabase.from("albums").select("*").order("artist", { ascending: true });
+    if (error) showToast("Failed to load albums: " + error.message, "error");
+    else setAlbumsList(data || []);
+    setAlbumsLoading(false);
+  }
+
+  function startAlbumEdit(album) {
+    setEditingAlbumId(album.id);
+    setAlbumForm({
+      title: album.title ?? "",
+      artist: album.artist ?? "",
+      artwork_url: album.artwork_url ?? "",
+      year: album.year ? String(album.year) : "",
+      description: album.description ?? "",
+      tags: album.tags ?? "",
+      enabled: album.enabled ?? true,
+    });
+    setDrawerOpen(true);
+  }
+
+  function cancelAlbumEdit() { setEditingAlbumId(null); setAlbumForm(EMPTY_ALBUM); setDrawerOpen(false); }
+
+  async function saveAlbum() {
+    if (!albumForm.artist.trim()) { showToast("Artist is required.", "error"); return; }
+    if (!albumForm.title.trim()) { showToast("Title is required.", "error"); return; }
+    setAlbumSaving(true);
+    const payload = {
+      title: albumForm.title.trim(),
+      artist: albumForm.artist.trim(),
+      artwork_url: albumForm.artwork_url.trim() || null,
+      year: albumForm.year ? Number(albumForm.year) : null,
+      description: albumForm.description.trim(),
+      tags: albumForm.tags.trim(),
+      enabled: albumForm.enabled,
+    };
+    try {
+      if (editingAlbumId) {
+        const { error } = await supabase.from("albums").update(payload).eq("id", editingAlbumId);
+        if (error) throw error;
+        showToast("Album updated"); cancelAlbumEdit();
+      } else {
+        const { error } = await supabase.from("albums").insert([payload]);
+        if (error) throw error;
+        showToast("Album added"); setAlbumForm(EMPTY_ALBUM); setDrawerOpen(false);
+      }
+      await loadAlbums();
+    } catch (err) { showToast("Save failed: " + err.message, "error"); }
+    setAlbumSaving(false);
+  }
+
+  async function deleteAlbum(id) {
+    const { error } = await supabase.from("albums").delete().eq("id", id);
+    if (error) showToast("Delete failed: " + error.message, "error");
+    else { showToast("Album deleted"); setDeleteAlbumConfirm(null); await loadAlbums(); }
   }
 
   // ──── ADS / VAST TAGS ────
@@ -3446,7 +3528,7 @@ export function CMS({ onExit }) {
           <>
             {/* Music sub-tab toggle */}
             <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
-              {[{ id: "videos", label: `Music Videos (${musicVideosList.length})` }, { id: "songs", label: `Songs (${songsList.length})` }].map(t => (
+              {[{ id: "videos", label: `Music Videos (${musicVideosList.length})` }, { id: "songs", label: `Songs (${songsList.length})` }, { id: "albums", label: `Albums (${albumsList.length})` }].map(t => (
                 <button key={t.id} onClick={() => setMusicSubTab(t.id)}
                   style={{ background: musicSubTab === t.id ? "rgba(79,70,229,0.08)" : "transparent", border: `1px solid ${musicSubTab === t.id ? "rgba(79,70,229,0.3)" : "#e2e8f0"}`, borderRadius: 8, padding: "7px 16px", color: musicSubTab === t.id ? "#4f46e5" : "#6b7280", fontSize: 13, fontWeight: musicSubTab === t.id ? 600 : 400, cursor: "pointer" }}>
                   {t.label}
@@ -3549,6 +3631,48 @@ export function CMS({ onExit }) {
               </div>
             )}
 
+            {/* Albums list */}
+            {musicSubTab === "albums" && (
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                  <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Albums ({albumsList.length})</h2>
+                  <button onClick={() => { setAlbumForm(EMPTY_ALBUM); setEditingAlbumId(null); setDrawerOpen(true); }}
+                    style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                    + Add Album
+                  </button>
+                </div>
+                {albumsLoading ? (
+                  <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>Loading...</div>
+                ) : albumsList.length === 0 ? (
+                  <div style={{ padding: 32, textAlign: "center", border: "1px dashed #e2e8f0", borderRadius: 10 }}>
+                    <p style={{ color: "#6b7280", margin: 0, fontSize: 14 }}>No albums yet.</p>
+                  </div>
+                ) : albumsList.map(al => (
+                  <div key={al.id} style={{ background: "#ffffff", border: `1px solid ${editingAlbumId === al.id ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 10, padding: "12px 14px", marginBottom: 10, display: "flex", gap: 12, alignItems: "center", borderLeft: `3px solid ${editingAlbumId === al.id ? "#4f46e5" : "transparent"}` }}>
+                    {al.artwork_url ? (
+                      <img src={al.artwork_url} alt={al.title} style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 6, flexShrink: 0 }} onError={e => { e.target.style.display = "none"; }} />
+                    ) : (
+                      <div style={{ width: 48, height: 48, borderRadius: 6, background: "linear-gradient(135deg, #e0e7ff, #c7d2fe)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+                      </div>
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{al.artist} — {al.title}</p>
+                      <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>
+                        {al.year && <span>{al.year}</span>}
+                        {al.year && " · "}
+                        <span style={{ color: al.enabled ? "#4ade80" : "#f87171" }}>{al.enabled ? "Enabled" : "Disabled"}</span>
+                      </p>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                      <button onClick={() => startAlbumEdit(al)} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 5, padding: "5px 10px", color: "#374151", fontSize: 11, cursor: "pointer" }}>Edit</button>
+                      <button onClick={() => setDeleteAlbumConfirm(al)} style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 5, padding: "5px 10px", color: "#f87171", fontSize: 11, cursor: "pointer" }}>Delete</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {deleteMusicVideoConfirm && (
               <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
@@ -3570,6 +3694,19 @@ export function CMS({ onExit }) {
                   <div style={{ display: "flex", gap: 10 }}>
                     <button onClick={() => setDeleteSongConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
                     <button onClick={() => deleteSong(deleteSongConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {deleteAlbumConfirm && (
+              <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+                  <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "#0f172a" }}>Delete "{deleteAlbumConfirm.artist} — {deleteAlbumConfirm.title}"?</p>
+                  <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 28 }}>The album will be removed. Songs assigned to it will keep their data but lose the album link.</p>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button onClick={() => setDeleteAlbumConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    <button onClick={() => deleteAlbum(deleteAlbumConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
                   </div>
                 </div>
               </div>
@@ -4978,6 +5115,7 @@ export function CMS({ onExit }) {
                   {tab === "videos" && videoSubTab === "podcasts" && (editingPodcastId ? "Edit Podcast" : "Add Podcast")}
                   {tab === "videos" && videoSubTab === "music" && musicSubTab === "videos" && (editingMusicVideoId ? "Edit Music Video" : "Add Music Video")}
                   {tab === "videos" && videoSubTab === "music" && musicSubTab === "songs" && (editingSongId ? "Edit Song" : "Add Song")}
+                  {tab === "videos" && videoSubTab === "music" && musicSubTab === "albums" && (editingAlbumId ? "Edit Album" : "Add Album")}
                   {tab === "carousels" && (editingCarouselId ? "Edit Carousel" : "Add Carousel")}
                   {tab === "live" && drawerFormType !== "epg" && drawerFormType !== "bulk" && (editingLiveId ? "Edit Stream" : "Add Stream")}
                   {tab === "live" && drawerFormType === "epg" && (editingEpgId ? "Edit Program" : "Add Program")}
@@ -5233,7 +5371,7 @@ export function CMS({ onExit }) {
                     {[
                       { label: "Artist *", key: "artist", placeholder: "e.g. Doja Cat" },
                       { label: "Title *", key: "title", placeholder: "e.g. Say So" },
-                      { label: "Album", key: "album", placeholder: "e.g. Hot Pink" },
+                      { label: "Album (text)", key: "album", placeholder: "e.g. Hot Pink" },
                     ].map(({ label, key, placeholder }) => (
                       <div key={key}>
                         <label style={{ display: "block", fontSize: 11, color: "#6b7280", marginBottom: 4, fontWeight: 600 }}>{label}</label>
@@ -5243,6 +5381,16 @@ export function CMS({ onExit }) {
                           onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
                       </div>
                     ))}
+
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, color: "#6b7280", marginBottom: 4, fontWeight: 600 }}>Link to Album</label>
+                      <select value={songForm.album_id ?? ""} onChange={e => setSongForm(f => ({ ...f, album_id: e.target.value || null }))}
+                        style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 7, padding: "9px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" }}>
+                        <option value="">— No album —</option>
+                        {albumsList.map(al => <option key={al.id} value={al.id}>{al.artist} — {al.title}</option>)}
+                      </select>
+                      <p style={{ margin: "4px 0 0", fontSize: 11, color: "#9ca3af" }}>Links this track to an album page</p>
+                    </div>
 
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                       {[{ label: "Year", key: "year", placeholder: "2024" }, { label: "Duration", key: "duration", placeholder: "3:45" }].map(({ label, key, placeholder }) => (
@@ -5295,6 +5443,65 @@ export function CMS({ onExit }) {
                         {songSaving ? "Saving…" : editingSongId ? "Save Changes" : "Add Song"}
                       </button>
                       <button onClick={cancelSongEdit} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── ALBUM FORM ── */}
+                {tab === "videos" && videoSubTab === "music" && musicSubTab === "albums" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                    {[
+                      { label: "Artist *", key: "artist", placeholder: "e.g. Doja Cat" },
+                      { label: "Title *", key: "title", placeholder: "e.g. Hot Pink" },
+                    ].map(({ label, key, placeholder }) => (
+                      <div key={key}>
+                        <label style={{ display: "block", fontSize: 11, color: "#6b7280", marginBottom: 4, fontWeight: 600 }}>{label}</label>
+                        <input value={albumForm[key]} onChange={e => setAlbumForm(f => ({ ...f, [key]: e.target.value }))}
+                          placeholder={placeholder}
+                          style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 7, padding: "9px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                          onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                      </div>
+                    ))}
+
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, color: "#6b7280", marginBottom: 4, fontWeight: 600 }}>Year</label>
+                      <input value={albumForm.year} onChange={e => setAlbumForm(f => ({ ...f, year: e.target.value }))} placeholder="2024"
+                        style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 7, padding: "9px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                        onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, color: "#6b7280", marginBottom: 4, fontWeight: 600 }}>Album Artwork</label>
+                      <ImageUploader value={albumForm.artwork_url} onChange={url => setAlbumForm(f => ({ ...f, artwork_url: url }))} label="album artwork" />
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, color: "#6b7280", marginBottom: 4, fontWeight: 600 }}>Tags</label>
+                      <input value={albumForm.tags} onChange={e => setAlbumForm(f => ({ ...f, tags: e.target.value }))} placeholder="Pop, Hip Hop, R&B"
+                        style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 7, padding: "9px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                        onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, color: "#6b7280", marginBottom: 4, fontWeight: 600 }}>Description</label>
+                      <textarea value={albumForm.description} onChange={e => setAlbumForm(f => ({ ...f, description: e.target.value }))} placeholder="Optional description…" rows={3}
+                        style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 7, padding: "9px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box", resize: "vertical" }}
+                        onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <button onClick={() => setAlbumForm(f => ({ ...f, enabled: !f.enabled }))}
+                        style={{ width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer", background: albumForm.enabled ? "#22c55e" : "#d1d5db", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                        <span style={{ position: "absolute", top: 3, left: albumForm.enabled ? 22 : 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.2)", transition: "left 0.2s" }} />
+                      </button>
+                      <span style={{ fontSize: 13, color: "#374151" }}>{albumForm.enabled ? "Enabled (visible on Music page)" : "Disabled (hidden from users)"}</span>
+                    </div>
+
+                    <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+                      <button onClick={saveAlbum} disabled={albumSaving} style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: albumSaving ? "not-allowed" : "pointer", opacity: albumSaving ? 0.7 : 1 }}>
+                        {albumSaving ? "Saving…" : editingAlbumId ? "Save Changes" : "Add Album"}
+                      </button>
+                      <button onClick={cancelAlbumEdit} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
                     </div>
                   </div>
                 )}

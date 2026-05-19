@@ -369,6 +369,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
   const [epgEntries, setEpgEntries] = useState([]);
   const [musicVideos, setMusicVideos] = useState([]);
   const [songs, setSongs] = useState([]);
+  const [albums, setAlbums] = useState([]);
   const [playingSong, setPlayingSong] = useState(null);
   const [continueWatching, setContinueWatching] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -415,6 +416,9 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     const songsChannel = supabase.channel("songs-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "songs" }, fetchAll)
       .subscribe();
+    const albumsChannel = supabase.channel("albums-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "albums" }, fetchAll)
+      .subscribe();
 
     const handler = () => setScrolled(window.scrollY > 60);
     window.addEventListener("scroll", handler);
@@ -428,6 +432,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       supabase.removeChannel(epgChannel);
       supabase.removeChannel(musicChannel);
       supabase.removeChannel(songsChannel);
+      supabase.removeChannel(albumsChannel);
       window.removeEventListener("scroll", handler);
     };
   }, []);
@@ -442,7 +447,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
   async function fetchAll() {
     const epgWindowStart = new Date(Date.now() - 60 * 60 * 1000);
     const epgWindowEnd = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    const [videosRes, showsRes, carouselsRes, podcastsRes, liveRes, epgRes, musicRes, songsRes] = await Promise.all([
+    const [videosRes, showsRes, carouselsRes, podcastsRes, liveRes, epgRes, musicRes, songsRes, albumsRes] = await Promise.all([
       supabase.from("videos").select("*").order("id", { ascending: true }),
       supabase.from("shows").select("*").order("id", { ascending: true }),
       supabase.from("carousels").select("*").eq("enabled", true).order("position", { ascending: true }),
@@ -451,6 +456,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       supabase.from("epg_entries").select("*").gte("end_time", epgWindowStart.toISOString()).lte("start_time", epgWindowEnd.toISOString()).order("start_time", { ascending: true }),
       supabase.from("music_videos").select("*").eq("enabled", true).order("artist", { ascending: true }),
       supabase.from("songs").select("*").eq("enabled", true).order("artist", { ascending: true }),
+      supabase.from("albums").select("*").eq("enabled", true).order("title", { ascending: true }),
     ]);
     if (videosRes.data) setVideos(videosRes.data);
     if (showsRes.data) setShows(showsRes.data);
@@ -460,6 +466,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     if (epgRes.data) setEpgEntries(epgRes.data);
     if (musicRes.data) setMusicVideos(musicRes.data);
     if (songsRes.data) setSongs(songsRes.data);
+    if (albumsRes.data) setAlbums(albumsRes.data);
     setLoading(false);
 
     // Resolve deep link
@@ -919,7 +926,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       )}
 
       {activeNav === "Music" && !loading && (
-        <MusicPage musicVideos={musicVideos} songs={songs} sections={sections} onPlay={handleMusicVideoPlay} onPlaySong={setPlayingSong} />
+        <MusicPage musicVideos={musicVideos} songs={songs} albums={albums} sections={sections} onPlay={handleMusicVideoPlay} onPlaySong={setPlayingSong} />
       )}
 
       {/* My List — full grid */}
@@ -1122,9 +1129,11 @@ function CatalogPage({ type, content, carousels = [], podcasts = [], onPlay, onS
   );
 }
 
-// ─── Music Page (Videos + Songs) ─────────────────────────────────────────────
+// ─── Music Page (Videos + Songs + Albums) ────────────────────────────────────
 
-function MusicPage({ musicVideos, songs, sections = [], onPlay, onPlaySong }) {
+function MusicPage({ musicVideos, songs, albums, sections = [], onPlay, onPlaySong }) {
+  const [subTab, setSubTab] = useState("videos"); // "videos" | "songs" | "albums"
+  const [selectedAlbum, setSelectedAlbum] = useState(null);
   const [mvSort, setMvSort] = useState("artist");
   const [songSort, setSongSort] = useState("artist");
   const isMobile = useIsMobile();
@@ -1142,70 +1151,202 @@ function MusicPage({ musicVideos, songs, sections = [], onPlay, onPlaySong }) {
     return [...songs].sort((a, b) => (a.artist || "").localeCompare(b.artist || ""));
   }, [songs, songSort]);
 
-  const hasAny = musicVideos.length > 0 || songs.length > 0;
+  if (selectedAlbum) {
+    const albumSongs = songs.filter(s => s.album_id === selectedAlbum.id);
+    return <AlbumDetail album={selectedAlbum} songs={albumSongs} onBack={() => setSelectedAlbum(null)} onPlay={onPlaySong} />;
+  }
+
+  const tabs = [
+    { id: "videos", label: "Music Videos" },
+    { id: "songs", label: "Songs" },
+    { id: "albums", label: "Albums" },
+  ];
 
   return (
     <div style={{ paddingTop: 88, minHeight: "100vh" }}>
-      <div style={{ padding: `0 ${PAD} 28px` }}>
-        <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(32px, 4vw, 56px)", fontWeight: 400, margin: 0, color: "#fff" }}>Music</h1>
+      <div style={{ padding: `0 ${PAD} 0` }}>
+        <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(32px, 4vw, 56px)", fontWeight: 400, margin: "0 0 24px", color: "#fff" }}>Music</h1>
+        <div style={{ display: "flex", gap: 4, borderBottom: "1px solid rgba(255,255,255,0.08)", marginBottom: 32 }}>
+          {tabs.map(t => (
+            <button key={t.id} onClick={() => setSubTab(t.id)}
+              style={{ background: "none", border: "none", borderBottom: `2px solid ${subTab === t.id ? "#facc15" : "transparent"}`, padding: "10px 18px", color: subTab === t.id ? "#fff" : "rgba(255,255,255,0.45)", fontSize: 14, fontWeight: subTab === t.id ? 600 : 400, cursor: "pointer", transition: "color 0.15s", marginBottom: -1, fontFamily: "'Space Grotesk', sans-serif" }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {!hasAny && (
-        <div style={{ padding: "80px 0", textAlign: "center", color: "#444", fontSize: 15 }}>
-          No music yet — add content from the admin panel.
-        </div>
-      )}
-
-      {/* Music Videos section */}
-      {(musicVideos.length > 0 || mvSections.length > 0) && (
-        <>
-          <div style={{ padding: `0 ${PAD}`, marginBottom: 16, display: "flex", alignItems: "baseline", gap: 16 }}>
-            <h2 style={{ margin: 0, fontFamily: "'DM Serif Display', serif", fontSize: "clamp(22px, 2.5vw, 32px)", fontWeight: 400, color: "#fff" }}>Music Videos</h2>
-            {mvSections.length === 0 && musicVideos.length > 0 && (
-              <select value={mvSort} onChange={e => setMvSort(e.target.value)}
-                style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "6px 12px", color: "rgba(255,255,255,0.6)", fontSize: 12, cursor: "pointer", outline: "none" }}>
-                <option value="artist">By Artist</option>
-                <option value="newest">Newest First</option>
-              </select>
+      {/* Music Videos tab */}
+      {subTab === "videos" && (
+        musicVideos.length === 0 && mvSections.length === 0 ? (
+          <div style={{ padding: "80px 0", textAlign: "center", color: "#444", fontSize: 15 }}>No music videos yet.</div>
+        ) : (
+          <div>
+            {mvSections.length === 0 && (
+              <div style={{ padding: `0 ${PAD}`, marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
+                <p style={{ margin: 0, fontSize: 12, color: "#444" }}>{musicVideos.length} video{musicVideos.length !== 1 ? "s" : ""}</p>
+                <select value={mvSort} onChange={e => setMvSort(e.target.value)}
+                  style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "6px 12px", color: "rgba(255,255,255,0.6)", fontSize: 12, cursor: "pointer", outline: "none" }}>
+                  <option value="artist">By Artist</option>
+                  <option value="newest">Newest First</option>
+                </select>
+              </div>
             )}
-          </div>
-          {mvSections.map(s => <MusicVideoRow key={s.id} section={s} onPlay={onPlay} />)}
-          {mvSections.length === 0 && sortedMv.length > 0 && (
-            <>
-              <div style={{ height: 1, background: "linear-gradient(to right, rgba(255,255,255,0.06), transparent)", margin: `0 ${PAD} 8px` }} />
-              <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? "150px" : "200px"}, 1fr))`, gap: isMobile ? 10 : 16, padding: `0 ${PAD} 32px` }}>
+            {mvSections.map(s => <MusicVideoRow key={s.id} section={s} onPlay={onPlay} />)}
+            {mvSections.length === 0 && (
+              <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? "150px" : "200px"}, 1fr))`, gap: isMobile ? 10 : 16, padding: `0 ${PAD} 80px` }}>
                 {sortedMv.map(mv => <MusicVideoCard key={mv.id} item={mv} onClick={() => onPlay(mv)} />)}
               </div>
-            </>
-          )}
-        </>
-      )}
-
-      {/* Songs section */}
-      {(songs.length > 0 || songSections.length > 0) && (
-        <>
-          <div style={{ height: 1, background: "linear-gradient(to right, rgba(255,255,255,0.04), transparent)", margin: `0 ${PAD} 24px` }} />
-          <div style={{ padding: `0 ${PAD}`, marginBottom: 16, display: "flex", alignItems: "baseline", gap: 16 }}>
-            <h2 style={{ margin: 0, fontFamily: "'DM Serif Display', serif", fontSize: "clamp(22px, 2.5vw, 32px)", fontWeight: 400, color: "#fff" }}>Songs</h2>
-            {songSections.length === 0 && songs.length > 0 && (
-              <select value={songSort} onChange={e => setSongSort(e.target.value)}
-                style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "6px 12px", color: "rgba(255,255,255,0.6)", fontSize: 12, cursor: "pointer", outline: "none" }}>
-                <option value="artist">By Artist</option>
-                <option value="newest">Newest First</option>
-              </select>
             )}
           </div>
-          {songSections.map(s => <SongRow key={s.id} section={s} onPlay={onPlaySong} />)}
-          {songSections.length === 0 && sortedSongs.length > 0 && (
-            <>
-              <div style={{ height: 1, background: "linear-gradient(to right, rgba(255,255,255,0.06), transparent)", margin: `0 ${PAD} 8px` }} />
+        )
+      )}
+
+      {/* Songs tab */}
+      {subTab === "songs" && (
+        songs.length === 0 && songSections.length === 0 ? (
+          <div style={{ padding: "80px 0", textAlign: "center", color: "#444", fontSize: 15 }}>No songs yet.</div>
+        ) : (
+          <div>
+            {songSections.length === 0 && (
+              <div style={{ padding: `0 ${PAD}`, marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
+                <p style={{ margin: 0, fontSize: 12, color: "#444" }}>{songs.length} song{songs.length !== 1 ? "s" : ""}</p>
+                <select value={songSort} onChange={e => setSongSort(e.target.value)}
+                  style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "6px 12px", color: "rgba(255,255,255,0.6)", fontSize: 12, cursor: "pointer", outline: "none" }}>
+                  <option value="artist">By Artist</option>
+                  <option value="newest">Newest First</option>
+                </select>
+              </div>
+            )}
+            {songSections.map(s => <SongRow key={s.id} section={s} onPlay={onPlaySong} />)}
+            {songSections.length === 0 && (
               <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? "130px" : "160px"}, 1fr))`, gap: isMobile ? 10 : 14, padding: `0 ${PAD} 80px` }}>
                 {sortedSongs.map(s => <SongCard key={s.id} item={s} onClick={() => onPlaySong(s)} />)}
               </div>
-            </>
-          )}
-        </>
+            )}
+          </div>
+        )
       )}
+
+      {/* Albums tab */}
+      {subTab === "albums" && (
+        albums.length === 0 ? (
+          <div style={{ padding: "80px 0", textAlign: "center", color: "#444", fontSize: 15 }}>No albums yet.</div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? "140px" : "180px"}, 1fr))`, gap: isMobile ? 12 : 18, padding: `0 ${PAD} 80px` }}>
+            {albums.map(a => <AlbumCard key={a.id} album={a} onClick={() => setSelectedAlbum(a)} />)}
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
+function AlbumCard({ album, onClick }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div onClick={onClick} style={{ cursor: "pointer", borderRadius: 10, overflow: "hidden", background: "#141414", transform: hovered ? "scale(1.04) translateY(-4px)" : "scale(1)", transition: "transform 0.22s ease, box-shadow 0.22s ease", boxShadow: hovered ? "0 20px 48px rgba(0,0,0,0.8)" : "0 2px 8px rgba(0,0,0,0.3)" }}>
+      <div onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
+        style={{ position: "relative", aspectRatio: "1", overflow: "hidden", background: "#0a0a0a" }}>
+        {album.artwork_url
+          ? <img src={album.artwork_url} alt={album.title} style={{ width: "100%", height: "100%", objectFit: "cover", transition: "filter 0.22s", filter: hovered ? "brightness(0.45)" : "brightness(0.9)" }} />
+          : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #1a1a2e, #16213e)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            </div>
+        }
+        {hovered && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ width: 52, height: 52, borderRadius: "50%", background: "rgba(250,204,21,0.92)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 16px rgba(0,0,0,0.5)" }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="#0a0a0a"><polygon points="6,3 20,12 6,21" /></svg>
+            </div>
+          </div>
+        )}
+      </div>
+      <div style={{ padding: "10px 12px 12px", background: hovered ? "#1c1c1c" : "#141414", transition: "background 0.22s" }}>
+        <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{album.title}</p>
+        {album.artist && <p style={{ margin: "0 0 2px", fontSize: 12, fontWeight: 600, color: "#facc15", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{album.artist}</p>}
+        {album.year && <p style={{ margin: 0, fontSize: 11, color: "#555" }}>{album.year}</p>}
+      </div>
+    </div>
+  );
+}
+
+function AlbumDetail({ album, songs, onBack, onPlay }) {
+  const isMobile = useIsMobile();
+
+  function fmtDur(dur) {
+    if (!dur) return null;
+    return dur;
+  }
+
+  return (
+    <div style={{ paddingTop: 88, minHeight: "100vh", paddingBottom: 80 }}>
+      {/* Back */}
+      <div style={{ padding: `0 ${PAD} 24px` }}>
+        <button onClick={onBack} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.5)", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 13, padding: 0, fontFamily: "'Space Grotesk', sans-serif" }}
+          onMouseEnter={e => e.currentTarget.style.color = "#fff"}
+          onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.5)"}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+          Albums
+        </button>
+      </div>
+
+      {/* Album header */}
+      <div style={{ padding: `0 ${PAD} 40px`, display: "flex", gap: isMobile ? 20 : 36, alignItems: "flex-end", flexWrap: isMobile ? "wrap" : "nowrap" }}>
+        <div style={{ width: isMobile ? 140 : 200, height: isMobile ? 140 : 200, flexShrink: 0, borderRadius: 12, overflow: "hidden", background: "#141414", boxShadow: "0 16px 48px rgba(0,0,0,0.6)" }}>
+          {album.artwork_url
+            ? <img src={album.artwork_url} alt={album.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #1a1a2e, #16213e)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+              </div>
+          }
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <p style={{ margin: "0 0 8px", fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 600 }}>Album</p>
+          <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(28px, 4vw, 52px)", fontWeight: 400, margin: "0 0 8px", color: "#fff", lineHeight: 1.1 }}>{album.title}</h1>
+          {album.artist && <p style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 600, color: "#facc15" }}>{album.artist}</p>}
+          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+            {album.year && <span style={{ fontSize: 13, color: "#555" }}>{album.year}</span>}
+            <span style={{ fontSize: 13, color: "#555" }}>{songs.length} track{songs.length !== 1 ? "s" : ""}</span>
+          </div>
+          {album.description && <p style={{ margin: "12px 0 0", fontSize: 13, color: "#555", lineHeight: 1.6, maxWidth: 500 }}>{album.description}</p>}
+        </div>
+      </div>
+
+      {/* Tracklist */}
+      {songs.length === 0 ? (
+        <div style={{ padding: `0 ${PAD}`, color: "#444", fontSize: 14 }}>No tracks assigned to this album yet.</div>
+      ) : (
+        <div style={{ padding: `0 ${PAD}` }}>
+          <div style={{ height: 1, background: "rgba(255,255,255,0.06)", marginBottom: 8 }} />
+          {songs.map((song, i) => (
+            <AlbumTrackRow key={song.id} song={song} index={i + 1} onPlay={() => onPlay(song)} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AlbumTrackRow({ song, index, onPlay }) {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <div onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
+      onClick={onPlay}
+      style={{ display: "flex", alignItems: "center", gap: 16, padding: "10px 12px", borderRadius: 8, cursor: "pointer", background: hovered ? "rgba(255,255,255,0.04)" : "transparent", transition: "background 0.15s" }}>
+      <div style={{ width: 24, textAlign: "right", flexShrink: 0 }}>
+        {hovered
+          ? <svg width="14" height="14" viewBox="0 0 24 24" fill="#facc15"><polygon points="5,3 19,12 5,21"/></svg>
+          : <span style={{ fontSize: 13, color: "#555" }}>{index}</span>
+        }
+      </div>
+      {song.thumbnail && <img src={song.thumbnail} alt="" style={{ width: 36, height: 36, borderRadius: 4, objectFit: "cover", flexShrink: 0 }} />}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ margin: 0, fontSize: 14, fontWeight: 500, color: hovered ? "#fff" : "#e5e5e5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", transition: "color 0.15s" }}>{song.title}</p>
+        {song.artist && <p style={{ margin: 0, fontSize: 12, color: "#555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{song.artist}</p>}
+      </div>
+      {song.duration && <span style={{ fontSize: 12, color: "#444", flexShrink: 0 }}>{song.duration}</span>}
     </div>
   );
 }
