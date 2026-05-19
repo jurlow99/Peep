@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { CMS } from "../components/CMS";
+import { supabase } from "../supabase";
 
 const ADMIN_PIN = "1234";
 const BOSS_PIN = "0319";
@@ -16,6 +17,7 @@ export function AdminPage() {
       setAuthed(true);
       setPinError(false);
     } else {
+      supabase.from("admin_login_attempts").insert({ pin_entered: pin }).then(() => {});
       setPinError(true);
       setPin("");
     }

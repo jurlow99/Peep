@@ -265,6 +265,7 @@ export function CMS({ onExit }) {
   const [grantEmail, setGrantEmail] = useState("");
   const [grantLoading, setGrantLoading] = useState(false);
   const [grantResult, setGrantResult] = useState(null);
+  const [loginAttempts, setLoginAttempts] = useState([]);
 
   const subscriptionRef = useRef(null);
   const carouselSubRef = useRef(null);
@@ -329,7 +330,7 @@ export function CMS({ onExit }) {
     if (tab === "reports") { loadReports(); loadTodayStats(); loadOnlineUsers(); }
     if (tab === "ads") { loadAdAnalytics(); loadTodayStats(); }
     if (tab === "subscriptions") loadSubscriptions();
-    if (tab === "boss") { loadPromos(); loadBossSettings(); }
+    if (tab === "boss") { loadPromos(); loadBossSettings(); loadLoginAttempts(); }
   }, [tab]);
 
   useEffect(() => {
@@ -485,6 +486,11 @@ export function CMS({ onExit }) {
     setRevokeConfirm(null);
     loadSubscriptions();
     showToast("Subscription revoked");
+  }
+
+  async function loadLoginAttempts() {
+    const { data } = await supabase.from("admin_login_attempts").select("*").order("attempted_at", { ascending: false }).limit(50);
+    setLoginAttempts(data || []);
   }
 
   async function loadBossSettings() {
@@ -4291,6 +4297,47 @@ export function CMS({ onExit }) {
                 <p style={{ margin: "10px 0 0", fontSize: 13, color: grantResult.success ? "#059669" : "#dc2626", fontWeight: 500 }}>
                   {grantResult.success ? "✓ " : "✗ "}{grantResult.msg}
                 </p>
+              )}
+            </div>
+
+            {/* ── Failed Login Attempts ── */}
+            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                <div>
+                  <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Failed Login Attempts</p>
+                  <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Every wrong PIN entered on the admin login screen.</p>
+                </div>
+                <button onClick={loadLoginAttempts} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "6px 14px", fontSize: 12, color: "#6b7280", cursor: "pointer" }}>Refresh</button>
+              </div>
+              {loginAttempts.length === 0 ? (
+                <p style={{ margin: 0, fontSize: 13, color: "#9ca3af", textAlign: "center", padding: "20px 0" }}>No failed attempts — you're safe 👀</p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 0, borderRadius: 10, overflow: "hidden", border: "1px solid #f1f5f9" }}>
+                  {loginAttempts.map((a, i) => {
+                    const date = new Date(a.attempted_at);
+                    const masked = a.pin_entered ? a.pin_entered.slice(0, 1) + "*".repeat(Math.max(0, a.pin_entered.length - 1)) : "?";
+                    return (
+                      <div key={a.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: i % 2 === 0 ? "#fafafa" : "#fff", borderBottom: i < loginAttempts.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                          <span style={{ fontSize: 18 }}>🚨</span>
+                          <div>
+                            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#0f172a" }}>Tried: <code style={{ background: "rgba(239,68,68,0.08)", color: "#dc2626", padding: "1px 6px", borderRadius: 4, letterSpacing: "0.1em" }}>{masked}</code></p>
+                            <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>{date.toLocaleDateString()} at {date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
+                          </div>
+                        </div>
+                        <span style={{ fontSize: 11, color: "#d1d5db", fontStyle: "italic" }}>wrong</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {loginAttempts.length > 0 && (
+                <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
+                  <button onClick={async () => { await supabase.from("admin_login_attempts").delete().neq("id", "00000000-0000-0000-0000-000000000000"); loadLoginAttempts(); showToast("Cleared"); }}
+                    style={{ background: "none", border: "none", fontSize: 12, color: "#9ca3af", cursor: "pointer", textDecoration: "underline" }}>
+                    Clear all
+                  </button>
+                </div>
               )}
             </div>
 
