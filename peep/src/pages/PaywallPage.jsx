@@ -24,6 +24,10 @@ function CheckoutForm({ user, onSignOut }) {
   const elements = useElements();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [showPromo, setShowPromo] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoError, setPromoError] = useState(null);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -42,10 +46,7 @@ function CheckoutForm({ user, onSignOut }) {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${SUPABASE_URL}/functions/v1/create-subscription`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${session.access_token}`,
-        },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
         body: JSON.stringify({ user_id: user.id, email: user.email, payment_method_id: paymentMethod.id }),
       });
       const data = await res.json();
@@ -63,24 +64,72 @@ function CheckoutForm({ user, onSignOut }) {
     }
   }
 
+  async function handlePromo(e) {
+    e.preventDefault();
+    if (!promoCode.trim()) return;
+    setPromoLoading(true);
+    setPromoError(null);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/redeem-promo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
+        body: JSON.stringify({ user_id: user.id, email: user.email, code: promoCode }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      window.location.href = "/?subscribed=1";
+    } catch (err) {
+      setPromoError(err.message);
+      setPromoLoading(false);
+    }
+  }
+
   return (
-    <form onSubmit={handleSubmit}>
-      <div style={{ background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 10, padding: "14px 16px", marginBottom: 16 }}>
-        <CardElement options={CARD_OPTIONS} />
+    <div>
+      <form onSubmit={handleSubmit}>
+        <div style={{ background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 10, padding: "14px 16px", marginBottom: 16 }}>
+          <CardElement options={CARD_OPTIONS} />
+        </div>
+
+        {error && <p style={{ color: "#f87171", fontSize: 13, marginBottom: 12, textAlign: "center" }}>{error}</p>}
+
+        <button type="submit" disabled={loading || !stripe}
+          style={{ width: "100%", background: "#facc15", border: "none", borderRadius: 10, padding: "14px", color: "#0a0a0a", fontSize: 15, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, transition: "opacity 0.15s" }}>
+          {loading ? "Processing…" : "Subscribe for $10/mo"}
+        </button>
+      </form>
+
+      {/* Promo code */}
+      <div style={{ marginTop: 16, textAlign: "center" }}>
+        {!showPromo ? (
+          <button onClick={() => setShowPromo(true)} style={{ background: "none", border: "none", color: "#444", fontSize: 12, cursor: "pointer", textDecoration: "underline" }}>
+            Have a promo code?
+          </button>
+        ) : (
+          <form onSubmit={handlePromo} style={{ display: "flex", gap: 8, marginTop: 4 }}>
+            <input
+              value={promoCode}
+              onChange={e => { setPromoCode(e.target.value); setPromoError(null); }}
+              placeholder="Enter code"
+              autoFocus
+              style={{ flex: 1, background: "#0a0a0a", border: `1px solid ${promoError ? "#f87171" : "#2a2a2a"}`, borderRadius: 8, padding: "10px 14px", color: "#fff", fontSize: 13, outline: "none", textTransform: "uppercase", letterSpacing: "0.05em" }}
+            />
+            <button type="submit" disabled={promoLoading}
+              style={{ background: "#1e1e1e", border: "1px solid #2a2a2a", borderRadius: 8, padding: "10px 16px", color: "#facc15", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+              {promoLoading ? "…" : "Apply"}
+            </button>
+          </form>
+        )}
+        {promoError && <p style={{ color: "#f87171", fontSize: 12, margin: "6px 0 0" }}>{promoError}</p>}
       </div>
-
-      {error && <p style={{ color: "#f87171", fontSize: 13, marginBottom: 12, textAlign: "center" }}>{error}</p>}
-
-      <button type="submit" disabled={loading || !stripe}
-        style={{ width: "100%", background: "#facc15", border: "none", borderRadius: 10, padding: "14px", color: "#0a0a0a", fontSize: 15, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, transition: "opacity 0.15s" }}>
-        {loading ? "Processing…" : "Subscribe for $10/mo"}
-      </button>
 
       <p style={{ margin: "16px 0 0", fontSize: 12, color: "#333", textAlign: "center" }}>
         Signed in as {user.email} ·{" "}
         <span onClick={onSignOut} style={{ color: "#555", cursor: "pointer", textDecoration: "underline" }}>Sign out</span>
       </p>
-    </form>
+    </div>
   );
 }
 

@@ -3969,14 +3969,17 @@ export function CMS({ onExit }) {
         {/* ────── SUBSCRIPTIONS TAB ────── */}
         {tab === "subscriptions" && (() => {
           const active = subs.filter(s => s.status === "active");
+          const activePaid = active.filter(s => s.plan !== "comp");
+          const activeComp = active.filter(s => s.plan === "comp");
           const inactive = subs.filter(s => s.status !== "active");
-          const mrr = active.length * 10;
+          const mrr = activePaid.length * 10;
           const arr = mrr * 12;
           const now = new Date();
           const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-          const netNewThisMonth = subs.filter(s => s.created_at && new Date(s.created_at) >= startOfMonth).length;
-          const churnRate = subs.length > 0 ? ((inactive.length / subs.length) * 100).toFixed(1) : "0.0";
-          const atRisk = active.filter(s => !s.last_seen || (now - new Date(s.last_seen)) > 14 * 24 * 60 * 60 * 1000);
+          const netNewThisMonth = subs.filter(s => s.plan !== "comp" && s.created_at && new Date(s.created_at) >= startOfMonth).length;
+          const paidTotal = subs.filter(s => s.plan !== "comp").length;
+          const churnRate = paidTotal > 0 ? (((paidTotal - activePaid.length) / paidTotal) * 100).toFixed(1) : "0.0";
+          const atRisk = activePaid.filter(s => !s.last_seen || (now - new Date(s.last_seen)) > 14 * 24 * 60 * 60 * 1000);
 
           const filtered = subs
             .filter(s => subStatusFilter === "all" || s.status === subStatusFilter)
@@ -4012,13 +4015,14 @@ export function CMS({ onExit }) {
               {/* Stats */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 16, marginBottom: 32 }}>
                 {[
-                  { label: "MRR", value: `$${mrr}`, color: "#facc15" },
-                  { label: "ARR", value: `$${arr}`, color: "#f59e0b" },
-                  { label: "Active", value: active.length, color: "#34d399" },
+                  { label: "MRR", value: `$${mrr}`, sub: "Paid only", color: "#facc15" },
+                  { label: "ARR", value: `$${arr}`, sub: "Paid only", color: "#f59e0b" },
+                  { label: "Active Paid", value: activePaid.length, color: "#34d399" },
+                  { label: "Comped", value: activeComp.length, sub: "Free access granted", color: "#818cf8" },
                   { label: "Churned", value: inactive.length, color: "#f87171" },
-                  { label: "Churn Rate", value: `${churnRate}%`, color: inactive.length > 0 ? "#f87171" : "#34d399" },
-                  { label: "New This Month", value: netNewThisMonth, color: "#818cf8" },
-                  { label: "At Risk", value: atRisk.length, sub: "Active, no activity 14d+", color: atRisk.length > 0 ? "#f59e0b" : "#34d399" },
+                  { label: "Churn Rate", value: `${churnRate}%`, sub: "Paid subs only", color: inactive.length > 0 ? "#f87171" : "#34d399" },
+                  { label: "New This Month", value: netNewThisMonth, color: "#a78bfa" },
+                  { label: "At Risk", value: atRisk.length, sub: "Paid, no activity 14d+", color: atRisk.length > 0 ? "#f59e0b" : "#34d399" },
                 ].map(({ label, value, color, sub }) => (
                   <div key={label} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "18px 20px" }}>
                     <p style={{ margin: "0 0 4px", fontSize: 11, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6 }}>{label}</p>
@@ -4075,9 +4079,14 @@ export function CMS({ onExit }) {
                               </div>
                             </td>
                             <td style={{ padding: "14px 16px" }}>
-                              <span style={{ background: s.status === "active" ? "rgba(52,211,153,0.1)" : "rgba(248,113,113,0.1)", color: s.status === "active" ? "#059669" : "#dc2626", border: `1px solid ${s.status === "active" ? "rgba(52,211,153,0.3)" : "rgba(248,113,113,0.3)"}`, borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 600 }}>
-                                {s.status}
-                              </span>
+                              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                <span style={{ background: s.status === "active" ? "rgba(52,211,153,0.1)" : "rgba(248,113,113,0.1)", color: s.status === "active" ? "#059669" : "#dc2626", border: `1px solid ${s.status === "active" ? "rgba(52,211,153,0.3)" : "rgba(248,113,113,0.3)"}`, borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 600 }}>
+                                  {s.status}
+                                </span>
+                                {s.plan === "comp" && (
+                                  <span style={{ background: "rgba(129,140,248,0.12)", color: "#818cf8", border: "1px solid rgba(129,140,248,0.3)", borderRadius: 20, padding: "3px 8px", fontSize: 10, fontWeight: 700 }}>COMP</span>
+                                )}
+                              </div>
                             </td>
                             <td style={{ padding: "14px 16px", color: "#6b7280", whiteSpace: "nowrap" }}>{s.created_at ? new Date(s.created_at).toLocaleDateString() : "—"}</td>
                             <td style={{ padding: "14px 16px", color: "#6b7280", whiteSpace: "nowrap" }}>{s.current_period_end ? new Date(s.current_period_end).toLocaleDateString() : "—"}</td>
