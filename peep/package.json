@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@stripe/react-stripe-js": "^6.4.0",
+    "@stripe/stripe-js": "^9.6.0",
     "@supabase/supabase-js": "^2.105.4",
     "hls.js": "^1.6.16",
     "react": "^19.2.6",

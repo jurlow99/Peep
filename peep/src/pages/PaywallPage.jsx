@@ -1,65 +1,111 @@
 import { useState } from "react";
+import { loadStripe } from "@stripe/stripe-js";
+import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { supabase } from "../supabase";
 
 const SUPABASE_URL = "https://iuozujwtuzuwubhsnhix.supabase.co";
+const stripePromise = loadStripe("pk_test_51TYZ1FDARsmnN5Leu436JpkJ6NL9mNbqwtcvB9ueJPnbhLEJgcwfVHcnU3mQkgcAlAEOrd6Ne76UQPYIbKrAZsCo006pJcUBJ3");
 
-export function PaywallPage({ user, onSubscribed, onSignOut }) {
+const CARD_OPTIONS = {
+  style: {
+    base: {
+      color: "#fff",
+      fontFamily: "'Space Grotesk', sans-serif",
+      fontSize: "15px",
+      fontSmoothing: "antialiased",
+      "::placeholder": { color: "#555" },
+    },
+    invalid: { color: "#f87171" },
+  },
+};
+
+function CheckoutForm({ user, onSignOut }) {
+  const stripe = useStripe();
+  const elements = useElements();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  async function startCheckout() {
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!stripe || !elements) return;
     setLoading(true);
     setError(null);
+
     try {
+      const { paymentMethod, error: pmError } = await stripe.createPaymentMethod({
+        type: "card",
+        card: elements.getElement(CardElement),
+        billing_details: { email: user.email },
+      });
+      if (pmError) throw new Error(pmError.message);
+
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/create-checkout-session`, {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/create-subscription`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({
-          user_id: user.id,
-          email: user.email,
-          origin: window.location.origin,
-        }),
+        body: JSON.stringify({ user_id: user.id, email: user.email, payment_method_id: paymentMethod.id }),
       });
       const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        setError(data.error || "No checkout URL returned.");
-        setLoading(false);
+      if (data.error) throw new Error(data.error);
+
+      if (data.status === "requires_action" && data.client_secret) {
+        const { error: confirmError } = await stripe.confirmCardPayment(data.client_secret);
+        if (confirmError) throw new Error(confirmError.message);
       }
-    } catch (e) {
-      setError(e.message || "Network error.");
+
+      window.location.href = "/?subscribed=1";
+    } catch (err) {
+      setError(err.message);
       setLoading(false);
     }
   }
 
   return (
+    <form onSubmit={handleSubmit}>
+      <div style={{ background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 10, padding: "14px 16px", marginBottom: 16 }}>
+        <CardElement options={CARD_OPTIONS} />
+      </div>
+
+      {error && <p style={{ color: "#f87171", fontSize: 13, marginBottom: 12, textAlign: "center" }}>{error}</p>}
+
+      <button type="submit" disabled={loading || !stripe}
+        style={{ width: "100%", background: "#facc15", border: "none", borderRadius: 10, padding: "14px", color: "#0a0a0a", fontSize: 15, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, transition: "opacity 0.15s" }}>
+        {loading ? "Processing…" : "Subscribe for $10/mo"}
+      </button>
+
+      <p style={{ margin: "16px 0 0", fontSize: 12, color: "#333", textAlign: "center" }}>
+        Signed in as {user.email} ·{" "}
+        <span onClick={onSignOut} style={{ color: "#555", cursor: "pointer", textDecoration: "underline" }}>Sign out</span>
+      </p>
+    </form>
+  );
+}
+
+export function PaywallPage({ user, onSubscribed, onSignOut }) {
+  return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", padding: 24 }}>
       <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
 
       <div style={{ width: "100%", maxWidth: 440 }}>
-        {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: 40 }}>
           <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 42, color: "#facc15" }}>peep.</span>
         </div>
 
-        {/* Card */}
-        <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 20, padding: "40px 36px", textAlign: "center" }}>
-          <div style={{ width: 56, height: 56, borderRadius: "50%", background: "rgba(250,204,21,0.1)", border: "1px solid rgba(250,204,21,0.2)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#facc15" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 20, padding: "40px 36px" }}>
+          <div style={{ textAlign: "center", marginBottom: 28 }}>
+            <div style={{ width: 56, height: 56, borderRadius: "50%", background: "rgba(250,204,21,0.1)", border: "1px solid rgba(250,204,21,0.2)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#facc15" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+            </div>
+            <h1 style={{ margin: "0 0 10px", fontSize: 24, fontWeight: 700, color: "#fff" }}>Start Watching</h1>
+            <p style={{ margin: 0, fontSize: 14, color: "#555", lineHeight: 1.6 }}>
+              Unlimited access to all movies, series, live TV, and podcasts.
+            </p>
           </div>
 
-          <h1 style={{ margin: "0 0 10px", fontSize: 24, fontWeight: 700, color: "#fff" }}>Start Watching</h1>
-          <p style={{ margin: "0 0 28px", fontSize: 14, color: "#555", lineHeight: 1.6 }}>
-            Get unlimited access to all movies, series, live TV, and podcasts on peep.
-          </p>
-
-          {/* Price */}
-          <div style={{ background: "#0a0a0a", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px", marginBottom: 24 }}>
+          <div style={{ background: "#0a0a0a", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px", marginBottom: 24, textAlign: "center" }}>
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 4, marginBottom: 6 }}>
               <span style={{ fontSize: 42, fontWeight: 700, color: "#fff" }}>$10</span>
               <span style={{ fontSize: 14, color: "#555" }}>/month</span>
@@ -67,8 +113,7 @@ export function PaywallPage({ user, onSubscribed, onSignOut }) {
             <p style={{ margin: 0, fontSize: 12, color: "#444" }}>Cancel anytime</p>
           </div>
 
-          {/* Features */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28, textAlign: "left" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
             {["All movies & series", "Live TV channels", "Podcasts", "New content weekly", "Watch on any device"].map(f => (
               <div key={f} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ width: 18, height: 18, borderRadius: "50%", background: "rgba(250,204,21,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -79,17 +124,9 @@ export function PaywallPage({ user, onSubscribed, onSignOut }) {
             ))}
           </div>
 
-          {error && <p style={{ color: "#f87171", fontSize: 13, marginBottom: 12 }}>{error}</p>}
-
-          <button onClick={startCheckout} disabled={loading}
-            style={{ width: "100%", background: "#facc15", border: "none", borderRadius: 10, padding: "14px", color: "#0a0a0a", fontSize: 15, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, transition: "opacity 0.15s" }}>
-            {loading ? "Redirecting…" : "Subscribe for $10/mo"}
-          </button>
-
-          <p style={{ margin: "16px 0 0", fontSize: 12, color: "#333" }}>
-            Signed in as {user.email} ·{" "}
-            <span onClick={onSignOut} style={{ color: "#555", cursor: "pointer", textDecoration: "underline" }}>Sign out</span>
-          </p>
+          <Elements stripe={stripePromise}>
+            <CheckoutForm user={user} onSignOut={onSignOut} />
+          </Elements>
         </div>
       </div>
     </div>
