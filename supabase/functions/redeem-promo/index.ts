@@ -9,19 +9,27 @@ Deno.serve(async (req) => {
 
   try {
     const { user_id, email, code } = await req.json();
-    const validCode = Deno.env.get("PROMO_CODE") || "";
-
-    if (!validCode || code.trim().toUpperCase() !== validCode.toUpperCase()) {
-      return new Response(JSON.stringify({ error: "Invalid promo code" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
-      });
-    }
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SERVICE_ROLE_KEY")!
     );
+
+    const { data: promo } = await supabase
+      .from("promo_codes")
+      .select("*")
+      .eq("code", code.trim().toUpperCase())
+      .eq("active", true)
+      .maybeSingle();
+
+    if (!promo) {
+      return new Response(JSON.stringify({ error: "Invalid or inactive promo code" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      });
+    }
+
+    await supabase.from("promo_codes").update({ uses: promo.uses + 1 }).eq("id", promo.id);
 
     const { error } = await supabase.from("subscriptions").upsert({
       user_id,

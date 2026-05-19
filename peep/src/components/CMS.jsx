@@ -253,6 +253,12 @@ export function CMS({ onExit }) {
   const [subStatusFilter, setSubStatusFilter] = useState("all");
   const [subSort, setSubSort] = useState({ col: "created_at", dir: "desc" });
 
+  // The Boss state
+  const [promos, setPromos] = useState([]);
+  const [promosLoading, setPromosLoading] = useState(false);
+  const [promoForm, setPromoForm] = useState({ name: "", code: "" });
+  const [promoSaving, setPromoSaving] = useState(false);
+
   const subscriptionRef = useRef(null);
   const carouselSubRef = useRef(null);
   const showSubRef = useRef(null);
@@ -316,6 +322,7 @@ export function CMS({ onExit }) {
     if (tab === "reports") { loadReports(); loadTodayStats(); loadOnlineUsers(); }
     if (tab === "ads") { loadAdAnalytics(); loadTodayStats(); }
     if (tab === "subscriptions") loadSubscriptions();
+    if (tab === "boss") loadPromos();
   }, [tab]);
 
   useEffect(() => {
@@ -471,6 +478,37 @@ export function CMS({ onExit }) {
     setRevokeConfirm(null);
     loadSubscriptions();
     showToast("Subscription revoked");
+  }
+
+  async function loadPromos() {
+    setPromosLoading(true);
+    const { data } = await supabase.from("promo_codes").select("*").order("created_at", { ascending: false });
+    setPromos(data || []);
+    setPromosLoading(false);
+  }
+
+  async function savePromo() {
+    if (!promoForm.name.trim() || !promoForm.code.trim()) return;
+    setPromoSaving(true);
+    const { error } = await supabase.from("promo_codes").insert({
+      name: promoForm.name.trim(),
+      code: promoForm.code.trim().toUpperCase(),
+      active: true,
+    });
+    if (error) { showToast(error.message, "error"); }
+    else { setPromoForm({ name: "", code: "" }); showToast("Promo code created"); loadPromos(); }
+    setPromoSaving(false);
+  }
+
+  async function togglePromo(id, active) {
+    await supabase.from("promo_codes").update({ active }).eq("id", id);
+    setPromos(p => p.map(x => x.id === id ? { ...x, active } : x));
+  }
+
+  async function deletePromo(id) {
+    await supabase.from("promo_codes").delete().eq("id", id);
+    setPromos(p => p.filter(x => x.id !== id));
+    showToast("Promo code deleted");
   }
 
   function exportSubsCSV() {
@@ -2071,6 +2109,9 @@ export function CMS({ onExit }) {
         </button>
         <button onClick={() => setTab("subscriptions")} style={{ background: "transparent", border: "none", borderBottom: tab === "subscriptions" ? "2px solid #818cf8" : "none", color: tab === "subscriptions" ? "#818cf8" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "subscriptions" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
           Subscriptions {subs.length > 0 && `(${subs.length})`}
+        </button>
+        <button onClick={() => setTab("boss")} style={{ background: "transparent", border: "none", borderBottom: tab === "boss" ? "2px solid #facc15" : "none", color: tab === "boss" ? "#facc15" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "boss" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
+          The Boss
         </button>
       </div>
 
@@ -4125,6 +4166,95 @@ export function CMS({ onExit }) {
             </div>
           );
         })()}
+
+        {/* ────── THE BOSS TAB ────── */}
+        {tab === "boss" && (
+          <div style={{ maxWidth: 700 }}>
+            <div style={{ marginBottom: 32 }}>
+              <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>The Boss</h2>
+              <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Manage promo codes — turn them on or off anytime.</p>
+            </div>
+
+            {/* Create new code */}
+            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "28px 28px", marginBottom: 28 }}>
+              <h3 style={{ margin: "0 0 20px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Create Promo Code</h3>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Name</label>
+                  <input
+                    value={promoForm.name}
+                    onChange={e => setPromoForm(f => ({ ...f, name: e.target.value }))}
+                    placeholder="e.g. Friends & Family"
+                    onKeyDown={e => e.key === "Enter" && savePromo()}
+                    style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px", fontSize: 14, color: "#0f172a", outline: "none", boxSizing: "border-box" }}
+                  />
+                </div>
+                <div style={{ flex: 1, minWidth: 140 }}>
+                  <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Code</label>
+                  <input
+                    value={promoForm.code}
+                    onChange={e => setPromoForm(f => ({ ...f, code: e.target.value.toUpperCase() }))}
+                    placeholder="e.g. FAMILY50"
+                    onKeyDown={e => e.key === "Enter" && savePromo()}
+                    style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px", fontSize: 14, color: "#0f172a", outline: "none", fontFamily: "monospace", letterSpacing: "0.08em", boxSizing: "border-box" }}
+                  />
+                </div>
+                <div style={{ display: "flex", alignItems: "flex-end" }}>
+                  <button onClick={savePromo} disabled={promoSaving || !promoForm.name.trim() || !promoForm.code.trim()}
+                    style={{ background: "#facc15", border: "none", borderRadius: 8, padding: "10px 24px", color: "#0a0a0a", fontSize: 14, fontWeight: 700, cursor: "pointer", opacity: promoSaving ? 0.6 : 1, whiteSpace: "nowrap" }}>
+                    {promoSaving ? "Saving…" : "Add Code"}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Code list */}
+            {promosLoading ? (
+              <div style={{ textAlign: "center", padding: 40, color: "#9ca3af" }}>Loading…</div>
+            ) : promos.length === 0 ? (
+              <div style={{ textAlign: "center", padding: 40, color: "#9ca3af", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16 }}>No promo codes yet</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {promos.map(p => (
+                  <div key={p.id} style={{ background: "#fff", border: `1px solid ${p.active ? "#e2e8f0" : "#f1f5f9"}`, borderRadius: 14, padding: "20px 24px", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", opacity: p.active ? 1 : 0.6 }}>
+                    {/* Info */}
+                    <div style={{ flex: 1, minWidth: 120 }}>
+                      <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>{p.name}</p>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <code style={{ fontSize: 13, color: "#4f46e5", background: "rgba(79,70,229,0.07)", padding: "2px 8px", borderRadius: 5, letterSpacing: "0.08em" }}>{p.code}</code>
+                        <button onClick={() => { navigator.clipboard.writeText(p.code); showToast("Copied!"); }}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 11, padding: 0 }}>
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Uses */}
+                    <div style={{ textAlign: "center", minWidth: 60 }}>
+                      <p style={{ margin: "0 0 2px", fontSize: 22, fontWeight: 700, color: "#0f172a" }}>{p.uses}</p>
+                      <p style={{ margin: 0, fontSize: 11, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.5 }}>Uses</p>
+                    </div>
+
+                    {/* Toggle */}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                      <button onClick={() => togglePromo(p.id, !p.active)}
+                        style={{ width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer", background: p.active ? "#22c55e" : "#d1d5db", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                        <span style={{ position: "absolute", top: 3, left: p.active ? 22 : 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.15)", transition: "left 0.2s" }} />
+                      </button>
+                      <span style={{ fontSize: 10, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.5 }}>{p.active ? "On" : "Off"}</span>
+                    </div>
+
+                    {/* Delete */}
+                    <button onClick={() => deletePromo(p.id)}
+                      style={{ background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 7, padding: "7px 14px", color: "#dc2626", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                      Delete
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
       </div>
 
