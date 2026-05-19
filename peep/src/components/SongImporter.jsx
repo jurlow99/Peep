@@ -142,7 +142,7 @@ export function SongImporter({ onClose, onImported }) {
                 <>
                   <p style={{ margin: "0 0 6px", fontSize: 16, fontWeight: 600, color: "#0f172a" }}>Select your audio files</p>
                   <p style={{ margin: "0 0 24px", fontSize: 13, color: "#6b7280" }}>MP3, FLAC, AAC, WMA, OGG — any format WMP supports</p>
-                  <input ref={fileInputRef} type="file" multiple accept="audio/*" onChange={handleFiles} style={{ display: "none" }} />
+                  <input ref={fileInputRef} type="file" multiple accept=".mp3,.m4a,.aac,.flac,.wav,.ogg,.wma,.opus,.aiff,.ape" onChange={handleFiles} style={{ display: "none" }} />
                   <button onClick={() => fileInputRef.current?.click()}
                     style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "12px 28px", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
                     Choose Files
@@ -161,7 +161,7 @@ export function SongImporter({ onClose, onImported }) {
                   <strong>{songs.length}</strong> song{songs.length !== 1 ? "s" : ""} detected — review and edit before uploading
                 </p>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <input ref={fileInputRef} type="file" multiple accept="audio/*" onChange={handleFiles} style={{ display: "none" }} />
+                  <input ref={fileInputRef} type="file" multiple accept=".mp3,.m4a,.aac,.flac,.wav,.ogg,.wma,.opus,.aiff,.ape" onChange={handleFiles} style={{ display: "none" }} />
                   <button onClick={() => fileInputRef.current?.click()}
                     style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "8px 14px", color: "#374151", fontSize: 12, cursor: "pointer" }}>
                     + Add More Files
