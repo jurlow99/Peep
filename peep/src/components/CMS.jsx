@@ -713,8 +713,7 @@ export function CMS({ onExit }) {
     ]);
     const normUrl = url => {
       if (!url) return null;
-      const i = url.indexOf("/peep-media/");
-      return i >= 0 ? url.slice(i + "/peep-media/".length) : url;
+      return url.split("/").pop()?.toLowerCase() || null;
     };
     const ingestedUrls = new Set([
       ...(movRes.data || []).flatMap(r => [r.url, r.trailer_url]),
