@@ -358,6 +358,9 @@ export function CMS({ onExit }) {
   const [bossSettings, setBossSettings] = useState({ maintenance_mode: "false", banner_active: "false", banner_text: "", banner_expires_at: "" });
   const [bossTodos, setBossTodos] = useState([]);
   const [newTodo, setNewTodo] = useState("");
+  const [newTodoLabel, setNewTodoLabel] = useState("");
+  const [newGoal, setNewGoal] = useState("");
+  const [newGoalLabel, setNewGoalLabel] = useState("");
   const [grantEmail, setGrantEmail] = useState("");
   const [grantLoading, setGrantLoading] = useState(false);
   const [grantResult, setGrantResult] = useState(null);
@@ -649,13 +652,25 @@ export function CMS({ onExit }) {
     showToast("User unblocked");
   }
 
+  const TODO_LABELS = [
+    { name: "Legal", color: "#3b82f6" },
+    { name: "Tech", color: "#7c3aed" },
+    { name: "Business", color: "#fb923c" },
+    { name: "Content", color: "#10b981" },
+    { name: "Finance", color: "#06b6d4" },
+  ];
+
   const DEFAULT_TODOS = [
-    { id: "1", text: "Form LLC", done: false },
-    { id: "2", text: "Register DMCA agent at copyright.gov ($6)", done: false },
-    { id: "3", text: "Set up Terms of Service + Privacy Policy", done: false },
-    { id: "4", text: "Write creator agreement template", done: false },
-    { id: "5", text: "First licensed content on platform", done: false },
-    { id: "6", text: "Set up Stripe for subscriptions", done: false },
+    { id: "t1", text: "Form LLC", done: false, section: "todo", label: "Legal" },
+    { id: "t2", text: "Register DMCA agent at copyright.gov ($6)", done: false, section: "todo", label: "Legal" },
+    { id: "t3", text: "Set up Terms of Service + Privacy Policy", done: false, section: "todo", label: "Legal" },
+    { id: "t4", text: "Write creator agreement template", done: false, section: "todo", label: "Legal" },
+    { id: "t5", text: "Set up Stripe for subscriptions", done: true, section: "todo", label: "Tech" },
+    { id: "g1", text: "First licensed content on platform", done: false, section: "goal", label: "Content" },
+    { id: "g2", text: "Legal Team", done: false, section: "goal", label: "Legal" },
+    { id: "g3", text: "Content Licensing Team", done: false, section: "goal", label: "Content" },
+    { id: "g4", text: "Marketing/Growth Team + Customer Support", done: false, section: "goal", label: "Business" },
+    { id: "g5", text: "Finance/Accounting Team", done: false, section: "goal", label: "Finance" },
   ];
 
   async function loadBossSettings() {
@@ -664,7 +679,8 @@ export function CMS({ onExit }) {
     (data || []).forEach(r => { s[r.key] = r.value; });
     setBossSettings(prev => ({ ...prev, ...s }));
     const todosRow = (data || []).find(r => r.key === "boss_todos");
-    setBossTodos(todosRow ? JSON.parse(todosRow.value) : DEFAULT_TODOS);
+    const parsed = todosRow ? JSON.parse(todosRow.value) : DEFAULT_TODOS;
+    setBossTodos(parsed.map(t => ({ section: "todo", label: "", ...t })));
   }
 
   async function saveTodos(todos) {
@@ -682,8 +698,14 @@ export function CMS({ onExit }) {
 
   function addTodo() {
     if (!newTodo.trim()) return;
-    saveTodos([...bossTodos, { id: Date.now().toString(), text: newTodo.trim(), done: false }]);
-    setNewTodo("");
+    saveTodos([...bossTodos, { id: Date.now().toString(), text: newTodo.trim(), done: false, section: "todo", label: newTodoLabel }]);
+    setNewTodo(""); setNewTodoLabel("");
+  }
+
+  function addGoal() {
+    if (!newGoal.trim()) return;
+    saveTodos([...bossTodos, { id: Date.now().toString(), text: newGoal.trim(), done: false, section: "goal", label: newGoalLabel }]);
+    setNewGoal(""); setNewGoalLabel("");
   }
 
   async function saveSetting(key, value) {
@@ -5169,30 +5191,65 @@ export function CMS({ onExit }) {
               <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Platform controls — only you can see this.</p>
             </div>
 
-            {/* ── Boss TODO List ── */}
-            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-                <div>
-                  <p style={{ margin: "0 0 3px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Boss TODO</p>
-                  <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>{bossTodos.filter(t => t.done).length} of {bossTodos.length} done</p>
-                </div>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
-                {bossTodos.map(t => (
+            {/* ── Boss Goals + TODO ── */}
+            {(() => {
+              const goals = bossTodos.filter(t => t.section === "goal");
+              const todos = bossTodos.filter(t => t.section === "todo");
+              const totalDone = bossTodos.filter(t => t.done).length;
+              const renderItem = t => {
+                const labelMeta = TODO_LABELS.find(l => l.name === t.label);
+                return (
                   <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: t.done ? "#f8fafc" : "#fff", border: "1px solid #f1f5f9", borderRadius: 8 }}>
                     <button onClick={() => toggleTodo(t.id)} style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${t.done ? "#7c3aed" : "#d1d5db"}`, background: t.done ? "#7c3aed" : "#fff", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>
                       {t.done && <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1.5 5L4 7.5L8.5 2.5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                     </button>
                     <span style={{ flex: 1, fontSize: 13, color: t.done ? "#9ca3af" : "#0f172a", textDecoration: t.done ? "line-through" : "none" }}>{t.text}</span>
+                    {labelMeta && <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 99, background: labelMeta.color + "18", color: labelMeta.color, whiteSpace: "nowrap" }}>{labelMeta.name}</span>}
                     <button onClick={() => deleteTodo(t.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#d1d5db", fontSize: 16, lineHeight: 1, padding: "0 2px" }}>×</button>
                   </div>
-                ))}
-              </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <input value={newTodo} onChange={e => setNewTodo(e.target.value)} onKeyDown={e => e.key === "Enter" && addTodo()} placeholder="Add a task..." style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 12px", fontSize: 13, color: "#0f172a", outline: "none" }} />
-                <button onClick={addTodo} style={{ background: "#facc15", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 700, color: "#0a0a0a", cursor: "pointer" }}>Add</button>
-              </div>
-            </div>
+                );
+              };
+              const renderAddRow = (val, setVal, labelVal, setLabelVal, onAdd, placeholder) => (
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  <select value={labelVal} onChange={e => setLabelVal(e.target.value)} style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 10px", fontSize: 12, color: labelVal ? "#0f172a" : "#9ca3af", outline: "none", background: "#fff", flexShrink: 0 }}>
+                    <option value="">Label</option>
+                    {TODO_LABELS.map(l => <option key={l.name} value={l.name}>{l.name}</option>)}
+                  </select>
+                  <input value={val} onChange={e => setVal(e.target.value)} onKeyDown={e => e.key === "Enter" && onAdd()} placeholder={placeholder} style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 12px", fontSize: 13, color: "#0f172a", outline: "none" }} />
+                  <button onClick={onAdd} style={{ background: "#facc15", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 700, color: "#0a0a0a", cursor: "pointer", whiteSpace: "nowrap" }}>Add</button>
+                </div>
+              );
+              return (
+                <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+                    <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#0f172a" }}>Boss Board</p>
+                    <span style={{ fontSize: 12, color: "#9ca3af" }}>{totalDone} of {bossTodos.length} done</span>
+                  </div>
+
+                  {/* Goals */}
+                  <div style={{ marginBottom: 24 }}>
+                    <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6 }}>Goals — {goals.filter(t => t.done).length}/{goals.length}</p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {goals.length === 0 && <p style={{ margin: 0, fontSize: 13, color: "#d1d5db", padding: "8px 0" }}>No goals yet</p>}
+                      {goals.map(renderItem)}
+                    </div>
+                    {renderAddRow(newGoal, setNewGoal, newGoalLabel, setNewGoalLabel, addGoal, "Add a goal...")}
+                  </div>
+
+                  <div style={{ height: 1, background: "#f1f5f9", marginBottom: 20 }} />
+
+                  {/* To-Do */}
+                  <div>
+                    <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6 }}>To-Do — {todos.filter(t => t.done).length}/{todos.length}</p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {todos.length === 0 && <p style={{ margin: 0, fontSize: 13, color: "#d1d5db", padding: "8px 0" }}>No tasks yet</p>}
+                      {todos.map(renderItem)}
+                    </div>
+                    {renderAddRow(newTodo, setNewTodo, newTodoLabel, setNewTodoLabel, addTodo, "Add a task...")}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* ── Maintenance Mode ── */}
             <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
