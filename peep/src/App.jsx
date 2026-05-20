@@ -1423,9 +1423,13 @@ function SongCard({ item, onClick }) {
 
 function MiniPlayer({ song, onClose, isMobile }) {
   const audioRef = useRef(null);
+  const scrubBarRef = useRef(null);
   const [paused, setPaused] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [scrubbing, setScrubbing] = useState(false);
+  const [scrubPct, setScrubPct] = useState(null);
+  const [barHovered, setBarHovered] = useState(false);
 
   useEffect(() => {
     if (!song?.url || !audioRef.current) return;
@@ -1448,16 +1452,39 @@ function MiniPlayer({ song, onClose, isMobile }) {
     return () => { audio.removeEventListener("timeupdate", onTime); audio.removeEventListener("durationchange", onDur); audio.removeEventListener("ended", onEnd); };
   }, []);
 
+  useEffect(() => {
+    if (!scrubbing) return;
+    function onMove(e) {
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const rect = scrubBarRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setScrubPct(Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)));
+    }
+    function onUp(e) {
+      const clientX = (e.changedTouches ? e.changedTouches[0].clientX : e.clientX);
+      const rect = scrubBarRef.current?.getBoundingClientRect();
+      if (rect && audioRef.current && duration) {
+        audioRef.current.currentTime = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)) * duration;
+      }
+      setScrubbing(false);
+      setScrubPct(null);
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("touchmove", onMove, { passive: true });
+    window.addEventListener("touchend", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onUp);
+    };
+  }, [scrubbing, duration]);
+
   function togglePlay() {
     if (!audioRef.current) return;
     if (paused) { audioRef.current.play().catch(() => {}); setPaused(false); }
     else { audioRef.current.pause(); setPaused(true); }
-  }
-
-  function seek(e) {
-    if (!audioRef.current || !duration) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    audioRef.current.currentTime = ((e.clientX - rect.left) / rect.width) * duration;
   }
 
   function fmt(s) {
@@ -1466,14 +1493,26 @@ function MiniPlayer({ song, onClose, isMobile }) {
     return `${m}:${String(sec).padStart(2, "0")}`;
   }
 
-  const progress = duration > 0 ? currentTime / duration : 0;
+  const displayPct = scrubPct !== null ? scrubPct : (duration > 0 ? currentTime / duration : 0);
+  const active = barHovered || scrubbing;
 
   return (
     <div style={{ position: "fixed", bottom: isMobile ? 60 : 0, left: 0, right: 0, zIndex: 200, background: "rgba(12,12,12,0.97)", backdropFilter: "blur(20px)", borderTop: "1px solid rgba(255,255,255,0.08)", fontFamily: "'Space Grotesk', sans-serif" }}>
       <audio ref={audioRef} />
-      {/* Progress bar */}
-      <div onClick={seek} style={{ height: 3, background: "rgba(255,255,255,0.08)", cursor: "pointer", position: "relative" }}>
-        <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${progress * 100}%`, background: "#facc15", transition: "width 0.5s linear" }} />
+      {/* Scrub bar */}
+      <div
+        ref={scrubBarRef}
+        onMouseEnter={() => setBarHovered(true)}
+        onMouseLeave={() => setBarHovered(false)}
+        onMouseDown={e => { e.preventDefault(); setScrubbing(true); const rect = e.currentTarget.getBoundingClientRect(); setScrubPct(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))); }}
+        onTouchStart={e => { setScrubbing(true); const rect = e.currentTarget.getBoundingClientRect(); setScrubPct(Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width))); }}
+        style={{ height: active ? 20 : 12, cursor: "pointer", position: "relative", display: "flex", alignItems: "center", transition: "height 0.15s ease" }}
+      >
+        <div style={{ position: "absolute", left: 0, right: 0, height: active ? 5 : 3, background: "rgba(255,255,255,0.08)", borderRadius: 99, transition: "height 0.15s ease", overflow: "visible" }}>
+          <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${displayPct * 100}%`, background: "#facc15", borderRadius: 99, transition: scrubbing ? "none" : "width 0.5s linear" }} />
+          {/* Thumb */}
+          <div style={{ position: "absolute", top: "50%", left: `${displayPct * 100}%`, transform: "translate(-50%, -50%)", width: active ? 14 : 0, height: active ? 14 : 0, borderRadius: "50%", background: "#facc15", boxShadow: "0 0 6px rgba(250,204,21,0.6)", transition: "width 0.15s ease, height 0.15s ease", pointerEvents: "none" }} />
+        </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "10px 20px", height: 68 }}>
         {/* Album art */}
@@ -2056,7 +2095,7 @@ function ContinueWatchingCard({ item, onPlay, onRemove }) {
 // ─── Video Card ───────────────────────────────────────────────────────────────
 
 const TRAILER_OVERLAY_W = 520;
-const TRAILER_INFO_H = 148;
+const TRAILER_INFO_H = 200;
 
 function VideoCard({ video, onClick, rank, myList, onToggleList }) {
   const [hovered, setHovered] = useState(false);

@@ -3732,6 +3732,7 @@ export function CMS({ onExit }) {
                   <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Ad Performance <span style={{ fontSize: 12, fontWeight: 400, color: "#9ca3af" }}>last 30 days</span></h2>
                   {adLastFetched && <span style={{ fontSize: 11, color: "#9ca3af", marginLeft: "auto" }}>Updated {adLastFetched.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>}
                   <button onClick={loadAdAnalytics} style={{ background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)", borderRadius: 6, padding: "5px 12px", color: "#6366f1", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Refresh</button>
+                  <button onClick={async () => { if (!window.confirm("Clear all ad impression history?")) return; const { error, count } = await supabase.from("ad_impressions").delete({ count: "exact" }).lte("created_at", new Date().toISOString()); if (error) { showToast("Delete failed: " + error.message, "error"); return; } showToast(`Cleared ${count ?? "all"} ad impression records`, "success"); setAdAnalytics(null); loadAdAnalytics(); }} style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 6, padding: "5px 12px", color: "#ef4444", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Clear History</button>
                 </div>
 
                 {/* Today row */}
