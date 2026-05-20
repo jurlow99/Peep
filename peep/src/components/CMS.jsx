@@ -704,13 +704,18 @@ export function CMS({ onExit }) {
       supabase.from("music_videos").select("url, trailer_url"),
       supabase.from("podcast_episodes").select("audio_url"),
     ]);
+    const normUrl = url => {
+      if (!url) return null;
+      const i = url.indexOf("/peep-media/");
+      return i >= 0 ? url.slice(i + "/peep-media/".length) : url;
+    };
     const ingestedUrls = new Set([
       ...(movRes.data || []).flatMap(r => [r.url, r.trailer_url]),
       ...(epRes.data || []).map(r => r.url),
       ...(mvRes.data || []).flatMap(r => [r.url, r.trailer_url]),
       ...(peRes.data || []).map(r => r.audio_url),
-    ].filter(Boolean));
-    setStorageFiles(allFiles.map(f => ({ ...f, ingested: ingestedUrls.has(f.url) })));
+    ].filter(Boolean).map(normUrl));
+    setStorageFiles(allFiles.map(f => ({ ...f, ingested: ingestedUrls.has(normUrl(f.url)) })));
     setStorageLoading(false);
   }
 
