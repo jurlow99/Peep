@@ -7290,7 +7290,7 @@ export function CMS({ onExit }) {
 
         {/* ────── STORAGE TAB ────── */}
         {tab === "storage" && (
-          <div>
+          <div style={{ maxWidth: 1600, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28, flexWrap: "wrap", gap: 12 }}>
               <div>
                 <p style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 700, color: "#0f172a" }}>Storage Browser</p>
