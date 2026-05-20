@@ -34,3 +34,7 @@ npm run dev
 ## Deployment
 
 Deployed automatically to Cloudflare Pages on every push to `main`.
+
+## Documentation
+
+Full docs are in the [`/docs`](docs/) folder — CMS, creator system, revenue share, ads, database schema.
