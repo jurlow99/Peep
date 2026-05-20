@@ -851,8 +851,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
             <button onClick={onAuthOpen} style={{ background: "#facc15", border: "none", borderRadius: 6, padding: isMobile ? "7px 14px" : "8px 18px", color: "#0a0a0a", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Sign In</button>
           )}
           {!isMobile && (
-            <div onClick={() => window.location.href = "/admin"} title="Admin panel"
-              style={{ width: 34, height: 34, borderRadius: 8, background: "linear-gradient(135deg, #fde68a, #b45309)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>P</div>
+            <div style={{ width: 34, height: 34 }} />
           )}
         </div>
       </nav>
