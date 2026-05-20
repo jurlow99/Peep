@@ -228,6 +228,7 @@ export function SignupPage() {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const emailTimer = useRef(null);
+  const refCode = new URLSearchParams(window.location.search).get("ref")?.toUpperCase() || null;
 
   useEffect(() => {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setEmailStatus(null); return; }
@@ -295,6 +296,7 @@ export function SignupPage() {
         username: name.trim().toLowerCase().replace(/\s+/g, "_"),
         email: email.toLowerCase(),
         full_name: name.trim(),
+        ...(refCode ? { referred_by: refCode } : {}),
       });
     }
 

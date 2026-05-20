@@ -289,6 +289,24 @@ export function CMS({ onExit }) {
   const [albumSaving, setAlbumSaving] = useState(false);
   const [deleteAlbumConfirm, setDeleteAlbumConfirm] = useState(null);
 
+  // Creators state
+  const [creatorsList, setCreatorsList] = useState([]);
+  const [creatorsLoading, setCreatorsLoading] = useState(false);
+  const [creatorModal, setCreatorModal] = useState(false);
+  const [editingCreator, setEditingCreator] = useState(null);
+  const [creatorForm, setCreatorForm] = useState({ name: "", email: "", referral_code: "", rev_share_percentage: 50, payment_method: "PayPal", payment_handle: "", status: "active", notes: "" });
+  const [creatorSaving, setCreatorSaving] = useState(false);
+  const [deleteCreatorConfirm, setDeleteCreatorConfirm] = useState(null);
+
+  // Payouts state
+  const [payoutMonth, setPayoutMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [payoutData, setPayoutData] = useState([]);
+  const [payoutLoading, setPayoutLoading] = useState(false);
+  const [payoutView, setPayoutView] = useState("current"); // "current" | "history"
+  const [payoutHistory, setPayoutHistory] = useState([]);
+  const [payoutHistoryLoading, setPayoutHistoryLoading] = useState(false);
+  const [platformPrice, setPlatformPrice] = useState(9.99);
+
   // Ads state
   const [adList, setAdList] = useState([]);
   const [adLoading, setAdLoading] = useState(false);
@@ -409,6 +427,8 @@ export function CMS({ onExit }) {
     if (tab === "subscriptions") loadSubscriptions();
     if (tab === "boss") { loadPromos(); loadBossSettings(); }
     if (tab === "boss") setBossView("main");
+    if (tab === "creators") loadCreators();
+    if (tab === "payouts") { loadPayouts(); loadPayoutHistory(); }
   }, [tab]);
 
   useEffect(() => {
@@ -699,6 +719,108 @@ export function CMS({ onExit }) {
     a.href = url;
     a.download = `peep-subscribers-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ──── CREATORS ────
+
+  function genRefCode() {
+    return Array.from({ length: 6 }, () => "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[Math.floor(Math.random() * 36)]).join("");
+  }
+
+  async function loadCreators() {
+    setCreatorsLoading(true);
+    const { data } = await supabase.from("creators").select("*").order("created_at", { ascending: false });
+    setCreatorsList(data || []);
+    setCreatorsLoading(false);
+  }
+
+  function openCreatorModal(creator = null) {
+    if (creator) {
+      setEditingCreator(creator);
+      setCreatorForm({ name: creator.name, email: creator.email, referral_code: creator.referral_code, rev_share_percentage: creator.rev_share_percentage, payment_method: creator.payment_method || "PayPal", payment_handle: creator.payment_handle || "", status: creator.status, notes: creator.notes || "" });
+    } else {
+      setEditingCreator(null);
+      setCreatorForm({ name: "", email: "", referral_code: genRefCode(), rev_share_percentage: 50, payment_method: "PayPal", payment_handle: "", status: "active", notes: "" });
+    }
+    setCreatorModal(true);
+  }
+
+  async function saveCreator() {
+    if (!creatorForm.name.trim() || !creatorForm.email.trim() || !creatorForm.referral_code.trim()) return;
+    setCreatorSaving(true);
+    const payload = { ...creatorForm, referral_code: creatorForm.referral_code.toUpperCase().trim(), email: creatorForm.email.trim().toLowerCase() };
+    let error;
+    if (editingCreator) {
+      ({ error } = await supabase.from("creators").update(payload).eq("id", editingCreator.id));
+    } else {
+      ({ error } = await supabase.from("creators").insert(payload));
+    }
+    if (error) { showToast(error.message, "error"); }
+    else { showToast(editingCreator ? "Creator updated" : "Creator added"); setCreatorModal(false); loadCreators(); }
+    setCreatorSaving(false);
+  }
+
+  async function deleteCreator(id) {
+    await supabase.from("creators").delete().eq("id", id);
+    setCreatorsList(c => c.filter(x => x.id !== id));
+    setDeleteCreatorConfirm(null);
+    showToast("Creator removed");
+  }
+
+  // ──── PAYOUTS ────
+
+  async function loadPayouts() {
+    setPayoutLoading(true);
+    const { data: creators } = await supabase.from("creators").select("*");
+    if (!creators?.length) { setPayoutData([]); setPayoutLoading(false); return; }
+
+    const monthStart = `${payoutMonth}-01T00:00:00.000Z`;
+    const monthEnd = new Date(new Date(monthStart).getFullYear(), new Date(monthStart).getMonth() + 1, 1).toISOString();
+
+    const { data: allReferred } = await supabase.from("profiles").select("referred_by, created_at").not("referred_by", "is", null);
+    const { data: existingPayouts } = await supabase.from("creator_payouts").select("*").eq("month", payoutMonth);
+
+    const rows = creators.map(c => {
+      const monthly = (allReferred || []).filter(p => p.referred_by === c.referral_code && p.created_at >= monthStart && p.created_at < monthEnd).length;
+      const lifetime = (allReferred || []).filter(p => p.referred_by === c.referral_code).length;
+      const revenue = +(monthly * platformPrice).toFixed(2);
+      const payout = +(revenue * (c.rev_share_percentage / 100)).toFixed(2);
+      const cut = +(revenue - payout).toFixed(2);
+      const saved = existingPayouts?.find(p => p.creator_id === c.id);
+      return { creator: c, monthly, lifetime, revenue, payout, cut, status: saved?.status || "unpaid", paid_at: saved?.paid_at || null, payout_id: saved?.id || null };
+    });
+
+    setPayoutData(rows);
+    setPayoutLoading(false);
+  }
+
+  async function loadPayoutHistory() {
+    setPayoutHistoryLoading(true);
+    const { data } = await supabase.from("creator_payouts").select("*").eq("status", "paid").order("month", { ascending: false });
+    setPayoutHistory(data || []);
+    setPayoutHistoryLoading(false);
+  }
+
+  async function togglePayoutStatus(row) {
+    const newStatus = row.status === "paid" ? "unpaid" : "paid";
+    const payload = { creator_id: row.creator.id, creator_name: row.creator.name, referral_code: row.creator.referral_code, month: payoutMonth, attributed_subscribers: row.monthly, lifetime_subscribers: row.lifetime, revenue: row.revenue, platform_cut: row.cut, payout_amount: row.payout, rev_share_percentage: row.creator.rev_share_percentage, status: newStatus, paid_at: newStatus === "paid" ? new Date().toISOString() : null };
+    if (row.payout_id) {
+      await supabase.from("creator_payouts").update({ status: newStatus, paid_at: payload.paid_at }).eq("id", row.payout_id);
+    } else {
+      await supabase.from("creator_payouts").insert(payload);
+    }
+    loadPayouts();
+    if (newStatus === "paid") loadPayoutHistory();
+  }
+
+  function exportPayoutsCSV() {
+    const headers = ["Creator", "Email", "Referral Code", "Monthly Subscribers", "Lifetime Subscribers", "Revenue", "Platform Cut", "Creator Payout", "Rev Share %", "Status", "Paid Date"];
+    const rows = payoutData.map(r => [r.creator.name, r.creator.email, r.creator.referral_code, r.monthly, r.lifetime, r.revenue.toFixed(2), r.cut.toFixed(2), r.payout.toFixed(2), r.creator.rev_share_percentage + "%", r.status, r.paid_at ? new Date(r.paid_at).toLocaleDateString() : ""].map(v => `"${v}"`));
+    const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `peep-payouts-${payoutMonth}.csv`; a.click();
     URL.revokeObjectURL(url);
   }
 
@@ -2480,6 +2602,12 @@ export function CMS({ onExit }) {
         </button>
         <button onClick={() => setTab("boss")} style={{ background: "transparent", border: "none", borderBottom: tab === "boss" ? "2px solid #facc15" : "none", color: tab === "boss" ? "#facc15" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "boss" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
           The Boss
+        </button>
+        <button onClick={() => setTab("creators")} style={{ background: "transparent", border: "none", borderBottom: tab === "creators" ? "2px solid #fb923c" : "none", color: tab === "creators" ? "#fb923c" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "creators" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
+          Creators {creatorsList.length > 0 && `(${creatorsList.length})`}
+        </button>
+        <button onClick={() => { setTab("payouts"); setPayoutView("current"); }} style={{ background: "transparent", border: "none", borderBottom: tab === "payouts" ? "2px solid #a78bfa" : "none", color: tab === "payouts" ? "#a78bfa" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "payouts" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
+          Payouts
         </button>
       </div>
 
@@ -6435,6 +6563,266 @@ export function CMS({ onExit }) {
         </div>
       </div>
     )}
+        {/* ────── CREATORS TAB ────── */}
+        {tab === "creators" && (
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28, flexWrap: "wrap" }}>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Creators</h2>
+              <span style={{ fontSize: 13, color: "#9ca3af" }}>{creatorsList.length} creator{creatorsList.length !== 1 ? "s" : ""}</span>
+              <button onClick={() => openCreatorModal()} style={{ marginLeft: "auto", background: "#fb923c", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>+ Add Creator</button>
+            </div>
+
+            {creatorsLoading ? (
+              <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Spinner /></div>
+            ) : creatorsList.length === 0 ? (
+              <div style={{ textAlign: "center", padding: 80, color: "#9ca3af" }}>No creators yet. Add one to get started.</div>
+            ) : (
+              <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, overflow: "hidden" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid #f1f5f9", background: "#f8fafc" }}>
+                      {["Name", "Email", "Ref Code", "Rev Share", "Payment", "Status", "Actions"].map(h => (
+                        <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6 }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {creatorsList.map((c, i) => (
+                      <tr key={c.id} style={{ borderBottom: i < creatorsList.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                        <td style={{ padding: "14px 16px", fontWeight: 600, color: "#0f172a" }}>{c.name}</td>
+                        <td style={{ padding: "14px 16px", color: "#475569" }}>{c.email}</td>
+                        <td style={{ padding: "14px 16px" }}>
+                          <span style={{ fontFamily: "monospace", background: "#f1f5f9", borderRadius: 5, padding: "3px 8px", fontSize: 13, fontWeight: 700, color: "#fb923c", letterSpacing: 1 }}>{c.referral_code}</span>
+                        </td>
+                        <td style={{ padding: "14px 16px", color: "#0f172a", fontWeight: 600 }}>{c.rev_share_percentage}%</td>
+                        <td style={{ padding: "14px 16px", color: "#475569" }}>{c.payment_method}{c.payment_handle ? ` — ${c.payment_handle}` : ""}</td>
+                        <td style={{ padding: "14px 16px" }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99, background: c.status === "active" ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)", color: c.status === "active" ? "#16a34a" : "#dc2626" }}>
+                            {c.status}
+                          </span>
+                        </td>
+                        <td style={{ padding: "14px 16px" }}>
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <button onClick={() => openCreatorModal(c)} style={{ background: "rgba(79,70,229,0.08)", border: "1px solid rgba(79,70,229,0.2)", borderRadius: 6, padding: "5px 12px", color: "#4f46e5", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Edit</button>
+                            <button onClick={() => setDeleteCreatorConfirm(c)} style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 6, padding: "5px 12px", color: "#ef4444", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Add/Edit Creator Modal */}
+            {creatorModal && (
+              <div onClick={() => setCreatorModal(false)} style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 16, padding: "32px 36px", width: "min(520px,94vw)", fontFamily: "'Space Grotesk',sans-serif", maxHeight: "90vh", overflowY: "auto" }}>
+                  <h3 style={{ margin: "0 0 24px", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>{editingCreator ? "Edit Creator" : "Add Creator"}</h3>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                    {[["Name", "name", "text", "e.g. Jarrad Wright"], ["Email", "email", "email", "creator@email.com"], ["Payment Handle", "payment_handle", "text", "PayPal email or bank details"]].map(([label, key, type, ph]) => (
+                      <div key={key}>
+                        <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>{label}</label>
+                        <input type={type} value={creatorForm[key]} onChange={e => setCreatorForm(f => ({ ...f, [key]: e.target.value }))} placeholder={ph}
+                          style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#0f172a", outline: "none", boxSizing: "border-box" }} />
+                      </div>
+                    ))}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Referral Code</label>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <input value={creatorForm.referral_code} onChange={e => setCreatorForm(f => ({ ...f, referral_code: e.target.value.toUpperCase() }))} maxLength={10}
+                            style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 13, fontFamily: "monospace", fontWeight: 700, letterSpacing: 2, color: "#fb923c", outline: "none" }} />
+                          <button onClick={() => setCreatorForm(f => ({ ...f, referral_code: genRefCode() }))} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "0 10px", fontSize: 11, cursor: "pointer", color: "#6b7280", whiteSpace: "nowrap" }}>New</button>
+                        </div>
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Rev Share %</label>
+                        <input type="number" min={0} max={100} value={creatorForm.rev_share_percentage} onChange={e => setCreatorForm(f => ({ ...f, rev_share_percentage: parseInt(e.target.value) || 0 }))}
+                          style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#0f172a", outline: "none", boxSizing: "border-box" }} />
+                      </div>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Payment Method</label>
+                        <select value={creatorForm.payment_method} onChange={e => setCreatorForm(f => ({ ...f, payment_method: e.target.value }))}
+                          style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#0f172a", outline: "none", background: "#fff" }}>
+                          <option>PayPal</option><option>Bank Transfer</option><option>Other</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Status</label>
+                        <select value={creatorForm.status} onChange={e => setCreatorForm(f => ({ ...f, status: e.target.value }))}
+                          style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#0f172a", outline: "none", background: "#fff" }}>
+                          <option value="active">Active</option><option value="inactive">Inactive</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Notes</label>
+                      <textarea value={creatorForm.notes} onChange={e => setCreatorForm(f => ({ ...f, notes: e.target.value }))} rows={2} placeholder="Internal notes…"
+                        style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#0f172a", outline: "none", resize: "vertical", boxSizing: "border-box" }} />
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 24 }}>
+                    <button onClick={() => setCreatorModal(false)} style={{ background: "#f1f5f9", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 600, color: "#475569", cursor: "pointer" }}>Cancel</button>
+                    <button onClick={saveCreator} disabled={creatorSaving} style={{ background: "#fb923c", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 700, color: "#fff", cursor: "pointer", opacity: creatorSaving ? 0.7 : 1 }}>
+                      {creatorSaving ? "Saving…" : editingCreator ? "Save Changes" : "Add Creator"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Delete confirm */}
+            {deleteCreatorConfirm && (
+              <div onClick={() => setDeleteCreatorConfirm(null)} style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 14, padding: "32px 36px", width: "min(400px,92vw)", textAlign: "center" }}>
+                  <p style={{ fontSize: 16, fontWeight: 600, color: "#0f172a", marginBottom: 8 }}>Delete "{deleteCreatorConfirm.name}"?</p>
+                  <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 24 }}>Their referral code will stop working. Past payout records are preserved.</p>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button onClick={() => setDeleteCreatorConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "none", borderRadius: 8, padding: "10px", fontSize: 13, fontWeight: 600, color: "#475569", cursor: "pointer" }}>Cancel</button>
+                    <button onClick={() => deleteCreator(deleteCreatorConfirm.id)} style={{ flex: 1, background: "#ef4444", border: "none", borderRadius: 8, padding: "10px", fontSize: 13, fontWeight: 600, color: "#fff", cursor: "pointer" }}>Delete</button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ────── PAYOUTS TAB ────── */}
+        {tab === "payouts" && (
+          <div>
+            {/* Sub-tab toggle */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 28 }}>
+              {[["current", "Monthly Payouts"], ["history", "Payout History"]].map(([v, label]) => (
+                <button key={v} onClick={() => setPayoutView(v)} style={{ background: payoutView === v ? "rgba(167,139,250,0.12)" : "transparent", border: `1px solid ${payoutView === v ? "rgba(167,139,250,0.4)" : "#e2e8f0"}`, borderRadius: 8, padding: "8px 18px", color: payoutView === v ? "#7c3aed" : "#6b7280", fontSize: 13, fontWeight: payoutView === v ? 700 : 400, cursor: "pointer" }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {payoutView === "current" && (
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
+                  <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Monthly Payouts</h2>
+                  <input type="month" value={payoutMonth} onChange={e => setPayoutMonth(e.target.value)}
+                    style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: "7px 12px", fontSize: 13, color: "#0f172a", outline: "none" }} />
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
+                    <span style={{ fontSize: 12, color: "#6b7280" }}>Price/sub: $</span>
+                    <input type="number" value={platformPrice} onChange={e => setPlatformPrice(parseFloat(e.target.value) || 9.99)} step="0.01" min="0"
+                      style={{ width: 72, border: "1px solid #e2e8f0", borderRadius: 8, padding: "7px 10px", fontSize: 13, color: "#0f172a", outline: "none" }} />
+                    <button onClick={loadPayouts} style={{ background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.3)", borderRadius: 8, padding: "7px 14px", color: "#7c3aed", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Calculate</button>
+                    <button onClick={exportPayoutsCSV} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "7px 14px", color: "#475569", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Export CSV</button>
+                  </div>
+                </div>
+
+                {payoutLoading ? (
+                  <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Spinner /></div>
+                ) : payoutData.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: 80, color: "#9ca3af" }}>No creators to pay out. Add creators first.</div>
+                ) : (
+                  <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, overflow: "hidden" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: "#f8fafc", borderBottom: "1px solid #f1f5f9" }}>
+                          {["Creator", "This Month", "Lifetime", "Revenue", "Platform Cut", "Creator Payout", "Status", ""].map(h => (
+                            <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, whiteSpace: "nowrap" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {payoutData.map((row, i) => (
+                          <tr key={row.creator.id} style={{ borderBottom: i < payoutData.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                            <td style={{ padding: "14px 16px" }}>
+                              <p style={{ margin: "0 0 2px", fontWeight: 600, color: "#0f172a" }}>{row.creator.name}</p>
+                              <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>{row.creator.referral_code}</p>
+                            </td>
+                            <td style={{ padding: "14px 16px", color: "#0f172a", fontWeight: 600 }}>{row.monthly} <span style={{ fontSize: 11, color: "#9ca3af" }}>subs</span></td>
+                            <td style={{ padding: "14px 16px", color: "#475569" }}>{row.lifetime}</td>
+                            <td style={{ padding: "14px 16px", color: "#0f172a" }}>${row.revenue.toFixed(2)}</td>
+                            <td style={{ padding: "14px 16px", color: "#475569" }}>${row.cut.toFixed(2)} <span style={{ fontSize: 11, color: "#9ca3af" }}>({100 - row.creator.rev_share_percentage}%)</span></td>
+                            <td style={{ padding: "14px 16px", fontWeight: 700, color: "#7c3aed" }}>${row.payout.toFixed(2)} <span style={{ fontSize: 11, color: "#9ca3af" }}>({row.creator.rev_share_percentage}%)</span></td>
+                            <td style={{ padding: "14px 16px" }}>
+                              {row.status === "paid"
+                                ? <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99, background: "rgba(34,197,94,0.1)", color: "#16a34a" }}>Paid{row.paid_at ? ` ${new Date(row.paid_at).toLocaleDateString()}` : ""}</span>
+                                : <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99, background: "rgba(251,146,60,0.1)", color: "#ea580c" }}>Unpaid</span>
+                              }
+                            </td>
+                            <td style={{ padding: "14px 16px" }}>
+                              <button onClick={() => togglePayoutStatus(row)}
+                                style={{ background: row.status === "paid" ? "rgba(239,68,68,0.08)" : "rgba(34,197,94,0.1)", border: `1px solid ${row.status === "paid" ? "rgba(239,68,68,0.2)" : "rgba(34,197,94,0.3)"}`, borderRadius: 6, padding: "5px 12px", color: row.status === "paid" ? "#ef4444" : "#16a34a", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                                {row.status === "paid" ? "Mark Unpaid" : "Mark Paid"}
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                        {/* Totals row */}
+                        {(() => {
+                          const totalRevenue = payoutData.reduce((s, r) => s + r.revenue, 0);
+                          const totalCut = payoutData.reduce((s, r) => s + r.cut, 0);
+                          const totalPayout = payoutData.reduce((s, r) => s + r.payout, 0);
+                          const unpaidPayout = payoutData.filter(r => r.status !== "paid").reduce((s, r) => s + r.payout, 0);
+                          return (
+                            <tr style={{ background: "#f8fafc", borderTop: "2px solid #e2e8f0" }}>
+                              <td style={{ padding: "14px 16px", fontWeight: 700, color: "#0f172a" }}>Total</td>
+                              <td style={{ padding: "14px 16px", fontWeight: 700, color: "#0f172a" }}>{payoutData.reduce((s, r) => s + r.monthly, 0)} subs</td>
+                              <td style={{ padding: "14px 16px" }}></td>
+                              <td style={{ padding: "14px 16px", fontWeight: 700, color: "#0f172a" }}>${totalRevenue.toFixed(2)}</td>
+                              <td style={{ padding: "14px 16px", fontWeight: 700, color: "#475569" }}>${totalCut.toFixed(2)}</td>
+                              <td style={{ padding: "14px 16px", fontWeight: 700, color: "#7c3aed" }}>${totalPayout.toFixed(2)}</td>
+                              <td colSpan={2} style={{ padding: "14px 16px" }}>
+                                <span style={{ fontSize: 12, color: "#ea580c", fontWeight: 700 }}>${unpaidPayout.toFixed(2)} still owed</span>
+                              </td>
+                            </tr>
+                          );
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {payoutView === "history" && (
+              <div>
+                <h2 style={{ margin: "0 0 24px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Payout History</h2>
+                {payoutHistoryLoading ? (
+                  <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Spinner /></div>
+                ) : payoutHistory.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: 80, color: "#9ca3af" }}>No paid payouts yet.</div>
+                ) : (
+                  <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, overflow: "hidden" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: "#f8fafc", borderBottom: "1px solid #f1f5f9" }}>
+                          {["Month", "Creator", "Ref Code", "Subscribers", "Revenue", "Paid Out", "Rev Share", "Date Paid"].map(h => (
+                            <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6 }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {payoutHistory.map((p, i) => (
+                          <tr key={p.id} style={{ borderBottom: i < payoutHistory.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                            <td style={{ padding: "14px 16px", fontWeight: 600, color: "#0f172a" }}>{p.month}</td>
+                            <td style={{ padding: "14px 16px", color: "#0f172a" }}>{p.creator_name}</td>
+                            <td style={{ padding: "14px 16px" }}><span style={{ fontFamily: "monospace", background: "#f1f5f9", borderRadius: 5, padding: "2px 7px", fontSize: 12, fontWeight: 700, color: "#fb923c" }}>{p.referral_code}</span></td>
+                            <td style={{ padding: "14px 16px", color: "#475569" }}>{p.attributed_subscribers}</td>
+                            <td style={{ padding: "14px 16px", color: "#475569" }}>${(+p.revenue).toFixed(2)}</td>
+                            <td style={{ padding: "14px 16px", fontWeight: 700, color: "#7c3aed" }}>${(+p.payout_amount).toFixed(2)}</td>
+                            <td style={{ padding: "14px 16px", color: "#475569" }}>{p.rev_share_percentage}%</td>
+                            <td style={{ padding: "14px 16px", color: "#475569" }}>{p.paid_at ? new Date(p.paid_at).toLocaleDateString() : "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
     </div>
   );
 }
