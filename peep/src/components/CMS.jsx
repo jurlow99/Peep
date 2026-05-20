@@ -4527,21 +4527,38 @@ export function CMS({ onExit }) {
                               <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>total signups</p>
                             </div>
                           </div>
-                          <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 120, borderBottom: "1px solid #f1f5f9", paddingBottom: 8, marginBottom: 8 }}>
-                            {reportData.userGrowth.map(([month, count]) => (
-                              <div key={month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 4, height: "100%" }}>
-                                <span style={{ fontSize: 11, fontWeight: 700, color: count === max ? "#0f172a" : "#6b7280" }}>{count}</span>
-                                <div style={{ width: "100%", background: count === max ? "#6366f1" : "rgba(99,102,241,0.15)", borderRadius: "4px 4px 0 0", height: `${Math.round((count / max) * 90)}px`, minHeight: 4, transition: "height 0.4s ease" }} />
-                              </div>
-                            ))}
-                          </div>
-                          <div style={{ display: "flex", gap: 6 }}>
-                            {reportData.userGrowth.map(([month]) => (
-                              <div key={month} style={{ flex: 1, textAlign: "center", fontSize: 11, color: "#9ca3af", fontWeight: 500 }}>
-                                {MONTH_NAMES[month.slice(5)] || month.slice(5)}
-                              </div>
-                            ))}
-                          </div>
+                          {(() => {
+                            const svgW = 600, svgH = 100;
+                            const pL = 24, pR = 24, pT = 20, pB = 24;
+                            const cW = svgW - pL - pR, cH = svgH - pT - pB;
+                            const n = reportData.userGrowth.length;
+                            const pts = reportData.userGrowth.map(([month, count], i) => ({
+                              x: n === 1 ? pL + cW / 2 : pL + (i / (n - 1)) * cW,
+                              y: n === 1 ? pT + cH / 2 : pT + (max === 0 ? cH : (1 - count / max) * cH),
+                              month, count,
+                            }));
+                            const line = pts.map(p => `${p.x},${p.y}`).join(" ");
+                            const area = [`${pts[0].x},${pT + cH}`, ...pts.map(p => `${p.x},${p.y}`), `${pts[pts.length - 1].x},${pT + cH}`].join(" ");
+                            return (
+                              <svg viewBox={`0 0 ${svgW} ${svgH}`} style={{ width: "100%", height: "auto", overflow: "visible" }}>
+                                <defs>
+                                  <linearGradient id="signupFill" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor="#6366f1" stopOpacity="0.15" />
+                                    <stop offset="100%" stopColor="#6366f1" stopOpacity="0" />
+                                  </linearGradient>
+                                </defs>
+                                <polygon points={area} fill="url(#signupFill)" />
+                                {n > 1 && <polyline points={line} fill="none" stroke="#6366f1" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />}
+                                {pts.map(p => (
+                                  <g key={p.month}>
+                                    <circle cx={p.x} cy={p.y} r="5" fill="#fff" stroke="#6366f1" strokeWidth="2.5" />
+                                    <text x={p.x} y={p.y - 10} textAnchor="middle" fontSize="11" fontWeight="700" fill="#0f172a">{p.count}</text>
+                                    <text x={p.x} y={pT + cH + 18} textAnchor="middle" fontSize="11" fill="#9ca3af">{MONTH_NAMES[p.month.slice(5)] || p.month.slice(5)}</text>
+                                  </g>
+                                ))}
+                              </svg>
+                            );
+                          })()}
                         </div>
                       );
                     })()}
@@ -5309,6 +5326,28 @@ export function CMS({ onExit }) {
                   style={{ width: 52, height: 28, borderRadius: 14, border: "none", cursor: "pointer", background: bossSettings.fraud_detection_enabled === "true" ? "#7c3aed" : "#d1d5db", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
                   <span style={{ position: "absolute", top: 4, left: bossSettings.fraud_detection_enabled === "true" ? 26 : 4, width: 20, height: 20, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.15)", transition: "left 0.2s" }} />
                 </button>
+              </div>
+            </div>
+
+            {/* ── Beta Access Code ── */}
+            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
+              <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Beta Access Code</p>
+              <p style={{ margin: "0 0 16px", fontSize: 13, color: "#9ca3af" }}>Visitors must enter this code to access the site. Leave blank to disable the gate.</p>
+              <div style={{ display: "flex", gap: 10 }}>
+                <input
+                  defaultValue={bossSettings.beta_code || ""}
+                  id="beta-code-input"
+                  placeholder="e.g. PEEP2026"
+                  style={{ flex: 1, padding: "10px 14px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14, color: "#0f172a", outline: "none" }}
+                />
+                <button
+                  onClick={() => {
+                    const val = document.getElementById("beta-code-input").value.trim();
+                    saveSetting("beta_code", val);
+                    showToast(val ? `Access code set to "${val}"` : "Beta gate disabled");
+                  }}
+                  style={{ padding: "10px 20px", borderRadius: 8, border: "none", background: "#0f172a", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+                >Save</button>
               </div>
             </div>
 
