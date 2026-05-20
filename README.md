@@ -1,16 +1,36 @@
-# React + Vite
+# Peep
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A streaming platform for movies, TV shows, music videos, podcasts, and live TV. Built for independent content creators with a built-in revenue share system.
 
-Currently, two official plugins are available:
+## Tech Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Frontend** — React + Vite
+- **Backend/Database** — Supabase (PostgreSQL)
+- **Hosting** — Cloudflare Pages
+- **Payments** — Stripe
+- **Ads** — VAST/IMA pre-roll ad serving
 
-## React Compiler
+## Running Locally
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+**1. Install dependencies**
+```bash
+cd peep
+npm install
+```
 
-## Expanding the ESLint configuration
+**2. Set up environment variables**
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Create a `.env` file in the `peep/` directory:
+```
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+**3. Start the dev server**
+```bash
+npm run dev
+```
+
+## Deployment
+
+Deployed automatically to Cloudflare Pages on every push to `main`.
