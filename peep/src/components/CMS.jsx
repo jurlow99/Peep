@@ -358,6 +358,7 @@ export function CMS({ onExit }) {
   const [bossSettings, setBossSettings] = useState({ maintenance_mode: "false", banner_active: "false", banner_text: "", banner_expires_at: "" });
   const [storageFiles, setStorageFiles] = useState([]);
   const [storageLoading, setStorageLoading] = useState(false);
+  const [storageFilter, setStorageFilter] = useState("pending");
   const [storageAddModal, setStorageAddModal] = useState(null);
   const [storageAddForm, setStorageAddForm] = useState({ title: "", type: "movie", show_id: "", podcast_id: "", description: "", year: new Date().getFullYear(), genre: "", artist: "", episode_number: 1, season_number: 1 });
   const [storageAddSaving, setStorageAddSaving] = useState(false);
@@ -697,7 +698,19 @@ export function CMS({ onExit }) {
         allFiles.push({ ...f, folder, path, url: urlData?.publicUrl, isVideo: VIDEO_EXTS.includes(ext), isAudio: AUDIO_EXTS.includes(ext) });
       });
     }
-    setStorageFiles(allFiles);
+    const [movRes, epRes, mvRes, peRes] = await Promise.all([
+      supabase.from("videos").select("url"),
+      supabase.from("episodes").select("url"),
+      supabase.from("music_videos").select("url"),
+      supabase.from("podcast_episodes").select("audio_url"),
+    ]);
+    const ingestedUrls = new Set([
+      ...(movRes.data || []).map(r => r.url),
+      ...(epRes.data || []).map(r => r.url),
+      ...(mvRes.data || []).map(r => r.url),
+      ...(peRes.data || []).map(r => r.audio_url),
+    ].filter(Boolean));
+    setStorageFiles(allFiles.map(f => ({ ...f, ingested: ingestedUrls.has(f.url) })));
     setStorageLoading(false);
   }
 
@@ -7310,35 +7323,65 @@ export function CMS({ onExit }) {
               </div>
             )}
 
-            {!storageLoading && storageFiles.length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {storageFiles.map(file => (
-                  <div key={file.path} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "16px 20px", display: "flex", alignItems: "center", gap: 16 }}>
-                    <div style={{ width: 40, height: 40, borderRadius: 8, background: file.isVideo ? "rgba(99,102,241,0.1)" : "rgba(34,211,238,0.1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      {file.isVideo
-                        ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-                        : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" strokeWidth="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-                      }
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{file.name}</p>
-                      <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>
-                        {file.folder ? `/${file.folder}` : "/root"} · {file.metadata?.size ? `${(file.metadata.size / 1024 / 1024).toFixed(1)} MB` : ""}
-                      </p>
-                    </div>
-                    <a href={file.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "#6366f1", textDecoration: "none", flexShrink: 0 }}>Preview</a>
-                    <button
-                      onClick={() => {
-                        const cleanName = file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ").replace(/\b\w/g, c => c.toUpperCase());
-                        setStorageAddForm({ title: cleanName, type: file.isAudio ? "podcast_episode" : "movie", show_id: "", podcast_id: "", description: "", year: new Date().getFullYear(), genre: "", artist: "", episode_number: 1, season_number: 1 });
-                        setStorageAddModal(file);
-                      }}
-                      style={{ padding: "8px 16px", background: "#0f172a", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
-                    >Add to Library</button>
+            {!storageLoading && storageFiles.length > 0 && (() => {
+              const pending = storageFiles.filter(f => !f.ingested);
+              const ingested = storageFiles.filter(f => f.ingested);
+              const visible = storageFilter === "pending" ? pending : storageFilter === "ingested" ? ingested : storageFiles;
+              return (
+                <>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
+                    {[
+                      { key: "pending", label: `Ready to Ingest`, count: pending.length, color: "#f59e0b" },
+                      { key: "ingested", label: `Ingested`, count: ingested.length, color: "#22c55e" },
+                      { key: "all", label: `All`, count: storageFiles.length, color: "#6366f1" },
+                    ].map(({ key, label, count, color }) => (
+                      <button key={key} onClick={() => setStorageFilter(key)} style={{ padding: "8px 18px", borderRadius: 8, border: `1.5px solid ${storageFilter === key ? color : "#e2e8f0"}`, background: storageFilter === key ? color : "#fff", color: storageFilter === key ? "#fff" : "#64748b", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                        {label} <span style={{ opacity: 0.8 }}>({count})</span>
+                      </button>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
+
+                  {visible.length === 0 && (
+                    <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "40px 0" }}>
+                      {storageFilter === "ingested" ? "No files have been ingested yet." : "All files are already ingested."}
+                    </p>
+                  )}
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {visible.map(file => (
+                      <div key={file.path} style={{ background: "#fff", border: `1px solid ${file.ingested ? "#dcfce7" : "#e2e8f0"}`, borderRadius: 12, padding: "16px 20px", display: "flex", alignItems: "center", gap: 16 }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 8, background: file.isVideo ? "rgba(99,102,241,0.1)" : "rgba(34,211,238,0.1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          {file.isVideo
+                            ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+                            : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" strokeWidth="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                          }
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+                            <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{file.name}</p>
+                            {file.ingested && <span style={{ fontSize: 11, fontWeight: 700, color: "#16a34a", background: "#dcfce7", borderRadius: 4, padding: "2px 7px", flexShrink: 0 }}>Ingested</span>}
+                          </div>
+                          <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>
+                            {file.folder ? `/${file.folder}` : "/root"}{file.metadata?.size ? ` · ${(file.metadata.size / 1024 / 1024).toFixed(1)} MB` : ""}
+                          </p>
+                        </div>
+                        <a href={file.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "#6366f1", textDecoration: "none", flexShrink: 0 }}>Preview</a>
+                        {!file.ingested && (
+                          <button
+                            onClick={() => {
+                              const cleanName = file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+                              setStorageAddForm({ title: cleanName, type: file.isAudio ? "podcast_episode" : "movie", show_id: "", podcast_id: "", description: "", year: new Date().getFullYear(), genre: "", artist: "", episode_number: 1, season_number: 1 });
+                              setStorageAddModal(file);
+                            }}
+                            style={{ padding: "8px 16px", background: "#0f172a", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
+                          >Ingest</button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              );
+            })()}
 
             {storageAddModal && (
               <>
