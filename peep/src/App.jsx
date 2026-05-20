@@ -841,10 +841,10 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           {user ? (() => {
             const av = avatarForId(userAvatarId || activeProfile?.avatar_id);
             return (
-              <div onClick={onProfileOpen} title={activeProfile?.name ?? "Profile"} style={{ width: isMobile ? 32 : 36, height: isMobile ? 32 : 36, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg, #6366f1, #8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? (isMobile ? 14 : 16) : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
+              <div onClick={onProfileOpen} title={activeProfile?.name ?? "Profile"} style={{ width: isMobile ? 32 : 36, height: isMobile ? 32 : 36, borderRadius: "50%", background: av?.svg ? "none" : (av?.gradient ?? "linear-gradient(135deg, #6366f1, #8b5cf6)"), display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? (isMobile ? 14 : 16) : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s", overflow: "hidden" }}
                 onMouseEnter={e => e.currentTarget.style.borderColor = "#facc15"}
                 onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}>
-                {av ? av.emoji : (activeProfile?.name?.[0] || user.email[0]).toUpperCase()}
+                {av?.svg ? <div style={{ width: "100%", height: "100%" }} dangerouslySetInnerHTML={{ __html: av.svg }} /> : (av ? av.emoji : (activeProfile?.name?.[0] || user.email[0]).toUpperCase())}
               </div>
             );
           })() : (

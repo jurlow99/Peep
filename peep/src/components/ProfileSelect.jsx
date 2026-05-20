@@ -100,11 +100,11 @@ export function ProfileSelect({ user, onSelect }) {
             <div key={profile.id} onClick={() => !managing && onSelect(profile)}
               style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, cursor: managing ? "default" : "pointer" }}>
               <div
-                style={{ width: 116, height: 116, borderRadius: 12, background: av.gradient, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 46, border: "3px solid transparent", transition: "border-color 0.2s, transform 0.2s", position: "relative" }}
+                style={{ width: 116, height: 116, borderRadius: 12, background: av.svg ? "none" : av.gradient, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 46, border: "3px solid transparent", transition: "border-color 0.2s, transform 0.2s", position: "relative", overflow: "hidden" }}
                 onMouseEnter={e => { if (!managing) { e.currentTarget.style.borderColor = "#fff"; e.currentTarget.style.transform = "scale(1.06)"; } }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.transform = "scale(1)"; }}
               >
-                {av.emoji}
+                {av.svg ? <div style={{ width: "100%", height: "100%" }} dangerouslySetInnerHTML={{ __html: av.svg }} /> : av.emoji}
                 {managing && (
                   <div style={{ position: "absolute", inset: 0, borderRadius: 10, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">

@@ -356,6 +356,11 @@ export function CMS({ onExit }) {
   const [promoForm, setPromoForm] = useState({ name: "", code: "" });
   const [promoSaving, setPromoSaving] = useState(false);
   const [bossSettings, setBossSettings] = useState({ maintenance_mode: "false", banner_active: "false", banner_text: "", banner_expires_at: "" });
+  const [storageFiles, setStorageFiles] = useState([]);
+  const [storageLoading, setStorageLoading] = useState(false);
+  const [storageAddModal, setStorageAddModal] = useState(null);
+  const [storageAddForm, setStorageAddForm] = useState({ title: "", type: "movie", show_id: "", podcast_id: "", description: "", year: new Date().getFullYear(), genre: "", artist: "", episode_number: 1, season_number: 1 });
+  const [storageAddSaving, setStorageAddSaving] = useState(false);
   const [bossTodos, setBossTodos] = useState([]);
   const [newTodo, setNewTodo] = useState("");
   const [newTodoLabel, setNewTodoLabel] = useState("");
@@ -440,6 +445,7 @@ export function CMS({ onExit }) {
     if (tab === "ads") { loadAdAnalytics(); loadTodayStats(); }
     if (tab === "subscriptions") loadSubscriptions();
     if (tab === "boss") { loadPromos(); loadBossSettings(); setBossView("main"); }
+    if (tab === "storage") loadStorageFiles();
   }, [tab]);
 
   useEffect(() => {
@@ -672,6 +678,51 @@ export function CMS({ onExit }) {
     { id: "g4", text: "Marketing/Growth Team + Customer Support", done: false, section: "goal", label: "Business" },
     { id: "g5", text: "Finance/Accounting Team", done: false, section: "goal", label: "Finance" },
   ];
+
+  async function loadStorageFiles() {
+    setStorageLoading(true);
+    const BUCKET = "peep-media";
+    const VIDEO_EXTS = [".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"];
+    const AUDIO_EXTS = [".mp3", ".wav", ".aac", ".m4a", ".ogg"];
+    const folders = ["", "videos", "episodes", "music", "podcasts", "content"];
+    const allFiles = [];
+    for (const folder of folders) {
+      const { data } = await supabase.storage.from(BUCKET).list(folder || undefined, { limit: 200, sortBy: { column: "created_at", order: "desc" } });
+      (data || []).forEach(f => {
+        if (!f.id) return;
+        const ext = f.name.substring(f.name.lastIndexOf(".")).toLowerCase();
+        if (![...VIDEO_EXTS, ...AUDIO_EXTS].includes(ext)) return;
+        const path = folder ? `${folder}/${f.name}` : f.name;
+        const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
+        allFiles.push({ ...f, folder, path, url: urlData?.publicUrl, isVideo: VIDEO_EXTS.includes(ext), isAudio: AUDIO_EXTS.includes(ext) });
+      });
+    }
+    setStorageFiles(allFiles);
+    setStorageLoading(false);
+  }
+
+  async function saveStorageItem() {
+    setStorageAddSaving(true);
+    const f = storageAddForm;
+    const url = storageAddModal?.url;
+    let error = null;
+    if (f.type === "movie") {
+      ({ error } = await supabase.from("videos").insert({ title: f.title, url, description: f.description, year: f.year || null, genre: f.genre || null }));
+    } else if (f.type === "episode") {
+      ({ error } = await supabase.from("episodes").insert({ title: f.title, url, show_id: f.show_id, episode_number: f.episode_number, season_number: f.season_number, description: f.description }));
+    } else if (f.type === "music_video") {
+      ({ error } = await supabase.from("music_videos").insert({ title: f.title, url, artist: f.artist || null }));
+    } else if (f.type === "podcast_episode") {
+      ({ error } = await supabase.from("podcast_episodes").insert({ title: f.title, audio_url: url, podcast_id: f.podcast_id, description: f.description }));
+    }
+    setStorageAddSaving(false);
+    if (!error) {
+      showToast(`"${f.title}" added to library`);
+      setStorageAddModal(null);
+    } else {
+      showToast("Error: " + error.message);
+    }
+  }
 
   async function loadBossSettings() {
     const { data } = await supabase.from("app_settings").select("key, value");
@@ -2756,6 +2807,9 @@ export function CMS({ onExit }) {
         </button>
         <button onClick={() => setTab("boss")} style={{ background: "transparent", border: "none", borderBottom: tab === "boss" ? "2px solid #facc15" : "none", color: tab === "boss" ? "#facc15" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "boss" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
           The Boss
+        </button>
+        <button onClick={() => setTab("storage")} style={{ background: "transparent", border: "none", borderBottom: tab === "storage" ? "2px solid #22d3ee" : "none", color: tab === "storage" ? "#22d3ee" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "storage" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
+          Storage {storageFiles.length > 0 && `(${storageFiles.length})`}
         </button>
       </div>
 
@@ -7230,6 +7284,141 @@ export function CMS({ onExit }) {
                   </div>
                 )}
               </div>
+            )}
+          </div>
+        )}
+
+        {/* ────── STORAGE TAB ────── */}
+        {tab === "storage" && (
+          <div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28, flexWrap: "wrap", gap: 12 }}>
+              <div>
+                <p style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 700, color: "#0f172a" }}>Storage Browser</p>
+                <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Files in your peep-media bucket — click "Add to Library" to create a content record.</p>
+              </div>
+              <button onClick={loadStorageFiles} style={{ padding: "10px 20px", background: "#0f172a", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                {storageLoading ? "Scanning…" : "Refresh"}
+              </button>
+            </div>
+
+            {storageLoading && <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Spinner /></div>}
+
+            {!storageLoading && storageFiles.length === 0 && (
+              <div style={{ textAlign: "center", padding: "80px 0", color: "#9ca3af" }}>
+                <p style={{ fontSize: 15, marginBottom: 8 }}>No media files found in the bucket.</p>
+                <p style={{ fontSize: 13 }}>Upload video or audio files to the <strong>peep-media</strong> bucket in Supabase Storage, then click Refresh.</p>
+              </div>
+            )}
+
+            {!storageLoading && storageFiles.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {storageFiles.map(file => (
+                  <div key={file.path} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "16px 20px", display: "flex", alignItems: "center", gap: 16 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 8, background: file.isVideo ? "rgba(99,102,241,0.1)" : "rgba(34,211,238,0.1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      {file.isVideo
+                        ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+                        : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" strokeWidth="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                      }
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{file.name}</p>
+                      <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>
+                        {file.folder ? `/${file.folder}` : "/root"} · {file.metadata?.size ? `${(file.metadata.size / 1024 / 1024).toFixed(1)} MB` : ""}
+                      </p>
+                    </div>
+                    <a href={file.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "#6366f1", textDecoration: "none", flexShrink: 0 }}>Preview</a>
+                    <button
+                      onClick={() => {
+                        const cleanName = file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+                        setStorageAddForm({ title: cleanName, type: file.isAudio ? "podcast_episode" : "movie", show_id: "", podcast_id: "", description: "", year: new Date().getFullYear(), genre: "", artist: "", episode_number: 1, season_number: 1 });
+                        setStorageAddModal(file);
+                      }}
+                      style={{ padding: "8px 16px", background: "#0f172a", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
+                    >Add to Library</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {storageAddModal && (
+              <>
+                <div onClick={() => setStorageAddModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200 }} />
+                <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 201, background: "#fff", borderRadius: 16, padding: 32, width: "min(520px, 95vw)", maxHeight: "90vh", overflowY: "auto" }}>
+                  <p style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>Add to Library</p>
+                  <p style={{ margin: "0 0 24px", fontSize: 13, color: "#9ca3af", wordBreak: "break-all" }}>{storageAddModal.name}</p>
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Content Type</label>
+                    <select value={storageAddForm.type} onChange={e => setStorageAddForm(p => ({ ...p, type: e.target.value }))} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14, background: "#fff", color: "#0f172a" }}>
+                      <option value="movie">Movie</option>
+                      <option value="episode">TV Episode</option>
+                      <option value="music_video">Music Video</option>
+                      <option value="podcast_episode">Podcast Episode</option>
+                    </select>
+                  </div>
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Title</label>
+                    <input value={storageAddForm.title} onChange={e => setStorageAddForm(p => ({ ...p, title: e.target.value }))} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14, boxSizing: "border-box" }} />
+                  </div>
+                  {storageAddForm.type === "episode" && (
+                    <>
+                      <div style={{ marginBottom: 16 }}>
+                        <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Show</label>
+                        <select value={storageAddForm.show_id} onChange={e => setStorageAddForm(p => ({ ...p, show_id: e.target.value }))} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14, background: "#fff" }}>
+                          <option value="">Select a show…</option>
+                          {showsList.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+                        <div>
+                          <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Season</label>
+                          <input type="number" value={storageAddForm.season_number} onChange={e => setStorageAddForm(p => ({ ...p, season_number: parseInt(e.target.value) || 1 }))} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14, boxSizing: "border-box" }} />
+                        </div>
+                        <div>
+                          <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Episode #</label>
+                          <input type="number" value={storageAddForm.episode_number} onChange={e => setStorageAddForm(p => ({ ...p, episode_number: parseInt(e.target.value) || 1 }))} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14, boxSizing: "border-box" }} />
+                        </div>
+                      </div>
+                    </>
+                  )}
+                  {storageAddForm.type === "podcast_episode" && (
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Podcast</label>
+                      <select value={storageAddForm.podcast_id} onChange={e => setStorageAddForm(p => ({ ...p, podcast_id: e.target.value }))} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14, background: "#fff" }}>
+                        <option value="">Select a podcast…</option>
+                        {podcastsList.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  {storageAddForm.type === "music_video" && (
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Artist</label>
+                      <input value={storageAddForm.artist} onChange={e => setStorageAddForm(p => ({ ...p, artist: e.target.value }))} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14, boxSizing: "border-box" }} />
+                    </div>
+                  )}
+                  {storageAddForm.type === "movie" && (
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Year</label>
+                        <input type="number" value={storageAddForm.year} onChange={e => setStorageAddForm(p => ({ ...p, year: parseInt(e.target.value) || null }))} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14, boxSizing: "border-box" }} />
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Genre</label>
+                        <input value={storageAddForm.genre} onChange={e => setStorageAddForm(p => ({ ...p, genre: e.target.value }))} placeholder="Comedy, Drama…" style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14, boxSizing: "border-box" }} />
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ marginBottom: 24 }}>
+                    <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Description</label>
+                    <textarea value={storageAddForm.description} onChange={e => setStorageAddForm(p => ({ ...p, description: e.target.value }))} rows={3} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14, resize: "vertical", boxSizing: "border-box" }} />
+                  </div>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button onClick={() => setStorageAddModal(null)} style={{ flex: 1, padding: "11px 0", background: "#f1f5f9", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#64748b" }}>Cancel</button>
+                    <button onClick={saveStorageItem} disabled={storageAddSaving || !storageAddForm.title} style={{ flex: 2, padding: "11px 0", background: "#0f172a", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#fff", opacity: storageAddSaving || !storageAddForm.title ? 0.6 : 1 }}>
+                      {storageAddSaving ? "Saving…" : "Add to Library"}
+                    </button>
+                  </div>
+                </div>
+              </>
             )}
           </div>
         )}
