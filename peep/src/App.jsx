@@ -4184,8 +4184,8 @@ function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, o
       {/* Profile header */}
       <div style={{ padding: `0 ${PAD}`, marginTop: -52, position: "relative", zIndex: 1 }}>
         <div style={{ display: "flex", alignItems: "flex-end", gap: 20, marginBottom: 16, flexWrap: "wrap" }}>
-          <div style={{ width: isMobile ? 80 : 100, height: isMobile ? 80 : 100, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: isMobile ? 32 : 40, border: "4px solid #0a0a0a", flexShrink: 0 }}>
-            {av?.emoji ?? "?"}
+          <div style={{ width: isMobile ? 80 : 100, height: isMobile ? 80 : 100, borderRadius: "50%", background: av?.svg ? "none" : (av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)"), display: "flex", alignItems: "center", justifyContent: "center", fontSize: isMobile ? 32 : 40, border: "4px solid #0a0a0a", flexShrink: 0, overflow: "hidden" }}>
+            {av?.svg ? <div style={{ width: "100%", height: "100%" }} dangerouslySetInnerHTML={{ __html: av.svg }} /> : (av?.emoji ?? (activeProfile?.name?.[0] ?? user?.email?.[0] ?? "?").toUpperCase())}
           </div>
           <div style={{ flex: 1, minWidth: 0, paddingBottom: 6 }}>
             <h1 style={{ margin: "0 0 3px", fontSize: isMobile ? 22 : 28, fontWeight: 700, color: "#fff" }}>{activeProfile?.name}</h1>
