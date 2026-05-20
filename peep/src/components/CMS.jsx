@@ -294,15 +294,20 @@ export function CMS({ onExit }) {
   const [creatorsLoading, setCreatorsLoading] = useState(false);
   const [creatorModal, setCreatorModal] = useState(false);
   const [editingCreator, setEditingCreator] = useState(null);
-  const [creatorForm, setCreatorForm] = useState({ name: "", email: "", referral_code: "", rev_share_percentage: 50, payment_method: "PayPal", payment_handle: "", routing_number: "", status: "active", notes: "" });
+  const [creatorForm, setCreatorForm] = useState({ name: "", email: "", payment_method: "PayPal", payment_handle: "", routing_number: "", status: "active", notes: "" });
   const [creatorSaving, setCreatorSaving] = useState(false);
   const [deleteCreatorConfirm, setDeleteCreatorConfirm] = useState(null);
 
   // Payouts state
-  const [payoutMonth, setPayoutMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [payoutMonth, setPayoutMonth] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    return d.toISOString().slice(0, 7);
+  });
   const [payoutData, setPayoutData] = useState([]);
   const [payoutLoading, setPayoutLoading] = useState(false);
   const [payoutView, setPayoutView] = useState("current"); // "current" | "history"
+  const [showPayoutInfo, setShowPayoutInfo] = useState(false);
   const [payoutHistory, setPayoutHistory] = useState([]);
   const [payoutHistoryLoading, setPayoutHistoryLoading] = useState(false);
   const [totalRevenue, setTotalRevenue] = useState(0);
@@ -351,6 +356,8 @@ export function CMS({ onExit }) {
   const [promoForm, setPromoForm] = useState({ name: "", code: "" });
   const [promoSaving, setPromoSaving] = useState(false);
   const [bossSettings, setBossSettings] = useState({ maintenance_mode: "false", banner_active: "false", banner_text: "", banner_expires_at: "" });
+  const [bossTodos, setBossTodos] = useState([]);
+  const [newTodo, setNewTodo] = useState("");
   const [grantEmail, setGrantEmail] = useState("");
   const [grantLoading, setGrantLoading] = useState(false);
   const [grantResult, setGrantResult] = useState(null);
@@ -435,7 +442,7 @@ export function CMS({ onExit }) {
   useEffect(() => {
     if (tab !== "boss") return;
     if (bossView === "creators") { loadCreators(); loadContentCreators(); }
-    if (bossView === "payouts") { loadPayoutHistory(); }
+    if (bossView === "payouts") { loadPayoutHistory(); loadPayouts(); }
   }, [bossView]);
 
   useEffect(() => {
@@ -642,11 +649,41 @@ export function CMS({ onExit }) {
     showToast("User unblocked");
   }
 
+  const DEFAULT_TODOS = [
+    { id: "1", text: "Form LLC", done: false },
+    { id: "2", text: "Register DMCA agent at copyright.gov ($6)", done: false },
+    { id: "3", text: "Set up Terms of Service + Privacy Policy", done: false },
+    { id: "4", text: "Write creator agreement template", done: false },
+    { id: "5", text: "First licensed content on platform", done: false },
+    { id: "6", text: "Set up Stripe for subscriptions", done: false },
+  ];
+
   async function loadBossSettings() {
     const { data } = await supabase.from("app_settings").select("key, value");
     const s = {};
     (data || []).forEach(r => { s[r.key] = r.value; });
     setBossSettings(prev => ({ ...prev, ...s }));
+    const todosRow = (data || []).find(r => r.key === "boss_todos");
+    setBossTodos(todosRow ? JSON.parse(todosRow.value) : DEFAULT_TODOS);
+  }
+
+  async function saveTodos(todos) {
+    setBossTodos(todos);
+    await supabase.from("app_settings").upsert({ key: "boss_todos", value: JSON.stringify(todos), updated_at: new Date().toISOString() }, { onConflict: "key" });
+  }
+
+  function toggleTodo(id) {
+    saveTodos(bossTodos.map(t => t.id === id ? { ...t, done: !t.done } : t));
+  }
+
+  function deleteTodo(id) {
+    saveTodos(bossTodos.filter(t => t.id !== id));
+  }
+
+  function addTodo() {
+    if (!newTodo.trim()) return;
+    saveTodos([...bossTodos, { id: Date.now().toString(), text: newTodo.trim(), done: false }]);
+    setNewTodo("");
   }
 
   async function saveSetting(key, value) {
@@ -731,9 +768,6 @@ export function CMS({ onExit }) {
 
   // ──── CREATORS ────
 
-  function genRefCode() {
-    return Array.from({ length: 6 }, () => "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[Math.floor(Math.random() * 36)]).join("");
-  }
 
   async function loadCreators() {
     setCreatorsLoading(true);
@@ -745,18 +779,18 @@ export function CMS({ onExit }) {
   function openCreatorModal(creator = null) {
     if (creator) {
       setEditingCreator(creator);
-      setCreatorForm({ name: creator.name, email: creator.email, referral_code: creator.referral_code, rev_share_percentage: creator.rev_share_percentage, payment_method: creator.payment_method || "PayPal", payment_handle: creator.payment_handle || "", routing_number: creator.routing_number || "", status: creator.status, notes: creator.notes || "" });
+      setCreatorForm({ name: creator.name, email: creator.email, payment_method: creator.payment_method || "PayPal", payment_handle: creator.payment_handle || "", routing_number: creator.routing_number || "", status: creator.status, notes: creator.notes || "" });
     } else {
       setEditingCreator(null);
-      setCreatorForm({ name: "", email: "", referral_code: genRefCode(), rev_share_percentage: 50, payment_method: "PayPal", payment_handle: "", status: "active", notes: "" });
+      setCreatorForm({ name: "", email: "", payment_method: "PayPal", payment_handle: "", status: "active", notes: "" });
     }
     setCreatorModal(true);
   }
 
   async function saveCreator() {
-    if (!creatorForm.name.trim() || !creatorForm.email.trim() || !creatorForm.referral_code.trim()) return;
+    if (!creatorForm.name.trim() || !creatorForm.email.trim()) return;
     setCreatorSaving(true);
-    const payload = { ...creatorForm, referral_code: creatorForm.referral_code.toUpperCase().trim(), email: creatorForm.email.trim().toLowerCase() };
+    const payload = { ...creatorForm, email: creatorForm.email.trim().toLowerCase() };
     let error;
     if (editingCreator) {
       ({ error } = await supabase.from("creators").update(payload).eq("id", editingCreator.id));
@@ -804,7 +838,8 @@ export function CMS({ onExit }) {
     if (!creators?.length) { setPayoutData([]); setPayoutLoading(false); return; }
 
     const monthStart = `${payoutMonth}-01T00:00:00.000Z`;
-    const monthEnd = new Date(new Date(monthStart).getFullYear(), new Date(monthStart).getMonth() + 1, 1).toISOString();
+    const _ms = new Date(monthStart);
+    const monthEnd = new Date(Date.UTC(_ms.getUTCFullYear(), _ms.getUTCMonth() + 1, 1)).toISOString();
 
     const [
       { data: links },
@@ -814,7 +849,7 @@ export function CMS({ onExit }) {
       { data: existingPayouts },
     ] = await Promise.all([
       supabase.from("content_creators").select("*"),
-      supabase.from("watch_progress").select("content_id, content_type, progress_seconds").gte("last_watched_at", monthStart).lt("last_watched_at", monthEnd),
+      supabase.from("watch_progress").select("content_id, content_type, progress_seconds, duration_seconds, user_id").gte("last_watched_at", monthStart).lt("last_watched_at", monthEnd),
       supabase.from("episodes").select("id, show_id"),
       supabase.from("podcast_episodes").select("id, podcast_id"),
       supabase.from("creator_payouts").select("*").eq("month", payoutMonth),
@@ -824,10 +859,26 @@ export function CMS({ onExit }) {
     const contentToCreator = {};
     (links || []).forEach(l => { contentToCreator[`${l.content_type}:${l.content_id}`] = l.creator_id; });
 
-    // Sum watch seconds per creator
-    const creatorSeconds = {};
-    let totalSeconds = 0;
+    // Deduplicate: keep best (highest progress) session per user per content
+    const userContentBest = {};
     (watchData || []).forEach(w => {
+      const key = `${w.user_id}:${w.content_type}:${w.content_id}`;
+      if (!userContentBest[key] || w.progress_seconds > userContentBest[key].progress_seconds) {
+        userContentBest[key] = w;
+      }
+    });
+
+    // 25% threshold: must have watched at least 25% of content to count
+    const qualifyingWatches = Object.values(userContentBest).filter(w => {
+      if (w.duration_seconds > 0) return w.progress_seconds >= w.duration_seconds * 0.25;
+      return w.progress_seconds >= 60; // fallback: at least 1 min if duration unknown
+    });
+
+    // Sum watch seconds per creator, track per-user for fraud detection
+    const creatorSeconds = {};
+    const creatorUserSeconds = {};
+    let totalSeconds = 0;
+    qualifyingWatches.forEach(w => {
       let creatorId = contentToCreator[`${w.content_type}:${w.content_id}`];
       if (!creatorId && w.content_type === "episode") {
         const ep = (episodes || []).find(e => String(e.id) === String(w.content_id));
@@ -840,7 +891,19 @@ export function CMS({ onExit }) {
       if (creatorId) {
         creatorSeconds[creatorId] = (creatorSeconds[creatorId] || 0) + (w.progress_seconds || 0);
         totalSeconds += (w.progress_seconds || 0);
+        if (!creatorUserSeconds[creatorId]) creatorUserSeconds[creatorId] = {};
+        const uid = w.user_id || "unknown";
+        creatorUserSeconds[creatorId][uid] = (creatorUserSeconds[creatorId][uid] || 0) + (w.progress_seconds || 0);
       }
+    });
+
+    // Fraud flag: one user accounts for >40% of a creator's watch time
+    const fraudFlags = {};
+    Object.entries(creatorUserSeconds).forEach(([cId, userMap]) => {
+      const total = creatorSeconds[cId] || 0;
+      if (total === 0) return;
+      const maxUserSecs = Math.max(...Object.values(userMap));
+      if (maxUserSecs / total > 0.4) fraudFlags[cId] = Math.round(maxUserSecs / total * 100);
     });
 
     const creatorPool = +(totalRevenue * 0.5).toFixed(2);
@@ -851,7 +914,7 @@ export function CMS({ onExit }) {
       const share = totalSeconds > 0 ? secs / totalSeconds : 0;
       const payout = +(creatorPool * share).toFixed(2);
       const saved = (existingPayouts || []).find(p => p.creator_id === c.id);
-      return { creator: c, watchMins, share: +(share * 100).toFixed(1), payout, status: saved?.status || "unpaid", paid_at: saved?.paid_at || null, payout_id: saved?.id || null };
+      return { creator: c, watchMins, share: +(share * 100).toFixed(1), payout, status: saved?.status || "unpaid", paid_at: saved?.paid_at || null, payout_id: saved?.id || null, fraudFlag: fraudFlags[c.id] || null };
     });
 
     setPayoutData(rows);
@@ -868,10 +931,10 @@ export function CMS({ onExit }) {
   async function togglePayoutStatus(row) {
     const newStatus = row.status === "paid" ? "unpaid" : "paid";
     const payload = {
-      creator_id: row.creator.id, creator_name: row.creator.name, referral_code: row.creator.referral_code,
+      creator_id: row.creator.id, creator_name: row.creator.name,
       month: payoutMonth, attributed_subscribers: row.watchMins, lifetime_subscribers: 0,
       revenue: totalRevenue, platform_cut: +(totalRevenue * 0.5).toFixed(2),
-      payout_amount: row.payout, rev_share_percentage: Math.round(row.share),
+      payout_amount: row.payout,
       status: newStatus, paid_at: newStatus === "paid" ? new Date().toISOString() : null,
     };
     if (row.payout_id) {
@@ -884,8 +947,8 @@ export function CMS({ onExit }) {
   }
 
   function exportPayoutsCSV() {
-    const headers = ["Creator", "Email", "Referral Code", "Watch Time (mins)", "Watch Share %", "Total Revenue", "Creator Payout", "Status", "Paid Date"];
-    const csvRows = payoutData.map(r => [r.creator.name, r.creator.email, r.creator.referral_code, r.watchMins, r.share + "%", totalRevenue.toFixed(2), r.payout.toFixed(2), r.status, r.paid_at ? new Date(r.paid_at).toLocaleDateString() : ""].map(v => `"${v}"`));
+    const headers = ["Creator", "Email", "Watch Time (mins)", "Watch Share %", "Total Revenue", "Creator Payout", "Status", "Paid Date"];
+    const csvRows = payoutData.map(r => [r.creator.name, r.creator.email, r.watchMins, r.share + "%", totalRevenue.toFixed(2), r.payout.toFixed(2), r.status, r.paid_at ? new Date(r.paid_at).toLocaleDateString() : ""].map(v => `"${v}"`));
     const csv = [headers, ...csvRows].map(r => r.join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -5106,6 +5169,31 @@ export function CMS({ onExit }) {
               <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Platform controls — only you can see this.</p>
             </div>
 
+            {/* ── Boss TODO List ── */}
+            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                <div>
+                  <p style={{ margin: "0 0 3px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Boss TODO</p>
+                  <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>{bossTodos.filter(t => t.done).length} of {bossTodos.length} done</p>
+                </div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+                {bossTodos.map(t => (
+                  <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: t.done ? "#f8fafc" : "#fff", border: "1px solid #f1f5f9", borderRadius: 8 }}>
+                    <button onClick={() => toggleTodo(t.id)} style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${t.done ? "#7c3aed" : "#d1d5db"}`, background: t.done ? "#7c3aed" : "#fff", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>
+                      {t.done && <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1.5 5L4 7.5L8.5 2.5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                    </button>
+                    <span style={{ flex: 1, fontSize: 13, color: t.done ? "#9ca3af" : "#0f172a", textDecoration: t.done ? "line-through" : "none" }}>{t.text}</span>
+                    <button onClick={() => deleteTodo(t.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#d1d5db", fontSize: 16, lineHeight: 1, padding: "0 2px" }}>×</button>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input value={newTodo} onChange={e => setNewTodo(e.target.value)} onKeyDown={e => e.key === "Enter" && addTodo()} placeholder="Add a task..." style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 12px", fontSize: 13, color: "#0f172a", outline: "none" }} />
+                <button onClick={addTodo} style={{ background: "#facc15", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 700, color: "#0a0a0a", cursor: "pointer" }}>Add</button>
+              </div>
+            </div>
+
             {/* ── Maintenance Mode ── */}
             <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
@@ -5150,6 +5238,21 @@ export function CMS({ onExit }) {
                   {grantResult.success ? "✓ " : "✗ "}{grantResult.msg}
                 </p>
               )}
+            </div>
+
+            {/* ── Fraud Detection Toggle ── */}
+            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+                <div>
+                  <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Payout Fraud Detection</p>
+                  <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Flags creators where one account drives over 40% of their watch time. Turn on once you have enough real viewers.</p>
+                </div>
+                <button
+                  onClick={() => { const next = bossSettings.fraud_detection_enabled !== "true"; saveSetting("fraud_detection_enabled", String(next)); showToast(next ? "Fraud detection ON" : "Fraud detection OFF"); }}
+                  style={{ width: 52, height: 28, borderRadius: 14, border: "none", cursor: "pointer", background: bossSettings.fraud_detection_enabled === "true" ? "#7c3aed" : "#d1d5db", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                  <span style={{ position: "absolute", top: 4, left: bossSettings.fraud_detection_enabled === "true" ? 26 : 4, width: 20, height: 20, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.15)", transition: "left 0.2s" }} />
+                </button>
+              </div>
             </div>
 
             {/* ── Creators Card ── */}
@@ -6679,7 +6782,7 @@ export function CMS({ onExit }) {
                 <table style={{ width: "100%", minWidth: 700, borderCollapse: "collapse", fontSize: 13, background: "#fff" }}>
                   <thead>
                     <tr style={{ borderBottom: "1px solid #f1f5f9", background: "#f8fafc" }}>
-                      {["Name", "Email", "Ref Code", "Rev Share", "Payment", "Status", "Actions"].map(h => (
+                      {["Name", "Email", "Payment", "Status", "Actions"].map(h => (
                         <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, whiteSpace: "nowrap" }}>{h}</th>
                       ))}
                     </tr>
@@ -6689,10 +6792,7 @@ export function CMS({ onExit }) {
                       <tr key={c.id} style={{ borderBottom: i < creatorsList.length - 1 ? "1px solid #f1f5f9" : "none" }}>
                         <td style={{ padding: "12px 16px", fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap" }}>{c.name}</td>
                         <td style={{ padding: "12px 16px", color: "#475569" }}>{c.email}</td>
-                        <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}>
-                          <span style={{ fontFamily: "monospace", background: "#f1f5f9", borderRadius: 5, padding: "3px 8px", fontSize: 12, fontWeight: 700, color: "#fb923c", letterSpacing: 1 }}>{c.referral_code}</span>
-                        </td>
-                        <td style={{ padding: "12px 16px", color: "#0f172a", fontWeight: 600, whiteSpace: "nowrap" }}>{c.rev_share_percentage}%</td>
+
                         <td style={{ padding: "12px 16px", color: "#475569", whiteSpace: "nowrap" }}>{c.payment_method}{c.payment_handle ? ` — ${c.payment_handle}` : ""}</td>
                         <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}>
                           <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99, background: c.status === "active" ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)", color: c.status === "active" ? "#16a34a" : "#dc2626" }}>
@@ -6745,21 +6845,6 @@ export function CMS({ onExit }) {
                         </div>
                       </div>
                     )}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                      <div>
-                        <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Referral Code</label>
-                        <div style={{ display: "flex", gap: 8 }}>
-                          <input value={creatorForm.referral_code} onChange={e => setCreatorForm(f => ({ ...f, referral_code: e.target.value.toUpperCase() }))} maxLength={10}
-                            style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 13, fontFamily: "monospace", fontWeight: 700, letterSpacing: 2, color: "#fb923c", outline: "none" }} />
-                          <button onClick={() => setCreatorForm(f => ({ ...f, referral_code: genRefCode() }))} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "0 10px", fontSize: 11, cursor: "pointer", color: "#6b7280", whiteSpace: "nowrap" }}>New</button>
-                        </div>
-                      </div>
-                      <div>
-                        <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Rev Share %</label>
-                        <input type="number" min={0} max={100} value={creatorForm.rev_share_percentage} onChange={e => setCreatorForm(f => ({ ...f, rev_share_percentage: parseInt(e.target.value) || 0 }))}
-                          style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#0f172a", outline: "none", boxSizing: "border-box" }} />
-                      </div>
-                    </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                       <div>
                         <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Payment Method</label>
@@ -6873,8 +6958,66 @@ export function CMS({ onExit }) {
               ))}
             </div>
 
+            {/* How payouts work info box */}
+            <div style={{ marginBottom: 20 }}>
+              <button onClick={() => setShowPayoutInfo(v => !v)} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, color: "#6b7280", fontSize: 12, fontWeight: 600 }}>
+                <span style={{ fontSize: 14 }}>{showPayoutInfo ? "▾" : "▸"}</span> How payouts work
+              </button>
+              {showPayoutInfo && (
+                <div style={{ marginTop: 12, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px" }}>
+                  <p style={{ margin: "0 0 12px", fontWeight: 700, fontSize: 14, color: "#0f172a" }}>Creator Revenue Share — How It Works</p>
+                  <p style={{ margin: "0 0 10px", fontSize: 13, color: "#374151", lineHeight: 1.6 }}>Every month, <strong>50% of Peep's total revenue</strong> goes into a creator pool. Each creator's cut of that pool is based on how much of the platform's total watch time their content drove that month.</p>
+                  <p style={{ margin: "0 0 6px", fontSize: 12, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5 }}>Formula</p>
+                  <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px", marginBottom: 12, fontFamily: "monospace", fontSize: 12, color: "#374151" }}>
+                    Creator Pool = Total Revenue × 50%<br />
+                    Your Payout = Creator Pool × (Your Watch Mins ÷ All Watch Mins)
+                  </div>
+                  <p style={{ margin: "0 0 6px", fontSize: 12, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5 }}>Example</p>
+                  <p style={{ margin: "0 0 10px", fontSize: 13, color: "#374151", lineHeight: 1.6 }}>Peep makes <strong>$2,000</strong> → pool is <strong>$1,000</strong>. Your content = <strong>30% of all watch time</strong> → you earn <strong>$300</strong>.</p>
+                  <p style={{ margin: "0 0 10px", fontSize: 13, color: "#374151", lineHeight: 1.6 }}>The per-minute rate is never fixed — it grows as Peep grows. More subscribers = more revenue = bigger pool = more money per watch minute.</p>
+                  <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>Payments go out on the 15th of each month for the previous month's watch data. Only watch sessions where the viewer watched at least 25% of an episode count toward your total.</p>
+                </div>
+              )}
+            </div>
+
             {payoutView === "current" && (
               <div>
+                {(() => {
+                  const today = new Date();
+                  const day = today.getDate();
+                  const yr = today.getFullYear();
+                  const mo = today.getMonth();
+                  const nextDue = day < 15 ? new Date(yr, mo, 15) : new Date(yr, mo + 1, 15);
+                  const daysUntil = Math.ceil((nextDue - today) / 86400000);
+                  const nextDueStr = nextDue.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+                  const lastMonthStr = new Date(yr, mo - 1).toISOString().slice(0, 7);
+                  const unpaidCount = payoutData.filter(r => r.status !== "paid").length;
+                  const isOverdue = day >= 15 && payoutMonth === lastMonthStr && unpaidCount > 0;
+                  const overdueMonthLabel = new Date(payoutMonth + "-02").toLocaleDateString("en-US", { month: "long", year: "numeric" });
+                  return (
+                    <div style={{ marginBottom: 20 }}>
+                      {isOverdue && (
+                        <div style={{ background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 12, padding: "14px 20px", marginBottom: 12, display: "flex", alignItems: "center", gap: 16 }}>
+                          <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#ef4444", flexShrink: 0 }} />
+                          <div>
+                            <p style={{ margin: 0, fontWeight: 700, color: "#ef4444", fontSize: 14 }}>Overdue — {overdueMonthLabel} payouts not complete</p>
+                            <p style={{ margin: "3px 0 0", fontSize: 12, color: "#6b7280" }}>Payments were due by the 15th. {unpaidCount} creator{unpaidCount !== 1 ? "s" : ""} still unpaid.</p>
+                          </div>
+                        </div>
+                      )}
+                      <div style={{ background: isOverdue ? "rgba(239,68,68,0.04)" : "rgba(167,139,250,0.06)", border: `1px solid ${isOverdue ? "rgba(239,68,68,0.15)" : "rgba(167,139,250,0.2)"}`, borderRadius: 12, padding: "14px 20px", display: "flex", alignItems: "center", gap: 16 }}>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ margin: 0, fontSize: 11, color: "#6b7280", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>Next Payout Due</p>
+                          <p style={{ margin: "4px 0 0", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>{nextDueStr}</p>
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: isOverdue ? "#ef4444" : "#7c3aed" }}>{daysUntil === 0 ? "Due today" : daysUntil === 1 ? "1 day away" : `${daysUntil} days away`}</p>
+                          <p style={{ margin: "3px 0 0", fontSize: 11, color: "#9ca3af" }}>Payments go out on the 15th of each month</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
                 <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
                   <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Monthly Payouts</h2>
                   <input type="month" value={payoutMonth} onChange={e => setPayoutMonth(e.target.value)}
@@ -6907,8 +7050,13 @@ export function CMS({ onExit }) {
                         {payoutData.map((row, i) => (
                           <tr key={row.creator.id} style={{ borderBottom: i < payoutData.length - 1 ? "1px solid #f1f5f9" : "none" }}>
                             <td style={{ padding: "14px 16px" }}>
-                              <p style={{ margin: "0 0 2px", fontWeight: 600, color: "#0f172a" }}>{row.creator.name}</p>
-                              <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>{row.creator.referral_code}</p>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <p style={{ margin: "0 0 2px", fontWeight: 600, color: "#0f172a" }}>{row.creator.name}</p>
+                                {row.fraudFlag && bossSettings.fraud_detection_enabled === "true" && (
+                                  <span title={`One account = ${row.fraudFlag}% of this creator's watch time`} style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 99, background: "rgba(239,68,68,0.1)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.25)", whiteSpace: "nowrap", cursor: "default" }}>Suspicious</span>
+                                )}
+                              </div>
+                              <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>{row.creator.email}</p>
                             </td>
                             <td style={{ padding: "14px 16px", color: "#0f172a", fontWeight: 600 }}>
                               {row.watchMins >= 60 ? `${(row.watchMins / 60).toFixed(1)} hrs` : `${row.watchMins} mins`}
@@ -6965,7 +7113,7 @@ export function CMS({ onExit }) {
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                       <thead>
                         <tr style={{ background: "#f8fafc", borderBottom: "1px solid #f1f5f9" }}>
-                          {["Month", "Creator", "Ref Code", "Subscribers", "Revenue", "Paid Out", "Rev Share", "Date Paid"].map(h => (
+                          {["Month", "Creator", "Watch Time", "Revenue", "Paid Out", "Date Paid"].map(h => (
                             <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6 }}>{h}</th>
                           ))}
                         </tr>
@@ -6975,11 +7123,9 @@ export function CMS({ onExit }) {
                           <tr key={p.id} style={{ borderBottom: i < payoutHistory.length - 1 ? "1px solid #f1f5f9" : "none" }}>
                             <td style={{ padding: "14px 16px", fontWeight: 600, color: "#0f172a" }}>{p.month}</td>
                             <td style={{ padding: "14px 16px", color: "#0f172a" }}>{p.creator_name}</td>
-                            <td style={{ padding: "14px 16px" }}><span style={{ fontFamily: "monospace", background: "#f1f5f9", borderRadius: 5, padding: "2px 7px", fontSize: 12, fontWeight: 700, color: "#fb923c" }}>{p.referral_code}</span></td>
                             <td style={{ padding: "14px 16px", color: "#475569" }}>{p.attributed_subscribers}</td>
                             <td style={{ padding: "14px 16px", color: "#475569" }}>${(+p.revenue).toFixed(2)}</td>
                             <td style={{ padding: "14px 16px", fontWeight: 700, color: "#7c3aed" }}>${(+p.payout_amount).toFixed(2)}</td>
-                            <td style={{ padding: "14px 16px", color: "#475569" }}>{p.rev_share_percentage}%</td>
                             <td style={{ padding: "14px 16px", color: "#475569" }}>{p.paid_at ? new Date(p.paid_at).toLocaleDateString() : "—"}</td>
                           </tr>
                         ))}
