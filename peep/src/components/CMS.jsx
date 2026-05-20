@@ -699,15 +699,15 @@ export function CMS({ onExit }) {
       });
     }
     const [movRes, epRes, mvRes, peRes] = await Promise.all([
-      supabase.from("videos").select("url"),
+      supabase.from("videos").select("url, trailer_url"),
       supabase.from("episodes").select("url"),
-      supabase.from("music_videos").select("url"),
+      supabase.from("music_videos").select("url, trailer_url"),
       supabase.from("podcast_episodes").select("audio_url"),
     ]);
     const ingestedUrls = new Set([
-      ...(movRes.data || []).map(r => r.url),
+      ...(movRes.data || []).flatMap(r => [r.url, r.trailer_url]),
       ...(epRes.data || []).map(r => r.url),
-      ...(mvRes.data || []).map(r => r.url),
+      ...(mvRes.data || []).flatMap(r => [r.url, r.trailer_url]),
       ...(peRes.data || []).map(r => r.audio_url),
     ].filter(Boolean));
     setStorageFiles(allFiles.map(f => ({ ...f, ingested: ingestedUrls.has(f.url) })));
