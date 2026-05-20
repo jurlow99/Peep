@@ -371,6 +371,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
   const [songs, setSongs] = useState([]);
   const [albums, setAlbums] = useState([]);
   const [playingSong, setPlayingSong] = useState(null);
+  const [songPaused, setSongPaused] = useState(false);
   const [continueWatching, setContinueWatching] = useState([]);
   const [loading, setLoading] = useState(true);
   const [scrolled, setScrolled] = useState(false);
@@ -926,7 +927,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       )}
 
       {activeNav === "Music" && !loading && (
-        <MusicPage musicVideos={musicVideos} songs={songs} albums={albums} sections={sections} onPlay={handleMusicVideoPlay} onPlaySong={setPlayingSong} />
+        <MusicPage musicVideos={musicVideos} songs={songs} albums={albums} sections={sections} onPlay={handleMusicVideoPlay} playingSong={playingSong} songPaused={songPaused} onPlaySong={s => { if (playingSong?.id === s.id) { setSongPaused(p => !p); } else { setPlayingSong(s); setSongPaused(false); } }} />
       )}
 
       {/* My List — full grid */}
@@ -989,7 +990,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         </div>
       )}
 
-      {playingSong && <MiniPlayer song={playingSong} onClose={() => setPlayingSong(null)} isMobile={isMobile} />}
+      {playingSong && <MiniPlayer song={playingSong} onClose={() => { setPlayingSong(null); setSongPaused(false); }} isMobile={isMobile} paused={songPaused} onPausedChange={setSongPaused} />}
       {isMobile && <div style={{ height: playingSong ? 152 : 72 }} />}
       {!isMobile && playingSong && <div style={{ height: 80 }} />}
       <Footer onNavChange={setActiveNav} onProfileOpen={onProfileOpen} onOpenModal={setFooterModal} />
@@ -1131,7 +1132,7 @@ function CatalogPage({ type, content, carousels = [], podcasts = [], onPlay, onS
 
 // ─── Music Page (Videos + Songs + Albums) ────────────────────────────────────
 
-function MusicPage({ musicVideos, songs, albums, sections = [], onPlay, onPlaySong }) {
+function MusicPage({ musicVideos, songs, albums, sections = [], onPlay, onPlaySong, playingSong, songPaused }) {
   const [subTab, setSubTab] = useState("videos"); // "videos" | "songs" | "albums"
   const [selectedAlbum, setSelectedAlbum] = useState(null);
   const [mvSort, setMvSort] = useState("artist");
@@ -1221,7 +1222,7 @@ function MusicPage({ musicVideos, songs, albums, sections = [], onPlay, onPlaySo
             {songSections.map(s => <SongRow key={s.id} section={s} onPlay={onPlaySong} />)}
             {songSections.length === 0 && (
               <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? "130px" : "160px"}, 1fr))`, gap: isMobile ? 10 : 14, padding: `0 ${PAD} 80px` }}>
-                {sortedSongs.map(s => <SongCard key={s.id} item={s} onClick={() => onPlaySong(s)} />)}
+                {sortedSongs.map(s => <SongCard key={s.id} item={s} onClick={() => onPlaySong(s)} isPlaying={playingSong?.id === s.id && !songPaused} isActive={playingSong?.id === s.id} />)}
               </div>
             )}
           </div>
@@ -1391,23 +1392,27 @@ function SongRow({ section, onPlay }) {
   );
 }
 
-function SongCard({ item, onClick }) {
+function SongCard({ item, onClick, isPlaying, isActive }) {
   const [hovered, setHovered] = useState(false);
+  const showOverlay = hovered || isActive;
 
   return (
-    <div onClick={onClick} style={{ cursor: "pointer", borderRadius: 10, overflow: "hidden", background: "#141414", transform: hovered ? "scale(1.04) translateY(-4px)" : "scale(1)", transition: "transform 0.22s ease, box-shadow 0.22s ease", boxShadow: hovered ? "0 20px 48px rgba(0,0,0,0.8)" : "0 2px 8px rgba(0,0,0,0.3)" }}>
+    <div onClick={onClick} style={{ cursor: "pointer", borderRadius: 10, overflow: "hidden", background: "#141414", transform: hovered ? "scale(1.04) translateY(-4px)" : "scale(1)", transition: "transform 0.22s ease, box-shadow 0.22s ease", boxShadow: hovered ? "0 20px 48px rgba(0,0,0,0.8)" : isActive ? "0 0 0 2px #facc15" : "0 2px 8px rgba(0,0,0,0.3)" }}>
       <div onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
         style={{ position: "relative", aspectRatio: "1", overflow: "hidden", background: "#0a0a0a" }}>
         {item.thumbnail
-          ? <img src={item.thumbnail} alt={item.title} style={{ width: "100%", height: "100%", objectFit: "cover", transition: "filter 0.22s", filter: hovered ? "brightness(0.45)" : "brightness(0.82)" }} />
+          ? <img src={item.thumbnail} alt={item.title} style={{ width: "100%", height: "100%", objectFit: "cover", transition: "filter 0.22s", filter: showOverlay ? "brightness(0.45)" : "brightness(0.82)" }} />
           : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #1a1a2e, #16213e)", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
             </div>
         }
-        {hovered && (
+        {showOverlay && (
           <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <div style={{ width: 48, height: 48, borderRadius: "50%", background: "rgba(250,204,21,0.92)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 16px rgba(0,0,0,0.5)" }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="#0a0a0a"><polygon points="5,3 19,12 5,21" /></svg>
+              {isPlaying
+                ? <svg width="16" height="16" viewBox="0 0 24 24" fill="#0a0a0a"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                : <svg width="16" height="16" viewBox="0 0 24 24" fill="#0a0a0a"><polygon points="5,3 19,12 5,21" /></svg>
+              }
             </div>
           </div>
         )}
@@ -1421,10 +1426,9 @@ function SongCard({ item, onClick }) {
   );
 }
 
-function MiniPlayer({ song, onClose, isMobile }) {
+function MiniPlayer({ song, onClose, isMobile, paused, onPausedChange }) {
   const audioRef = useRef(null);
   const scrubBarRef = useRef(null);
-  const [paused, setPaused] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [scrubbing, setScrubbing] = useState(false);
@@ -1435,17 +1439,23 @@ function MiniPlayer({ song, onClose, isMobile }) {
     if (!song?.url || !audioRef.current) return;
     audioRef.current.src = song.url;
     audioRef.current.play().catch(() => {});
-    setPaused(false);
+    onPausedChange(false);
     setCurrentTime(0);
     setDuration(0);
   }, [song?.id]);
+
+  useEffect(() => {
+    if (!audioRef.current) return;
+    if (paused) audioRef.current.pause();
+    else audioRef.current.play().catch(() => {});
+  }, [paused]);
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
     const onTime = () => setCurrentTime(audio.currentTime);
     const onDur = () => setDuration(audio.duration || 0);
-    const onEnd = () => setPaused(true);
+    const onEnd = () => onPausedChange(true);
     audio.addEventListener("timeupdate", onTime);
     audio.addEventListener("durationchange", onDur);
     audio.addEventListener("ended", onEnd);
@@ -1483,8 +1493,8 @@ function MiniPlayer({ song, onClose, isMobile }) {
 
   function togglePlay() {
     if (!audioRef.current) return;
-    if (paused) { audioRef.current.play().catch(() => {}); setPaused(false); }
-    else { audioRef.current.pause(); setPaused(true); }
+    if (paused) { audioRef.current.play().catch(() => {}); onPausedChange(false); }
+    else { audioRef.current.pause(); onPausedChange(true); }
   }
 
   function fmt(s) {
