@@ -211,7 +211,7 @@ export default function App() {
     }
   }, [page, selectedVideo?.id, selectedShow?.id, selectedPodcast?.id]);
 
-  const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true), onProfileOpen: () => setProfileOpen(true), userAvatarId, activeProfile, onSwitchProfile: switchProfile, onPodcastSelect: pod => { setSelectedPodcast(pod); setPage("podcast"); }, onViewProfile: () => setPage("profile") };
+  const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true), onProfileOpen: () => setPage("profile"), userAvatarId, activeProfile, onSwitchProfile: switchProfile, onPodcastSelect: pod => { setSelectedPodcast(pod); setPage("podcast"); }, onViewProfile: () => setPage("profile") };
 
   if (betaCodeSetting && !betaUnlocked) return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", gap: 24 }}>
