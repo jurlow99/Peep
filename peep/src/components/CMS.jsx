@@ -294,7 +294,7 @@ export function CMS({ onExit }) {
   const [creatorsLoading, setCreatorsLoading] = useState(false);
   const [creatorModal, setCreatorModal] = useState(false);
   const [editingCreator, setEditingCreator] = useState(null);
-  const [creatorForm, setCreatorForm] = useState({ name: "", email: "", referral_code: "", rev_share_percentage: 50, payment_method: "PayPal", payment_handle: "", status: "active", notes: "" });
+  const [creatorForm, setCreatorForm] = useState({ name: "", email: "", referral_code: "", rev_share_percentage: 50, payment_method: "PayPal", payment_handle: "", routing_number: "", status: "active", notes: "" });
   const [creatorSaving, setCreatorSaving] = useState(false);
   const [deleteCreatorConfirm, setDeleteCreatorConfirm] = useState(null);
 
@@ -305,7 +305,11 @@ export function CMS({ onExit }) {
   const [payoutView, setPayoutView] = useState("current"); // "current" | "history"
   const [payoutHistory, setPayoutHistory] = useState([]);
   const [payoutHistoryLoading, setPayoutHistoryLoading] = useState(false);
-  const [platformPrice, setPlatformPrice] = useState(9.99);
+  const [totalRevenue, setTotalRevenue] = useState(0);
+
+  // Content-creator links state
+  const [contentCreators, setContentCreators] = useState([]);
+  const [contentCreatorsLoading, setContentCreatorsLoading] = useState(false);
 
   // Ads state
   const [adList, setAdList] = useState([]);
@@ -351,7 +355,7 @@ export function CMS({ onExit }) {
   const [grantLoading, setGrantLoading] = useState(false);
   const [grantResult, setGrantResult] = useState(null);
   const [loginAttempts, setLoginAttempts] = useState([]);
-  const [bossView, setBossView] = useState("main"); // "main" | "security"
+  const [bossView, setBossView] = useState("main"); // "main" | "security" | "creators" | "payouts"
   const [blockedUsers, setBlockedUsers] = useState([]);
   const [blockEmail, setBlockEmail] = useState("");
   const [blockReason, setBlockReason] = useState("");
@@ -425,11 +429,14 @@ export function CMS({ onExit }) {
     if (tab === "reports") { loadReports(); loadTodayStats(); loadOnlineUsers(); }
     if (tab === "ads") { loadAdAnalytics(); loadTodayStats(); }
     if (tab === "subscriptions") loadSubscriptions();
-    if (tab === "boss") { loadPromos(); loadBossSettings(); }
-    if (tab === "boss") setBossView("main");
-    if (tab === "creators") loadCreators();
-    if (tab === "payouts") { loadPayouts(); loadPayoutHistory(); }
+    if (tab === "boss") { loadPromos(); loadBossSettings(); setBossView("main"); }
   }, [tab]);
+
+  useEffect(() => {
+    if (tab !== "boss") return;
+    if (bossView === "creators") { loadCreators(); loadContentCreators(); }
+    if (bossView === "payouts") { loadPayoutHistory(); }
+  }, [bossView]);
 
   useEffect(() => {
     if (tab !== "ads" && tab !== "reports") return;
@@ -738,7 +745,7 @@ export function CMS({ onExit }) {
   function openCreatorModal(creator = null) {
     if (creator) {
       setEditingCreator(creator);
-      setCreatorForm({ name: creator.name, email: creator.email, referral_code: creator.referral_code, rev_share_percentage: creator.rev_share_percentage, payment_method: creator.payment_method || "PayPal", payment_handle: creator.payment_handle || "", status: creator.status, notes: creator.notes || "" });
+      setCreatorForm({ name: creator.name, email: creator.email, referral_code: creator.referral_code, rev_share_percentage: creator.rev_share_percentage, payment_method: creator.payment_method || "PayPal", payment_handle: creator.payment_handle || "", routing_number: creator.routing_number || "", status: creator.status, notes: creator.notes || "" });
     } else {
       setEditingCreator(null);
       setCreatorForm({ name: "", email: "", referral_code: genRefCode(), rev_share_percentage: 50, payment_method: "PayPal", payment_handle: "", status: "active", notes: "" });
@@ -768,6 +775,27 @@ export function CMS({ onExit }) {
     showToast("Creator removed");
   }
 
+  // ──── CONTENT-CREATOR LINKS ────
+
+  async function loadContentCreators() {
+    setContentCreatorsLoading(true);
+    const { data } = await supabase.from("content_creators").select("*");
+    setContentCreators(data || []);
+    setContentCreatorsLoading(false);
+  }
+
+  async function linkCreatorContent(creatorId, contentId, contentType) {
+    const { error } = await supabase.from("content_creators").insert([{ creator_id: creatorId, content_id: String(contentId), content_type: contentType }]);
+    if (error) { showToast("Failed to link content: " + error.message, "error"); return; }
+    await loadContentCreators();
+  }
+
+  async function unlinkCreatorContent(id) {
+    const { error } = await supabase.from("content_creators").delete().eq("id", id);
+    if (error) { showToast("Failed to unlink: " + error.message, "error"); return; }
+    await loadContentCreators();
+  }
+
   // ──── PAYOUTS ────
 
   async function loadPayouts() {
@@ -778,17 +806,52 @@ export function CMS({ onExit }) {
     const monthStart = `${payoutMonth}-01T00:00:00.000Z`;
     const monthEnd = new Date(new Date(monthStart).getFullYear(), new Date(monthStart).getMonth() + 1, 1).toISOString();
 
-    const { data: allReferred } = await supabase.from("profiles").select("referred_by, created_at").not("referred_by", "is", null);
-    const { data: existingPayouts } = await supabase.from("creator_payouts").select("*").eq("month", payoutMonth);
+    const [
+      { data: links },
+      { data: watchData },
+      { data: episodes },
+      { data: podEps },
+      { data: existingPayouts },
+    ] = await Promise.all([
+      supabase.from("content_creators").select("*"),
+      supabase.from("watch_progress").select("content_id, content_type, progress_seconds").gte("last_watched_at", monthStart).lt("last_watched_at", monthEnd),
+      supabase.from("episodes").select("id, show_id"),
+      supabase.from("podcast_episodes").select("id, podcast_id"),
+      supabase.from("creator_payouts").select("*").eq("month", payoutMonth),
+    ]);
+
+    // Build map: "content_type:content_id" → creator_id
+    const contentToCreator = {};
+    (links || []).forEach(l => { contentToCreator[`${l.content_type}:${l.content_id}`] = l.creator_id; });
+
+    // Sum watch seconds per creator
+    const creatorSeconds = {};
+    let totalSeconds = 0;
+    (watchData || []).forEach(w => {
+      let creatorId = contentToCreator[`${w.content_type}:${w.content_id}`];
+      if (!creatorId && w.content_type === "episode") {
+        const ep = (episodes || []).find(e => String(e.id) === String(w.content_id));
+        if (ep) creatorId = contentToCreator[`show:${ep.show_id}`];
+      }
+      if (!creatorId && w.content_type === "podcast_episode") {
+        const ep = (podEps || []).find(e => String(e.id) === String(w.content_id));
+        if (ep) creatorId = contentToCreator[`podcast:${ep.podcast_id}`];
+      }
+      if (creatorId) {
+        creatorSeconds[creatorId] = (creatorSeconds[creatorId] || 0) + (w.progress_seconds || 0);
+        totalSeconds += (w.progress_seconds || 0);
+      }
+    });
+
+    const creatorPool = +(totalRevenue * 0.5).toFixed(2);
 
     const rows = creators.map(c => {
-      const monthly = (allReferred || []).filter(p => p.referred_by === c.referral_code && p.created_at >= monthStart && p.created_at < monthEnd).length;
-      const lifetime = (allReferred || []).filter(p => p.referred_by === c.referral_code).length;
-      const revenue = +(monthly * platformPrice).toFixed(2);
-      const payout = +(revenue * (c.rev_share_percentage / 100)).toFixed(2);
-      const cut = +(revenue - payout).toFixed(2);
-      const saved = existingPayouts?.find(p => p.creator_id === c.id);
-      return { creator: c, monthly, lifetime, revenue, payout, cut, status: saved?.status || "unpaid", paid_at: saved?.paid_at || null, payout_id: saved?.id || null };
+      const secs = creatorSeconds[c.id] || 0;
+      const watchMins = Math.round(secs / 60);
+      const share = totalSeconds > 0 ? secs / totalSeconds : 0;
+      const payout = +(creatorPool * share).toFixed(2);
+      const saved = (existingPayouts || []).find(p => p.creator_id === c.id);
+      return { creator: c, watchMins, share: +(share * 100).toFixed(1), payout, status: saved?.status || "unpaid", paid_at: saved?.paid_at || null, payout_id: saved?.id || null };
     });
 
     setPayoutData(rows);
@@ -804,7 +867,13 @@ export function CMS({ onExit }) {
 
   async function togglePayoutStatus(row) {
     const newStatus = row.status === "paid" ? "unpaid" : "paid";
-    const payload = { creator_id: row.creator.id, creator_name: row.creator.name, referral_code: row.creator.referral_code, month: payoutMonth, attributed_subscribers: row.monthly, lifetime_subscribers: row.lifetime, revenue: row.revenue, platform_cut: row.cut, payout_amount: row.payout, rev_share_percentage: row.creator.rev_share_percentage, status: newStatus, paid_at: newStatus === "paid" ? new Date().toISOString() : null };
+    const payload = {
+      creator_id: row.creator.id, creator_name: row.creator.name, referral_code: row.creator.referral_code,
+      month: payoutMonth, attributed_subscribers: row.watchMins, lifetime_subscribers: 0,
+      revenue: totalRevenue, platform_cut: +(totalRevenue * 0.5).toFixed(2),
+      payout_amount: row.payout, rev_share_percentage: Math.round(row.share),
+      status: newStatus, paid_at: newStatus === "paid" ? new Date().toISOString() : null,
+    };
     if (row.payout_id) {
       await supabase.from("creator_payouts").update({ status: newStatus, paid_at: payload.paid_at }).eq("id", row.payout_id);
     } else {
@@ -815,9 +884,9 @@ export function CMS({ onExit }) {
   }
 
   function exportPayoutsCSV() {
-    const headers = ["Creator", "Email", "Referral Code", "Monthly Subscribers", "Lifetime Subscribers", "Revenue", "Platform Cut", "Creator Payout", "Rev Share %", "Status", "Paid Date"];
-    const rows = payoutData.map(r => [r.creator.name, r.creator.email, r.creator.referral_code, r.monthly, r.lifetime, r.revenue.toFixed(2), r.cut.toFixed(2), r.payout.toFixed(2), r.creator.rev_share_percentage + "%", r.status, r.paid_at ? new Date(r.paid_at).toLocaleDateString() : ""].map(v => `"${v}"`));
-    const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
+    const headers = ["Creator", "Email", "Referral Code", "Watch Time (mins)", "Watch Share %", "Total Revenue", "Creator Payout", "Status", "Paid Date"];
+    const csvRows = payoutData.map(r => [r.creator.name, r.creator.email, r.creator.referral_code, r.watchMins, r.share + "%", totalRevenue.toFixed(2), r.payout.toFixed(2), r.status, r.paid_at ? new Date(r.paid_at).toLocaleDateString() : ""].map(v => `"${v}"`));
+    const csv = [headers, ...csvRows].map(r => r.join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = `peep-payouts-${payoutMonth}.csv`; a.click();
@@ -2603,12 +2672,6 @@ export function CMS({ onExit }) {
         <button onClick={() => setTab("boss")} style={{ background: "transparent", border: "none", borderBottom: tab === "boss" ? "2px solid #facc15" : "none", color: tab === "boss" ? "#facc15" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "boss" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
           The Boss
         </button>
-        <button onClick={() => setTab("creators")} style={{ background: "transparent", border: "none", borderBottom: tab === "creators" ? "2px solid #fb923c" : "none", color: tab === "creators" ? "#fb923c" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "creators" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
-          Creators {creatorsList.length > 0 && `(${creatorsList.length})`}
-        </button>
-        <button onClick={() => { setTab("payouts"); setPayoutView("current"); }} style={{ background: "transparent", border: "none", borderBottom: tab === "payouts" ? "2px solid #a78bfa" : "none", color: tab === "payouts" ? "#a78bfa" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "payouts" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
-          Payouts
-        </button>
       </div>
 
       <div style={{ maxWidth: 1600, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
@@ -3106,7 +3169,7 @@ export function CMS({ onExit }) {
             ) : liveList.length === 0 ? (
               <div style={{ color: "#6b7280", padding: 40, textAlign: "center", border: "1px dashed #e2e8f0", borderRadius: 10 }}>No streams yet.</div>
             ) : liveList.map(s => (
-              <div key={s.id} style={{ background: "#ffffff", border: `1px solid ${s.is_live ? "rgba(239,68,68,0.3)" : "#e2e8f0"}`, borderRadius: 10, padding: "16px 20px", marginBottom: 12, display: "flex", gap: 14, alignItems: "center" }}>
+              <div key={s.id} style={{ background: "#ffffff", border: `1px solid ${s.is_live ? "rgba(239,68,68,0.3)" : "#e2e8f0"}`, borderRadius: 10, padding: "12px 16px", marginBottom: 12, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
                 {s.channel_number != null && s.channel_number !== "" && (
                   <div style={{ flexShrink: 0, width: 40, height: 40, borderRadius: 8, background: "#f1f5f9", border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
                     <span style={{ fontSize: 9, color: "#94a3b8", fontWeight: 600, letterSpacing: 0.5, textTransform: "uppercase" }}>CH</span>
@@ -3122,7 +3185,7 @@ export function CMS({ onExit }) {
                   </p>
                   {s.up_next && <p style={{ margin: "2px 0 0", fontSize: 11, color: "#9ca3af" }}>Up next: {s.up_next}</p>}
                 </div>
-                <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
+                <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center", flexWrap: "wrap" }}>
                   {channelStatuses[s.id] === "testing" && <span style={{ fontSize: 11, color: "#6b7280" }}>Testing…</span>}
                   {channelStatuses[s.id] === "ok" && <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 600 }}>✓ Working</span>}
                   {channelStatuses[s.id] === "error" && <span style={{ fontSize: 11, color: "#dc2626", fontWeight: 600 }}>✗ Failed</span>}
@@ -5089,6 +5152,40 @@ export function CMS({ onExit }) {
               )}
             </div>
 
+            {/* ── Creators Card ── */}
+            <div onClick={() => setBossView("creators")}
+              style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "22px 28px", marginBottom: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "box-shadow 0.15s" }}
+              onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"}
+              onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(251,146,60,0.08)", border: "1px solid rgba(251,146,60,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fb923c" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                </div>
+                <div>
+                  <p style={{ margin: "0 0 3px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Creators</p>
+                  <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Manage creator partnerships and referral codes</p>
+                </div>
+              </div>
+              <span style={{ fontSize: 18, color: "#d1d5db" }}>→</span>
+            </div>
+
+            {/* ── Payouts Card ── */}
+            <div onClick={() => { setBossView("payouts"); setPayoutView("current"); }}
+              style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "22px 28px", marginBottom: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "box-shadow 0.15s" }}
+              onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"}
+              onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-4 0v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
+                </div>
+                <div>
+                  <p style={{ margin: "0 0 3px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Payouts</p>
+                  <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Calculate and track monthly creator revenue share</p>
+                </div>
+              </div>
+              <span style={{ fontSize: 18, color: "#d1d5db" }}>→</span>
+            </div>
+
             {/* ── Security Card ── */}
             <div onClick={() => { setBossView("security"); loadSecurityData(); }}
               style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "22px 28px", marginBottom: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "box-shadow 0.15s" }}
@@ -6563,10 +6660,11 @@ export function CMS({ onExit }) {
         </div>
       </div>
     )}
-        {/* ────── CREATORS TAB ────── */}
-        {tab === "creators" && (
-          <div>
+        {/* ────── CREATORS VIEW (inside Boss) ────── */}
+        {tab === "boss" && bossAuthed && bossView === "creators" && (
+          <div style={{ maxWidth: 1600, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28, flexWrap: "wrap" }}>
+              <button onClick={() => setBossView("main")} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 14px", fontSize: 13, color: "#374151", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>← Back</button>
               <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Creators</h2>
               <span style={{ fontSize: 13, color: "#9ca3af" }}>{creatorsList.length} creator{creatorsList.length !== 1 ? "s" : ""}</span>
               <button onClick={() => openCreatorModal()} style={{ marginLeft: "auto", background: "#fb923c", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>+ Add Creator</button>
@@ -6577,31 +6675,31 @@ export function CMS({ onExit }) {
             ) : creatorsList.length === 0 ? (
               <div style={{ textAlign: "center", padding: 80, color: "#9ca3af" }}>No creators yet. Add one to get started.</div>
             ) : (
-              <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, overflow: "hidden" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <div style={{ overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: 14 }}>
+                <table style={{ width: "100%", minWidth: 700, borderCollapse: "collapse", fontSize: 13, background: "#fff" }}>
                   <thead>
                     <tr style={{ borderBottom: "1px solid #f1f5f9", background: "#f8fafc" }}>
                       {["Name", "Email", "Ref Code", "Rev Share", "Payment", "Status", "Actions"].map(h => (
-                        <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6 }}>{h}</th>
+                        <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, whiteSpace: "nowrap" }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {creatorsList.map((c, i) => (
                       <tr key={c.id} style={{ borderBottom: i < creatorsList.length - 1 ? "1px solid #f1f5f9" : "none" }}>
-                        <td style={{ padding: "14px 16px", fontWeight: 600, color: "#0f172a" }}>{c.name}</td>
-                        <td style={{ padding: "14px 16px", color: "#475569" }}>{c.email}</td>
-                        <td style={{ padding: "14px 16px" }}>
-                          <span style={{ fontFamily: "monospace", background: "#f1f5f9", borderRadius: 5, padding: "3px 8px", fontSize: 13, fontWeight: 700, color: "#fb923c", letterSpacing: 1 }}>{c.referral_code}</span>
+                        <td style={{ padding: "12px 16px", fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap" }}>{c.name}</td>
+                        <td style={{ padding: "12px 16px", color: "#475569" }}>{c.email}</td>
+                        <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}>
+                          <span style={{ fontFamily: "monospace", background: "#f1f5f9", borderRadius: 5, padding: "3px 8px", fontSize: 12, fontWeight: 700, color: "#fb923c", letterSpacing: 1 }}>{c.referral_code}</span>
                         </td>
-                        <td style={{ padding: "14px 16px", color: "#0f172a", fontWeight: 600 }}>{c.rev_share_percentage}%</td>
-                        <td style={{ padding: "14px 16px", color: "#475569" }}>{c.payment_method}{c.payment_handle ? ` — ${c.payment_handle}` : ""}</td>
-                        <td style={{ padding: "14px 16px" }}>
+                        <td style={{ padding: "12px 16px", color: "#0f172a", fontWeight: 600, whiteSpace: "nowrap" }}>{c.rev_share_percentage}%</td>
+                        <td style={{ padding: "12px 16px", color: "#475569", whiteSpace: "nowrap" }}>{c.payment_method}{c.payment_handle ? ` — ${c.payment_handle}` : ""}</td>
+                        <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}>
                           <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99, background: c.status === "active" ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)", color: c.status === "active" ? "#16a34a" : "#dc2626" }}>
                             {c.status}
                           </span>
                         </td>
-                        <td style={{ padding: "14px 16px" }}>
+                        <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}>
                           <div style={{ display: "flex", gap: 8 }}>
                             <button onClick={() => openCreatorModal(c)} style={{ background: "rgba(79,70,229,0.08)", border: "1px solid rgba(79,70,229,0.2)", borderRadius: 6, padding: "5px 12px", color: "#4f46e5", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Edit</button>
                             <button onClick={() => setDeleteCreatorConfirm(c)} style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 6, padding: "5px 12px", color: "#ef4444", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Delete</button>
@@ -6620,13 +6718,33 @@ export function CMS({ onExit }) {
                 <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 16, padding: "32px 36px", width: "min(520px,94vw)", fontFamily: "'Space Grotesk',sans-serif", maxHeight: "90vh", overflowY: "auto" }}>
                   <h3 style={{ margin: "0 0 24px", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>{editingCreator ? "Edit Creator" : "Add Creator"}</h3>
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                    {[["Name", "name", "text", "e.g. Jarrad Wright"], ["Email", "email", "email", "creator@email.com"], ["Payment Handle", "payment_handle", "text", "PayPal email or bank details"]].map(([label, key, type, ph]) => (
+                    {[["Name", "name", "text", "e.g. Jarrad Wright"], ["Email", "email", "email", "creator@email.com"]].map(([label, key, type, ph]) => (
                       <div key={key}>
                         <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>{label}</label>
                         <input type={type} value={creatorForm[key]} onChange={e => setCreatorForm(f => ({ ...f, [key]: e.target.value }))} placeholder={ph}
                           style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#0f172a", outline: "none", boxSizing: "border-box" }} />
                       </div>
                     ))}
+                    {creatorForm.payment_method !== "Bank Transfer" ? (
+                      <div>
+                        <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Payment Handle</label>
+                        <input value={creatorForm.payment_handle} onChange={e => setCreatorForm(f => ({ ...f, payment_handle: e.target.value }))} placeholder="e.g. @username or email"
+                          style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#0f172a", outline: "none", boxSizing: "border-box" }} />
+                      </div>
+                    ) : (
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                        <div>
+                          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Account Number</label>
+                          <input value={creatorForm.payment_handle} onChange={e => setCreatorForm(f => ({ ...f, payment_handle: e.target.value }))} placeholder="e.g. 000123456789"
+                            style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#0f172a", outline: "none", boxSizing: "border-box", fontFamily: "monospace" }} />
+                        </div>
+                        <div>
+                          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Routing Number</label>
+                          <input value={creatorForm.routing_number} onChange={e => setCreatorForm(f => ({ ...f, routing_number: e.target.value }))} placeholder="e.g. 021000021"
+                            style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#0f172a", outline: "none", boxSizing: "border-box", fontFamily: "monospace" }} />
+                        </div>
+                      </div>
+                    )}
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                       <div>
                         <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Referral Code</label>
@@ -6647,7 +6765,7 @@ export function CMS({ onExit }) {
                         <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Payment Method</label>
                         <select value={creatorForm.payment_method} onChange={e => setCreatorForm(f => ({ ...f, payment_method: e.target.value }))}
                           style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#0f172a", outline: "none", background: "#fff" }}>
-                          <option>PayPal</option><option>Bank Transfer</option><option>Other</option>
+                          <option>PayPal</option><option>Venmo</option><option>Cash App</option><option>Bank Transfer</option><option>Other</option>
                         </select>
                       </div>
                       <div>
@@ -6664,6 +6782,56 @@ export function CMS({ onExit }) {
                         style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#0f172a", outline: "none", resize: "vertical", boxSizing: "border-box" }} />
                     </div>
                   </div>
+                  {editingCreator && (
+                    <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 20, marginTop: 4 }}>
+                      <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, color: "#0f172a" }}>Linked Content</p>
+                      <p style={{ margin: "0 0 12px", fontSize: 11, color: "#9ca3af" }}>Watch time from these shows/movies counts toward this creator's payout share.</p>
+
+                      {/* Currently linked */}
+                      {contentCreators.filter(l => l.creator_id === editingCreator.id).length > 0 && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+                          {contentCreators.filter(l => l.creator_id === editingCreator.id).map(link => {
+                            const label = (() => {
+                              if (link.content_type === "show") return showsList.find(s => String(s.id) === link.content_id)?.title || link.content_id;
+                              if (link.content_type === "movie") return rows.find(r => String(r.id) === link.content_id)?.title || link.content_id;
+                              if (link.content_type === "music_video") return musicVideosList.find(m => String(m.id) === link.content_id)?.title || link.content_id;
+                              if (link.content_type === "podcast") return podcastsList.find(p => String(p.id) === link.content_id)?.title || link.content_id;
+                              return link.content_id;
+                            })();
+                            return (
+                              <div key={link.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 12px" }}>
+                                <div>
+                                  <span style={{ fontSize: 13, fontWeight: 500, color: "#0f172a" }}>{label}</span>
+                                  <span style={{ fontSize: 11, color: "#9ca3af", marginLeft: 8, textTransform: "capitalize" }}>{link.content_type.replace("_", " ")}</span>
+                                </div>
+                                <button onClick={() => unlinkCreatorContent(link.id)} style={{ background: "none", border: "none", color: "#f87171", fontSize: 18, cursor: "pointer", lineHeight: 1, padding: "0 4px" }}>×</button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Add content dropdown */}
+                      {(() => {
+                        const linked = contentCreators.filter(l => l.creator_id === editingCreator.id).map(l => `${l.content_type}:${l.content_id}`);
+                        const options = [
+                          ...showsList.map(s => ({ label: `${s.title} (Show)`, value: `show:${s.id}` })),
+                          ...rows.map(r => ({ label: `${r.title} (Movie)`, value: `movie:${r.id}` })),
+                          ...musicVideosList.map(m => ({ label: `${m.artist} — ${m.title} (Music Video)`, value: `music_video:${m.id}` })),
+                          ...podcastsList.map(p => ({ label: `${p.title} (Podcast)`, value: `podcast:${p.id}` })),
+                        ].filter(o => !linked.includes(o.value));
+                        if (!options.length) return <p style={{ fontSize: 12, color: "#9ca3af" }}>All content linked.</p>;
+                        return (
+                          <select defaultValue="" onChange={e => { if (!e.target.value) return; const [type, id] = e.target.value.split(":"); linkCreatorContent(editingCreator.id, id, type); e.target.value = ""; }}
+                            style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 12px", fontSize: 13, color: "#6b7280", outline: "none", background: "#fff" }}>
+                            <option value="">+ Link content…</option>
+                            {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                          </select>
+                        );
+                      })()}
+                    </div>
+                  )}
+
                   <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 24 }}>
                     <button onClick={() => setCreatorModal(false)} style={{ background: "#f1f5f9", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 600, color: "#475569", cursor: "pointer" }}>Cancel</button>
                     <button onClick={saveCreator} disabled={creatorSaving} style={{ background: "#fb923c", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 700, color: "#fff", cursor: "pointer", opacity: creatorSaving ? 0.7 : 1 }}>
@@ -6690,9 +6858,12 @@ export function CMS({ onExit }) {
           </div>
         )}
 
-        {/* ────── PAYOUTS TAB ────── */}
-        {tab === "payouts" && (
-          <div>
+        {/* ────── PAYOUTS VIEW (inside Boss) ────── */}
+        {tab === "boss" && bossAuthed && bossView === "payouts" && (
+          <div style={{ maxWidth: 1600, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
+            <div style={{ marginBottom: 24 }}>
+              <button onClick={() => setBossView("main")} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 14px", fontSize: 13, color: "#374151", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>← Back</button>
+            </div>
             {/* Sub-tab toggle */}
             <div style={{ display: "flex", gap: 8, marginBottom: 28 }}>
               {[["current", "Monthly Payouts"], ["history", "Payout History"]].map(([v, label]) => (
@@ -6708,10 +6879,11 @@ export function CMS({ onExit }) {
                   <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Monthly Payouts</h2>
                   <input type="month" value={payoutMonth} onChange={e => setPayoutMonth(e.target.value)}
                     style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: "7px 12px", fontSize: 13, color: "#0f172a", outline: "none" }} />
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
-                    <span style={{ fontSize: 12, color: "#6b7280" }}>Price/sub: $</span>
-                    <input type="number" value={platformPrice} onChange={e => setPlatformPrice(parseFloat(e.target.value) || 9.99)} step="0.01" min="0"
-                      style={{ width: 72, border: "1px solid #e2e8f0", borderRadius: 8, padding: "7px 10px", fontSize: 13, color: "#0f172a", outline: "none" }} />
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    <span style={{ fontSize: 12, color: "#6b7280" }}>Total Revenue: $</span>
+                    <input type="number" value={totalRevenue} onChange={e => setTotalRevenue(parseFloat(e.target.value) || 0)} step="0.01" min="0" placeholder="0.00"
+                      style={{ width: 90, border: "1px solid #e2e8f0", borderRadius: 8, padding: "7px 10px", fontSize: 13, color: "#0f172a", outline: "none" }} />
+                    <span style={{ fontSize: 11, color: "#9ca3af" }}>50% pool = ${(totalRevenue * 0.5).toFixed(2)}</span>
                     <button onClick={loadPayouts} style={{ background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.3)", borderRadius: 8, padding: "7px 14px", color: "#7c3aed", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Calculate</button>
                     <button onClick={exportPayoutsCSV} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "7px 14px", color: "#475569", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Export CSV</button>
                   </div>
@@ -6726,7 +6898,7 @@ export function CMS({ onExit }) {
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                       <thead>
                         <tr style={{ background: "#f8fafc", borderBottom: "1px solid #f1f5f9" }}>
-                          {["Creator", "This Month", "Lifetime", "Revenue", "Platform Cut", "Creator Payout", "Status", ""].map(h => (
+                          {["Creator", "Watch Time", "Share", "Payout (50%)", "Status", ""].map(h => (
                             <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, whiteSpace: "nowrap" }}>{h}</th>
                           ))}
                         </tr>
@@ -6738,11 +6910,11 @@ export function CMS({ onExit }) {
                               <p style={{ margin: "0 0 2px", fontWeight: 600, color: "#0f172a" }}>{row.creator.name}</p>
                               <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>{row.creator.referral_code}</p>
                             </td>
-                            <td style={{ padding: "14px 16px", color: "#0f172a", fontWeight: 600 }}>{row.monthly} <span style={{ fontSize: 11, color: "#9ca3af" }}>subs</span></td>
-                            <td style={{ padding: "14px 16px", color: "#475569" }}>{row.lifetime}</td>
-                            <td style={{ padding: "14px 16px", color: "#0f172a" }}>${row.revenue.toFixed(2)}</td>
-                            <td style={{ padding: "14px 16px", color: "#475569" }}>${row.cut.toFixed(2)} <span style={{ fontSize: 11, color: "#9ca3af" }}>({100 - row.creator.rev_share_percentage}%)</span></td>
-                            <td style={{ padding: "14px 16px", fontWeight: 700, color: "#7c3aed" }}>${row.payout.toFixed(2)} <span style={{ fontSize: 11, color: "#9ca3af" }}>({row.creator.rev_share_percentage}%)</span></td>
+                            <td style={{ padding: "14px 16px", color: "#0f172a", fontWeight: 600 }}>
+                              {row.watchMins >= 60 ? `${(row.watchMins / 60).toFixed(1)} hrs` : `${row.watchMins} mins`}
+                            </td>
+                            <td style={{ padding: "14px 16px", color: "#475569", fontWeight: 600 }}>{row.share}%</td>
+                            <td style={{ padding: "14px 16px", fontWeight: 700, color: "#7c3aed" }}>${row.payout.toFixed(2)}</td>
                             <td style={{ padding: "14px 16px" }}>
                               {row.status === "paid"
                                 ? <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99, background: "rgba(34,197,94,0.1)", color: "#16a34a" }}>Paid{row.paid_at ? ` ${new Date(row.paid_at).toLocaleDateString()}` : ""}</span>
@@ -6759,17 +6931,14 @@ export function CMS({ onExit }) {
                         ))}
                         {/* Totals row */}
                         {(() => {
-                          const totalRevenue = payoutData.reduce((s, r) => s + r.revenue, 0);
-                          const totalCut = payoutData.reduce((s, r) => s + r.cut, 0);
                           const totalPayout = payoutData.reduce((s, r) => s + r.payout, 0);
                           const unpaidPayout = payoutData.filter(r => r.status !== "paid").reduce((s, r) => s + r.payout, 0);
+                          const totalMins = payoutData.reduce((s, r) => s + r.watchMins, 0);
                           return (
                             <tr style={{ background: "#f8fafc", borderTop: "2px solid #e2e8f0" }}>
                               <td style={{ padding: "14px 16px", fontWeight: 700, color: "#0f172a" }}>Total</td>
-                              <td style={{ padding: "14px 16px", fontWeight: 700, color: "#0f172a" }}>{payoutData.reduce((s, r) => s + r.monthly, 0)} subs</td>
-                              <td style={{ padding: "14px 16px" }}></td>
-                              <td style={{ padding: "14px 16px", fontWeight: 700, color: "#0f172a" }}>${totalRevenue.toFixed(2)}</td>
-                              <td style={{ padding: "14px 16px", fontWeight: 700, color: "#475569" }}>${totalCut.toFixed(2)}</td>
+                              <td style={{ padding: "14px 16px", fontWeight: 700, color: "#0f172a" }}>{totalMins >= 60 ? `${(totalMins / 60).toFixed(1)} hrs` : `${totalMins} mins`}</td>
+                              <td style={{ padding: "14px 16px", fontWeight: 700, color: "#475569" }}>100%</td>
                               <td style={{ padding: "14px 16px", fontWeight: 700, color: "#7c3aed" }}>${totalPayout.toFixed(2)}</td>
                               <td colSpan={2} style={{ padding: "14px 16px" }}>
                                 <span style={{ fontSize: 12, color: "#ea580c", fontWeight: 700 }}>${unpaidPayout.toFixed(2)} still owed</span>
