@@ -4335,6 +4335,29 @@ function SettingRow({ label, description, value, onChange }) {
 }
 
 
+function AvatarThumb({ av, size = 48, selected = false, onClick }) {
+  const isSvg = !!av.svg;
+  return (
+    <button onClick={onClick} style={{ background: "none", border: `2px solid ${selected ? "#facc15" : "rgba(255,255,255,0.06)"}`, borderRadius: 12, padding: 3, cursor: "pointer", outline: "none", transition: "border-color 0.15s, transform 0.15s", transform: selected ? "scale(1.06)" : "scale(1)" }}>
+      <div style={{ width: size, height: size, borderRadius: 8, background: av.gradient || "#1a1a1a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: Math.round(size * 0.44), overflow: "hidden" }}>
+        {isSvg ? <div style={{ width: "100%", height: "100%" }} dangerouslySetInnerHTML={{ __html: av.svg }} /> : av.emoji}
+      </div>
+    </button>
+  );
+}
+
+function AvatarDisplay({ av, size = 64, initials }) {
+  if (!av) return (
+    <div style={{ width: size, height: size, borderRadius: "50%", background: "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.35, fontWeight: 700, border: "3px solid #facc15", flexShrink: 0 }}>{initials}</div>
+  );
+  const isSvg = !!av.svg;
+  return (
+    <div style={{ width: size, height: size, borderRadius: "50%", background: av.gradient || "#1a1a1a", border: "3px solid #facc15", overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.44 }}>
+      {isSvg ? <div style={{ width: "100%", height: "100%" }} dangerouslySetInnerHTML={{ __html: av.svg }} /> : av.emoji}
+    </div>
+  );
+}
+
 function SettingsPage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, onAvatarChange, onSignOut }) {
   const [name, setName] = useState(activeProfile?.name || "");
   const [savedName, setSavedName] = useState(activeProfile?.name || "");
@@ -4369,10 +4392,8 @@ function SettingsPage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, 
       supabase.from("viewer_profiles").update({ name: name.trim(), avatar_id: avatarId }).eq("id", activeProfile.id),
       supabase.from("profiles").upsert({ id: user.id, avatar_id: avatarId }, { onConflict: "id" }),
     ]);
-    setSaving(false);
-    setSaved(true);
-    setSavedName(name.trim());
-    setSavedAvatarId(avatarId);
+    setSaving(false); setSaved(true);
+    setSavedName(name.trim()); setSavedAvatarId(avatarId);
     setTimeout(() => setSaved(false), 2500);
     onAvatarChange?.(avatarId);
     onProfileUpdate?.({ ...activeProfile, name: name.trim(), avatar_id: avatarId });
@@ -4400,105 +4421,100 @@ function SettingsPage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, 
     else { setPasswordMsg({ type: "ok", text: "Password updated successfully" }); setNewPassword(""); setConfirmPassword(""); }
   }
 
-  const sectionHead = { margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: "#555", textTransform: "uppercase", letterSpacing: 1 };
-  const inputStyle = { width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 8, padding: "11px 14px", color: "#fff", fontSize: 14, outline: "none", boxSizing: "border-box", fontFamily: "inherit" };
+  const inputStyle = { width: "100%", background: "#111", border: "1px solid #222", borderRadius: 10, padding: "12px 14px", color: "#fff", fontSize: 14, outline: "none", boxSizing: "border-box", fontFamily: "inherit", transition: "border-color 0.15s" };
+  const section = { marginBottom: 32, background: "#111", border: "1px solid #1e1e1e", borderRadius: 16, overflow: "hidden" };
+  const sectionHeader = { padding: "18px 20px", borderBottom: "1px solid #1a1a1a" };
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
       <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
 
-      <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 50, display: "flex", alignItems: "center", padding: `0 ${PAD}`, height: 68, gap: 24, background: "rgba(10,10,10,0.9)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-        <button onClick={onBack} style={{ background: "rgba(255,255,255,0.07)", border: "none", color: "#ccc", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6 }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
+      <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 50, display: "flex", alignItems: "center", padding: `0 ${PAD}`, height: 64, gap: 20, background: "rgba(10,10,10,0.92)", backdropFilter: "blur(16px)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        <button onClick={onBack} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)", color: "#aaa", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8 }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
           Back
         </button>
-        <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
+        <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer", color: "#facc15" }}>peep.</span>
       </nav>
 
-      <div style={{ paddingTop: 68 + 40, paddingBottom: 80, paddingLeft: PAD, paddingRight: PAD, maxWidth: 580, margin: "0 auto" }}>
+      <div style={{ paddingTop: 64 + 48, paddingBottom: 80, paddingLeft: PAD, paddingRight: PAD, maxWidth: 600, margin: "0 auto" }}>
 
-        <div style={{ marginBottom: 40 }}>
-          <h1 style={{ margin: "0 0 4px", fontSize: 26, fontWeight: 700 }}>Settings</h1>
-          <p style={{ margin: 0, fontSize: 13, color: "#444" }}>{user?.email}{memberSince ? ` · Member since ${memberSince}` : ""}</p>
+        <div style={{ marginBottom: 36 }}>
+          <h1 style={{ margin: "0 0 6px", fontSize: 28, fontWeight: 700, letterSpacing: "-0.3px" }}>Settings</h1>
+          <p style={{ margin: 0, fontSize: 13, color: "#555" }}>{user?.email}{memberSince ? ` · Member since ${memberSince}` : ""}</p>
         </div>
 
         {/* Profile section */}
-        <div style={{ marginBottom: 40 }}>
-          <p style={sectionHead}>Profile</p>
-          <p style={{ margin: "0 0 20px", fontSize: 12, color: "#333" }}>Your profile is only visible to you</p>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20 }}>
-            <div style={{ width: 64, height: 64, borderRadius: "50%", background: currentAv?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: currentAv ? 26 : 22, fontWeight: 700, border: "3px solid #facc15", flexShrink: 0 }}>
-              {currentAv ? currentAv.emoji : initials}
+        <div style={section}>
+          <div style={sectionHeader}>
+            <p style={{ margin: "0 0 1px", fontSize: 14, fontWeight: 600, color: "#e5e5e5" }}>Profile</p>
+            <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Visible only to you</p>
+          </div>
+          <div style={{ padding: "20px 20px 24px" }}>
+            {/* Current avatar + name preview */}
+            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24 }}>
+              <AvatarDisplay av={currentAv} size={60} initials={initials} />
+              <div>
+                <p style={{ margin: "0 0 2px", fontSize: 15, fontWeight: 600, color: "#fff" }}>{name || "—"}</p>
+                <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Choose an avatar below</p>
+              </div>
             </div>
-            <p style={{ margin: 0, fontSize: 12, color: "#444" }}>Pick an avatar below</p>
-          </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8, marginBottom: 20 }}>
-            {PRESET_AVATARS.map(av => {
-              const sel = avatarId === av.id;
-              return (
-                <button key={av.id} onClick={() => setAvatarId(av.id)} style={{ background: "none", border: `2px solid ${sel ? "#facc15" : "transparent"}`, borderRadius: 10, padding: 3, cursor: "pointer", outline: "none", transition: "border-color 0.15s" }}>
-                  <div style={{ width: "100%", aspectRatio: "1", borderRadius: 7, background: av.gradient, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>{av.emoji}</div>
-                </button>
-              );
-            })}
-          </div>
+            {/* Avatar grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8, marginBottom: 20 }}>
+              {PRESET_AVATARS.map(av => (
+                <AvatarThumb key={av.id} av={av} size={72} selected={avatarId === av.id} onClick={() => setAvatarId(av.id)} />
+              ))}
+            </div>
 
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ display: "block", fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Display Name</label>
-            <input type="text" value={name} onChange={e => setName(e.target.value)} maxLength={40} placeholder="Your name" style={inputStyle} />
+            <div style={{ marginBottom: hasProfileChange ? 16 : 0 }}>
+              <label style={{ display: "block", fontSize: 12, color: "#666", marginBottom: 7, fontWeight: 500 }}>Display Name</label>
+              <input type="text" value={name} onChange={e => setName(e.target.value)} maxLength={40} placeholder="Your name" style={inputStyle} />
+            </div>
+            {hasProfileChange && (
+              <button onClick={saveProfile} disabled={saving} style={{ background: "#facc15", border: "none", borderRadius: 10, padding: "11px 28px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
+                {saving ? "Saving…" : saved ? "Saved ✓" : "Save Changes"}
+              </button>
+            )}
           </div>
-          {hasProfileChange && (
-            <button onClick={saveProfile} disabled={saving} style={{ background: "#facc15", border: "none", borderRadius: 8, padding: "10px 24px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
-              {saving ? "Saving…" : saved ? "Saved ✓" : "Save Profile"}
-            </button>
-          )}
         </div>
 
         {/* Playback section */}
-        <div style={{ marginBottom: 40 }}>
-          <p style={sectionHead}>Playback</p>
-          <p style={{ margin: "0 0 4px", fontSize: 12, color: "#333" }}>Controls how content plays automatically</p>
-          <SettingRow
-            label="Autoplay Next Episode"
-            description="Automatically play the next episode when one ends"
-            value={autoplayNext}
-            onChange={toggleAutoplayNext}
-          />
-          <SettingRow
-            label="Hover Previews"
-            description="Play a trailer clip when hovering over a title"
-            value={autoplayPreviews}
-            onChange={toggleAutoplayPreviews}
-          />
-          <SettingRow
-            label="Hero Trailer Autoplay"
-            description="Automatically play the featured trailer on the home screen"
-            value={autoplayHero}
-            onChange={toggleAutoplayHero}
-          />
+        <div style={section}>
+          <div style={sectionHeader}>
+            <p style={{ margin: "0 0 1px", fontSize: 14, fontWeight: 600, color: "#e5e5e5" }}>Playback</p>
+            <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Controls how content plays automatically</p>
+          </div>
+          <div style={{ padding: "0 20px" }}>
+            <SettingRow label="Autoplay Next Episode" description="Automatically play the next episode when one ends" value={autoplayNext} onChange={toggleAutoplayNext} />
+            <SettingRow label="Hover Previews" description="Play a trailer clip when hovering over a title" value={autoplayPreviews} onChange={toggleAutoplayPreviews} />
+            <SettingRow label="Hero Trailer Autoplay" description="Automatically play the featured trailer on the home screen" value={autoplayHero} onChange={toggleAutoplayHero} />
+          </div>
         </div>
 
         {/* Account section */}
-        <div style={{ marginBottom: 40 }}>
-          <p style={sectionHead}>Account</p>
+        <div style={section}>
+          <div style={sectionHeader}>
+            <p style={{ margin: "0 0 1px", fontSize: 14, fontWeight: 600, color: "#e5e5e5" }}>Account</p>
+            <p style={{ margin: 0, fontSize: 12, color: "#555" }}>{user?.email}</p>
+          </div>
+          <div style={{ padding: "20px 20px 8px" }}>
 
           {/* Change email */}
-          <div style={{ background: "#111", border: "1px solid #1a1a1a", borderRadius: 10, padding: "18px 20px", marginBottom: 12 }}>
-            <p style={{ margin: "0 0 2px", fontSize: 11, color: "#444", textTransform: "uppercase", letterSpacing: 0.7 }}>Current Email</p>
-            <p style={{ margin: "0 0 16px", fontSize: 14, color: "#666" }}>{user?.email}</p>
-            <label style={{ display: "block", fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>New Email</label>
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: "block", fontSize: 12, color: "#666", marginBottom: 7, fontWeight: 500 }}>New Email Address</label>
             <input type="email" value={newEmail} onChange={e => { setNewEmail(e.target.value); setEmailMsg(null); }} placeholder="Enter new email" style={inputStyle} />
             {emailMsg && <p style={{ margin: "8px 0 0", fontSize: 12, color: emailMsg.type === "ok" ? "#4ade80" : "#f87171" }}>{emailMsg.text}</p>}
             <button onClick={changeEmail} disabled={emailSaving || !newEmail.trim()}
-              style={{ marginTop: 12, background: newEmail.trim() ? "#facc15" : "#1a1a1a", border: "none", borderRadius: 8, padding: "9px 20px", color: newEmail.trim() ? "#0a0a0a" : "#333", fontSize: 13, fontWeight: 600, cursor: newEmail.trim() ? "pointer" : "default", transition: "background 0.15s" }}>
+              style={{ marginTop: 10, background: newEmail.trim() ? "#facc15" : "#1a1a1a", border: "none", borderRadius: 10, padding: "10px 20px", color: newEmail.trim() ? "#0a0a0a" : "#333", fontSize: 13, fontWeight: 600, cursor: newEmail.trim() ? "pointer" : "default", transition: "background 0.15s" }}>
               {emailSaving ? "Sending…" : "Update Email"}
             </button>
           </div>
 
+          <div style={{ height: 1, background: "#1a1a1a", margin: "0 0 20px" }} />
+
           {/* Change password */}
-          <div style={{ background: "#111", border: "1px solid #1a1a1a", borderRadius: 10, padding: "18px 20px" }}>
+          <div style={{ paddingBottom: 20 }}>
             <p style={{ margin: "0 0 14px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>Change Password</p>
             <label style={{ display: "block", fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>New Password</label>
             <input type="password" value={newPassword} onChange={e => { setNewPassword(e.target.value); setPasswordMsg(null); }} placeholder="At least 6 characters" style={{ ...inputStyle, marginBottom: 10 }} />
@@ -4522,6 +4538,7 @@ function SettingsPage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, 
         </div>
       </div>
     </div>
+  </div>
   );
 }
 
