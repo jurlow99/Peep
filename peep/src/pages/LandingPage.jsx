@@ -5,22 +5,22 @@ const PAD = "clamp(24px, 7vw, 96px)";
 
 // Cinematic gradient "posters" for the background grid
 const POSTER_GRADS = [
-  "linear-gradient(145deg, #1a1640, #2e2060)",
-  "linear-gradient(145deg, #142814, #1a4020)",
-  "linear-gradient(145deg, #3a0810, #581020)",
-  "linear-gradient(145deg, #0e1a38, #142860)",
-  "linear-gradient(145deg, #2a2000, #403200)",
-  "linear-gradient(145deg, #0a2230, #103650)",
-  "linear-gradient(145deg, #200a38, #341460)",
-  "linear-gradient(145deg, #222222, #333333)",
-  "linear-gradient(145deg, #281800, #402800)",
-  "linear-gradient(145deg, #0c1c38, #102a58)",
-  "linear-gradient(145deg, #300810, #4a1020)",
-  "linear-gradient(145deg, #0a3020, #104830)",
-  "linear-gradient(145deg, #1e0c2e, #301848)",
-  "linear-gradient(145deg, #0c2210, #103418)",
-  "linear-gradient(145deg, #301420, #481e32)",
-  "linear-gradient(145deg, #101838, #182450)",
+  "linear-gradient(145deg, #1e3a8a, #2563eb)",
+  "linear-gradient(145deg, #14532d, #166534)",
+  "linear-gradient(145deg, #7f1d1d, #b91c1c)",
+  "linear-gradient(145deg, #1e1b4b, #4338ca)",
+  "linear-gradient(145deg, #78350f, #b45309)",
+  "linear-gradient(145deg, #134e4a, #0f766e)",
+  "linear-gradient(145deg, #4a044e, #7e22ce)",
+  "linear-gradient(145deg, #1c1917, #44403c)",
+  "linear-gradient(145deg, #7c2d12, #c2410c)",
+  "linear-gradient(145deg, #0c4a6e, #0369a1)",
+  "linear-gradient(145deg, #831843, #be185d)",
+  "linear-gradient(145deg, #14532d, #15803d)",
+  "linear-gradient(145deg, #312e81, #6d28d9)",
+  "linear-gradient(145deg, #064e3b, #047857)",
+  "linear-gradient(145deg, #7f1d1d, #dc2626)",
+  "linear-gradient(145deg, #1e3a8a, #1d4ed8)",
 ];
 
 const ROWS = Array.from({ length: 6 }, (_, r) =>
@@ -128,7 +128,7 @@ export function LandingPage() {
           </div>
 
           {/* Dark overlay */}
-          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.72)" }} />
+          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)" }} />
           {/* Yellow orb */}
           <div style={{ position: "absolute", top: "40%", left: "50%", transform: "translate(-50%,-50%)", width: 700, height: 500, background: "radial-gradient(ellipse, rgba(250,204,21,0.055) 0%, transparent 65%)", pointerEvents: "none" }} />
           {/* Bottom fade */}
