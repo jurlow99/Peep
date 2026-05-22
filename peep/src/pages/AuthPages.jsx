@@ -18,7 +18,7 @@ const CARD_OPTS = {
   },
 };
 
-const STEPS = ["Account", "Password", "Payment"];
+const STEPS = ["Account", "Password"];
 
 function Logo() {
   return (
@@ -300,11 +300,10 @@ export function SignupPage() {
       });
     }
 
-    // Sign in to get a live session for the payment step
     await supabase.auth.signInWithPassword({ email, password });
 
     setLoading(false);
-    setStep(3);
+    setStep(4);
   }
 
   return (
@@ -368,14 +367,7 @@ export function SignupPage() {
             </>
           )}
 
-          {/* Step 3: Payment */}
-          {step === 3 && (
-            <Elements stripe={stripePromise}>
-              <PaymentStep email={email} onSuccess={() => setStep(4)} />
-            </Elements>
-          )}
-
-          {/* Step 4: Success */}
+          {/* Step 3: Success */}
           {step === 4 && (
             <div style={{ textAlign: "center", padding: "16px 0" }}>
               <div style={{ width: 64, height: 64, borderRadius: "50%", background: "rgba(250,204,21,0.1)", border: "2px solid rgba(250,204,21,0.3)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px", fontSize: 28 }}>

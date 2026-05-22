@@ -218,9 +218,10 @@ export default function App() {
   if (!user) return <LandingPage />;
   if (!user.email_confirmed_at) return <EmailVerificationGate user={user} />;
   if (!activeProfile) return <ProfileSelect user={user} onSelect={selectProfile} />;
-  if (subChecked && (!subscription || subscription.status !== "active")) {
-    return <PaywallPage user={user} onSubscribed={() => supabase.from("subscriptions").select("*").eq("user_id", user.id).maybeSingle().then(({ data }) => setSubscription(data))} onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }} />;
-  }
+  // Payments disabled — paywall bypassed until Stripe is configured
+  // if (subChecked && (!subscription || subscription.status !== "active")) {
+  //   return <PaywallPage ... />;
+  // }
 
   const profileScreenEl = profileOpen && <ProfileScreen user={user} activeProfile={activeProfile} onClose={() => setProfileOpen(false)} onAvatarChange={id => setUserAvatarId(id)} onProfileUpdate={updated => { setActiveProfile(updated); localStorage.setItem(`peep_profile_${user.id}`, JSON.stringify(updated)); }} onSwitchProfile={switchProfile} onViewProfile={() => { setProfileOpen(false); setPage("profile"); }} onOpenSettings={() => { setProfileOpen(false); setPage("settings"); }} />;
 
