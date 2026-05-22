@@ -152,7 +152,7 @@ export function LandingPage() {
             Movies, series, podcasts, and live streams — curated for people who care about what they watch.
           </p>
 
-          <p style={{ margin: "0 auto 36px", fontSize: 14, color: "#555" }}>No commitments. Cancel anytime.</p>
+          <p style={{ margin: "0 auto 36px", fontSize: 14, color: "#555" }}>$10/month. Cancel anytime.</p>
 
           <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
             <a href="/signup" className="lp-cta" style={{ background: YELLOW, color: "#0a0a0a", fontSize: 16, fontWeight: 700, textDecoration: "none", padding: "16px 44px", borderRadius: 12, display: "inline-block", transition: "transform 0.2s, box-shadow 0.2s" }}>
@@ -227,7 +227,7 @@ export function LandingPage() {
         <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 500, height: 260, background: "radial-gradient(ellipse, rgba(250,204,21,0.06) 0%, transparent 70%)", pointerEvents: "none" }} />
         <div style={{ position: "relative" }}>
           <h2 style={{ margin: "0 0 14px", fontSize: "clamp(30px, 5vw, 56px)", fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1.05 }}>Ready to watch?</h2>
-          <p style={{ margin: "0 auto 40px", fontSize: 15, color: "#444", maxWidth: 360, lineHeight: 1.7 }}>Create your account and start streaming in seconds.</p>
+          <p style={{ margin: "0 auto 40px", fontSize: 15, color: "#444", maxWidth: 360, lineHeight: 1.7 }}>$10/month. Cancel anytime. Start streaming in seconds.</p>
           <a href="/signup" className="lp-cta" style={{ display: "inline-block", background: YELLOW, color: "#0a0a0a", fontSize: 15, fontWeight: 700, textDecoration: "none", padding: "16px 52px", borderRadius: 12, transition: "transform 0.2s, box-shadow 0.2s" }}>
             Get Started →
           </a>
