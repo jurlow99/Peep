@@ -55,10 +55,6 @@ export default function App() {
   const [subChecked, setSubChecked] = useState(false);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [banner, setBanner] = useState(null);
-  const [betaUnlocked, setBetaUnlocked] = useState(() => localStorage.getItem("peep_beta") === "true");
-  const [betaCode, setBetaCode] = useState("");
-  const [betaError, setBetaError] = useState(false);
-  const [betaCodeSetting, setBetaCodeSetting] = useState(null);
   // Capture deep-link params before any effect clears the URL
   const [deepLink] = useState(() => {
     const p = new URLSearchParams(window.location.search);
@@ -66,11 +62,10 @@ export default function App() {
   });
 
   useEffect(() => {
-    supabase.from("app_settings").select("key, value").in("key", ["maintenance_mode", "banner_active", "banner_text", "banner_expires_at", "beta_code"]).then(({ data }) => {
+    supabase.from("app_settings").select("key, value").in("key", ["maintenance_mode", "banner_active", "banner_text", "banner_expires_at"]).then(({ data }) => {
       const s = {};
       (data || []).forEach(r => { s[r.key] = r.value; });
       setMaintenanceMode(s.maintenance_mode === "true");
-      if (s.beta_code) setBetaCodeSetting(s.beta_code);
       if (s.banner_active === "true" && s.banner_text) {
         const expired = s.banner_expires_at && new Date(s.banner_expires_at) < new Date();
         if (!expired) setBanner(s.banner_text);
@@ -213,46 +208,6 @@ export default function App() {
 
   const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true), onProfileOpen: () => setPage("profile"), userAvatarId, activeProfile, onSwitchProfile: switchProfile, onPodcastSelect: pod => { setSelectedPodcast(pod); setPage("podcast"); }, onViewProfile: () => setPage("profile") };
 
-  if (betaCodeSetting && !betaUnlocked) return (
-    <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", gap: 24 }}>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&display=swap" rel="stylesheet" />
-      <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 52, color: "#facc15" }}>peep.</span>
-      <p style={{ color: "#9ca3af", fontSize: 14, margin: 0 }}>Enter your access code to continue.</p>
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, width: 280 }}>
-        <input
-          value={betaCode}
-          onChange={e => { setBetaCode(e.target.value); setBetaError(false); }}
-          onKeyDown={e => {
-            if (e.key === "Enter") {
-              if (betaCode.trim().toLowerCase() === betaCodeSetting.toLowerCase()) {
-                localStorage.setItem("peep_beta", "true");
-                setBetaUnlocked(true);
-              } else {
-                setBetaError(true);
-                setBetaCode("");
-              }
-            }
-          }}
-          placeholder="Access code"
-          style={{ width: "100%", padding: "12px 16px", borderRadius: 10, border: betaError ? "1px solid #f87171" : "1px solid #333", background: "#111", color: "#fff", fontSize: 15, outline: "none", textAlign: "center", letterSpacing: 2, boxSizing: "border-box" }}
-          autoFocus
-        />
-        {betaError && <p style={{ margin: 0, fontSize: 12, color: "#f87171" }}>Incorrect code — try again.</p>}
-        <button
-          onClick={() => {
-            if (betaCode.trim().toLowerCase() === betaCodeSetting.toLowerCase()) {
-              localStorage.setItem("peep_beta", "true");
-              setBetaUnlocked(true);
-            } else {
-              setBetaError(true);
-              setBetaCode("");
-            }
-          }}
-          style={{ width: "100%", padding: "12px 0", borderRadius: 10, border: "none", background: "#facc15", color: "#0a0a0a", fontSize: 15, fontWeight: 700, cursor: "pointer" }}
-        >Enter</button>
-      </div>
-    </div>
-  );
 
   if (maintenanceMode) return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", gap: 16 }}>
