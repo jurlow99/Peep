@@ -128,7 +128,7 @@ export function LandingPage() {
           </div>
 
           {/* Dark overlay */}
-          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.72)" }} />
+          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.85)" }} />
           {/* Yellow orb */}
           <div style={{ position: "absolute", top: "40%", left: "50%", transform: "translate(-50%,-50%)", width: 700, height: 500, background: "radial-gradient(ellipse, rgba(250,204,21,0.055) 0%, transparent 65%)", pointerEvents: "none" }} />
           {/* Bottom fade */}
