@@ -35,7 +35,7 @@ export function ProfileSelect({ user, onSelect }) {
 
     if (list.length === 0) {
       const { data: profile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
-      const defaultName = profile?.full_name || user.email?.split("@")[0] || "Main";
+      const defaultName = profile?.full_name || user.user_metadata?.full_name || user.email?.split("@")[0] || "Main";
       const { data: created } = await supabase
         .from("viewer_profiles")
         .insert({ user_id: user.id, name: defaultName, avatar_id: "a1" })

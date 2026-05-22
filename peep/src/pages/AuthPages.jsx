@@ -281,7 +281,7 @@ export function SignupPage() {
     setErrors({});
     setLoading(true);
 
-    const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
+    const { data, error: signUpError } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name.trim() } } });
     if (signUpError) { setErrors({ submit: signUpError.message }); setLoading(false); return; }
 
     if (!data.user || data.user.identities?.length === 0) {
