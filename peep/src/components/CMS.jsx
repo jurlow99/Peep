@@ -672,7 +672,12 @@ export function CMS({ onExit }) {
   async function searchSupportUsers(query) {
     if (!query.trim()) { setSupportResults([]); return; }
     setSupportSearching(true);
-    const { data } = await supabase.from("profiles").select("id, full_name, email, username, created_at").or(`email.ilike.%${query.trim()}%,full_name.ilike.%${query.trim()}%`).limit(10);
+    const q = query.trim();
+    // UUID pattern — search by id directly
+    const isUuid = /^[0-9a-f-]{8,}$/i.test(q);
+    const { data } = await supabase.from("profiles").select("id, full_name, email, username, created_at")
+      .or(isUuid ? `id.eq.${q},email.ilike.%${q}%,full_name.ilike.%${q}%` : `email.ilike.%${q}%,full_name.ilike.%${q}%`)
+      .limit(10);
     setSupportResults(data || []);
     setSupportSearching(false);
   }
@@ -5103,7 +5108,7 @@ export function CMS({ onExit }) {
                 <input
                   value={supportSearch}
                   onChange={e => { setSupportSearch(e.target.value); searchSupportUsers(e.target.value); }}
-                  placeholder="Search by email or name…"
+                  placeholder="Search by email, name, or user ID…"
                   style={{ border: "none", outline: "none", fontSize: 14, color: "#0f172a", background: "transparent", flex: 1 }}
                 />
                 {supportSearching && <span style={{ color: "#9ca3af", fontSize: 12 }}>⋯</span>}
