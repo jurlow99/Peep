@@ -599,7 +599,7 @@ export function CMS({ onExit }) {
       const ids = presence.map(r => r.user_id);
       const { data: profiles } = await supabase
         .from("profiles")
-        .select("id, email, username")
+        .select("id, email, username, full_name")
         .in("id", ids);
       const profileMap = {};
       (profiles || []).forEach(p => { profileMap[p.id] = p; });
@@ -4657,7 +4657,7 @@ export function CMS({ onExit }) {
                       ? <div style={{ padding: "20px", color: "#9ca3af", fontSize: 13, textAlign: "center" }}>No admins currently in the CMS</div>
                       : <div>{admins.map((u, i) => {
                           const email = u.profile?.email || u.user_id;
-                          const username = u.profile?.username;
+                          const username = u.profile?.full_name || u.profile?.username;
                           const secsAgo = Math.floor((Date.now() - new Date(u.last_seen).getTime()) / 1000);
                           const agoLabel = secsAgo < 60 ? "just now" : `${Math.floor(secsAgo / 60)}m ago`;
                           return (
