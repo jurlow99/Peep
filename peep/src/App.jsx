@@ -339,18 +339,35 @@ export default function App() {
   return (
     <>
       {!betaAck && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(0,0,0,0.82)", backdropFilter: "blur(12px)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", padding: 24 }}>
-          <div style={{ background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 20, padding: "40px 36px", maxWidth: 420, width: "100%", textAlign: "center" }}>
-            <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 36, color: "#facc15", display: "block", marginBottom: 20 }}>peep.</span>
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.15)", borderRadius: 100, padding: "5px 14px", marginBottom: 20 }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#facc15", display: "inline-block" }} />
-              <span style={{ fontSize: 11, color: "#facc15", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>Early Access</span>
+        <div style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(0,0,0,0.88)", backdropFilter: "blur(20px)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", padding: 24 }}>
+          <div style={{ position: "relative", background: "linear-gradient(160deg, #111 0%, #0d0d0d 100%)", border: "1px solid #222", borderRadius: 24, padding: "48px 40px 40px", maxWidth: 400, width: "100%", textAlign: "center", overflow: "hidden", boxShadow: "0 40px 100px rgba(0,0,0,0.6)" }}>
+            {/* Orb glow */}
+            <div style={{ position: "absolute", top: -60, left: "50%", transform: "translateX(-50%)", width: 300, height: 200, background: "radial-gradient(ellipse, rgba(250,204,21,0.1) 0%, transparent 70%)", pointerEvents: "none" }} />
+            {/* Top accent line */}
+            <div style={{ position: "absolute", top: 0, left: "20%", right: "20%", height: 1, background: "linear-gradient(90deg, transparent, rgba(250,204,21,0.4), transparent)" }} />
+
+            <div style={{ position: "relative" }}>
+              <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 44, color: "#facc15", display: "block", marginBottom: 18, letterSpacing: "-0.01em" }}>peep.</span>
+
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "rgba(250,204,21,0.07)", border: "1px solid rgba(250,204,21,0.18)", borderRadius: 100, padding: "6px 16px", marginBottom: 28 }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#facc15", display: "inline-block", boxShadow: "0 0 6px #facc15" }} />
+                <span style={{ fontSize: 10, color: "#facc15", fontWeight: 700, letterSpacing: 2, textTransform: "uppercase" }}>Early Access</span>
+              </div>
+
+              <h2 style={{ margin: "0 0 14px", fontSize: 24, fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1.15 }}>We're still building.</h2>
+              <p style={{ margin: "0 0 36px", fontSize: 14, color: "#4a4a4a", lineHeight: 1.85 }}>
+                You might run into rough edges or missing features — we're working on it every day. Thanks for being here early.
+              </p>
+
+              <button
+                onClick={() => { localStorage.setItem("peep_beta_ack", "true"); setBetaAck(true); }}
+                style={{ width: "100%", background: "#facc15", border: "none", borderRadius: 12, padding: "15px 0", color: "#0a0a0a", fontSize: 15, fontWeight: 700, cursor: "pointer", transition: "transform 0.15s, box-shadow 0.15s", letterSpacing: "-0.01em" }}
+                onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.02)"; e.currentTarget.style.boxShadow = "0 6px 28px rgba(250,204,21,0.3)"; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "none"; }}
+              >
+                Let's go →
+              </button>
             </div>
-            <h2 style={{ margin: "0 0 12px", fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>We're still building.</h2>
-            <p style={{ margin: "0 0 28px", fontSize: 14, color: "#555", lineHeight: 1.8 }}>Peep is in early access. You might run into rough edges, missing features, or the occasional bug. We're working on it every day — thanks for being here early.</p>
-            <button onClick={() => { localStorage.setItem("peep_beta_ack", "true"); setBetaAck(true); }} style={{ width: "100%", background: "#facc15", border: "none", borderRadius: 12, padding: "14px 0", color: "#0a0a0a", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
-              Let's go →
-            </button>
           </div>
         </div>
       )}
