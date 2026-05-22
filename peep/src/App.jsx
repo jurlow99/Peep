@@ -54,7 +54,7 @@ export default function App() {
   const [subscription, setSubscription] = useState(null);
   const [subChecked, setSubChecked] = useState(false);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
-  const [banner, setBanner] = useState(null);
+  const [betaAck, setBetaAck] = useState(() => localStorage.getItem("peep_beta_ack") === "true");
   // Capture deep-link params before any effect clears the URL
   const [deepLink] = useState(() => {
     const p = new URLSearchParams(window.location.search);
@@ -62,14 +62,10 @@ export default function App() {
   });
 
   useEffect(() => {
-    supabase.from("app_settings").select("key, value").in("key", ["maintenance_mode", "banner_active", "banner_text", "banner_expires_at"]).then(({ data }) => {
+    supabase.from("app_settings").select("key, value").in("key", ["maintenance_mode"]).then(({ data }) => {
       const s = {};
       (data || []).forEach(r => { s[r.key] = r.value; });
       setMaintenanceMode(s.maintenance_mode === "true");
-      if (s.banner_active === "true" && s.banner_text) {
-        const expired = s.banner_expires_at && new Date(s.banner_expires_at) < new Date();
-        if (!expired) setBanner(s.banner_text);
-      }
     });
   }, []);
 
@@ -341,10 +337,20 @@ export default function App() {
 
   return (
     <>
-      {banner && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 9999, background: "#facc15", color: "#0a0a0a", padding: "10px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, fontWeight: 600, fontFamily: "'Space Grotesk', sans-serif" }}>
-          <span>{banner}</span>
-          <button onClick={() => setBanner(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#0a0a0a", fontSize: 18, lineHeight: 1, padding: "0 4px" }}>×</button>
+      {!betaAck && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(0,0,0,0.82)", backdropFilter: "blur(12px)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", padding: 24 }}>
+          <div style={{ background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 20, padding: "40px 36px", maxWidth: 420, width: "100%", textAlign: "center" }}>
+            <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 36, color: "#facc15", display: "block", marginBottom: 20 }}>peep.</span>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.15)", borderRadius: 100, padding: "5px 14px", marginBottom: 20 }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#facc15", display: "inline-block" }} />
+              <span style={{ fontSize: 11, color: "#facc15", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>Early Access</span>
+            </div>
+            <h2 style={{ margin: "0 0 12px", fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>We're still building.</h2>
+            <p style={{ margin: "0 0 28px", fontSize: 14, color: "#555", lineHeight: 1.8 }}>Peep is in early access. You might run into rough edges, missing features, or the occasional bug. We're working on it every day — thanks for being here early.</p>
+            <button onClick={() => { localStorage.setItem("peep_beta_ack", "true"); setBetaAck(true); }} style={{ width: "100%", background: "#facc15", border: "none", borderRadius: 12, padding: "14px 0", color: "#0a0a0a", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+              Let's go →
+            </button>
+          </div>
         </div>
       )}
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
