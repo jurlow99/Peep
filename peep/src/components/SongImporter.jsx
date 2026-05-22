@@ -1,5 +1,4 @@
 import { useState, useRef } from "react";
-import { parseBlob } from "music-metadata-browser";
 import { supabase } from "../supabase";
 
 const BUCKET = "peep-media";
@@ -40,20 +39,15 @@ export function SongImporter({ onClose, onImported }) {
       let artist = "", album = "", year = "", durationStr = "";
       let artworkBlob = null, artworkUrl = null;
       try {
-        const meta = await parseBlob(file, { skipCovers: false });
-        const c = meta.common;
-        if (c.title) title = c.title;
-        if (c.artist) artist = c.artist;
-        if (c.album) album = c.album;
-        if (c.year) year = String(c.year);
-        if (meta.format.duration) durationStr = fmt(meta.format.duration);
-        if (c.picture && c.picture.length > 0) {
-          const pic = c.picture[0];
-          artworkBlob = new Blob([pic.data], { type: pic.format || "image/jpeg" });
-          artworkUrl = URL.createObjectURL(artworkBlob);
-          artworkUrlsRef.current.push(artworkUrl);
-        }
-      } catch { /* use defaults */ }
+        const duration = await new Promise((resolve) => {
+          const audio = new Audio();
+          const url = URL.createObjectURL(file);
+          audio.addEventListener("loadedmetadata", () => { URL.revokeObjectURL(url); resolve(audio.duration); });
+          audio.addEventListener("error", () => { URL.revokeObjectURL(url); resolve(null); });
+          audio.src = url;
+        });
+        if (duration) durationStr = fmt(duration);
+      } catch { /* use filename defaults */ }
       return { file, title, artist, album, year, durationStr, artworkBlob, artworkUrl, status: "ready" };
     }));
 
