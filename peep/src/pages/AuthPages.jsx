@@ -9,7 +9,7 @@ const CARD = "#111";
 const BORDER = "#1e1e1e";
 const SUPABASE_URL = "https://iuozujwtuzuwubhsnhix.supabase.co";
 
-const stripePromise = loadStripe("pk_test_51TYZ1FDARsmnN5Leu436JpkJ6NL9mNbqwtcvB9ueJPnbhLEJgcwfVHcnU3mQkgcAlAEOrd6Ne76UQPYIbKrAZsCo006pJcUBJ3");
+const stripePromise = loadStripe("pk_live_51TYZ17RgQH3TYy3Q51H1NPxizg1dHKpdRx0Vzes5cFI1jdrkCctrYp1ulMTuZL1Obxe9QBq0oKSEAHN7QNAvSSq700rFAyMhZn");
 
 const CARD_OPTS = {
   style: {
@@ -18,7 +18,7 @@ const CARD_OPTS = {
   },
 };
 
-const STEPS = ["Account", "Password"];
+const STEPS = ["Account", "Password", "Payment"];
 
 function Logo() {
   return (
@@ -303,7 +303,7 @@ export function SignupPage() {
     await supabase.auth.signInWithPassword({ email, password });
 
     setLoading(false);
-    setStep(4);
+    setStep(3);
   }
 
   return (
@@ -367,7 +367,14 @@ export function SignupPage() {
             </>
           )}
 
-          {/* Step 3: Success */}
+          {/* Step 3: Payment */}
+          {step === 3 && (
+            <Elements stripe={stripePromise}>
+              <PaymentStep email={email} onSuccess={() => setStep(4)} />
+            </Elements>
+          )}
+
+          {/* Step 4: Success */}
           {step === 4 && (
             <div style={{ textAlign: "center", padding: "16px 0" }}>
               <div style={{ width: 64, height: 64, borderRadius: "50%", background: "rgba(250,204,21,0.1)", border: "2px solid rgba(250,204,21,0.3)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px", fontSize: 28 }}>

@@ -218,10 +218,9 @@ export default function App() {
   if (!user) return <LandingPage />;
   if (!user.email_confirmed_at) return <EmailVerificationGate user={user} />;
   if (!activeProfile) return <ProfileSelect user={user} onSelect={selectProfile} />;
-  // Payments disabled — paywall bypassed until Stripe is configured
-  // if (subChecked && (!subscription || subscription.status !== "active")) {
-  //   return <PaywallPage ... />;
-  // }
+  if (subChecked && (!subscription || subscription.status !== "active")) {
+    return <PaywallPage user={user} onSubscribed={() => window.location.href = "/?subscribed=1"} onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }} />;
+  }
 
   const profileScreenEl = profileOpen && <ProfileScreen user={user} activeProfile={activeProfile} onClose={() => setProfileOpen(false)} onAvatarChange={id => setUserAvatarId(id)} onProfileUpdate={updated => { setActiveProfile(updated); localStorage.setItem(`peep_profile_${user.id}`, JSON.stringify(updated)); }} onSwitchProfile={switchProfile} onViewProfile={() => { setProfileOpen(false); setPage("profile"); }} onOpenSettings={() => { setProfileOpen(false); setPage("settings"); }} />;
 
@@ -4337,6 +4336,61 @@ function AvatarDisplay({ av, size = 64, initials }) {
   );
 }
 
+const SUPABASE_URL_SETTINGS = "https://iuozujwtuzuwubhsnhix.supabase.co";
+
+function DeleteAccountSection({ user, onSignOut }) {
+  const [confirm, setConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function handleDelete() {
+    setDeleting(true);
+    setError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${SUPABASE_URL_SETTINGS}/functions/v1/delete-user`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
+        body: JSON.stringify({ user_id: user.id }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      await supabase.auth.signOut();
+      window.location.href = "/";
+    } catch (err) {
+      setError(err.message);
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 32, paddingTop: 24, borderTop: "1px solid #1a1a1a" }}>
+      {!confirm ? (
+        <button onClick={() => setConfirm(true)}
+          style={{ background: "transparent", border: "none", color: "#444", fontSize: 13, cursor: "pointer", padding: 0, textDecoration: "underline" }}>
+          Delete Account
+        </button>
+      ) : (
+        <div style={{ background: "#111", border: "1px solid #2a2a2a", borderRadius: 12, padding: "20px" }}>
+          <p style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 600, color: "#f87171" }}>Delete your account?</p>
+          <p style={{ margin: "0 0 16px", fontSize: 12, color: "#555" }}>This permanently deletes your account, all profiles, and watch history. This cannot be undone.</p>
+          {error && <p style={{ margin: "0 0 12px", fontSize: 12, color: "#f87171" }}>{error}</p>}
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={() => setConfirm(false)} disabled={deleting}
+              style={{ flex: 1, background: "transparent", border: "1px solid #2a2a2a", borderRadius: 8, padding: "10px", color: "#666", fontSize: 13, cursor: "pointer" }}>
+              Cancel
+            </button>
+            <button onClick={handleDelete} disabled={deleting}
+              style={{ flex: 1, background: "#7f1d1d", border: "none", borderRadius: 8, padding: "10px", color: "#fca5a5", fontSize: 13, fontWeight: 600, cursor: deleting ? "not-allowed" : "pointer", opacity: deleting ? 0.7 : 1 }}>
+              {deleting ? "Deleting…" : "Yes, Delete Everything"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SettingsPage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, onAvatarChange, onSignOut }) {
   const [name, setName] = useState(activeProfile?.name || "");
   const [savedName, setSavedName] = useState(activeProfile?.name || "");
@@ -4515,6 +4569,9 @@ function SettingsPage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, 
             Sign Out
           </button>
         </div>
+
+        {/* Delete account */}
+        <DeleteAccountSection user={user} onSignOut={onSignOut} />
       </div>
     </div>
   </div>

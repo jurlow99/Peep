@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const PRICE_ID = "price_1TYZ4ADARsmnN5LeElZnYYgB";
+const PRICE_ID = "price_1TZkbxRgQH3TYy3QAYrrn4Ew";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
