@@ -96,7 +96,7 @@ export function LandingPage() {
           </h1>
 
           <p style={{ margin: "0 auto 16px", fontSize: "clamp(15px, 1.9vw, 18px)", color: "#666", lineHeight: 1.75, maxWidth: 520 }}>
-            A streaming home for adult animation that didn't get a network deal — and didn't need one. Indie. Unfiltered. Exactly what it is.
+            Weird TV. Adult animation. All of it.
           </p>
 
           <p style={{ margin: "0 auto 44px", fontSize: 14, color: "#444" }}>$10/month. Cancel anytime.</p>
@@ -120,7 +120,7 @@ export function LandingPage() {
           <h2 style={{ fontFamily: "'Righteous', sans-serif", fontWeight: 400, textAlign: "center", margin: "0 0 12px", fontSize: "clamp(26px, 4vw, 42px)" }}>
             What's on Peep
           </h2>
-          <p style={{ textAlign: "center", color: "#444", fontSize: 15, margin: "0 0 52px" }}>The stuff that fell through the cracks of the mainstream.</p>
+          <p style={{ textAlign: "center", color: "#444", fontSize: 15, margin: "0 0 52px" }}>Animated. Adult. Weird.</p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
             {features.map(f => (
               <div key={f.title} className="lp-feat-card" style={{ background: "#0f0f0f", border: "1px solid #1a1a1a", borderRadius: 14, padding: "28px 24px", transition: "border-color 0.2s, transform 0.2s" }}>
@@ -140,7 +140,7 @@ export function LandingPage() {
             Built for the stuff<br /><span style={{ color: YELLOW }}>they said no to.</span>
           </h2>
           <p style={{ fontSize: 15, color: "#555", lineHeight: 1.85, margin: 0 }}>
-            Adult animation has always lived on the fringe — but the fringe keeps getting cut. Peep exists so independent animators have somewhere to put their work, and fans have somewhere to find it. No gatekeepers. No notes. No watered-down cuts.
+            Weird cartoons for adults. That's it. That's the pitch.
           </p>
         </div>
       </section>
@@ -160,7 +160,7 @@ export function LandingPage() {
         <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 500, height: 260, background: "radial-gradient(ellipse, rgba(250,204,21,0.05) 0%, transparent 70%)", pointerEvents: "none" }} />
         <div style={{ position: "relative" }}>
           <h2 style={{ fontFamily: "'Righteous', sans-serif", fontWeight: 400, margin: "0 0 14px", fontSize: "clamp(28px, 5vw, 52px)" }}>Ready to watch something weird?</h2>
-          <p style={{ margin: "0 0 36px", fontSize: 15, color: "#444" }}>$10/month. Cancel anytime. Start watching in seconds.</p>
+          <p style={{ margin: "0 0 36px", fontSize: 15, color: "#444" }}>$10/month. Cancel anytime.</p>
           <a href="/signup" className="lp-cta-btn" style={{ background: YELLOW, color: "#0a0a0a", fontSize: 15, fontWeight: 700, textDecoration: "none", padding: "15px 44px", borderRadius: 10, display: "inline-block", transition: "transform 0.2s, box-shadow 0.2s" }}>
             Create Your Account →
           </a>
