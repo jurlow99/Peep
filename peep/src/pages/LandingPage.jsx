@@ -3,7 +3,6 @@ import { useState } from "react";
 const YELLOW = "#facc15";
 const PAD = "clamp(24px, 7vw, 96px)";
 
-// Cinematic gradient "posters" for the background grid
 const POSTER_GRADS = [
   "linear-gradient(145deg, #1e3a8a, #2563eb)",
   "linear-gradient(145deg, #14532d, #166534)",
@@ -35,7 +34,7 @@ const FEATURES = [
       </svg>
     ),
     title: "Movies & Series",
-    desc: "Original films, indie features, and full series — on demand, any time.",
+    desc: "Films and full series. Not the ones your dad watches. The other ones.",
   },
   {
     icon: (
@@ -44,7 +43,7 @@ const FEATURES = [
       </svg>
     ),
     title: "Live Streams",
-    desc: "Tune in to live events, premieres, and exclusive broadcasts as they happen.",
+    desc: "Something is happening right now. You should probably be watching it.",
   },
   {
     icon: (
@@ -53,7 +52,7 @@ const FEATURES = [
       </svg>
     ),
     title: "Podcasts",
-    desc: "Long-form audio from creators you won't find anywhere else.",
+    desc: "Long-form audio from people who have too much to say and nowhere else to say it.",
   },
   {
     icon: (
@@ -62,16 +61,16 @@ const FEATURES = [
       </svg>
     ),
     title: "Music",
-    desc: "Videos, albums, and curated listening built into the streaming experience.",
+    desc: "Videos, albums, and audio that actually belongs in the same place as everything else.",
   },
 ];
 
 const FAQ_ITEMS = [
-  { q: "What can I watch on Peep?", a: "Peep is home to movies, full series, podcasts, live streams, and music — all in one place. Content is hand-curated, not algorithm-generated." },
-  { q: "Do I need to download anything?", a: "No. Peep runs entirely in your browser on any device — phone, tablet, laptop, or TV. Nothing to install." },
-  { q: "Can multiple people use one account?", a: "Yes. Peep supports multiple viewer profiles under one account so everyone gets their own watch history and saved list." },
-  { q: "How do I cancel?", a: "You can cancel your subscription at any time from your account settings. No questions asked." },
-  { q: "Is there a free trial?", a: "We occasionally run limited-time offers. Create an account to see what's available to you." },
+  { q: "What can I watch on Peep?", a: "Films, series, podcasts, live streams, and music — all in one place. Hand-curated. No algorithm. No 'because you watched The Office' recommendations." },
+  { q: "Do I need to download anything?", a: "No. It runs in your browser. If you can read this sentence, you can watch Peep. That's the bar." },
+  { q: "Can multiple people use one account?", a: "Yes. Multiple profiles under one account. Everyone gets their own watch history. No one has to know what you've been watching." },
+  { q: "How do I cancel?", a: "Account settings. Two clicks. We won't ask why. We won't send a guilt email. We'll just be sad quietly." },
+  { q: "Is there a free trial?", a: "Sometimes. Create an account and see what you're offered. No promises. We're doing our best." },
 ];
 
 function FaqItem({ q, a, open, onToggle }) {
@@ -98,17 +97,43 @@ export function LandingPage() {
         @keyframes scrollL { from { transform: translateX(0); } to { transform: translateX(-50%); } }
         @keyframes scrollR { from { transform: translateX(-50%); } to { transform: translateX(0); } }
         @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes flicker {
+          0%, 95%, 100% { opacity: 1; }
+          96% { opacity: 0.6; }
+          97% { opacity: 1; }
+          98% { opacity: 0.4; }
+          99% { opacity: 1; }
+        }
+        @keyframes orbDrift {
+          0%, 100% { transform: translate(-50%, -50%) scale(1); }
+          50% { transform: translate(-52%, -48%) scale(1.08); }
+        }
+        @keyframes grain {
+          0%, 100% { transform: translate(0, 0); }
+          10% { transform: translate(-2%, -3%); }
+          20% { transform: translate(3%, 1%); }
+          30% { transform: translate(-1%, 4%); }
+          40% { transform: translate(2%, -2%); }
+          50% { transform: translate(-3%, 2%); }
+          60% { transform: translate(1%, -4%); }
+          70% { transform: translate(-2%, 3%); }
+          80% { transform: translate(3%, -1%); }
+          90% { transform: translate(-1%, 2%); }
+        }
         .lp-cta:hover { transform: scale(1.04) !important; box-shadow: 0 8px 36px rgba(250,204,21,0.28) !important; }
-        .lp-feat:hover { border-color: rgba(250,204,21,0.2) !important; transform: translateY(-3px); }
+        .lp-feat:hover { border-color: rgba(250,204,21,0.15) !important; transform: translateY(-2px); }
         .lp-signin-nav:hover { color: #fff !important; }
       `}</style>
 
+      {/* ── Grain texture overlay ── */}
+      <div style={{ position: "fixed", inset: 0, zIndex: 9999, pointerEvents: "none", opacity: 0.03, backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`, backgroundRepeat: "repeat", backgroundSize: "128px 128px", animation: "grain 0.5s steps(1) infinite" }} />
+
       {/* ── Fixed Nav ── */}
       <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "space-between", padding: `0 ${PAD}`, height: 68, background: "linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, transparent 100%)" }}>
-        <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 28, color: YELLOW }}>peep.</span>
+        <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 28, color: YELLOW, animation: "flicker 8s ease-in-out infinite" }}>peep.</span>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <a href="/signin" className="lp-signin-nav" style={{ color: "#aaa", fontSize: 14, fontWeight: 500, textDecoration: "none", padding: "8px 16px", borderRadius: 8, transition: "color 0.15s" }}>Sign In</a>
-          <a href="/signup" className="lp-cta" style={{ background: YELLOW, color: "#0a0a0a", fontSize: 14, fontWeight: 700, textDecoration: "none", padding: "9px 22px", borderRadius: 8, transition: "transform 0.2s, box-shadow 0.2s" }}>Get Started</a>
+          <a href="/signin" className="lp-signin-nav" style={{ color: "#aaa", fontSize: 14, fontWeight: 500, textDecoration: "none", padding: "8px 16px", borderRadius: 8, transition: "color 0.15s" }}>sign in</a>
+          <a href="/signup" className="lp-cta" style={{ background: YELLOW, color: "#0a0a0a", fontSize: 14, fontWeight: 700, textDecoration: "none", padding: "9px 22px", borderRadius: 8, transition: "transform 0.2s, box-shadow 0.2s" }}>get in →</a>
         </div>
       </nav>
 
@@ -130,7 +155,7 @@ export function LandingPage() {
           {/* Dark overlay */}
           <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.85)" }} />
           {/* Yellow orb */}
-          <div style={{ position: "absolute", top: "40%", left: "50%", transform: "translate(-50%,-50%)", width: 700, height: 500, background: "radial-gradient(ellipse, rgba(250,204,21,0.055) 0%, transparent 65%)", pointerEvents: "none" }} />
+          <div style={{ position: "absolute", top: "40%", left: "50%", width: 700, height: 500, background: "radial-gradient(ellipse, rgba(250,204,21,0.055) 0%, transparent 65%)", pointerEvents: "none", animation: "orbDrift 12s ease-in-out infinite" }} />
           {/* Bottom fade */}
           <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "50%", background: "linear-gradient(to top, #0a0a0a 0%, rgba(10,10,10,0.6) 50%, transparent 100%)" }} />
           {/* Top fade */}
@@ -139,29 +164,29 @@ export function LandingPage() {
 
         {/* Hero content */}
         <div style={{ position: "relative", zIndex: 1, textAlign: "center", maxWidth: 700, padding: `0 ${PAD}`, animation: "fadeUp 0.9s ease both" }}>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(250,204,21,0.1)", border: "1px solid rgba(250,204,21,0.2)", borderRadius: 100, padding: "6px 16px", marginBottom: 28 }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.18)", borderRadius: 4, padding: "6px 16px", marginBottom: 28, transform: "rotate(-0.8deg)" }}>
             <span style={{ width: 6, height: 6, borderRadius: "50%", background: YELLOW, display: "inline-block", boxShadow: `0 0 8px ${YELLOW}` }} />
-            <span style={{ fontSize: 11, color: YELLOW, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>Now Streaming</span>
+            <span style={{ fontSize: 11, color: YELLOW, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>on the air.</span>
           </div>
 
-          <h1 style={{ margin: "0 0 20px", fontSize: "clamp(40px, 7vw, 76px)", fontWeight: 800, lineHeight: 1.06, letterSpacing: "-0.03em", textShadow: "0 2px 20px rgba(0,0,0,0.5)" }}>
-            Watch something<br /><span style={{ color: YELLOW }}>worth watching.</span>
+          <h1 style={{ margin: "0 0 20px", fontSize: "clamp(40px, 7vw, 76px)", fontWeight: 800, lineHeight: 1.06, letterSpacing: "-0.03em", textShadow: "0 2px 20px rgba(0,0,0,0.5)", transform: "rotate(-0.4deg)" }}>
+            Watch something<br /><span style={{ color: YELLOW }}>you probably shouldn't.</span>
           </h1>
 
-          <p style={{ margin: "0 auto 16px", fontSize: "clamp(14px, 1.8vw, 18px)", color: "#999", lineHeight: 1.7, maxWidth: 480 }}>
-            Movies, series, podcasts, and live streams — curated for people who care about what they watch.
+          <p style={{ margin: "0 auto 16px", fontSize: "clamp(14px, 1.8vw, 18px)", color: "#777", lineHeight: 1.7, maxWidth: 480 }}>
+            Films. Series. Podcasts. Music. Weird stuff your algorithm would never recommend.
           </p>
 
-          <p style={{ margin: "0 auto 36px", fontSize: 14, color: "#555" }}>$10/month. Cancel anytime.</p>
+          <p style={{ margin: "0 auto 36px", fontSize: 14, color: "#444" }}>$10/month. don't overthink it.</p>
 
           <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-            <a href="/signup" className="lp-cta" style={{ background: YELLOW, color: "#0a0a0a", fontSize: 16, fontWeight: 700, textDecoration: "none", padding: "16px 44px", borderRadius: 12, display: "inline-block", transition: "transform 0.2s, box-shadow 0.2s" }}>
-              Get Started →
+            <a href="/signup" className="lp-cta" style={{ background: YELLOW, color: "#0a0a0a", fontSize: 16, fontWeight: 700, textDecoration: "none", padding: "16px 44px", borderRadius: 10, display: "inline-block", transition: "transform 0.2s, box-shadow 0.2s" }}>
+              get in →
             </a>
-            <a href="/signin" style={{ background: "rgba(255,255,255,0.08)", color: "#ccc", fontSize: 16, fontWeight: 600, textDecoration: "none", padding: "16px 44px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.1)", display: "inline-block", backdropFilter: "blur(8px)", transition: "background 0.2s" }}
-              onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.14)"}
-              onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.08)"}>
-              Sign In
+            <a href="/signin" style={{ background: "rgba(255,255,255,0.06)", color: "#aaa", fontSize: 16, fontWeight: 600, textDecoration: "none", padding: "16px 44px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", display: "inline-block", backdropFilter: "blur(8px)", transition: "background 0.2s" }}
+              onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
+              onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.06)"}>
+              sign in
             </a>
           </div>
         </div>
@@ -171,15 +196,15 @@ export function LandingPage() {
       <section style={{ padding: `96px ${PAD}`, borderTop: "1px solid #0f0f0f" }}>
         <div style={{ maxWidth: 1080, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: 56 }}>
-            <p style={{ fontSize: 11, color: YELLOW, fontWeight: 700, letterSpacing: 2, marginBottom: 12, textTransform: "uppercase" }}>All in one place</p>
-            <h2 style={{ margin: 0, fontSize: "clamp(26px, 3.5vw, 42px)", fontWeight: 700, letterSpacing: "-0.02em" }}>Everything you love to watch</h2>
+            <p style={{ fontSize: 11, color: YELLOW, fontWeight: 700, letterSpacing: 2, marginBottom: 12, textTransform: "uppercase" }}>what's in here</p>
+            <h2 style={{ margin: 0, fontSize: "clamp(26px, 3.5vw, 42px)", fontWeight: 700, letterSpacing: "-0.02em" }}>It's all in here.</h2>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 14 }}>
-            {FEATURES.map(f => (
-              <div key={f.title} className="lp-feat" style={{ background: "#161616", border: "1px solid #222", borderRadius: 18, padding: "30px 26px", transition: "border-color 0.2s, transform 0.2s" }}>
-                <div style={{ width: 48, height: 48, borderRadius: 12, background: "rgba(250,204,21,0.07)", border: "1px solid rgba(250,204,21,0.1)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 18 }}>{f.icon}</div>
-                <h3 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 700 }}>{f.title}</h3>
-                <p style={{ margin: 0, fontSize: 13, color: "#444", lineHeight: 1.75 }}>{f.desc}</p>
+            {FEATURES.map((f, idx) => (
+              <div key={f.title} className="lp-feat" style={{ background: "#111", border: "1px solid #1a1a1a", borderRadius: 12, padding: "28px 24px", transition: "border-color 0.2s, transform 0.2s", transform: `rotate(${[-0.4, 0.3, -0.2, 0.4][idx % 4]}deg)` }}>
+                <div style={{ width: 44, height: 44, borderRadius: 8, background: "rgba(250,204,21,0.06)", border: "1px solid rgba(250,204,21,0.1)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>{f.icon}</div>
+                <h3 style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700 }}>{f.title}</h3>
+                <p style={{ margin: 0, fontSize: 13, color: "#3a3a3a", lineHeight: 1.75 }}>{f.desc}</p>
               </div>
             ))}
           </div>
@@ -190,9 +215,9 @@ export function LandingPage() {
       <section style={{ padding: `96px ${PAD}`, borderTop: "1px solid #0f0f0f" }}>
         <div style={{ maxWidth: 1080, margin: "0 auto", display: "flex", alignItems: "center", gap: 80, flexWrap: "wrap" }}>
           <div style={{ flex: "1 1 320px" }}>
-            <p style={{ fontSize: 11, color: YELLOW, fontWeight: 700, letterSpacing: 2, marginBottom: 14, textTransform: "uppercase" }}>Your account</p>
-            <h2 style={{ margin: "0 0 18px", fontSize: "clamp(26px, 3.5vw, 42px)", fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.15 }}>One account,<br />everyone's taste</h2>
-            <p style={{ margin: 0, fontSize: 14, color: "#444", lineHeight: 1.85 }}>Create separate profiles for everyone in your household. Each person gets their own watch history, saved list, and experience — all under one account.</p>
+            <p style={{ fontSize: 11, color: YELLOW, fontWeight: 700, letterSpacing: 2, marginBottom: 14, textTransform: "uppercase" }}>who's watching</p>
+            <h2 style={{ margin: "0 0 18px", fontSize: "clamp(26px, 3.5vw, 42px)", fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.15 }}>one account.<br />many problems.</h2>
+            <p style={{ margin: 0, fontSize: 14, color: "#3a3a3a", lineHeight: 1.85 }}>Create separate profiles for everyone. Each person gets their own watch history and saved list. No one has to know what you've been watching. We certainly don't care.</p>
           </div>
           <div style={{ flex: "1 1 300px", display: "flex", gap: 14, flexWrap: "wrap", justifyContent: "center" }}>
             {[
@@ -204,8 +229,8 @@ export function LandingPage() {
               <div key={p.name} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, cursor: "pointer" }}
                 onMouseEnter={e => e.currentTarget.firstChild.style.borderColor = YELLOW}
                 onMouseLeave={e => e.currentTarget.firstChild.style.borderColor = "rgba(255,255,255,0.06)"}>
-                <div style={{ width: 82, height: 82, borderRadius: 16, background: p.bg, border: "2px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, transition: "border-color 0.2s" }}>{p.ch}</div>
-                <span style={{ fontSize: 12, color: "#555", fontWeight: 500 }}>{p.name}</span>
+                <div style={{ width: 82, height: 82, borderRadius: 14, background: p.bg, border: "2px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, transition: "border-color 0.2s" }}>{p.ch}</div>
+                <span style={{ fontSize: 12, color: "#444", fontWeight: 500 }}>{p.name}</span>
               </div>
             ))}
           </div>
@@ -215,7 +240,7 @@ export function LandingPage() {
       {/* ── FAQ ── */}
       <section style={{ padding: `96px ${PAD}`, borderTop: "1px solid #0f0f0f" }}>
         <div style={{ maxWidth: 720, margin: "0 auto" }}>
-          <h2 style={{ margin: "0 0 52px", fontSize: "clamp(26px, 3.5vw, 42px)", fontWeight: 700, textAlign: "center", letterSpacing: "-0.02em" }}>Questions? We've got answers.</h2>
+          <h2 style={{ margin: "0 0 52px", fontSize: "clamp(26px, 3.5vw, 42px)", fontWeight: 700, textAlign: "center", letterSpacing: "-0.02em" }}>you have questions.</h2>
           {FAQ_ITEMS.map((item, i) => (
             <FaqItem key={i} q={item.q} a={item.a} open={openFaq === i} onToggle={() => setOpenFaq(openFaq === i ? null : i)} />
           ))}
@@ -224,12 +249,12 @@ export function LandingPage() {
 
       {/* ── Bottom CTA ── */}
       <section style={{ padding: `96px ${PAD}`, borderTop: "1px solid #0f0f0f", textAlign: "center", position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 500, height: 260, background: "radial-gradient(ellipse, rgba(250,204,21,0.06) 0%, transparent 70%)", pointerEvents: "none" }} />
+        <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 500, height: 260, background: "radial-gradient(ellipse, rgba(250,204,21,0.05) 0%, transparent 70%)", pointerEvents: "none" }} />
         <div style={{ position: "relative" }}>
-          <h2 style={{ margin: "0 0 14px", fontSize: "clamp(30px, 5vw, 56px)", fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1.05 }}>Ready to watch?</h2>
-          <p style={{ margin: "0 auto 40px", fontSize: 15, color: "#444", maxWidth: 360, lineHeight: 1.7 }}>$10/month. Cancel anytime. Start streaming in seconds.</p>
-          <a href="/signup" className="lp-cta" style={{ display: "inline-block", background: YELLOW, color: "#0a0a0a", fontSize: 15, fontWeight: 700, textDecoration: "none", padding: "16px 52px", borderRadius: 12, transition: "transform 0.2s, box-shadow 0.2s" }}>
-            Get Started →
+          <h2 style={{ margin: "0 0 14px", fontSize: "clamp(30px, 5vw, 56px)", fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1.05, transform: "rotate(-0.3deg)", display: "inline-block" }}>still reading this?</h2>
+          <p style={{ margin: "0 auto 40px", fontSize: 15, color: "#3a3a3a", maxWidth: 360, lineHeight: 1.7 }}>$10 a month. cancel whenever. start watching the weird stuff.</p>
+          <a href="/signup" className="lp-cta" style={{ display: "inline-block", background: YELLOW, color: "#0a0a0a", fontSize: 15, fontWeight: 700, textDecoration: "none", padding: "16px 52px", borderRadius: 10, transition: "transform 0.2s, box-shadow 0.2s" }}>
+            get in →
           </a>
         </div>
       </section>
@@ -240,7 +265,7 @@ export function LandingPage() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 36, marginBottom: 40 }}>
             <div style={{ maxWidth: 240 }}>
               <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 24, color: YELLOW, display: "block", marginBottom: 10 }}>peep.</span>
-              <p style={{ margin: 0, fontSize: 13, color: "#2a2a2a", lineHeight: 1.7 }}>Independent streaming built for people who actually care about what they watch.</p>
+              <p style={{ margin: 0, fontSize: 13, color: "#252525", lineHeight: 1.7 }}>Independent streaming. for people with taste. or no taste. honestly fine either way.</p>
             </div>
             <div style={{ display: "flex", gap: 52, flexWrap: "wrap" }}>
               {[
@@ -248,23 +273,23 @@ export function LandingPage() {
                 { label: "Support", links: ["Contact Us", "FAQ", "Terms of Use", "Privacy Policy"] },
               ].map(col => (
                 <div key={col.label}>
-                  <p style={{ margin: "0 0 14px", fontSize: 10, color: "#2a2a2a", fontWeight: 700, letterSpacing: 1.8, textTransform: "uppercase" }}>{col.label}</p>
+                  <p style={{ margin: "0 0 14px", fontSize: 10, color: "#252525", fontWeight: 700, letterSpacing: 1.8, textTransform: "uppercase" }}>{col.label}</p>
                   {col.links.map(l => (
-                    <p key={l} style={{ margin: "0 0 10px", fontSize: 13, color: "#383838", cursor: "pointer", transition: "color 0.15s" }}
+                    <p key={l} style={{ margin: "0 0 10px", fontSize: 13, color: "#333", cursor: "pointer", transition: "color 0.15s" }}
                       onMouseEnter={e => e.target.style.color = "#888"}
-                      onMouseLeave={e => e.target.style.color = "#383838"}>{l}</p>
+                      onMouseLeave={e => e.target.style.color = "#333"}>{l}</p>
                   ))}
                 </div>
               ))}
             </div>
           </div>
           <div style={{ borderTop: "1px solid #0d0d0d", paddingTop: 24, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-            <p style={{ margin: 0, fontSize: 12, color: "#222" }}>© {new Date().getFullYear()} Peep. All rights reserved.</p>
+            <p style={{ margin: 0, fontSize: 12, color: "#1f1f1f" }}>© {new Date().getFullYear()} Peep. All rights reserved.</p>
             <div style={{ display: "flex", gap: 20 }}>
               {["Privacy Policy", "Terms of Use"].map(l => (
-                <span key={l} style={{ fontSize: 12, color: "#222", cursor: "pointer", transition: "color 0.15s" }}
+                <span key={l} style={{ fontSize: 12, color: "#1f1f1f", cursor: "pointer", transition: "color 0.15s" }}
                   onMouseEnter={e => e.target.style.color = "#555"}
-                  onMouseLeave={e => e.target.style.color = "#222"}>{l}</span>
+                  onMouseLeave={e => e.target.style.color = "#1f1f1f"}>{l}</span>
               ))}
             </div>
           </div>
