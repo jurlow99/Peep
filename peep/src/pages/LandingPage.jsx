@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-const YELLOW = "#facc15";
+const YELLOW = "#b9ff66";
 const PAD = "clamp(24px, 7vw, 96px)";
 
 const POSTER_GRADS = [
@@ -78,7 +78,7 @@ function FaqItem({ q, a, open, onToggle }) {
     <div onClick={onToggle} style={{ borderBottom: "1px solid #141414", cursor: "pointer", userSelect: "none" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "22px 0", gap: 20 }}>
         <span style={{ fontSize: "clamp(14px, 1.8vw, 16px)", fontWeight: 600, color: open ? "#fff" : "#bbb", transition: "color 0.2s" }}>{q}</span>
-        <div style={{ width: 28, height: 28, borderRadius: "50%", flexShrink: 0, background: open ? YELLOW : "rgba(255,255,255,0.05)", border: `1px solid ${open ? YELLOW : "rgba(255,255,255,0.08)"}`, display: "flex", alignItems: "center", justifyContent: "center", color: open ? "#0a0a0a" : "#555", fontSize: 18, lineHeight: 1, transition: "all 0.2s" }}>
+        <div style={{ width: 28, height: 28, borderRadius: "50%", flexShrink: 0, background: open ? YELLOW : "rgba(255,255,255,0.05)", border: `1px solid ${open ? YELLOW : "rgba(255,255,255,0.08)"}`, display: "flex", alignItems: "center", justifyContent: "center", color: open ? "#080808" : "#555", fontSize: 18, lineHeight: 1, transition: "all 0.2s" }}>
           {open ? "−" : "+"}
         </div>
       </div>
@@ -91,7 +91,7 @@ export function LandingPage() {
   const [openFaq, setOpenFaq] = useState(null);
 
   return (
-    <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff", overflowX: "hidden" }}>
+    <div style={{ background: "#080808", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff", overflowX: "hidden" }}>
       <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
       <style>{`
         @keyframes scrollL { from { transform: translateX(0); } to { transform: translateX(-50%); } }
@@ -120,8 +120,8 @@ export function LandingPage() {
           80% { transform: translate(3%, -1%); }
           90% { transform: translate(-1%, 2%); }
         }
-        .lp-cta:hover { transform: scale(1.04) !important; box-shadow: 0 8px 36px rgba(250,204,21,0.28) !important; }
-        .lp-feat:hover { border-color: rgba(250,204,21,0.15) !important; transform: translateY(-2px); }
+        .lp-cta:hover { transform: scale(1.04) !important; box-shadow: 0 8px 36px rgba(185,255,102,0.28) !important; }
+        .lp-feat:hover { border-color: rgba(185,255,102,0.15) !important; transform: translateY(-2px); }
         .lp-signin-nav:hover { color: #fff !important; }
       `}</style>
 
@@ -133,7 +133,7 @@ export function LandingPage() {
         <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 28, color: YELLOW, animation: "flicker 8s ease-in-out infinite" }}>peep.</span>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <a href="/signin" className="lp-signin-nav" style={{ color: "#aaa", fontSize: 13, fontFamily: "'Space Mono', monospace", textDecoration: "none", padding: "8px 16px", borderRadius: 8, transition: "color 0.15s" }}>sign in</a>
-          <a href="/signup" className="lp-cta" style={{ background: YELLOW, color: "#0a0a0a", fontSize: 13, fontFamily: "'Space Mono', monospace", fontWeight: 700, textDecoration: "none", padding: "9px 22px", borderRadius: 8, transition: "transform 0.2s, box-shadow 0.2s" }}>get in →</a>
+          <a href="/signup" className="lp-cta" style={{ background: YELLOW, color: "#080808", fontSize: 13, fontFamily: "'Space Mono', monospace", fontWeight: 700, textDecoration: "none", padding: "9px 22px", borderRadius: 8, transition: "transform 0.2s, box-shadow 0.2s" }}>get in →</a>
         </div>
       </nav>
 
@@ -155,32 +155,32 @@ export function LandingPage() {
           {/* Dark overlay */}
           <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.85)" }} />
           {/* Yellow orb */}
-          <div style={{ position: "absolute", top: "40%", left: "50%", width: 700, height: 500, background: "radial-gradient(ellipse, rgba(250,204,21,0.055) 0%, transparent 65%)", pointerEvents: "none", animation: "orbDrift 12s ease-in-out infinite" }} />
+          <div style={{ position: "absolute", top: "40%", left: "50%", width: 700, height: 500, background: "radial-gradient(ellipse, rgba(185,255,102,0.055) 0%, transparent 65%)", pointerEvents: "none", animation: "orbDrift 12s ease-in-out infinite" }} />
           {/* Bottom fade */}
-          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "50%", background: "linear-gradient(to top, #0a0a0a 0%, rgba(10,10,10,0.6) 50%, transparent 100%)" }} />
+          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "50%", background: "linear-gradient(to top, #080808 0%, rgba(10,10,10,0.6) 50%, transparent 100%)" }} />
           {/* Top fade */}
           <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 160, background: "linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, transparent 100%)" }} />
         </div>
 
         {/* Hero content */}
         <div style={{ position: "relative", zIndex: 1, textAlign: "center", maxWidth: 700, padding: `0 ${PAD}`, animation: "fadeUp 0.9s ease both" }}>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.18)", borderRadius: 4, padding: "6px 16px", marginBottom: 28, transform: "rotate(-0.8deg)" }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(185,255,102,0.08)", border: "1px solid rgba(185,255,102,0.18)", borderRadius: 4, padding: "6px 16px", marginBottom: 28, transform: "rotate(-0.8deg)" }}>
             <span style={{ width: 6, height: 6, borderRadius: "50%", background: YELLOW, display: "inline-block", boxShadow: `0 0 8px ${YELLOW}` }} />
             <span style={{ fontSize: 11, color: YELLOW, fontFamily: "'Space Mono', monospace", letterSpacing: 1.5, textTransform: "uppercase" }}>on the air.</span>
           </div>
 
           <h1 style={{ margin: "0 0 20px", fontFamily: "'Bebas Neue', sans-serif", fontSize: "clamp(64px, 10vw, 120px)", fontWeight: 400, lineHeight: 0.95, letterSpacing: "0.02em", textTransform: "uppercase", textShadow: "0 2px 20px rgba(0,0,0,0.5)", transform: "rotate(-0.4deg)" }}>
-            Watch something<br /><span style={{ color: YELLOW }}>you probably shouldn't.</span>
+            Watch something<br /><span style={{ color: YELLOW }}>wrong.</span>
           </h1>
 
           <p style={{ margin: "0 auto 16px", fontSize: "clamp(14px, 1.8vw, 18px)", color: "#777", lineHeight: 1.7, maxWidth: 480 }}>
-            Films. Series. Podcasts. Music. Weird stuff your algorithm would never recommend.
+            For the terminally online. Films, series, podcasts, and music your algorithm is too scared to recommend.
           </p>
 
           <p style={{ margin: "0 auto 36px", fontSize: 13, color: "#444", fontFamily: "'Space Mono', monospace" }}>$10/month. don't overthink it.</p>
 
           <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-            <a href="/signup" className="lp-cta" style={{ background: YELLOW, color: "#0a0a0a", fontSize: 14, fontFamily: "'Space Mono', monospace", fontWeight: 700, textDecoration: "none", padding: "16px 44px", borderRadius: 10, display: "inline-block", transition: "transform 0.2s, box-shadow 0.2s" }}>
+            <a href="/signup" className="lp-cta" style={{ background: YELLOW, color: "#080808", fontSize: 14, fontFamily: "'Space Mono', monospace", fontWeight: 700, textDecoration: "none", padding: "16px 44px", borderRadius: 10, display: "inline-block", transition: "transform 0.2s, box-shadow 0.2s" }}>
               get in →
             </a>
             <a href="/signin" style={{ background: "rgba(255,255,255,0.06)", color: "#aaa", fontSize: 14, fontFamily: "'Space Mono', monospace", textDecoration: "none", padding: "16px 44px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", display: "inline-block", backdropFilter: "blur(8px)", transition: "background 0.2s" }}
@@ -202,7 +202,7 @@ export function LandingPage() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 14 }}>
             {FEATURES.map((f, idx) => (
               <div key={f.title} className="lp-feat" style={{ background: "#111", border: "1px solid #1a1a1a", borderRadius: 12, padding: "28px 24px", transition: "border-color 0.2s, transform 0.2s", transform: `rotate(${[-0.4, 0.3, -0.2, 0.4][idx % 4]}deg)` }}>
-                <div style={{ width: 44, height: 44, borderRadius: 8, background: "rgba(250,204,21,0.06)", border: "1px solid rgba(250,204,21,0.1)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>{f.icon}</div>
+                <div style={{ width: 44, height: 44, borderRadius: 8, background: "rgba(185,255,102,0.06)", border: "1px solid rgba(185,255,102,0.1)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>{f.icon}</div>
                 <h3 style={{ margin: "0 0 8px", fontFamily: "'Space Mono', monospace", fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>{f.title}</h3>
                 <p style={{ margin: 0, fontSize: 13, color: "#3a3a3a", lineHeight: 1.75 }}>{f.desc}</p>
               </div>
@@ -249,11 +249,11 @@ export function LandingPage() {
 
       {/* ── Bottom CTA ── */}
       <section style={{ padding: `96px ${PAD}`, borderTop: "1px solid #0f0f0f", textAlign: "center", position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 500, height: 260, background: "radial-gradient(ellipse, rgba(250,204,21,0.05) 0%, transparent 70%)", pointerEvents: "none" }} />
+        <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 500, height: 260, background: "radial-gradient(ellipse, rgba(185,255,102,0.05) 0%, transparent 70%)", pointerEvents: "none" }} />
         <div style={{ position: "relative" }}>
           <h2 style={{ margin: "0 0 14px", fontFamily: "'Bebas Neue', sans-serif", fontSize: "clamp(48px, 7vw, 88px)", fontWeight: 400, letterSpacing: "0.02em", textTransform: "uppercase", lineHeight: 1.0, transform: "rotate(-0.3deg)", display: "inline-block" }}>still reading this?</h2>
           <p style={{ margin: "0 auto 40px", fontSize: 13, color: "#3a3a3a", fontFamily: "'Space Mono', monospace", maxWidth: 360, lineHeight: 1.7 }}>$10 a month. cancel whenever. start watching the weird stuff.</p>
-          <a href="/signup" className="lp-cta" style={{ display: "inline-block", background: YELLOW, color: "#0a0a0a", fontSize: 14, fontFamily: "'Space Mono', monospace", fontWeight: 700, textDecoration: "none", padding: "16px 52px", borderRadius: 10, transition: "transform 0.2s, box-shadow 0.2s" }}>
+          <a href="/signup" className="lp-cta" style={{ display: "inline-block", background: YELLOW, color: "#080808", fontSize: 14, fontFamily: "'Space Mono', monospace", fontWeight: 700, textDecoration: "none", padding: "16px 52px", borderRadius: 10, transition: "transform 0.2s, box-shadow 0.2s" }}>
             get in →
           </a>
         </div>
