@@ -176,7 +176,7 @@ export function LandingPage() {
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 14 }}>
             {FEATURES.map(f => (
-              <div key={f.title} className="lp-feat" style={{ background: "#0d0d0d", border: "1px solid #161616", borderRadius: 18, padding: "30px 26px", transition: "border-color 0.2s, transform 0.2s" }}>
+              <div key={f.title} className="lp-feat" style={{ background: "#161616", border: "1px solid #222", borderRadius: 18, padding: "30px 26px", transition: "border-color 0.2s, transform 0.2s" }}>
                 <div style={{ width: 48, height: 48, borderRadius: 12, background: "rgba(250,204,21,0.07)", border: "1px solid rgba(250,204,21,0.1)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 18 }}>{f.icon}</div>
                 <h3 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 700 }}>{f.title}</h3>
                 <p style={{ margin: 0, fontSize: 13, color: "#444", lineHeight: 1.75 }}>{f.desc}</p>
