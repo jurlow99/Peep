@@ -59,9 +59,11 @@ export function LandingPage() {
             <span style={{ color: YELLOW }}>worth watching.</span>
           </h1>
 
-          <p style={{ margin: "0 0 44px", fontSize: "clamp(15px, 2vw, 18px)", color: "#666", lineHeight: 1.7, maxWidth: 500, marginLeft: "auto", marginRight: "auto" }}>
+          <p style={{ margin: "0 0 16px", fontSize: "clamp(15px, 2vw, 18px)", color: "#666", lineHeight: 1.7, maxWidth: 500, marginLeft: "auto", marginRight: "auto" }}>
             Movies, series, podcasts, and live streams — curated for people who actually care about what they watch.
           </p>
+
+          <p style={{ margin: "0 0 44px", fontSize: 14, color: "#444" }}>$10/month. Cancel anytime.</p>
 
           <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
             <a href="/signup" style={{ background: YELLOW, color: "#0a0a0a", fontSize: 15, fontWeight: 700, textDecoration: "none", padding: "14px 32px", borderRadius: 10, display: "inline-block" }}>
