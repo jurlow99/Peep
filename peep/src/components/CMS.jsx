@@ -673,12 +673,24 @@ export function CMS({ onExit }) {
     if (!query.trim()) { setSupportResults([]); return; }
     setSupportSearching(true);
     const q = query.trim();
-    // UUID pattern — search by id directly
     const isUuid = /^[0-9a-f-]{8,}$/i.test(q);
     const { data } = await supabase.from("profiles").select("id, full_name, email, username, created_at")
       .or(isUuid ? `id.eq.${q},email.ilike.%${q}%,full_name.ilike.%${q}%` : `email.ilike.%${q}%,full_name.ilike.%${q}%`)
       .limit(10);
-    setSupportResults(data || []);
+    let results = data || [];
+
+    // If UUID search found nothing in profiles, check subscriptions + presence
+    if (isUuid && results.length === 0) {
+      const [{ data: sub }, { data: presence }] = await Promise.all([
+        supabase.from("subscriptions").select("user_id, email, created_at").eq("user_id", q).maybeSingle(),
+        supabase.from("user_presence").select("user_id, last_seen").eq("user_id", q).maybeSingle(),
+      ]);
+      if (sub || presence) {
+        results = [{ id: q, full_name: null, email: sub?.email || null, username: null, created_at: sub?.created_at || null, _ghost: true }];
+      }
+    }
+
+    setSupportResults(results);
     setSupportSearching(false);
   }
 
@@ -5117,8 +5129,8 @@ export function CMS({ onExit }) {
                 {supportResults.map(u => (
                   <button key={u.id} onClick={() => loadSupportUser(u)}
                     style={{ background: supportUser?.id === u.id ? "rgba(34,211,238,0.08)" : "#fff", border: `1px solid ${supportUser?.id === u.id ? "rgba(34,211,238,0.4)" : "#e2e8f0"}`, borderRadius: 10, padding: "12px 14px", textAlign: "left", cursor: "pointer", transition: "all 0.15s" }}>
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{u.full_name || u.username || "—"}</p>
-                    <p style={{ margin: "2px 0 0", fontSize: 12, color: "#6b7280" }}>{u.email}</p>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: u._ghost ? "#9ca3af" : "#0f172a" }}>{u.full_name || u.username || (u._ghost ? "Ghost Account" : "—")}</p>
+                    <p style={{ margin: "2px 0 0", fontSize: 12, color: "#6b7280" }}>{u.email || <span style={{ fontFamily: "monospace", fontSize: 11 }}>{u.id.slice(0, 20)}…</span>}</p>
                   </button>
                 ))}
                 {supportSearch && !supportSearching && supportResults.length === 0 && (
