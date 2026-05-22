@@ -128,7 +128,7 @@ function PaymentStep({ email, onSuccess }) {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/create-subscription`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
-        body: JSON.stringify({ email, payment_method_id: paymentMethod.id }),
+        body: JSON.stringify({ email, payment_method_id: paymentMethod.id, user_id: session.user.id }),
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
