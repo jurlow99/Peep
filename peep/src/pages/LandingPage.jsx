@@ -5,22 +5,22 @@ const PAD = "clamp(24px, 7vw, 96px)";
 
 // Cinematic gradient "posters" for the background grid
 const POSTER_GRADS = [
-  "linear-gradient(145deg, #080818, #14103a)",
-  "linear-gradient(145deg, #081408, #0d2212)",
-  "linear-gradient(145deg, #180305, #2c080e)",
-  "linear-gradient(145deg, #030810, #06152c)",
-  "linear-gradient(145deg, #121000, #201a00)",
-  "linear-gradient(145deg, #031012, #051e28)",
-  "linear-gradient(145deg, #0e0518, #1c0a30)",
-  "linear-gradient(145deg, #0c0c0c, #1a1a1a)",
-  "linear-gradient(145deg, #100a04, #201408)",
-  "linear-gradient(145deg, #030a18, #05102c)",
-  "linear-gradient(145deg, #140204, #240408)",
-  "linear-gradient(145deg, #031810, #052a1a)",
-  "linear-gradient(145deg, #0a0414, #180828)",
-  "linear-gradient(145deg, #040c04, #081808)",
-  "linear-gradient(145deg, #14080a, #281014)",
-  "linear-gradient(145deg, #040a14, #081828)",
+  "linear-gradient(145deg, #1a1640, #2e2060)",
+  "linear-gradient(145deg, #142814, #1a4020)",
+  "linear-gradient(145deg, #3a0810, #581020)",
+  "linear-gradient(145deg, #0e1a38, #142860)",
+  "linear-gradient(145deg, #2a2000, #403200)",
+  "linear-gradient(145deg, #0a2230, #103650)",
+  "linear-gradient(145deg, #200a38, #341460)",
+  "linear-gradient(145deg, #222222, #333333)",
+  "linear-gradient(145deg, #281800, #402800)",
+  "linear-gradient(145deg, #0c1c38, #102a58)",
+  "linear-gradient(145deg, #300810, #4a1020)",
+  "linear-gradient(145deg, #0a3020, #104830)",
+  "linear-gradient(145deg, #1e0c2e, #301848)",
+  "linear-gradient(145deg, #0c2210, #103418)",
+  "linear-gradient(145deg, #301420, #481e32)",
+  "linear-gradient(145deg, #101838, #182450)",
 ];
 
 const ROWS = Array.from({ length: 6 }, (_, r) =>
