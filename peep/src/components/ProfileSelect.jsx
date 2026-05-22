@@ -42,6 +42,14 @@ export function ProfileSelect({ user, onSelect }) {
         .select()
         .single();
       if (created) list = [created];
+    } else {
+      // Fix existing profiles whose name was incorrectly set to the email prefix
+      const emailPrefix = user.email?.split("@")[0];
+      const realName = user.user_metadata?.full_name;
+      if (realName && list[0]?.name === emailPrefix) {
+        await supabase.from("viewer_profiles").update({ name: realName }).eq("id", list[0].id);
+        list = [{ ...list[0], name: realName }, ...list.slice(1)];
+      }
     }
 
     setProfiles(list);
