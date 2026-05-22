@@ -5,22 +5,22 @@ const PAD = "clamp(24px, 7vw, 96px)";
 
 // Cinematic gradient "posters" for the background grid
 const POSTER_GRADS = [
-  "linear-gradient(145deg, #2563eb, #60a5fa)",
-  "linear-gradient(145deg, #16a34a, #4ade80)",
-  "linear-gradient(145deg, #dc2626, #f87171)",
-  "linear-gradient(145deg, #4f46e5, #a78bfa)",
-  "linear-gradient(145deg, #d97706, #fbbf24)",
-  "linear-gradient(145deg, #0d9488, #2dd4bf)",
-  "linear-gradient(145deg, #9333ea, #d8b4fe)",
-  "linear-gradient(145deg, #be185d, #f472b6)",
-  "linear-gradient(145deg, #ea580c, #fb923c)",
-  "linear-gradient(145deg, #0284c7, #38bdf8)",
-  "linear-gradient(145deg, #7c3aed, #c4b5fd)",
-  "linear-gradient(145deg, #059669, #6ee7b7)",
-  "linear-gradient(145deg, #e11d48, #fb7185)",
-  "linear-gradient(145deg, #0369a1, #7dd3fc)",
-  "linear-gradient(145deg, #c2410c, #fdba74)",
-  "linear-gradient(145deg, #7e22ce, #e9d5ff)",
+  "linear-gradient(145deg, #1e3a8a, #2563eb)",
+  "linear-gradient(145deg, #14532d, #166534)",
+  "linear-gradient(145deg, #7f1d1d, #b91c1c)",
+  "linear-gradient(145deg, #1e1b4b, #4338ca)",
+  "linear-gradient(145deg, #78350f, #b45309)",
+  "linear-gradient(145deg, #134e4a, #0f766e)",
+  "linear-gradient(145deg, #4a044e, #7e22ce)",
+  "linear-gradient(145deg, #1c1917, #44403c)",
+  "linear-gradient(145deg, #7c2d12, #c2410c)",
+  "linear-gradient(145deg, #0c4a6e, #0369a1)",
+  "linear-gradient(145deg, #831843, #be185d)",
+  "linear-gradient(145deg, #14532d, #15803d)",
+  "linear-gradient(145deg, #312e81, #6d28d9)",
+  "linear-gradient(145deg, #064e3b, #047857)",
+  "linear-gradient(145deg, #7f1d1d, #dc2626)",
+  "linear-gradient(145deg, #1e3a8a, #1d4ed8)",
 ];
 
 const ROWS = Array.from({ length: 6 }, (_, r) =>
@@ -121,14 +121,14 @@ export function LandingPage() {
             {ROWS.map((row, i) => (
               <div key={i} style={{ display: "flex", gap: 10, animation: `scroll${i % 2 === 0 ? "L" : "R"} ${52 + i * 9}s linear infinite`, willChange: "transform" }}>
                 {[...row, ...row].map((grad, j) => (
-                  <div key={j} style={{ width: 210, height: 120, flexShrink: 0, borderRadius: 10, background: grad, border: "1px solid rgba(255,255,255,0.12)" }} />
+                  <div key={j} style={{ width: 210, height: 120, flexShrink: 0, borderRadius: 10, background: grad, border: "1px solid rgba(255,255,255,0.04)" }} />
                 ))}
               </div>
             ))}
           </div>
 
           {/* Dark overlay */}
-          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.42)" }} />
+          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)" }} />
           {/* Yellow orb */}
           <div style={{ position: "absolute", top: "40%", left: "50%", transform: "translate(-50%,-50%)", width: 700, height: 500, background: "radial-gradient(ellipse, rgba(250,204,21,0.055) 0%, transparent 65%)", pointerEvents: "none" }} />
           {/* Bottom fade */}
