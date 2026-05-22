@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 
 const YELLOW = "#facc15";
 const PAD = "clamp(20px, 6vw, 80px)";
@@ -72,6 +72,14 @@ function FaqItem({ q, a, open, onToggle }) {
 
 export function LandingPage() {
   const [openFaq, setOpenFaq] = useState(null);
+  const orbRef = useRef(null);
+
+  const handleMouseMove = useCallback((e) => {
+    if (!orbRef.current) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    orbRef.current.style.left = (e.clientX - rect.left) + "px";
+    orbRef.current.style.top = (e.clientY - rect.top) + "px";
+  }, []);
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
@@ -91,21 +99,12 @@ export function LandingPage() {
           97.5% { opacity: 0.35; }
           98% { opacity: 1; }
         }
-        @keyframes grain {
-          0%,100%{transform:translate(0,0)} 10%{transform:translate(-2%,-3%)} 20%{transform:translate(3%,1%)}
-          30%{transform:translate(-1%,4%)} 40%{transform:translate(2%,-2%)} 50%{transform:translate(-3%,2%)}
-          60%{transform:translate(1%,-4%)} 70%{transform:translate(-2%,3%)} 80%{transform:translate(3%,-1%)} 90%{transform:translate(-1%,2%)}
-        }
         .lp-cta-btn:hover { transform: scale(1.04) !important; box-shadow: 0 0 40px rgba(250,204,21,0.45), 0 8px 28px rgba(250,204,21,0.2) !important; }
         .lp-ghost:hover { border-color: rgba(250,204,21,0.25) !important; color: #fff !important; }
         .lp-feat-card:hover { border-color: rgba(250,204,21,0.2) !important; transform: translateY(-4px) !important; }
         .lp-nav-link:hover { color: #fff !important; }
       `}</style>
 
-      {/* Grain overlay */}
-      <div style={{ position: "fixed", inset: 0, zIndex: 9999, pointerEvents: "none", opacity: 0.028,
-        backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
-        backgroundSize: "128px 128px", animation: "grain 0.4s steps(1) infinite" }} />
 
       {/* Nav */}
       <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "space-between", padding: `16px ${PAD}`, background: "rgba(10,10,10,0.85)", backdropFilter: "blur(16px)", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
@@ -117,7 +116,7 @@ export function LandingPage() {
       </nav>
 
       {/* Hero */}
-      <section style={{ position: "relative", height: "100vh", minHeight: 600, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", textAlign: "center" }}>
+      <section onMouseMove={handleMouseMove} style={{ position: "relative", height: "100vh", minHeight: 600, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", textAlign: "center" }}>
 
         {/* Animated poster grid */}
         <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
@@ -133,8 +132,8 @@ export function LandingPage() {
 
           {/* Main overlay */}
           <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.82)" }} />
-          {/* Yellow center glow */}
-          <div style={{ position: "absolute", top: "45%", left: "50%", transform: "translate(-50%,-50%)", width: 800, height: 600, background: "radial-gradient(ellipse, rgba(250,204,21,0.07) 0%, transparent 60%)", pointerEvents: "none" }} />
+          {/* Mouse-tracking yellow orb */}
+          <div ref={orbRef} style={{ position: "absolute", top: "50%", left: "50%", width: 700, height: 700, transform: "translate(-50%,-50%)", background: "radial-gradient(circle, rgba(250,204,21,0.1) 0%, rgba(250,204,21,0.04) 40%, transparent 70%)", pointerEvents: "none", transition: "left 0.6s cubic-bezier(0.23,1,0.32,1), top 0.6s cubic-bezier(0.23,1,0.32,1)" }} />
           {/* Bottom fade */}
           <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "50%", background: "linear-gradient(to top, #0a0a0a 0%, rgba(10,10,10,0.55) 55%, transparent 100%)" }} />
           {/* Top fade */}
