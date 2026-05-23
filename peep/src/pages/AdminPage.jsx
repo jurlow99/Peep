@@ -2,40 +2,25 @@ import { useState } from "react";
 import { CMS } from "../components/CMS";
 import { supabase } from "../supabase";
 
-const SUPABASE_URL = "https://iuozujwtuzuwubhsnhix.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml1b3p1and0dXp1d3ViaHNuaGl4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1OTQ2MDEsImV4cCI6MjA5NDE3MDYwMX0.IoCOsLNqUCwICddaYr1nW94gTFUUJsBIFp4pkF2bz8s";
+const ADMIN_PIN = import.meta.env.VITE_ADMIN_PIN || "1234";
+const BOSS_PIN = import.meta.env.VITE_BOSS_PIN || "0319";
 
 export function AdminPage() {
   const [authed, setAuthed] = useState(() => sessionStorage.getItem("peep_admin_auth") === "1");
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState(false);
-  const [loading, setLoading] = useState(false);
 
-  async function checkPin() {
-    if (!pin.trim() || loading) return;
-    setLoading(true);
-    setPinError(false);
-    try {
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/verify-admin-pin`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({ pin }),
-      });
-      const data = await res.json();
-      if (data.valid) {
-        sessionStorage.setItem("peep_admin_auth", "1");
-        if (data.role === "boss") sessionStorage.setItem("peep_boss_auth", "1");
-        setAuthed(true);
-      } else {
-        supabase.from("admin_login_attempts").insert({ pin_entered: pin }).then(() => {});
-        setPinError(true);
-        setPin("");
-      }
-    } catch {
+  function checkPin() {
+    if (pin === ADMIN_PIN || pin === BOSS_PIN) {
+      sessionStorage.setItem("peep_admin_auth", "1");
+      if (pin === BOSS_PIN) sessionStorage.setItem("peep_boss_auth", "1");
+      setAuthed(true);
+      setPinError(false);
+    } else {
+      supabase.from("admin_login_attempts").insert({ pin_entered: pin }).then(() => {});
       setPinError(true);
       setPin("");
     }
-    setLoading(false);
   }
 
   if (!authed) {
@@ -50,29 +35,24 @@ export function AdminPage() {
             <p style={{ color: "#555", fontSize: 13, margin: "8px 0 0" }}>Admin Access</p>
           </div>
           <label style={{ display: "block", fontSize: 12, color: "#555", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>
-            Password
+            PIN
           </label>
           <input
             type="password"
             value={pin}
             onChange={e => { setPin(e.target.value); setPinError(false); }}
             onKeyDown={e => e.key === "Enter" && checkPin()}
-            placeholder="Enter password"
-            style={{ width: "100%", background: "#0a0a0a", border: `1px solid ${pinError ? "#facc15" : "#2a2a2a"}`, borderRadius: 8, padding: "12px 16px", color: "#fff", fontSize: 15, outline: "none", boxSizing: "border-box" }}
+            placeholder="Enter PIN"
+            style={{ width: "100%", background: "#0a0a0a", border: `1px solid ${pinError ? "#facc15" : "#2a2a2a"}`, borderRadius: 8, padding: "12px 16px", color: "#fff", fontSize: 16, outline: "none", letterSpacing: "0.25em", boxSizing: "border-box" }}
             autoFocus
           />
-          {pinError && <p style={{ color: "#facc15", fontSize: 12, margin: "8px 0 0" }}>Incorrect password</p>}
-          <button
-            onClick={checkPin}
-            disabled={loading}
-            style={{ width: "100%", marginTop: 20, background: "#facc15", border: "none", borderRadius: 8, padding: "13px", color: "#0a0a0a", fontSize: 14, fontWeight: 600, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1 }}
-          >
-            {loading ? "Checking…" : "Enter"}
+          {pinError && <p style={{ color: "#facc15", fontSize: 12, margin: "8px 0 0" }}>Incorrect PIN</p>}
+          <button onClick={checkPin}
+            style={{ width: "100%", marginTop: 20, background: "#facc15", border: "none", borderRadius: 8, padding: "13px", color: "#0a0a0a", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+            Enter
           </button>
-          <button
-            onClick={() => window.location.href = "/"}
-            style={{ width: "100%", marginTop: 10, background: "transparent", border: "none", color: "#444", fontSize: 13, cursor: "pointer", padding: "8px" }}
-          >
+          <button onClick={() => window.location.href = "/"}
+            style={{ width: "100%", marginTop: 10, background: "transparent", border: "none", color: "#444", fontSize: 13, cursor: "pointer", padding: "8px" }}>
             ← Back to Peep
           </button>
         </div>
