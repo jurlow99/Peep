@@ -415,6 +415,7 @@ export function SigninPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError(null);
+    setResetSent(false);
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) { setError(error.message); setLoading(false); }
