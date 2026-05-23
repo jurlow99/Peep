@@ -305,6 +305,13 @@ export function SignupPage() {
 
     await supabase.auth.signInWithPassword({ email, password });
 
+    // Send confirmation email via Resend (Supabase SMTP is not configured)
+    fetch(`${SUPABASE_URL}/functions/v1/send-confirmation-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+      body: JSON.stringify({ email }),
+    });
+
     setLoading(false);
     setStep(3);
   }

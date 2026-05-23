@@ -4887,10 +4887,19 @@ function EmailVerificationGate({ user }) {
   async function handleResend() {
     setResending(true);
     setError(null);
-    const { error } = await supabase.auth.resend({ type: "signup", email: user.email });
+    try {
+      const res = await fetch(`${SUPABASE_URL_SETTINGS}/functions/v1/send-confirmation-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+        body: JSON.stringify({ email: user.email }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setResent(true);
+    } catch (err) {
+      setError(err.message);
+    }
     setResending(false);
-    if (error) setError(error.message);
-    else setResent(true);
   }
 
   async function handleSignOut() {
