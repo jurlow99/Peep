@@ -38,7 +38,12 @@ function useIsMobile() {
 }
 
 export default function App() {
-  const [page, setPage] = useState("home");
+  const [page, setPage] = useState(() => {
+    const p = new URLSearchParams(window.location.search);
+    const pg = p.get("page");
+    if (pg === "settings" || pg === "profile") return pg;
+    return "home";
+  });
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [selectedShow, setSelectedShow] = useState(null);
   const [selectedPodcast, setSelectedPodcast] = useState(null);
@@ -204,6 +209,10 @@ export default function App() {
       history.replaceState(null, "", `?s=${selectedShow.id}`);
     } else if (page === "podcast" && selectedPodcast) {
       history.replaceState(null, "", `?podcast=${selectedPodcast.id}`);
+    } else if (page === "settings") {
+      history.replaceState(null, "", "?page=settings");
+    } else if (page === "profile") {
+      history.replaceState(null, "", "?page=profile");
     } else if (page === "home") {
       history.replaceState(null, "", "/");
     }
