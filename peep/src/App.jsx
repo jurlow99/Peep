@@ -4400,6 +4400,8 @@ function SettingsPage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, 
   const [saved, setSaved] = useState(false);
   const [autoplayNext, setAutoplayNext] = useState(() => getPref(PREF_AUTOPLAY_NEXT));
   const [autoplayPreviews, setAutoplayPreviews] = useState(() => getPref(PREF_AUTOPLAY_PREVIEWS));
+  const [subscription, setSubscription] = useState(null);
+  const [portalLoading, setPortalLoading] = useState(false);
   const [autoplayHero, setAutoplayHero] = useState(() => getPref(PREF_AUTOPLAY_HERO));
   const [newEmail, setNewEmail] = useState("");
   const [emailSaving, setEmailSaving] = useState(false);
@@ -4412,6 +4414,28 @@ function SettingsPage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, 
   const currentAv = avatarForId(avatarId);
   const initials = (activeProfile?.name?.[0] || user?.email?.[0] || "?").toUpperCase();
   const memberSince = user?.created_at ? new Date(user.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : null;
+
+  useEffect(() => {
+    supabase.from("subscriptions").select("*").eq("user_id", user.id).maybeSingle().then(({ data }) => setSubscription(data));
+  }, [user.id]);
+
+  async function openBillingPortal() {
+    setPortalLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${SUPABASE_URL_SETTINGS}/functions/v1/create-portal-session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
+        body: JSON.stringify({ return_url: window.location.href }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      window.location.href = data.url;
+    } catch (err) {
+      alert(err.message);
+    }
+    setPortalLoading(false);
+  }
 
   function toggleAutoplayNext(val) { setAutoplayNext(val); setPref(PREF_AUTOPLAY_NEXT, val); }
   function toggleAutoplayPreviews(val) { setAutoplayPreviews(val); setPref(PREF_AUTOPLAY_PREVIEWS, val); }
@@ -4508,6 +4532,48 @@ function SettingsPage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, 
               <button onClick={saveProfile} disabled={saving} style={{ background: "#facc15", border: "none", borderRadius: 10, padding: "11px 28px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
                 {saving ? "Saving…" : saved ? "Saved ✓" : "Save Changes"}
               </button>
+            )}
+          </div>
+        </div>
+
+        {/* Billing section */}
+        <div style={section}>
+          <div style={sectionHeader}>
+            <p style={{ margin: "0 0 1px", fontSize: 14, fontWeight: 600, color: "#e5e5e5" }}>Subscription & Billing</p>
+            <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Your plan and payment details</p>
+          </div>
+          <div style={{ padding: "20px" }}>
+            {subscription ? (
+              <>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                      <span style={{ background: subscription.status === "active" ? "rgba(74,222,128,0.1)" : "rgba(248,113,113,0.1)", color: subscription.status === "active" ? "#4ade80" : "#f87171", border: `1px solid ${subscription.status === "active" ? "rgba(74,222,128,0.2)" : "rgba(248,113,113,0.2)"}`, borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>
+                        {subscription.plan === "comp" ? "COMPLIMENTARY" : subscription.status?.toUpperCase()}
+                      </span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: 13, color: "#888" }}>
+                      {subscription.plan === "comp" ? "Free access" : "Peep Monthly — $10/mo"}
+                    </p>
+                    {subscription.current_period_end && subscription.plan !== "comp" && (
+                      <p style={{ margin: "4px 0 0", fontSize: 12, color: "#555" }}>
+                        Renews {new Date(subscription.current_period_end).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                      </p>
+                    )}
+                  </div>
+                  {subscription.stripe_customer_id && (
+                    <button onClick={openBillingPortal} disabled={portalLoading}
+                      style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 10, padding: "10px 20px", color: "#facc15", fontSize: 13, fontWeight: 600, cursor: portalLoading ? "not-allowed" : "pointer", opacity: portalLoading ? 0.7 : 1, whiteSpace: "nowrap" }}>
+                      {portalLoading ? "Loading…" : "Manage Billing →"}
+                    </button>
+                  )}
+                </div>
+                <p style={{ margin: 0, fontSize: 11, color: "#333" }}>
+                  {subscription.stripe_customer_id ? "Update payment method, view invoices, or cancel anytime from the billing portal." : "Complimentary access — no billing required."}
+                </p>
+              </>
+            ) : (
+              <p style={{ margin: 0, fontSize: 13, color: "#555" }}>No active subscription.</p>
             )}
           </div>
         </div>
