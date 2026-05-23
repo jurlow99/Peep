@@ -740,8 +740,14 @@ export function CMS({ onExit }) {
   async function supportSendPasswordReset() {
     setSupportActionLoading(true); setSupportActionMsg(null);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(supportUser.email, { redirectTo: `${window.location.origin}/` });
-      if (error) throw new Error(error.message);
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/send-reset-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
+        body: JSON.stringify({ email: supportUser.email }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
       setSupportActionMsg({ ok: true, text: `Password reset email sent to ${supportUser.email}` });
     } catch (err) { setSupportActionMsg({ ok: false, text: err.message }); }
     setSupportActionLoading(false);

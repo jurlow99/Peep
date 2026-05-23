@@ -84,6 +84,11 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       if (_event === "PASSWORD_RECOVERY") { setPasswordRecovery(true); return; }
+      if (_event === "USER_UPDATED" && session?.user?.email) {
+        const { id, email } = session.user;
+        supabase.from("profiles").update({ email }).eq("id", id);
+        supabase.from("subscriptions").update({ email }).eq("user_id", id);
+      }
       if (_event === "SIGNED_IN") sessionStorage.removeItem("lastAdAt");
       if (!session?.user) {
         setMyList({});
