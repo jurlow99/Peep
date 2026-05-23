@@ -184,7 +184,7 @@ export default function App() {
     }
   }
 
-  const goHome = () => { setPage("home"); setActiveNav("Home"); setSelectedVideo(null); setSelectedShow(null); setSelectedPodcast(null); setSelectedPodcastEp(null); };
+  const goHome = () => { sessionStorage.setItem("peep_nav", "Home"); setPage("home"); setSelectedVideo(null); setSelectedShow(null); setSelectedPodcast(null); setSelectedPodcastEp(null); };
 
   // Keep URL in sync with navigation so share links work
   useEffect(() => {

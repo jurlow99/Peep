@@ -124,6 +124,7 @@ function PaymentStep({ email, onSuccess }) {
       });
       if (pmError) throw new Error(pmError.message);
 
+      await supabase.auth.refreshSession();
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${SUPABASE_URL}/functions/v1/create-subscription`, {
         method: "POST",
@@ -150,6 +151,7 @@ function PaymentStep({ email, onSuccess }) {
     setPromoLoading(true);
     setPromoError(null);
     try {
+      await supabase.auth.refreshSession();
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${SUPABASE_URL}/functions/v1/redeem-promo`, {
         method: "POST",
@@ -158,6 +160,7 @@ function PaymentStep({ email, onSuccess }) {
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
+      setPromoLoading(false);
       onSuccess();
     } catch (err) {
       setPromoError(err.message);
@@ -244,7 +247,7 @@ export function SignupPage() {
   // Auto-redirect after success
   useEffect(() => {
     if (step !== 4) return;
-    const t = setTimeout(() => { window.location.href = "/"; }, 2500);
+    const t = setTimeout(() => { window.location.href = "/?subscribed=1"; }, 2500);
     return () => clearTimeout(t);
   }, [step]);
 

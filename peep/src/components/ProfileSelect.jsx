@@ -43,7 +43,7 @@ export function ProfileSelect({ user, onSelect }) {
         .single();
       if (created) {
         list = [created];
-      } else if (insertErr) {
+      } else {
         await supabase.auth.signOut();
         window.location.href = "/";
         return;

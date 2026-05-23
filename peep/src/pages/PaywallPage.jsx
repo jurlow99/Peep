@@ -4,7 +4,7 @@ import { Elements, CardElement, useStripe, useElements } from "@stripe/react-str
 import { supabase } from "../supabase";
 
 const SUPABASE_URL = "https://iuozujwtuzuwubhsnhix.supabase.co";
-const stripePromise = loadStripe("pk_test_51TYZ1FDARsmnN5Leu436JpkJ6NL9mNbqwtcvB9ueJPnbhLEJgcwfVHcnU3mQkgcAlAEOrd6Ne76UQPYIbKrAZsCo006pJcUBJ3");
+const stripePromise = loadStripe("pk_live_51TYZ17RgQH3TYy3Q51H1NPxizg1dHKpdRx0Vzes5cFI1jdrkCctrYp1ulMTuZL1Obxe9QBq0oKSEAHN7QNAvSSq700rFAyMhZn");
 
 const CARD_OPTIONS = {
   style: {
@@ -43,6 +43,7 @@ function CheckoutForm({ user, onSignOut }) {
       });
       if (pmError) throw new Error(pmError.message);
 
+      await supabase.auth.refreshSession();
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${SUPABASE_URL}/functions/v1/create-subscription`, {
         method: "POST",
@@ -71,6 +72,7 @@ function CheckoutForm({ user, onSignOut }) {
     setPromoError(null);
 
     try {
+      await supabase.auth.refreshSession();
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${SUPABASE_URL}/functions/v1/redeem-promo`, {
         method: "POST",
@@ -79,6 +81,7 @@ function CheckoutForm({ user, onSignOut }) {
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
+      setPromoLoading(false);
       window.location.href = "/?subscribed=1";
     } catch (err) {
       setPromoError(err.message);

@@ -8,13 +8,20 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { user_id } = await req.json();
-    if (!user_id) throw new Error("user_id is required");
+    const authHeader = req.headers.get("Authorization") || "";
+    const token = authHeader.replace("Bearer ", "").trim();
+    if (!token) throw new Error("Not authenticated");
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SERVICE_ROLE_KEY")!
     );
+
+    const { data: { user: caller }, error: authErr } = await supabase.auth.getUser(token);
+    if (!caller || authErr) throw new Error("Not authenticated");
+
+    const { user_id } = await req.json();
+    if (!user_id) throw new Error("user_id is required");
 
     // Delete all user data first, then auth account
     await Promise.all([
@@ -26,8 +33,8 @@ Deno.serve(async (req) => {
 
     await supabase.from("profiles").delete().eq("id", user_id);
 
-    const { error: authErr } = await supabase.auth.admin.deleteUser(user_id);
-    if (authErr) throw new Error(authErr.message);
+    const { error: deleteErr } = await supabase.auth.admin.deleteUser(user_id);
+    if (deleteErr) throw new Error(deleteErr.message);
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
