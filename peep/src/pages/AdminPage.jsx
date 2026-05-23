@@ -3,6 +3,7 @@ import { CMS } from "../components/CMS";
 import { supabase } from "../supabase";
 
 const SUPABASE_URL = "https://iuozujwtuzuwubhsnhix.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml1b3p1and0dXp1d3ViaHNuaGl4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1OTQ2MDEsImV4cCI6MjA5NDE3MDYwMX0.IoCOsLNqUCwICddaYr1nW94gTFUUJsBIFp4pkF2bz8s";
 
 export function AdminPage() {
   const [authed, setAuthed] = useState(() => sessionStorage.getItem("peep_admin_auth") === "1");
@@ -17,7 +18,7 @@ export function AdminPage() {
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/verify-admin-pin`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_ANON_KEY}` },
         body: JSON.stringify({ pin }),
       });
       const data = await res.json();
