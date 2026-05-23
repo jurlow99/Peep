@@ -4351,7 +4351,7 @@ function AvatarDisplay({ av, size = 64, initials }) {
 
 const SUPABASE_URL_SETTINGS = "https://iuozujwtuzuwubhsnhix.supabase.co";
 
-function DeleteAccountSection({ user, onSignOut }) {
+function DeleteAccountSection({ user, onSignOut, inline }) {
   const [confirm, setConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState(null);
@@ -4374,6 +4374,37 @@ function DeleteAccountSection({ user, onSignOut }) {
       setError(err.message);
       setDeleting(false);
     }
+  }
+
+  if (inline) {
+    return (
+      <div style={{ flex: 1, position: "relative" }}>
+        {!confirm ? (
+          <button onClick={() => setConfirm(true)}
+            style={{ width: "100%", background: "transparent", border: "1px solid #2a2a2a", borderRadius: 12, padding: "14px", color: "#555", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = "#7f1d1d"; e.currentTarget.style.color = "#f87171"; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#555"; }}>
+            Delete Account
+          </button>
+        ) : (
+          <div style={{ background: "#111", border: "1px solid #2a2a2a", borderRadius: 12, padding: "20px" }}>
+            <p style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 600, color: "#f87171" }}>Delete your account?</p>
+            <p style={{ margin: "0 0 16px", fontSize: 12, color: "#555" }}>This permanently deletes your account, all profiles, and watch history. This cannot be undone.</p>
+            {error && <p style={{ margin: "0 0 12px", fontSize: 12, color: "#f87171" }}>{error}</p>}
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setConfirm(false)} disabled={deleting}
+                style={{ flex: 1, background: "transparent", border: "1px solid #2a2a2a", borderRadius: 8, padding: "10px", color: "#666", fontSize: 13, cursor: "pointer" }}>
+                Cancel
+              </button>
+              <button onClick={handleDelete} disabled={deleting}
+                style={{ flex: 1, background: "#7f1d1d", border: "none", borderRadius: 8, padding: "10px", color: "#fca5a5", fontSize: 13, fontWeight: 600, cursor: deleting ? "not-allowed" : "pointer", opacity: deleting ? 0.7 : 1 }}>
+                {deleting ? "Deleting…" : "Yes, Delete Everything"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -4469,9 +4500,10 @@ function SettingsPage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, 
     else { setPasswordMsg({ type: "ok", text: "Password updated successfully" }); setNewPassword(""); setConfirmPassword(""); }
   }
 
-  const inputStyle = { width: "100%", background: "#111", border: "1px solid #222", borderRadius: 10, padding: "12px 14px", color: "#fff", fontSize: 14, outline: "none", boxSizing: "border-box", fontFamily: "inherit", transition: "border-color 0.15s" };
-  const section = { marginBottom: 32, background: "#111", border: "1px solid #1e1e1e", borderRadius: 16, overflow: "hidden" };
-  const sectionHeader = { padding: "18px 20px", borderBottom: "1px solid #1a1a1a" };
+  const inp = { width: "100%", background: "#0d0d0d", border: "1px solid #222", borderRadius: 10, padding: "12px 14px", color: "#fff", fontSize: 14, outline: "none", boxSizing: "border-box", fontFamily: "inherit" };
+  const card = { marginBottom: 16, background: "#111", border: "1px solid #1e1e1e", borderRadius: 16, overflow: "hidden" };
+  const cardHead = { padding: "20px 24px", borderBottom: "1px solid #1a1a1a" };
+  const cardBody = { padding: "24px" };
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
@@ -4485,118 +4517,109 @@ function SettingsPage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, 
         <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer", color: "#facc15" }}>peep.</span>
       </nav>
 
-      <div style={{ paddingTop: 64 + 48, paddingBottom: 80, paddingLeft: PAD, paddingRight: PAD, maxWidth: 600, margin: "0 auto" }}>
+      <div style={{ paddingTop: 64 + 48, paddingBottom: 100, paddingLeft: PAD, paddingRight: PAD, maxWidth: 740, margin: "0 auto" }}>
 
-        <div style={{ marginBottom: 36 }}>
-          <h1 style={{ margin: "0 0 6px", fontSize: 28, fontWeight: 700, letterSpacing: "-0.3px" }}>Settings</h1>
-          <p style={{ margin: 0, fontSize: 13, color: "#555" }}>{user?.email}{memberSince ? ` · Member since ${memberSince}` : ""}</p>
+        <div style={{ marginBottom: 40 }}>
+          <h1 style={{ margin: "0 0 6px", fontSize: 30, fontWeight: 700, letterSpacing: "-0.5px" }}>Settings</h1>
+          <p style={{ margin: 0, fontSize: 13, color: "#444" }}>{user?.email}{memberSince ? ` · Member since ${memberSince}` : ""}</p>
         </div>
 
-        {/* Billing section */}
-        <div style={section}>
-          <div style={sectionHeader}>
-            <p style={{ margin: "0 0 1px", fontSize: 14, fontWeight: 600, color: "#e5e5e5" }}>Subscription & Billing</p>
+        {/* Billing */}
+        <div style={card}>
+          <div style={cardHead}>
+            <p style={{ margin: "0 0 2px", fontSize: 15, fontWeight: 600 }}>Subscription & Billing</p>
             <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Your plan and payment details</p>
           </div>
-          <div style={{ padding: "20px" }}>
+          <div style={cardBody}>
             {subscription ? (
-              <>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                      <span style={{ background: subscription.status === "active" ? "rgba(74,222,128,0.1)" : "rgba(248,113,113,0.1)", color: subscription.status === "active" ? "#4ade80" : "#f87171", border: `1px solid ${subscription.status === "active" ? "rgba(74,222,128,0.2)" : "rgba(248,113,113,0.2)"}`, borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>
-                        {subscription.plan === "comp" ? "COMPLIMENTARY" : subscription.status?.toUpperCase()}
-                      </span>
-                    </div>
-                    <p style={{ margin: 0, fontSize: 13, color: "#888" }}>
-                      {subscription.plan === "comp" ? "Free access" : "Peep Monthly — $10/mo"}
-                    </p>
-                    {subscription.current_period_end && subscription.plan !== "comp" && (
-                      <p style={{ margin: "4px 0 0", fontSize: 12, color: "#555" }}>
-                        Renews {new Date(subscription.current_period_end).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
-                      </p>
-                    )}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <span style={{ background: subscription.status === "active" ? "rgba(74,222,128,0.1)" : "rgba(248,113,113,0.1)", color: subscription.status === "active" ? "#4ade80" : "#f87171", border: `1px solid ${subscription.status === "active" ? "rgba(74,222,128,0.2)" : "rgba(248,113,113,0.2)"}`, borderRadius: 20, padding: "3px 12px", fontSize: 11, fontWeight: 700, letterSpacing: 0.5 }}>
+                      {subscription.plan === "comp" ? "COMPLIMENTARY" : subscription.status?.toUpperCase()}
+                    </span>
                   </div>
-                  {subscription.stripe_customer_id && (
-                    <button onClick={openBillingPortal} disabled={portalLoading}
-                      style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 10, padding: "10px 20px", color: "#facc15", fontSize: 13, fontWeight: 600, cursor: portalLoading ? "not-allowed" : "pointer", opacity: portalLoading ? 0.7 : 1, whiteSpace: "nowrap" }}>
-                      {portalLoading ? "Loading…" : "Manage Billing →"}
-                    </button>
+                  <p style={{ margin: "0 0 2px", fontSize: 14, color: "#e5e5e5", fontWeight: 500 }}>
+                    {subscription.plan === "comp" ? "Free access" : "Peep Monthly — $10/mo"}
+                  </p>
+                  {subscription.current_period_end && subscription.plan !== "comp" && (
+                    <p style={{ margin: 0, fontSize: 12, color: "#555" }}>
+                      Renews {new Date(subscription.current_period_end).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                    </p>
+                  )}
+                  {!subscription.stripe_customer_id && (
+                    <p style={{ margin: "4px 0 0", fontSize: 12, color: "#444" }}>Complimentary access — no billing required.</p>
                   )}
                 </div>
-                <p style={{ margin: 0, fontSize: 11, color: "#333" }}>
-                  {subscription.stripe_customer_id ? "Update payment method, view invoices, or cancel anytime from the billing portal." : "Complimentary access — no billing required."}
-                </p>
-              </>
+                {subscription.stripe_customer_id && (
+                  <button onClick={openBillingPortal} disabled={portalLoading}
+                    style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 10, padding: "11px 22px", color: "#facc15", fontSize: 13, fontWeight: 600, cursor: portalLoading ? "not-allowed" : "pointer", opacity: portalLoading ? 0.7 : 1, whiteSpace: "nowrap", flexShrink: 0 }}>
+                    {portalLoading ? "Loading…" : "Manage Billing →"}
+                  </button>
+                )}
+              </div>
             ) : (
-              <p style={{ margin: 0, fontSize: 13, color: "#555" }}>No active subscription.</p>
+              <p style={{ margin: 0, fontSize: 14, color: "#555" }}>No active subscription.</p>
             )}
           </div>
         </div>
 
-        {/* Playback section */}
-        <div style={section}>
-          <div style={sectionHeader}>
-            <p style={{ margin: "0 0 1px", fontSize: 14, fontWeight: 600, color: "#e5e5e5" }}>Playback</p>
+        {/* Playback */}
+        <div style={card}>
+          <div style={cardHead}>
+            <p style={{ margin: "0 0 2px", fontSize: 15, fontWeight: 600 }}>Playback</p>
             <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Controls how content plays automatically</p>
           </div>
-          <div style={{ padding: "0 20px" }}>
+          <div style={{ padding: "0 24px" }}>
             <SettingRow label="Autoplay Next Episode" description="Automatically play the next episode when one ends" value={autoplayNext} onChange={toggleAutoplayNext} />
             <SettingRow label="Hover Previews" description="Play a trailer clip when hovering over a title" value={autoplayPreviews} onChange={toggleAutoplayPreviews} />
             <SettingRow label="Hero Trailer Autoplay" description="Automatically play the featured trailer on the home screen" value={autoplayHero} onChange={toggleAutoplayHero} />
           </div>
         </div>
 
-        {/* Account section */}
-        <div style={section}>
-          <div style={sectionHeader}>
-            <p style={{ margin: "0 0 1px", fontSize: 14, fontWeight: 600, color: "#e5e5e5" }}>Account</p>
+        {/* Account */}
+        <div style={card}>
+          <div style={cardHead}>
+            <p style={{ margin: "0 0 2px", fontSize: 15, fontWeight: 600 }}>Account</p>
             <p style={{ margin: 0, fontSize: 12, color: "#555" }}>{user?.email}</p>
           </div>
-          <div style={{ padding: "20px 20px 8px" }}>
-
-          {/* Change email */}
-          <div style={{ marginBottom: 20 }}>
-            <label style={{ display: "block", fontSize: 12, color: "#666", marginBottom: 7, fontWeight: 500 }}>New Email Address</label>
-            <input type="email" value={newEmail} onChange={e => { setNewEmail(e.target.value); setEmailMsg(null); }} placeholder="Enter new email" style={inputStyle} />
-            {emailMsg && <p style={{ margin: "8px 0 0", fontSize: 12, color: emailMsg.type === "ok" ? "#4ade80" : "#f87171" }}>{emailMsg.text}</p>}
+          <div style={cardBody}>
+            <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 600, color: "#aaa" }}>Change Email</p>
+            <input type="email" value={newEmail} onChange={e => { setNewEmail(e.target.value); setEmailMsg(null); }} placeholder="New email address" style={{ ...inp, marginBottom: 10 }} />
+            {emailMsg && <p style={{ margin: "0 0 10px", fontSize: 12, color: emailMsg.type === "ok" ? "#4ade80" : "#f87171" }}>{emailMsg.text}</p>}
             <button onClick={changeEmail} disabled={emailSaving || !newEmail.trim()}
-              style={{ marginTop: 10, background: newEmail.trim() ? "#facc15" : "#1a1a1a", border: "none", borderRadius: 10, padding: "10px 20px", color: newEmail.trim() ? "#0a0a0a" : "#333", fontSize: 13, fontWeight: 600, cursor: newEmail.trim() ? "pointer" : "default", transition: "background 0.15s" }}>
+              style={{ background: newEmail.trim() ? "#facc15" : "#1a1a1a", border: "none", borderRadius: 10, padding: "10px 22px", color: newEmail.trim() ? "#0a0a0a" : "#444", fontSize: 13, fontWeight: 600, cursor: newEmail.trim() ? "pointer" : "default" }}>
               {emailSaving ? "Sending…" : "Update Email"}
             </button>
           </div>
-
-          <div style={{ height: 1, background: "#1a1a1a", margin: "0 0 20px" }} />
-
-          {/* Change password */}
-          <div style={{ paddingBottom: 20 }}>
-            <p style={{ margin: "0 0 14px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>Change Password</p>
-            <label style={{ display: "block", fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>New Password</label>
-            <input type="password" value={newPassword} onChange={e => { setNewPassword(e.target.value); setPasswordMsg(null); }} placeholder="At least 6 characters" style={{ ...inputStyle, marginBottom: 10 }} />
-            <label style={{ display: "block", fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Confirm Password</label>
-            <input type="password" value={confirmPassword} onChange={e => { setConfirmPassword(e.target.value); setPasswordMsg(null); }} placeholder="Repeat new password" style={inputStyle} />
-            {passwordMsg && <p style={{ margin: "8px 0 0", fontSize: 12, color: passwordMsg.type === "ok" ? "#4ade80" : "#f87171" }}>{passwordMsg.text}</p>}
+          <div style={{ height: 1, background: "#1a1a1a", margin: "0 24px" }} />
+          <div style={cardBody}>
+            <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 600, color: "#aaa" }}>Change Password</p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 10 }}>
+              <input type="password" value={newPassword} onChange={e => { setNewPassword(e.target.value); setPasswordMsg(null); }} placeholder="New password" style={inp} />
+              <input type="password" value={confirmPassword} onChange={e => { setConfirmPassword(e.target.value); setPasswordMsg(null); }} placeholder="Confirm password" style={inp} />
+            </div>
+            {passwordMsg && <p style={{ margin: "0 0 10px", fontSize: 12, color: passwordMsg.type === "ok" ? "#4ade80" : "#f87171" }}>{passwordMsg.text}</p>}
             <button onClick={changePassword} disabled={passwordSaving || !newPassword}
-              style={{ marginTop: 12, background: newPassword ? "#facc15" : "#1a1a1a", border: "none", borderRadius: 8, padding: "9px 20px", color: newPassword ? "#0a0a0a" : "#333", fontSize: 13, fontWeight: 600, cursor: newPassword ? "pointer" : "default", transition: "background 0.15s" }}>
+              style={{ background: newPassword ? "#facc15" : "#1a1a1a", border: "none", borderRadius: 10, padding: "10px 22px", color: newPassword ? "#0a0a0a" : "#444", fontSize: 13, fontWeight: 600, cursor: newPassword ? "pointer" : "default" }}>
               {passwordSaving ? "Updating…" : "Update Password"}
             </button>
           </div>
         </div>
 
-        {/* Sign out */}
-        <div style={{ paddingTop: 24, borderTop: "1px solid #1a1a1a" }}>
-          <button onClick={onSignOut} style={{ width: "100%", background: "transparent", border: "1px solid #2a2a2a", borderRadius: 10, padding: "13px", color: "#f87171", fontSize: 14, fontWeight: 600, cursor: "pointer", transition: "background 0.15s" }}
-            onMouseEnter={e => e.currentTarget.style.background = "rgba(248,113,113,0.08)"}
-            onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+        {/* Sign out + Delete — separate from account card */}
+        <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
+          <button onClick={onSignOut}
+            style={{ flex: 1, background: "transparent", border: "1px solid #2a2a2a", borderRadius: 12, padding: "14px", color: "#aaa", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+            onMouseEnter={e => { e.currentTarget.style.background = "#111"; e.currentTarget.style.color = "#fff"; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#aaa"; }}>
             Sign Out
           </button>
+          <DeleteAccountSection user={user} onSignOut={onSignOut} inline />
         </div>
 
-        {/* Delete account */}
-        <DeleteAccountSection user={user} onSignOut={onSignOut} />
       </div>
     </div>
-  </div>
   );
 }
 
