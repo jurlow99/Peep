@@ -17,7 +17,7 @@ export function AdminPage() {
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/verify-admin-pin`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
         body: JSON.stringify({ pin }),
       });
       const data = await res.json();
