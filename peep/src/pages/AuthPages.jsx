@@ -426,12 +426,19 @@ export function SigninPage() {
     if (!email.trim()) { setError("Enter your email above first."); return; }
     setResetLoading(true);
     setError(null);
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: "https://watchpeep.tv/",
-    });
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/send-reset-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setResetSent(true);
+    } catch (err) {
+      setError(err.message);
+    }
     setResetLoading(false);
-    if (error) setError(error.message);
-    else setResetSent(true);
   }
 
   return (

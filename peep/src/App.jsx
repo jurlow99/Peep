@@ -54,6 +54,7 @@ export default function App() {
   const [subscription, setSubscription] = useState(null);
   const [subChecked, setSubChecked] = useState(false);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
   const [betaAck, setBetaAck] = useState(() => localStorage.getItem("peep_beta_ack") === "true");
   // Capture deep-link params before any effect clears the URL
   const [deepLink] = useState(() => {
@@ -82,6 +83,7 @@ export default function App() {
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      if (_event === "PASSWORD_RECOVERY") { setPasswordRecovery(true); return; }
       if (_event === "SIGNED_IN") sessionStorage.removeItem("lastAdAt");
       if (!session?.user) {
         setMyList({});
@@ -215,6 +217,7 @@ export default function App() {
   );
 
   if (!authChecked) return null;
+  if (passwordRecovery) return <PasswordResetPage onDone={() => { setPasswordRecovery(false); window.location.href = "/"; }} />;
   if (!user) return <LandingPage />;
   if (!user.email_confirmed_at) return <EmailVerificationGate user={user} />;
   if (!activeProfile) return <ProfileSelect user={user} onSelect={selectProfile} />;
@@ -4807,6 +4810,70 @@ function Footer({ onNavChange, onProfileOpen, onOpenModal }) {
         </div>
       </div>
     </footer>
+  );
+}
+
+// ─── Password Reset Page ──────────────────────────────────────────────────────
+
+function PasswordResetPage({ onDone }) {
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [done, setDone] = useState(false);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (password !== confirm) { setError("Passwords don't match"); return; }
+    if (password.length < 6) { setError("Password must be at least 6 characters"); return; }
+    setLoading(true); setError(null);
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) { setError(error.message); setLoading(false); return; }
+    setDone(true);
+    setTimeout(onDone, 2000);
+  }
+
+  return (
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", padding: 24 }}>
+      <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
+      <div style={{ width: "min(420px, 100%)" }}>
+        <div style={{ textAlign: "center", marginBottom: 36 }}>
+          <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 36, color: "#facc15" }}>peep.</span>
+        </div>
+        <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 16, padding: "36px clamp(20px, 6vw, 40px)" }}>
+          {done ? (
+            <div style={{ textAlign: "center" }}>
+              <p style={{ fontSize: 20, fontWeight: 700, margin: "0 0 8px", color: "#fff" }}>Password updated!</p>
+              <p style={{ fontSize: 14, color: "#555" }}>Taking you back…</p>
+            </div>
+          ) : (
+            <>
+              <h2 style={{ margin: "0 0 6px", fontSize: 22, fontWeight: 700, color: "#fff" }}>Set new password</h2>
+              <p style={{ margin: "0 0 28px", fontSize: 13, color: "#555" }}>Choose a new password for your account.</p>
+              <form onSubmit={handleSubmit}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, color: "#666", marginBottom: 6, fontWeight: 500 }}>New Password</label>
+                    <input type="password" value={password} onChange={e => { setPassword(e.target.value); setError(null); }} placeholder="At least 6 characters" required
+                      style={{ width: "100%", background: "#0d0d0d", border: "1px solid #1e1e1e", borderRadius: 10, padding: "13px 14px", color: "#fff", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, color: "#666", marginBottom: 6, fontWeight: 500 }}>Confirm Password</label>
+                    <input type="password" value={confirm} onChange={e => { setConfirm(e.target.value); setError(null); }} placeholder="Repeat new password" required
+                      style={{ width: "100%", background: "#0d0d0d", border: "1px solid #1e1e1e", borderRadius: 10, padding: "13px 14px", color: "#fff", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+                  </div>
+                </div>
+                {error && <p style={{ color: "#f87171", fontSize: 13, margin: "12px 0 0" }}>{error}</p>}
+                <button type="submit" disabled={loading}
+                  style={{ display: "block", width: "100%", marginTop: 24, background: "#facc15", border: "none", borderRadius: 10, padding: "13px", color: "#0a0a0a", fontSize: 14, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1 }}>
+                  {loading ? "Updating…" : "Update Password"}
+                </button>
+              </form>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
