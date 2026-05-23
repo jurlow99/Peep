@@ -408,6 +408,9 @@ export function SigninPage() {
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [forgotMode, setForgotMode] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -416,6 +419,19 @@ export function SigninPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) { setError(error.message); setLoading(false); }
     else window.location.href = "/";
+  }
+
+  async function handleReset(e) {
+    e.preventDefault();
+    if (!email.trim()) { setError("Enter your email above first."); return; }
+    setResetLoading(true);
+    setError(null);
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: "https://watchpeep.tv/",
+    });
+    setResetLoading(false);
+    if (error) setError(error.message);
+    else setResetSent(true);
   }
 
   return (
@@ -431,11 +447,20 @@ export function SigninPage() {
 
           <form onSubmit={handleSubmit}>
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <Input label="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" required />
-              <Input label="Password" type={showPw ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="Your password" autoComplete="current-password" required
-                rightSlot={<button type="button" onClick={() => setShowPw(v => !v)} style={{ background: "none", border: "none", color: "#555", fontSize: 11, cursor: "pointer", fontWeight: 600, padding: 0 }}>{showPw ? "HIDE" : "SHOW"}</button>}
-              />
+              <Input label="Email" type="email" value={email} onChange={e => { setEmail(e.target.value); setError(null); setResetSent(false); }} placeholder="you@example.com" autoComplete="email" required />
+              <div>
+                <Input label="Password" type={showPw ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="Your password" autoComplete="current-password" required
+                  rightSlot={<button type="button" onClick={() => setShowPw(v => !v)} style={{ background: "none", border: "none", color: "#555", fontSize: 11, cursor: "pointer", fontWeight: 600, padding: 0 }}>{showPw ? "HIDE" : "SHOW"}</button>}
+                />
+                <div style={{ textAlign: "right", marginTop: 6 }}>
+                  <button type="button" onClick={handleReset} disabled={resetLoading}
+                    style={{ background: "none", border: "none", color: "#555", fontSize: 12, cursor: "pointer", padding: 0, textDecoration: "underline" }}>
+                    {resetLoading ? "Sending…" : "Forgot password?"}
+                  </button>
+                </div>
+              </div>
             </div>
+            {resetSent && <p style={{ color: "#4ade80", fontSize: 13, margin: "12px 0 0" }}>Reset link sent — check your inbox.</p>}
             {error && <p style={{ color: "#f87171", fontSize: 13, margin: "14px 0 0" }}>{error}</p>}
             <button type="submit" disabled={loading} style={{ ...btnStyle, opacity: loading ? 0.7 : 1, cursor: loading ? "not-allowed" : "pointer" }}>
               {loading ? "Signing in…" : "Sign In"}
