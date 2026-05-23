@@ -4459,21 +4459,10 @@ function SettingsPage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, 
   async function changeEmail() {
     if (!newEmail.trim() || newEmail === user.email) return;
     setEmailSaving(true); setEmailMsg(null);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`${SUPABASE_URL_SETTINGS}/functions/v1/update-email`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
-        body: JSON.stringify({ new_email: newEmail.trim() }),
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      setEmailMsg({ type: "ok", text: "Email updated to " + newEmail.trim() });
-      setNewEmail("");
-    } catch (err) {
-      setEmailMsg({ type: "error", text: err.message });
-    }
+    const { error } = await supabase.auth.updateUser({ email: newEmail.trim() });
     setEmailSaving(false);
+    if (error) setEmailMsg({ type: "error", text: error.message });
+    else { setEmailMsg({ type: "ok", text: `Confirmation sent to ${newEmail.trim()} — click the link in that email to complete the change.` }); setNewEmail(""); }
   }
 
   async function changePassword() {
