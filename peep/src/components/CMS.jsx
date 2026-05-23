@@ -2939,26 +2939,28 @@ export function CMS({ onExit }) {
             <span style={{ color: "#facc15" }}>peep.</span><span style={{ color: "#4f46e5", fontSize: 13, fontFamily: "sans-serif", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginLeft: 6 }}>admin</span>
           </span>
         </div>
-        <button
-          onClick={onExit}
-          style={{
-            background: "#f1f5f9",
-            border: "1px solid #e2e8f0",
-            borderRadius: 8,
-            padding: "7px 16px",
-            color: "#374151",
-            fontSize: 13,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-          }}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-          Exit CMS
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => window.location.reload(true)}
+            title="Hard refresh"
+            style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "7px 12px", color: "#374151", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+              <path d="M3 3v5h5"/>
+            </svg>
+            Refresh
+          </button>
+          <button
+            onClick={onExit}
+            style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "7px 16px", color: "#374151", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+            Exit CMS
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
