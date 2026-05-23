@@ -429,7 +429,7 @@ export function SigninPage() {
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/send-reset-email`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
         body: JSON.stringify({ email: email.trim() }),
       });
       const data = await res.json();
