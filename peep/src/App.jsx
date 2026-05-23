@@ -339,6 +339,7 @@ export default function App() {
             localStorage.setItem(`peep_profile_${user.id}`, JSON.stringify(updated));
           }}
           onOpenSettings={() => setPage("settings")}
+          onAvatarChange={id => setUserAvatarId(id)}
         />
       </>
     );
@@ -4084,7 +4085,7 @@ function timeAgo(dateStr) {
   return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, onOpenSettings }) {
+function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, onOpenSettings, onAvatarChange }) {
   const [history, setHistory] = useState([]);
   const [contentMap, setContentMap] = useState({});
   const [showsMap, setShowsMap] = useState({});
@@ -4092,10 +4093,11 @@ function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, o
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(activeProfile?.name || "");
   const [bio, setBio] = useState(activeProfile?.bio || "");
-  const [bannerUrl, setBannerUrl] = useState(activeProfile?.banner_url || "");
+  const [avatarId, setAvatarId] = useState(activeProfile?.avatar_id || null);
   const [saving, setSaving] = useState(false);
   const isMobile = useIsMobile();
-  const av = avatarForId(activeProfile?.avatar_id);
+  const memberSince = user?.created_at ? new Date(user.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : null;
+  const av = avatarForId(editing ? avatarId : activeProfile?.avatar_id);
 
   useEffect(() => { fetchData(); }, [activeProfile?.id]);
 
@@ -4125,10 +4127,14 @@ function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, o
 
   async function saveProfile() {
     setSaving(true);
-    await supabase.from("viewer_profiles").update({ name: name.trim(), bio: bio.trim(), banner_url: bannerUrl.trim() }).eq("id", activeProfile.id);
+    await Promise.all([
+      supabase.from("viewer_profiles").update({ name: name.trim(), bio: bio.trim(), avatar_id: avatarId }).eq("id", activeProfile.id),
+      supabase.from("profiles").upsert({ id: user.id, avatar_id: avatarId }, { onConflict: "id" }),
+    ]);
     setSaving(false);
     setEditing(false);
-    onProfileUpdate?.({ ...activeProfile, name: name.trim(), bio: bio.trim(), banner_url: bannerUrl.trim() });
+    onAvatarChange?.(avatarId);
+    onProfileUpdate?.({ ...activeProfile, name: name.trim(), bio: bio.trim(), avatar_id: avatarId });
   }
 
   const enriched = history.map(h => ({ ...h, content: contentMap[h.content_id] || null })).filter(h => h.content);
@@ -4146,14 +4152,12 @@ function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, o
   const topShowId = Object.entries(showCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
   const topShow = topShowId ? showsMap[topShowId] : null;
 
-  const banner = bannerUrl || activeProfile?.banner_url;
-
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
       <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
 
       {/* Nav */}
-      <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 50, display: "flex", alignItems: "center", padding: `0 ${PAD}`, height: 68, gap: 24, background: "rgba(10,10,10,0.85)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+      <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 50, display: "flex", alignItems: "center", padding: `0 ${PAD}`, height: 68, gap: 24, background: "rgba(10,10,10,0.92)", backdropFilter: "blur(16px)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
         <button onClick={onBack} style={{ background: "rgba(255,255,255,0.07)", border: "none", color: "#ccc", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6 }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
           Back
@@ -4161,67 +4165,59 @@ function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, o
         <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
       </nav>
 
-      {/* Banner */}
-      <div style={{ marginTop: 68, position: "relative", height: isMobile ? 160 : 240, overflow: "hidden", background: banner ? "transparent" : "linear-gradient(135deg, #0f0f1a, #1a1a2e)" }}>
-        {banner && <img src={banner} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.55 }} />}
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, transparent 30%, #0a0a0a 100%)" }} />
-      </div>
-
       {/* Profile header */}
-      <div style={{ padding: `0 ${PAD}`, marginTop: -52, position: "relative", zIndex: 1 }}>
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 20, marginBottom: 16, flexWrap: "wrap" }}>
-          <div style={{ width: isMobile ? 80 : 100, height: isMobile ? 80 : 100, borderRadius: "50%", background: av?.svg ? "none" : (av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)"), display: "flex", alignItems: "center", justifyContent: "center", fontSize: isMobile ? 32 : 40, border: "4px solid #0a0a0a", flexShrink: 0, overflow: "hidden" }}>
+      <div style={{ paddingTop: 68 + 40, paddingLeft: PAD, paddingRight: PAD, paddingBottom: 0, maxWidth: 860, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 24, marginBottom: 28, flexWrap: "wrap" }}>
+          <div style={{ width: isMobile ? 80 : 96, height: isMobile ? 80 : 96, borderRadius: "50%", background: av?.svg ? "none" : (av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)"), display: "flex", alignItems: "center", justifyContent: "center", fontSize: isMobile ? 30 : 38, border: "3px solid #222", flexShrink: 0, overflow: "hidden" }}>
             {av?.svg ? <div style={{ width: "100%", height: "100%" }} dangerouslySetInnerHTML={{ __html: av.svg }} /> : (av?.emoji ?? (activeProfile?.name?.[0] ?? user?.email?.[0] ?? "?").toUpperCase())}
           </div>
-          <div style={{ flex: 1, minWidth: 0, paddingBottom: 6 }}>
-            <h1 style={{ margin: "0 0 3px", fontSize: isMobile ? 22 : 28, fontWeight: 700, color: "#fff" }}>{activeProfile?.name}</h1>
-            <p style={{ margin: 0, fontSize: 13, color: "#444" }}>{user?.email}</p>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h1 style={{ margin: "0 0 4px", fontSize: isMobile ? 20 : 26, fontWeight: 700, color: "#fff" }}>{editing ? (name || activeProfile?.name) : activeProfile?.name}</h1>
+            {!editing && activeProfile?.bio && <p style={{ margin: "0 0 6px", fontSize: 13, color: "#666", lineHeight: 1.6 }}>{activeProfile.bio}</p>}
+            <p style={{ margin: 0, fontSize: 12, color: "#333" }}>{memberSince ? `Member since ${memberSince}` : user?.email}</p>
           </div>
-          <div style={{ display: "flex", gap: 8, flexShrink: 0, alignSelf: "center" }}>
+          <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
             {onOpenSettings && !editing && (
-              <button onClick={onOpenSettings}
-                style={{ background: "rgba(255,255,255,0.06)", border: "1px solid #2a2a2a", borderRadius: 8, padding: "8px 14px", color: "#aaa", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              <button onClick={onOpenSettings} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid #2a2a2a", borderRadius: 8, padding: "8px 14px", color: "#aaa", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                 Settings
               </button>
             )}
-            <button onClick={() => { setEditing(e => !e); setName(activeProfile?.name || ""); setBio(activeProfile?.bio || ""); setBannerUrl(activeProfile?.banner_url || ""); }}
+            <button onClick={() => { setEditing(e => !e); setName(activeProfile?.name || ""); setBio(activeProfile?.bio || ""); setAvatarId(activeProfile?.avatar_id || null); }}
               style={{ background: editing ? "rgba(250,204,21,0.12)" : "rgba(255,255,255,0.06)", border: `1px solid ${editing ? "rgba(250,204,21,0.3)" : "#2a2a2a"}`, borderRadius: 8, padding: "8px 18px", color: editing ? "#facc15" : "#aaa", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
               {editing ? "Cancel" : "Edit Profile"}
             </button>
           </div>
         </div>
 
-        {/* Bio display */}
-        {!editing && activeProfile?.bio && (
-          <p style={{ margin: "0 0 24px", fontSize: 14, color: "#888", maxWidth: 600, lineHeight: 1.7 }}>{activeProfile.bio}</p>
-        )}
-
         {/* Edit form */}
         {editing && (
-          <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: 20, maxWidth: 600, marginBottom: 28 }}>
-            <div style={{ marginBottom: 14 }}>
+          <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, padding: 24, marginBottom: 32 }}>
+            <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>Choose an avatar</p>
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${isMobile ? 4 : 6}, 1fr)`, gap: 8, marginBottom: 24 }}>
+              {PRESET_AVATARS.map(a => (
+                <AvatarThumb key={a.id} av={a} size={isMobile ? 56 : 64} selected={avatarId === a.id} onClick={() => setAvatarId(a.id)} />
+              ))}
+            </div>
+            <div style={{ height: 1, background: "#1a1a1a", marginBottom: 20 }} />
+            <div style={{ marginBottom: 16 }}>
               <label style={{ display: "block", fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Display Name</label>
               <input type="text" value={name} onChange={e => setName(e.target.value)} maxLength={40} placeholder="Your name" style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 8, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box", fontFamily: "inherit" }} />
             </div>
-            <div style={{ marginBottom: 14 }}>
+            <div style={{ marginBottom: 20 }}>
               <label style={{ display: "block", fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Bio</label>
               <textarea value={bio} onChange={e => setBio(e.target.value)} rows={3} maxLength={200} placeholder="Write something about yourself..." style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 8, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }} />
               <p style={{ margin: "4px 0 0", fontSize: 11, color: "#333", textAlign: "right" }}>{bio.length}/200</p>
             </div>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: "block", fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Banner Image URL</label>
-              <input type="text" value={bannerUrl} onChange={e => setBannerUrl(e.target.value)} placeholder="https://..." style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 8, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box", fontFamily: "inherit" }} />
-            </div>
-            <button onClick={saveProfile} disabled={saving} style={{ background: "#facc15", border: "none", borderRadius: 8, padding: "10px 24px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
-              {saving ? "Saving…" : "Save"}
+            <button onClick={saveProfile} disabled={saving} style={{ background: "#facc15", border: "none", borderRadius: 8, padding: "10px 28px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
+              {saving ? "Saving…" : "Save Changes"}
             </button>
           </div>
         )}
       </div>
 
       {/* Stats */}
-      <div style={{ padding: `8px ${PAD} 32px` }}>
-        <div style={{ display: "grid", gridTemplateColumns: `repeat(${isMobile ? 2 : 4}, 1fr)`, gap: 12, maxWidth: 860 }}>
+      <div style={{ padding: `8px ${PAD} 32px`, maxWidth: 860, margin: "0 auto" }}>
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${isMobile ? 2 : 4}, 1fr)`, gap: 12 }}>
           {[
             { label: "Hours Watched", value: totalHours > 0 ? `${totalHours}h ${totalMinutes}m` : totalMinutes > 0 ? `${totalMinutes}m` : "0m" },
             { label: "Titles Watched", value: enriched.length > 0 ? enriched.length.toString() : "0" },
@@ -4237,7 +4233,7 @@ function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, o
       </div>
 
       {/* Watch History */}
-      <div style={{ padding: `0 ${PAD} 80px`, maxWidth: 860 }}>
+      <div style={{ padding: `0 ${PAD} 80px`, maxWidth: 860, margin: "0 auto" }}>
         <h2 style={{ margin: "0 0 20px", fontSize: 18, fontWeight: 600, color: "#e5e5e5" }}>Watch History</h2>
         {loading ? (
           <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Spinner /></div>
@@ -4400,12 +4396,6 @@ function DeleteAccountSection({ user, onSignOut }) {
 }
 
 function SettingsPage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, onAvatarChange, onSignOut }) {
-  const [name, setName] = useState(activeProfile?.name || "");
-  const [savedName, setSavedName] = useState(activeProfile?.name || "");
-  const [avatarId, setAvatarId] = useState(activeProfile?.avatar_id || null);
-  const [savedAvatarId, setSavedAvatarId] = useState(activeProfile?.avatar_id || null);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [autoplayNext, setAutoplayNext] = useState(() => getPref(PREF_AUTOPLAY_NEXT));
   const [autoplayPreviews, setAutoplayPreviews] = useState(() => getPref(PREF_AUTOPLAY_PREVIEWS));
   const [subscription, setSubscription] = useState(null);
@@ -4419,8 +4409,6 @@ function SettingsPage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, 
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordMsg, setPasswordMsg] = useState(null);
 
-  const currentAv = avatarForId(avatarId);
-  const initials = (activeProfile?.name?.[0] || user?.email?.[0] || "?").toUpperCase();
   const memberSince = user?.created_at ? new Date(user.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : null;
 
   useEffect(() => {
@@ -4449,20 +4437,6 @@ function SettingsPage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, 
   function toggleAutoplayPreviews(val) { setAutoplayPreviews(val); setPref(PREF_AUTOPLAY_PREVIEWS, val); }
   function toggleAutoplayHero(val) { setAutoplayHero(val); setPref(PREF_AUTOPLAY_HERO, val); }
 
-  const hasProfileChange = name.trim() !== savedName || avatarId !== savedAvatarId;
-
-  async function saveProfile() {
-    setSaving(true);
-    await Promise.all([
-      supabase.from("viewer_profiles").update({ name: name.trim(), avatar_id: avatarId }).eq("id", activeProfile.id),
-      supabase.from("profiles").upsert({ id: user.id, avatar_id: avatarId }, { onConflict: "id" }),
-    ]);
-    setSaving(false); setSaved(true);
-    setSavedName(name.trim()); setSavedAvatarId(avatarId);
-    setTimeout(() => setSaved(false), 2500);
-    onAvatarChange?.(avatarId);
-    onProfileUpdate?.({ ...activeProfile, name: name.trim(), avatar_id: avatarId });
-  }
 
   async function changeEmail() {
     if (!newEmail.trim() || newEmail === user.email) return;
@@ -4507,41 +4481,6 @@ function SettingsPage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, 
         <div style={{ marginBottom: 36 }}>
           <h1 style={{ margin: "0 0 6px", fontSize: 28, fontWeight: 700, letterSpacing: "-0.3px" }}>Settings</h1>
           <p style={{ margin: 0, fontSize: 13, color: "#555" }}>{user?.email}{memberSince ? ` · Member since ${memberSince}` : ""}</p>
-        </div>
-
-        {/* Profile section */}
-        <div style={section}>
-          <div style={sectionHeader}>
-            <p style={{ margin: "0 0 1px", fontSize: 14, fontWeight: 600, color: "#e5e5e5" }}>Profile</p>
-            <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Visible only to you</p>
-          </div>
-          <div style={{ padding: "20px 20px 24px" }}>
-            {/* Current avatar + name preview */}
-            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24 }}>
-              <AvatarDisplay av={currentAv} size={60} initials={initials} />
-              <div>
-                <p style={{ margin: "0 0 2px", fontSize: 15, fontWeight: 600, color: "#fff" }}>{name || "—"}</p>
-                <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Choose an avatar below</p>
-              </div>
-            </div>
-
-            {/* Avatar grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8, marginBottom: 20 }}>
-              {PRESET_AVATARS.map(av => (
-                <AvatarThumb key={av.id} av={av} size={72} selected={avatarId === av.id} onClick={() => setAvatarId(av.id)} />
-              ))}
-            </div>
-
-            <div style={{ marginBottom: hasProfileChange ? 16 : 0 }}>
-              <label style={{ display: "block", fontSize: 12, color: "#666", marginBottom: 7, fontWeight: 500 }}>Display Name</label>
-              <input type="text" value={name} onChange={e => setName(e.target.value)} maxLength={40} placeholder="Your name" style={inputStyle} />
-            </div>
-            {hasProfileChange && (
-              <button onClick={saveProfile} disabled={saving} style={{ background: "#facc15", border: "none", borderRadius: 10, padding: "11px 28px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
-                {saving ? "Saving…" : saved ? "Saved ✓" : "Save Changes"}
-              </button>
-            )}
-          </div>
         </div>
 
         {/* Billing section */}
