@@ -22,7 +22,7 @@ export function avatarForId(id) {
   return PRESET_AVATARS.find(a => a.id === id) ?? null;
 }
 
-export function ProfileScreen({ user, activeProfile, onClose, onAvatarChange, onProfileUpdate, onSwitchProfile, onViewProfile, onOpenSettings }) {
+export function ProfileScreen({ user, activeProfile, onClose, onAvatarChange, onProfileUpdate, onSwitchProfile, onViewProfile, onOpenSettings, onCreatorDash }) {
   const [profile, setProfile] = useState(null);
   const [savedAvatar, setSavedAvatar] = useState(null);
   const [selectedAvatar, setSelectedAvatar] = useState(null);
@@ -125,6 +125,14 @@ export function ProfileScreen({ user, activeProfile, onClose, onAvatarChange, on
 
         {/* Actions */}
         <div style={{ padding: "24px", borderTop: "1px solid #1a1a1a", flexShrink: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+          {onCreatorDash && (
+            <button onClick={() => { onClose(); onCreatorDash(); }}
+              style={{ width: "100%", background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.3)", borderRadius: 10, padding: "12px", color: "#facc15", fontSize: 14, fontWeight: 600, cursor: "pointer", transition: "background 0.15s", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+              onMouseEnter={e => e.currentTarget.style.background = "rgba(250,204,21,0.14)"}
+              onMouseLeave={e => e.currentTarget.style.background = "rgba(250,204,21,0.08)"}>
+              <span style={{ fontSize: 16 }}>🎬</span> Creator Dashboard
+            </button>
+          )}
           {onViewProfile && (
             <button onClick={() => { onClose(); onViewProfile(); }}
               style={{ width: "100%", background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.2)", borderRadius: 10, padding: "12px", color: "#facc15", fontSize: 14, fontWeight: 600, cursor: "pointer", transition: "background 0.15s" }}

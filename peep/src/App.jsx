@@ -41,7 +41,7 @@ export default function App() {
   const [page, setPage] = useState(() => {
     const p = new URLSearchParams(window.location.search);
     const pg = p.get("page");
-    if (pg === "settings" || pg === "profile") return pg;
+    if (pg === "settings" || pg === "profile" || pg === "creator") return pg;
     return "home";
   });
   const [selectedVideo, setSelectedVideo] = useState(null);
@@ -60,6 +60,7 @@ export default function App() {
   const [subChecked, setSubChecked] = useState(false);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [passwordRecovery, setPasswordRecovery] = useState(false);
+  const [creatorRecord, setCreatorRecord] = useState(null);
   const [betaAck, setBetaAck] = useState(() => localStorage.getItem("peep_beta_ack") === "true");
   // Capture deep-link params before any effect clears the URL
   const [deepLink] = useState(() => {
@@ -106,6 +107,14 @@ export default function App() {
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  // Check if logged-in user is a creator
+  useEffect(() => {
+    if (!user?.email) { setCreatorRecord(null); return; }
+    supabase.from("creators").select("id, name, email, payment_method, payment_handle, status")
+      .eq("email", user.email.toLowerCase()).eq("status", "active").maybeSingle()
+      .then(({ data }) => setCreatorRecord(data ?? null));
+  }, [user?.email]);
 
   // Load saved profile from localStorage when user is known
   useEffect(() => {
@@ -213,6 +222,8 @@ export default function App() {
       history.replaceState(null, "", "?page=settings");
     } else if (page === "profile") {
       history.replaceState(null, "", "?page=profile");
+    } else if (page === "creator") {
+      history.replaceState(null, "", "?page=creator");
     } else if (page === "home") {
       history.replaceState(null, "", "/");
     }
@@ -239,7 +250,7 @@ export default function App() {
     return <PaywallPage user={user} onSubscribed={() => window.location.href = "/?subscribed=1"} onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }} />;
   }
 
-  const profileScreenEl = profileOpen && <ProfileScreen user={user} activeProfile={activeProfile} onClose={() => setProfileOpen(false)} onAvatarChange={id => setUserAvatarId(id)} onProfileUpdate={updated => { setActiveProfile(updated); localStorage.setItem(`peep_profile_${user.id}`, JSON.stringify(updated)); }} onSwitchProfile={switchProfile} onViewProfile={() => { setProfileOpen(false); setPage("profile"); }} onOpenSettings={() => { setProfileOpen(false); setPage("settings"); }} />;
+  const profileScreenEl = profileOpen && <ProfileScreen user={user} activeProfile={activeProfile} onClose={() => setProfileOpen(false)} onAvatarChange={id => setUserAvatarId(id)} onProfileUpdate={updated => { setActiveProfile(updated); localStorage.setItem(`peep_profile_${user.id}`, JSON.stringify(updated)); }} onSwitchProfile={switchProfile} onViewProfile={() => { setProfileOpen(false); setPage("profile"); }} onOpenSettings={() => { setProfileOpen(false); setPage("settings"); }} onCreatorDash={creatorRecord ? () => { setProfileOpen(false); setPage("creator"); } : null} />;
 
   if (page === "player" && selectedVideo) {
     const isLiveVideo = selectedVideo._type === "live" || selectedVideo._type === "live_epg";
@@ -349,6 +360,18 @@ export default function App() {
           }}
           onOpenSettings={() => setPage("settings")}
           onAvatarChange={id => setUserAvatarId(id)}
+        />
+      </>
+    );
+
+  if (page === "creator" && creatorRecord)
+    return (
+      <>
+        {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
+        <CreatorPortalPage
+          user={user}
+          onBack={() => setPage("home")}
+          onGoHome={goHome}
         />
       </>
     );
@@ -4285,6 +4308,186 @@ function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, o
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// ─── CreatorPortalPage ────────────────────────────────────────────────────────
+
+const SUPABASE_URL_CREATOR = "https://iuozujwtuzuwubhsnhix.supabase.co";
+
+function CreatorPortalPage({ user, onBack, onGoHome }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    async function load() {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${SUPABASE_URL_CREATOR}/functions/v1/get-creator-dashboard`, {
+        headers: { "Authorization": `Bearer ${session.access_token}` },
+      });
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      setData(json);
+      setLoading(false);
+    }
+    load().catch(err => { setError(err.message); setLoading(false); });
+  }, []);
+
+  const creator = data?.creator;
+  const payouts = data?.payouts || [];
+  const content = data?.contentList || [];
+  const stats = data?.currentMonth;
+  const monthLabel = stats ? new Date(stats.month + "-02").toLocaleDateString("en-US", { month: "long", year: "numeric" }) : "";
+  const paidPayouts = payouts.filter(p => p.status === "paid");
+  const totalEarned = paidPayouts.reduce((s, p) => s + (p.payout_amount || 0), 0);
+
+  const card = { marginBottom: 16, background: "#111", border: "1px solid #1e1e1e", borderRadius: 16, overflow: "hidden" };
+  const cardHead = { padding: "20px 24px", borderBottom: "1px solid #1a1a1a" };
+  const cardBody = { padding: "24px" };
+
+  return (
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
+      <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
+
+      <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 50, display: "flex", alignItems: "center", padding: `0 ${PAD}`, height: 64, gap: 20, background: "rgba(10,10,10,0.92)", backdropFilter: "blur(16px)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        <button onClick={onBack} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)", color: "#aaa", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8 }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
+          Back
+        </button>
+        <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer", color: "#facc15" }}>peep.</span>
+        <span style={{ fontSize: 12, color: "#444", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>Creator Portal</span>
+      </nav>
+
+      <div style={{ paddingTop: 64 + 48, paddingBottom: 100, paddingLeft: PAD, paddingRight: PAD, maxWidth: 780, margin: "0 auto" }}>
+        {loading && (
+          <div style={{ display: "flex", justifyContent: "center", paddingTop: 80 }}>
+            <div style={{ width: 32, height: 32, border: "3px solid #1a1a1a", borderTopColor: "#facc15", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+          </div>
+        )}
+
+        {error && (
+          <div style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", borderRadius: 12, padding: "20px 24px", color: "#f87171", fontSize: 14 }}>
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && creator && (
+          <>
+            {/* Header */}
+            <div style={{ marginBottom: 40 }}>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.2)", borderRadius: 100, padding: "5px 14px", marginBottom: 16, fontSize: 12, fontWeight: 600, color: "#facc15", letterSpacing: 0.5 }}>
+                <span style={{ width: 6, height: 6, background: "#facc15", borderRadius: "50%", boxShadow: "0 0 6px #facc15" }} />
+                CREATOR
+              </div>
+              <h1 style={{ margin: "0 0 6px", fontSize: 32, fontWeight: 700, letterSpacing: "-0.5px" }}>Welcome, {creator.name}</h1>
+              <p style={{ margin: 0, fontSize: 14, color: "#444" }}>Revenue share partner · {creator.email}</p>
+            </div>
+
+            {/* This month stats */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
+              {[
+                { label: "Watch Minutes", value: stats ? stats.watchMins.toLocaleString() : "—", sub: monthLabel },
+                { label: "Platform Share", value: stats ? `${stats.share}%` : "—", sub: "of total watch time" },
+                { label: "Total Earned", value: `$${totalEarned.toFixed(2)}`, sub: "lifetime paid out" },
+              ].map(({ label, value, sub }) => (
+                <div key={label} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, padding: "20px 22px" }}>
+                  <p style={{ margin: "0 0 8px", fontSize: 11, fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: 0.6 }}>{label}</p>
+                  <p style={{ margin: "0 0 4px", fontSize: 28, fontWeight: 700, color: "#facc15", letterSpacing: "-0.5px" }}>{value}</p>
+                  <p style={{ margin: 0, fontSize: 11, color: "#333" }}>{sub}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* How you earn */}
+            <div style={{ ...card }}>
+              <div style={cardHead}>
+                <p style={{ margin: "0 0 2px", fontSize: 15, fontWeight: 600 }}>How You Earn</p>
+                <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Your revenue share explained</p>
+              </div>
+              <div style={cardBody}>
+                <div style={{ background: "#0d0d0d", border: "1px solid #1a1a1a", borderRadius: 10, padding: "16px 18px", marginBottom: 16, fontFamily: "monospace", fontSize: 13, color: "#e5e5e5", lineHeight: 1.8 }}>
+                  Creator Pool = Total Revenue × 50%<br />
+                  Your Payout = Creator Pool × (Your Watch Mins ÷ All Watch Mins)
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  {[
+                    ["Payment Schedule", "15th of every month for the prior month's data"],
+                    ["Watch Threshold", "Viewer must watch at least 25% of an episode to count"],
+                    ["Minimum Payout", "$10 minimum before payment is issued"],
+                    ["Payment Method", creator.payment_method + (creator.payment_handle ? ` · ${creator.payment_handle}` : "")],
+                  ].map(([k, v]) => (
+                    <div key={k} style={{ background: "#0d0d0d", border: "1px solid #1a1a1a", borderRadius: 10, padding: "14px 16px" }}>
+                      <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: 0.5 }}>{k}</p>
+                      <p style={{ margin: 0, fontSize: 13, color: "#e5e5e5" }}>{v}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Your content */}
+            <div style={card}>
+              <div style={cardHead}>
+                <p style={{ margin: "0 0 2px", fontSize: 15, fontWeight: 600 }}>Your Content</p>
+                <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Watch time from these titles counts toward your share</p>
+              </div>
+              <div style={cardBody}>
+                {content.length === 0 ? (
+                  <p style={{ margin: 0, fontSize: 14, color: "#444" }}>No content linked yet. Contact us to get your shows or films attributed.</p>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {content.map(c => (
+                      <div key={c.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#0d0d0d", border: "1px solid #1a1a1a", borderRadius: 10, padding: "12px 16px" }}>
+                        <span style={{ fontSize: 14, fontWeight: 500, color: "#e5e5e5" }}>{c.title}</span>
+                        <span style={{ fontSize: 11, color: "#444", textTransform: "capitalize", background: "#1a1a1a", borderRadius: 6, padding: "3px 8px" }}>{c.content_type.replace("_", " ")}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Payout history */}
+            <div style={card}>
+              <div style={cardHead}>
+                <p style={{ margin: "0 0 2px", fontSize: 15, fontWeight: 600 }}>Payout History</p>
+                <p style={{ margin: 0, fontSize: 12, color: "#555" }}>{paidPayouts.length} payment{paidPayouts.length !== 1 ? "s" : ""} issued</p>
+              </div>
+              <div style={cardBody}>
+                {payouts.length === 0 ? (
+                  <p style={{ margin: 0, fontSize: 14, color: "#444" }}>No payouts yet. Your first payment will be issued on the 15th of next month.</p>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {payouts.map(p => {
+                      const monthStr = new Date(p.month + "-02").toLocaleDateString("en-US", { month: "long", year: "numeric" });
+                      return (
+                        <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#0d0d0d", border: "1px solid #1a1a1a", borderRadius: 10, padding: "14px 16px", flexWrap: "wrap", gap: 8 }}>
+                          <div>
+                            <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 600, color: "#e5e5e5" }}>{monthStr}</p>
+                            {p.paid_at && <p style={{ margin: 0, fontSize: 11, color: "#444" }}>Paid {new Date(p.paid_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>}
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                            <span style={{ fontSize: 20, fontWeight: 700, color: p.status === "paid" ? "#facc15" : "#555" }}>${(p.payout_amount || 0).toFixed(2)}</span>
+                            <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20, background: p.status === "paid" ? "rgba(74,222,128,0.1)" : "rgba(100,100,100,0.1)", color: p.status === "paid" ? "#4ade80" : "#666", border: `1px solid ${p.status === "paid" ? "rgba(74,222,128,0.2)" : "#2a2a2a"}` }}>
+                              {p.status === "paid" ? "PAID" : "PENDING"}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <p style={{ textAlign: "center", fontSize: 12, color: "#2a2a2a", marginTop: 32 }}>
+              Questions? Reach out at <span style={{ color: "#444" }}>creators@watchpeep.tv</span>
+            </p>
+          </>
+        )}
       </div>
     </div>
   );

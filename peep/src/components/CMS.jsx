@@ -297,7 +297,7 @@ export function CMS({ onExit }) {
   const [creatorsLoading, setCreatorsLoading] = useState(false);
   const [creatorModal, setCreatorModal] = useState(false);
   const [editingCreator, setEditingCreator] = useState(null);
-  const [creatorForm, setCreatorForm] = useState({ name: "", email: "", payment_method: "PayPal", payment_handle: "", routing_number: "", status: "active", notes: "" });
+  const [creatorForm, setCreatorForm] = useState({ name: "", email: "", payment_method: "PayPal", payment_handle: "", routing_number: "", status: "active", notes: "", agreement_signed_at: "" });
   const [creatorSaving, setCreatorSaving] = useState(false);
   const [deleteCreatorConfirm, setDeleteCreatorConfirm] = useState(null);
 
@@ -314,6 +314,7 @@ export function CMS({ onExit }) {
   const [payoutHistory, setPayoutHistory] = useState([]);
   const [payoutHistoryLoading, setPayoutHistoryLoading] = useState(false);
   const [totalRevenue, setTotalRevenue] = useState(0);
+  const [fetchingRevenue, setFetchingRevenue] = useState(false);
 
   // Content-creator links state
   const [contentCreators, setContentCreators] = useState([]);
@@ -1034,21 +1035,51 @@ export function CMS({ onExit }) {
     setCreatorsLoading(false);
   }
 
+  function parseAgreementDate(notes) {
+    const m = (notes || "").match(/\[AGREEMENT:(\d{4}-\d{2}-\d{2})\]/);
+    return m ? m[1] : "";
+  }
+
+  function buildNotesWithAgreement(notes, dateStr) {
+    const stripped = (notes || "").replace(/\[AGREEMENT:\d{4}-\d{2}-\d{2}\]\s*/g, "").trim();
+    return dateStr ? `[AGREEMENT:${dateStr}]\n${stripped}` : stripped;
+  }
+
   function openCreatorModal(creator = null) {
     if (creator) {
       setEditingCreator(creator);
-      setCreatorForm({ name: creator.name, email: creator.email, payment_method: creator.payment_method || "PayPal", payment_handle: creator.payment_handle || "", routing_number: creator.routing_number || "", status: creator.status, notes: creator.notes || "" });
+      setCreatorForm({ name: creator.name, email: creator.email, payment_method: creator.payment_method || "PayPal", payment_handle: creator.payment_handle || "", routing_number: creator.routing_number || "", status: creator.status, notes: (creator.notes || "").replace(/\[AGREEMENT:\d{4}-\d{2}-\d{2}\]\s*/g, "").trim(), agreement_signed_at: parseAgreementDate(creator.notes) });
     } else {
       setEditingCreator(null);
-      setCreatorForm({ name: "", email: "", payment_method: "PayPal", payment_handle: "", status: "active", notes: "" });
+      setCreatorForm({ name: "", email: "", payment_method: "PayPal", payment_handle: "", status: "active", notes: "", agreement_signed_at: "" });
     }
     setCreatorModal(true);
+  }
+
+  async function fetchStripeRevenue() {
+    setFetchingRevenue(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/get-stripe-revenue`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
+        body: JSON.stringify({ month: payoutMonth }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setTotalRevenue(data.revenue);
+      showToast(`Pulled $${data.revenue.toFixed(2)} from Stripe for ${payoutMonth}`);
+    } catch (err) {
+      showToast(err.message, "error");
+    }
+    setFetchingRevenue(false);
   }
 
   async function saveCreator() {
     if (!creatorForm.name.trim() || !creatorForm.email.trim()) return;
     setCreatorSaving(true);
-    const payload = { ...creatorForm, email: creatorForm.email.trim().toLowerCase() };
+    const { agreement_signed_at, notes, ...rest } = creatorForm;
+    const payload = { ...rest, email: creatorForm.email.trim().toLowerCase(), notes: buildNotesWithAgreement(notes, agreement_signed_at) };
     let error;
     if (editingCreator) {
       ({ error } = await supabase.from("creators").update(payload).eq("id", editingCreator.id));
@@ -7364,7 +7395,7 @@ export function CMS({ onExit }) {
                 <table style={{ width: "100%", minWidth: 700, borderCollapse: "collapse", fontSize: 13, background: "#fff" }}>
                   <thead>
                     <tr style={{ borderBottom: "1px solid #f1f5f9", background: "#f8fafc" }}>
-                      {["Name", "Email", "Payment", "Status", "Actions"].map(h => (
+                      {["Name", "Email", "Payment", "Agreement", "Status", "Actions"].map(h => (
                         <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, whiteSpace: "nowrap" }}>{h}</th>
                       ))}
                     </tr>
@@ -7374,8 +7405,16 @@ export function CMS({ onExit }) {
                       <tr key={c.id} style={{ borderBottom: i < creatorsList.length - 1 ? "1px solid #f1f5f9" : "none" }}>
                         <td style={{ padding: "12px 16px", fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap" }}>{c.name}</td>
                         <td style={{ padding: "12px 16px", color: "#475569" }}>{c.email}</td>
-
                         <td style={{ padding: "12px 16px", color: "#475569", whiteSpace: "nowrap" }}>{c.payment_method}{c.payment_handle ? ` — ${c.payment_handle}` : ""}</td>
+                        <td style={{ padding: "12px 16px" }}>
+                          {parseAgreementDate(c.notes) ? (
+                            <span style={{ fontSize: 11, background: "rgba(74,222,128,0.08)", color: "#16a34a", border: "1px solid rgba(74,222,128,0.2)", borderRadius: 20, padding: "2px 10px", fontWeight: 700, whiteSpace: "nowrap" }}>
+                              ✓ {parseAgreementDate(c.notes)}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: 11, color: "#ef4444", fontWeight: 600 }}>Unsigned</span>
+                          )}
+                        </td>
                         <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}>
                           <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99, background: c.status === "active" ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)", color: c.status === "active" ? "#16a34a" : "#dc2626" }}>
                             {c.status}
@@ -7447,6 +7486,43 @@ export function CMS({ onExit }) {
                       <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Notes</label>
                       <textarea value={creatorForm.notes} onChange={e => setCreatorForm(f => ({ ...f, notes: e.target.value }))} rows={2} placeholder="Internal notes…"
                         style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#0f172a", outline: "none", resize: "vertical", boxSizing: "border-box" }} />
+                    </div>
+                    <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 16 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                        <label style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6 }}>Creator Agreement</label>
+                        {creatorForm.agreement_signed_at && (
+                          <span style={{ fontSize: 11, background: "rgba(74,222,128,0.1)", color: "#4ade80", border: "1px solid rgba(74,222,128,0.2)", borderRadius: 20, padding: "2px 10px", fontWeight: 700 }}>
+                            SIGNED {creatorForm.agreement_signed_at}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "14px 16px", fontSize: 12, color: "#374151", lineHeight: 1.7, marginBottom: 12, maxHeight: 160, overflowY: "auto" }}>
+                        <strong>Peep Creator Revenue Share Agreement</strong><br /><br />
+                        By joining Peep as a creator partner, you agree to the following terms:<br /><br />
+                        <strong>1. Revenue Share.</strong> Each month, 50% of Peep's total subscription revenue is allocated to a Creator Pool. Your share of that pool is determined by your content's proportion of total platform watch time during that calendar month.<br /><br />
+                        <strong>2. Watch Qualification.</strong> A viewing session counts toward your watch total only if the viewer watches at least 25% of the episode or piece of content.<br /><br />
+                        <strong>3. Payment Schedule.</strong> Payments are issued on or around the 15th of each month for the prior month's watch data. Payments below the $10 minimum threshold will roll over to the following month.<br /><br />
+                        <strong>4. Payment Method.</strong> You are responsible for providing accurate payment details (PayPal, Venmo, Cash App, or bank transfer). Peep is not responsible for misdirected payments due to incorrect information.<br /><br />
+                        <strong>5. Content Ownership.</strong> You retain full ownership of your content. Peep is granted a non-exclusive license to distribute your content on the platform for the duration of this agreement.<br /><br />
+                        <strong>6. Termination.</strong> Either party may terminate this agreement with 30 days written notice. Outstanding earned payments will still be issued upon termination.<br /><br />
+                        <strong>7. Fraud.</strong> Any attempt to artificially inflate watch time (bots, repeat loops, etc.) will result in immediate removal and forfeiture of pending payouts.
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <input type="date" value={creatorForm.agreement_signed_at} onChange={e => setCreatorForm(f => ({ ...f, agreement_signed_at: e.target.value }))}
+                          style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 12px", fontSize: 13, color: "#0f172a", outline: "none" }} />
+                        {!creatorForm.agreement_signed_at && (
+                          <button type="button" onClick={() => setCreatorForm(f => ({ ...f, agreement_signed_at: new Date().toISOString().slice(0, 10) }))}
+                            style={{ background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.2)", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, color: "#16a34a", cursor: "pointer", whiteSpace: "nowrap" }}>
+                            Mark Signed Today
+                          </button>
+                        )}
+                        {creatorForm.agreement_signed_at && (
+                          <button type="button" onClick={() => setCreatorForm(f => ({ ...f, agreement_signed_at: "" }))}
+                            style={{ background: "transparent", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#9ca3af", cursor: "pointer" }}>
+                            Clear
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                   {editingCreator && (
@@ -7608,6 +7684,9 @@ export function CMS({ onExit }) {
                     <span style={{ fontSize: 12, color: "#6b7280" }}>Total Revenue: $</span>
                     <input type="number" value={totalRevenue} onChange={e => setTotalRevenue(parseFloat(e.target.value) || 0)} step="0.01" min="0" placeholder="0.00"
                       style={{ width: 90, border: "1px solid #e2e8f0", borderRadius: 8, padding: "7px 10px", fontSize: 13, color: "#0f172a", outline: "none" }} />
+                    <button onClick={fetchStripeRevenue} disabled={fetchingRevenue} style={{ background: "rgba(74,222,128,0.08)", border: "1px solid rgba(74,222,128,0.25)", borderRadius: 8, padding: "7px 14px", color: "#16a34a", fontSize: 12, fontWeight: 600, cursor: fetchingRevenue ? "not-allowed" : "pointer", opacity: fetchingRevenue ? 0.7 : 1, whiteSpace: "nowrap" }}>
+                      {fetchingRevenue ? "Fetching…" : "↓ From Stripe"}
+                    </button>
                     <span style={{ fontSize: 11, color: "#9ca3af" }}>50% pool = ${(totalRevenue * 0.5).toFixed(2)}</span>
                     <button onClick={loadPayouts} style={{ background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.3)", borderRadius: 8, padding: "7px 14px", color: "#7c3aed", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Calculate</button>
                     <button onClick={exportPayoutsCSV} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "7px 14px", color: "#475569", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Export CSV</button>
@@ -7644,16 +7723,23 @@ export function CMS({ onExit }) {
                               {row.watchMins >= 60 ? `${(row.watchMins / 60).toFixed(1)} hrs` : `${row.watchMins} mins`}
                             </td>
                             <td style={{ padding: "14px 16px", color: "#475569", fontWeight: 600 }}>{row.share}%</td>
-                            <td style={{ padding: "14px 16px", fontWeight: 700, color: "#7c3aed" }}>${row.payout.toFixed(2)}</td>
+                            <td style={{ padding: "14px 16px" }}>
+                              <span style={{ fontWeight: 700, color: row.payout < 10 ? "#9ca3af" : "#7c3aed" }}>${row.payout.toFixed(2)}</span>
+                              {row.payout < 10 && row.status !== "paid" && (
+                                <span title="Below $10 minimum — rolls over to next month" style={{ display: "block", fontSize: 10, color: "#9ca3af", marginTop: 2 }}>Below min.</span>
+                              )}
+                            </td>
                             <td style={{ padding: "14px 16px" }}>
                               {row.status === "paid"
                                 ? <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99, background: "rgba(34,197,94,0.1)", color: "#16a34a" }}>Paid{row.paid_at ? ` ${new Date(row.paid_at).toLocaleDateString()}` : ""}</span>
-                                : <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99, background: "rgba(251,146,60,0.1)", color: "#ea580c" }}>Unpaid</span>
+                                : row.payout < 10
+                                  ? <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99, background: "rgba(156,163,175,0.1)", color: "#9ca3af" }}>Below Min</span>
+                                  : <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99, background: "rgba(251,146,60,0.1)", color: "#ea580c" }}>Unpaid</span>
                               }
                             </td>
                             <td style={{ padding: "14px 16px" }}>
-                              <button onClick={() => togglePayoutStatus(row)}
-                                style={{ background: row.status === "paid" ? "rgba(239,68,68,0.08)" : "rgba(34,197,94,0.1)", border: `1px solid ${row.status === "paid" ? "rgba(239,68,68,0.2)" : "rgba(34,197,94,0.3)"}`, borderRadius: 6, padding: "5px 12px", color: row.status === "paid" ? "#ef4444" : "#16a34a", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                              <button onClick={() => togglePayoutStatus(row)} disabled={row.payout < 10 && row.status !== "paid"}
+                                style={{ background: row.status === "paid" ? "rgba(239,68,68,0.08)" : "rgba(34,197,94,0.1)", border: `1px solid ${row.status === "paid" ? "rgba(239,68,68,0.2)" : "rgba(34,197,94,0.3)"}`, borderRadius: 6, padding: "5px 12px", color: row.status === "paid" ? "#ef4444" : "#16a34a", fontSize: 11, fontWeight: 600, cursor: (row.payout < 10 && row.status !== "paid") ? "default" : "pointer", opacity: (row.payout < 10 && row.status !== "paid") ? 0.4 : 1, whiteSpace: "nowrap" }}>
                                 {row.status === "paid" ? "Mark Unpaid" : "Mark Paid"}
                               </button>
                             </td>
