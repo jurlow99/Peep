@@ -461,7 +461,10 @@ export function SigninPage() {
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) { setError(error.message); setLoading(false); }
-    else window.location.href = "/";
+    else {
+      const redirect = new URLSearchParams(window.location.search).get("redirect");
+      window.location.href = redirect && redirect.startsWith("/") ? redirect : "/";
+    }
   }
 
   async function handleReset(e) {
