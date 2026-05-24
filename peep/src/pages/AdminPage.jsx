@@ -4,6 +4,7 @@ import { supabase } from "../supabase";
 
 export function AdminPage() {
   const [isAdmin, setIsAdmin] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
   const [checking, setChecking] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -14,7 +15,7 @@ export function AdminPage() {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
         const { data: profile } = await supabase.from("profiles").select("role").eq("id", session.user.id).maybeSingle();
-        if (profile?.role === "admin") { setIsAdmin(true); }
+        if (profile?.role === "admin") { setIsAdmin(true); setCurrentUser(session.user); }
       }
       setChecking(false);
     });
@@ -34,6 +35,7 @@ export function AdminPage() {
       return;
     }
     setIsAdmin(true);
+    setCurrentUser(data.user);
     setLoading(false);
   }
 
@@ -92,5 +94,5 @@ export function AdminPage() {
     );
   }
 
-  return <CMS onExit={handleSignOut} />;
+  return <CMS onExit={handleSignOut} currentUser={currentUser} />;
 }

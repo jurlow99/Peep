@@ -136,7 +136,7 @@ const EMPTY_AD = {
 
 const SUPABASE_URL = "https://iuozujwtuzuwubhsnhix.supabase.co";
 
-export function CMS({ onExit }) {
+export function CMS({ onExit, currentUser }) {
   const [tab, setTab] = useState("content");
   const [videoSubTab, setVideoSubTab] = useState("movies"); // "movies" | "series" | "episodes" | "carousels" | "podcasts" | "music"
   const [analyticsTab, setAnalyticsTab] = useState("reports"); // "reports" | "ads"
@@ -5787,9 +5787,14 @@ export function CMS({ onExit }) {
         {tab === "settings" && (
           <div style={{ maxWidth: 700 }}>
             <div style={{ marginBottom: 32 }}>
-              <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>The Boss</h2>
-              <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Platform controls — only you can see this.</p>
+              <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Settings</h2>
+              <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Platform controls and admin access.</p>
             </div>
+
+            {/* ── Admin Access (owner only) ── */}
+            {currentUser?.email?.toLowerCase() === "jacob.furlow@outlook.com" && (
+              <AdminAccessCard supabaseUrl={SUPABASE_URL} currentUser={currentUser} />
+            )}
 
             {/* ── Boss Goals + TODO ── */}
             {(() => {
@@ -8265,6 +8270,87 @@ function Spinner() {
   return (
     <div style={{ width: 32, height: 32, border: "3px solid #e2e8f0", borderTop: "3px solid #4f46e5", borderRadius: "50%", animation: "spin 0.8s linear infinite" }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
+function AdminAccessCard({ supabaseUrl, currentUser }) {
+  const [searchEmail, setSearchEmail] = useState("");
+  const [result, setResult] = useState(null); // { email, role }
+  const [searching, setSearching] = useState(false);
+  const [acting, setActing] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  async function lookupUser() {
+    if (!searchEmail.trim()) return;
+    setSearching(true);
+    setResult(null);
+    setMsg(null);
+    const { data } = await supabase.from("profiles").select("email, role").eq("email", searchEmail.trim().toLowerCase()).maybeSingle();
+    if (!data) setMsg({ type: "error", text: "No account found with that email." });
+    else setResult(data);
+    setSearching(false);
+  }
+
+  async function changeRole(action) {
+    setActing(true);
+    setMsg(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${supabaseUrl}/functions/v1/manage-admin-role`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
+        body: JSON.stringify({ targetEmail: result.email, action }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setResult(prev => ({ ...prev, role: data.role }));
+      setMsg({ type: "success", text: action === "promote" ? `${result.email} is now an admin.` : `${result.email} has been demoted to viewer.` });
+    } catch (err) {
+      setMsg({ type: "error", text: err.message });
+    }
+    setActing(false);
+  }
+
+  const inp = { width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px", color: "#0f172a", fontSize: 14, outline: "none", boxSizing: "border-box", fontFamily: "inherit" };
+
+  return (
+    <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 28 }}>
+      <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: "#0f172a" }}>Admin Access</p>
+      <p style={{ margin: "0 0 18px", fontSize: 13, color: "#9ca3af" }}>Promote or demote accounts. Only visible to you.</p>
+      <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+        <input style={{ ...inp, flex: 1 }} placeholder="Enter their email address" value={searchEmail}
+          onChange={e => { setSearchEmail(e.target.value); setResult(null); setMsg(null); }}
+          onKeyDown={e => e.key === "Enter" && lookupUser()} />
+        <button onClick={lookupUser} disabled={searching}
+          style={{ background: "#0f172a", border: "none", borderRadius: 8, padding: "10px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: searching ? "not-allowed" : "pointer", opacity: searching ? 0.7 : 1, whiteSpace: "nowrap" }}>
+          {searching ? "Looking up…" : "Look Up"}
+        </button>
+      </div>
+      {result && (
+        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <div>
+            <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{result.email}</p>
+            <p style={{ margin: 0, fontSize: 12, color: result.role === "admin" ? "#7c3aed" : "#6b7280", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>{result.role}</p>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            {result.role !== "admin" ? (
+              <button onClick={() => changeRole("promote")} disabled={acting}
+                style={{ background: "#7c3aed", border: "none", borderRadius: 8, padding: "8px 16px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: acting ? "not-allowed" : "pointer", opacity: acting ? 0.7 : 1 }}>
+                {acting ? "…" : "Make Admin"}
+              </button>
+            ) : (
+              <button onClick={() => changeRole("demote")} disabled={acting}
+                style={{ background: "#ef4444", border: "none", borderRadius: 8, padding: "8px 16px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: acting ? "not-allowed" : "pointer", opacity: acting ? 0.7 : 1 }}>
+                {acting ? "…" : "Remove Admin"}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+      {msg && (
+        <p style={{ margin: "10px 0 0", fontSize: 13, color: msg.type === "error" ? "#ef4444" : "#16a34a", fontWeight: 500 }}>{msg.text}</p>
+      )}
     </div>
   );
 }
