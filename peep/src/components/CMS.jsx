@@ -137,8 +137,11 @@ const EMPTY_AD = {
 const SUPABASE_URL = "https://iuozujwtuzuwubhsnhix.supabase.co";
 
 export function CMS({ onExit }) {
-  const [tab, setTab] = useState("videos");
-  const [videoSubTab, setVideoSubTab] = useState("movies"); // "movies" | "series" | "episodes"
+  const [tab, setTab] = useState("content");
+  const [videoSubTab, setVideoSubTab] = useState("movies"); // "movies" | "series" | "episodes" | "carousels" | "podcasts" | "music"
+  const [analyticsTab, setAnalyticsTab] = useState("reports"); // "reports" | "ads"
+  const [membersTab, setMembersTab] = useState("users"); // "users" | "subscriptions" | "support"
+  const [creatorsTab, setCreatorsTab] = useState("list"); // "list" | "review" | "payouts"
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerFormType, setDrawerFormType] = useState(null); // null = tab-based, "epg" = EPG form
 
@@ -467,11 +470,11 @@ export function CMS({ onExit }) {
   }, []);
 
   useEffect(() => {
-    if (tab === "reports") { loadReports(); loadTodayStats(); loadOnlineUsers(); }
-    if (tab === "ads") { loadAdAnalytics(); loadTodayStats(); }
-    if (tab === "subscriptions") loadSubscriptions();
-    if (tab === "users") loadUsers();
-    if (tab === "boss") { loadPromos(); loadBossSettings(); setBossView("main"); }
+    if (tab === "analytics") { loadReports(); loadAdAnalytics(); loadTodayStats(); loadOnlineUsers(); }
+    if (tab === "members") { loadSubscriptions(); loadUsers(); }
+    if (tab === "settings") { loadPromos(); loadBossSettings(); supabase.from("episodes").select("id", { count: "exact", head: true }).eq("status", "pending").then(({ count }) => setPendingCount(count || 0)); }
+    if (tab === "security") loadSecurityData();
+    if (tab === "creators") { loadCreators(); loadContentCreators(); }
     if (tab === "storage") {
       loadStorageFiles();
       supabase.from("videos").select("id, title").order("title").then(({ data }) => setVideosList(data || []));
@@ -480,21 +483,17 @@ export function CMS({ onExit }) {
   }, [tab]);
 
   useEffect(() => {
-    if (tab !== "boss") return;
-    if (bossView === "creators") { loadCreators(); loadContentCreators(); }
-    if (bossView === "payouts") { loadPayoutHistory(); loadPayouts(); }
-    if (bossView === "review") { loadReviewQueue(); }
-    if (bossView === "main") { supabase.from("episodes").select("id", { count: "exact", head: true }).eq("status", "pending").then(({ count }) => setPendingCount(count || 0)); }
-  }, [bossView]);
+    if (tab !== "creators") return;
+    if (creatorsTab === "list") { loadCreators(); loadContentCreators(); }
+    if (creatorsTab === "payouts") { loadPayoutHistory(); loadPayouts(); }
+    if (creatorsTab === "review") { loadReviewQueue(); }
+  }, [creatorsTab]);
 
   useEffect(() => {
-    if (tab !== "ads" && tab !== "reports") return;
-    const fiveMin = setInterval(() => {
-      if (tab === "ads") loadAdAnalytics();
-      if (tab === "reports") { loadReports(); loadTodayStats(); }
-    }, 5 * 60 * 1000);
-    const oneMin = (tab === "reports" || tab === "ads") ? setInterval(() => { loadTodayStats(); if (tab === "reports") loadOnlineUsers(); }, 60 * 1000) : null;
-    return () => { clearInterval(fiveMin); if (oneMin) clearInterval(oneMin); };
+    if (tab !== "analytics") return;
+    const fiveMin = setInterval(() => { loadAdAnalytics(); loadReports(); loadTodayStats(); }, 5 * 60 * 1000);
+    const oneMin = setInterval(() => { loadTodayStats(); loadOnlineUsers(); }, 60 * 1000);
+    return () => { clearInterval(fiveMin); clearInterval(oneMin); };
   }, [tab]);
 
   async function fetchUserStatsForProfile(profile) {
@@ -3100,53 +3099,42 @@ export function CMS({ onExit }) {
       </div>
 
       {/* Tabs */}
-      <div style={{ borderBottom: "1px solid #e2e8f0", padding: `0 ${PAD}`, display: "flex", gap: 24, background: "#ffffff" }}>
-        <button
-          onClick={() => setTab("videos")}
-          style={{ background: "transparent", border: "none", borderBottom: tab === "videos" ? "2px solid #4f46e5" : "none", color: tab === "videos" ? "#0f172a" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "videos" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}
-        >
-          Content ({rows.length + showsList.length + podcastsList.length})
-        </button>
-        <button onClick={() => setTab("carousels")} style={{ background: "transparent", border: "none", borderBottom: tab === "carousels" ? "2px solid #4f46e5" : "none", color: tab === "carousels" ? "#0f172a" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "carousels" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
-          Carousels ({carousels.length})
-        </button>
-        <button onClick={() => { setTab("live"); setLivePasscodeInput(""); setLivePasscodeEntered(false); }} style={{ background: "transparent", border: "none", borderBottom: tab === "live" ? "2px solid #ef4444" : "none", color: tab === "live" ? "#ef4444" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "live" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
-          Live ({liveList.length})
-        </button>
-        <button onClick={() => setTab("reports")} style={{ background: "transparent", border: "none", borderBottom: tab === "reports" ? "2px solid #34d399" : "none", color: tab === "reports" ? "#34d399" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "reports" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
-          Reports
-        </button>
-        <button onClick={() => setTab("ads")} style={{ background: "transparent", border: "none", borderBottom: tab === "ads" ? "2px solid #f59e0b" : "none", color: tab === "ads" ? "#f59e0b" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "ads" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
-          Ads {adList.length > 0 && `(${adList.length})`}
-        </button>
-        <button onClick={() => setTab("subscriptions")} style={{ background: "transparent", border: "none", borderBottom: tab === "subscriptions" ? "2px solid #818cf8" : "none", color: tab === "subscriptions" ? "#818cf8" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "subscriptions" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
-          Subscriptions {subs.length > 0 && `(${subs.length})`}
-        </button>
-        <button onClick={() => setTab("users")} style={{ background: "transparent", border: "none", borderBottom: tab === "users" ? "2px solid #f87171" : "none", color: tab === "users" ? "#f87171" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "users" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
-          Users {users.length > 0 && `(${users.length})`}
-        </button>
-        <button onClick={() => { setTab("support"); setSupportUser(null); setSupportResults([]); setSupportSearch(""); setSupportActionMsg(null); }} style={{ background: "transparent", border: "none", borderBottom: tab === "support" ? "2px solid #22d3ee" : "none", color: tab === "support" ? "#22d3ee" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "support" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
-          Support
-        </button>
-        <button onClick={() => setTab("boss")} style={{ background: "transparent", border: "none", borderBottom: tab === "boss" ? "2px solid #facc15" : "none", color: tab === "boss" ? "#facc15" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "boss" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
-          The Boss
-        </button>
-        <button onClick={() => setTab("storage")} style={{ background: "transparent", border: "none", borderBottom: tab === "storage" ? "2px solid #22d3ee" : "none", color: tab === "storage" ? "#22d3ee" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "storage" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
-          Storage {storageFiles.length > 0 && `(${storageFiles.length})`}
-        </button>
+      <div style={{ borderBottom: "1px solid #e2e8f0", padding: `0 ${PAD}`, display: "flex", gap: 24, background: "#ffffff", overflowX: "auto" }}>
+        {[
+          { key: "content",   label: `Content (${rows.length + showsList.length + podcastsList.length})`, color: "#4f46e5" },
+          { key: "live",      label: `Live (${liveList.length})`,   color: "#ef4444" },
+          { key: "creators",  label: `Creators`,                    color: "#f97316" },
+          { key: "members",   label: `Members`,                     color: "#818cf8" },
+          { key: "analytics", label: `Analytics`,                   color: "#34d399" },
+          { key: "storage",   label: `Storage`,                     color: "#22d3ee" },
+          { key: "settings",  label: `Settings`,                    color: "#facc15" },
+          { key: "security",  label: `Security`,                    color: "#f87171" },
+        ].map(({ key, label, color }) => (
+          <button key={key}
+            onClick={() => {
+              setTab(key);
+              if (key === "live") { setLivePasscodeInput(""); setLivePasscodeEntered(false); }
+              if (key === "members") { setSupportUser(null); setSupportResults([]); setSupportSearch(""); setSupportActionMsg(null); }
+            }}
+            style={{ background: "transparent", border: "none", borderBottom: tab === key ? `2px solid ${color}` : "none", color: tab === key ? color : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === key ? 600 : 400, cursor: "pointer", transition: "color 0.2s", whiteSpace: "nowrap", flexShrink: 0 }}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       <div style={{ maxWidth: 1600, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
 
-        {/* ────── VIDEOS SUB-TAB BAR ────── */}
-        {tab === "videos" && (
+        {/* ────── CONTENT SUB-TAB BAR ────── */}
+        {tab === "content" && (
           <div style={{ display: "flex", gap: 6, marginBottom: 8, paddingBottom: 20, borderBottom: "1px solid #e2e8f0" }}>
             {[
-              { key: "movies", label: "Movies", count: rows.length },
-              { key: "series", label: "Series", count: showsList.length },
-              { key: "episodes", label: "Episodes", count: null },
-              { key: "podcasts", label: "Podcasts", count: podcastsList.length },
-              { key: "music", label: "Music", count: musicVideosList.length + songsList.length },
+              { key: "movies",    label: "Movies",    count: rows.length },
+              { key: "series",    label: "Series",    count: showsList.length },
+              { key: "episodes",  label: "Episodes",  count: null },
+              { key: "podcasts",  label: "Podcasts",  count: podcastsList.length },
+              { key: "music",     label: "Music",     count: musicVideosList.length + songsList.length },
+              { key: "carousels", label: "Carousels", count: carousels.length },
             ].map(({ key, label, count }) => (
               <button key={key} onClick={() => setVideoSubTab(key)} style={{ background: videoSubTab === key ? "rgba(79,70,229,0.08)" : "transparent", border: `1px solid ${videoSubTab === key ? "rgba(79,70,229,0.3)" : "#e2e8f0"}`, borderRadius: 8, padding: "7px 16px", color: videoSubTab === key ? "#4f46e5" : "#6b7280", fontSize: 13, fontWeight: videoSubTab === key ? 600 : 400, cursor: "pointer", transition: "all 0.15s" }}>
                 {label}{count !== null ? ` (${count})` : ""}
@@ -3156,7 +3144,7 @@ export function CMS({ onExit }) {
         )}
 
         {/* ────── VIDEOS TAB — MOVIES ────── */}
-        {tab === "videos" && videoSubTab === "movies" && (
+        {tab === "content" && videoSubTab === "movies" && (
           <>
             <div>
               {/* Header row with Add button */}
@@ -3354,7 +3342,7 @@ export function CMS({ onExit }) {
         )}
 
         {/* ────── VIDEOS TAB — SERIES ────── */}
-        {tab === "videos" && videoSubTab === "series" && (
+        {tab === "content" && videoSubTab === "series" && (
           <>
             <div>
               {/* Header row with Add button */}
@@ -3404,7 +3392,7 @@ export function CMS({ onExit }) {
         )}
 
         {/* ────── VIDEOS TAB — EPISODES ────── */}
-        {tab === "videos" && videoSubTab === "episodes" && (
+        {tab === "content" && videoSubTab === "episodes" && (
           <>
             <div>
               {/* Header row with show selector and Add button */}
@@ -3469,7 +3457,7 @@ export function CMS({ onExit }) {
         )}
 
         {/* ────── CAROUSELS TAB ────── */}
-        {tab === "carousels" && (
+        {tab === "content" && videoSubTab === "carousels" && (
           <div>
             {/* Header row with Add button */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
@@ -4019,7 +4007,7 @@ export function CMS({ onExit }) {
         )}
 
         {/* ────── PODCASTS SUB-TAB ────── */}
-        {tab === "videos" && videoSubTab === "podcasts" && (
+        {tab === "content" && videoSubTab === "podcasts" && (
           <>
             <div>
               {/* Header row with Add button */}
@@ -4177,7 +4165,7 @@ export function CMS({ onExit }) {
         )}
 
         {/* ────── MUSIC TAB ────── */}
-        {tab === "videos" && videoSubTab === "music" && (
+        {tab === "content" && videoSubTab === "music" && (
           <>
             {/* Music sub-tab toggle */}
             <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
@@ -4374,8 +4362,19 @@ export function CMS({ onExit }) {
           </>
         )}
 
+        {/* ────── ANALYTICS SUB-TAB BAR ────── */}
+        {tab === "analytics" && (
+          <div style={{ display: "flex", gap: 6, marginBottom: 28, paddingBottom: 20, borderBottom: "1px solid #e2e8f0" }}>
+            {[{ key: "reports", label: "Reports" }, { key: "ads", label: `Ads${adList.length > 0 ? ` (${adList.length})` : ""}` }].map(({ key, label }) => (
+              <button key={key} onClick={() => setAnalyticsTab(key)} style={{ background: analyticsTab === key ? "rgba(52,211,153,0.08)" : "transparent", border: `1px solid ${analyticsTab === key ? "rgba(52,211,153,0.3)" : "#e2e8f0"}`, borderRadius: 8, padding: "7px 16px", color: analyticsTab === key ? "#059669" : "#6b7280", fontSize: 13, fontWeight: analyticsTab === key ? 600 : 400, cursor: "pointer" }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* ────── ADS TAB ────── */}
-        {tab === "ads" && (
+        {tab === "analytics" && analyticsTab === "ads" && (
           <div>
 
             {/* ── Ad Performance ── */}
@@ -4590,7 +4589,7 @@ export function CMS({ onExit }) {
         )}
 
         {/* ────── REPORTS TAB ────── */}
-        {tab === "reports" && (
+        {tab === "analytics" && analyticsTab === "reports" && (
           <div>
             {/* Header row */}
             <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28, flexWrap: "wrap" }}>
@@ -5246,9 +5245,19 @@ export function CMS({ onExit }) {
           </div>
         )}
 
-        {/* ────── SUBSCRIPTIONS TAB ────── */}
+        {/* ────── MEMBERS SUB-TAB BAR ────── */}
+        {tab === "members" && (
+          <div style={{ display: "flex", gap: 6, marginBottom: 28, paddingBottom: 20, borderBottom: "1px solid #e2e8f0" }}>
+            {[{ key: "users", label: `Users${users.length > 0 ? ` (${users.length})` : ""}` }, { key: "subscriptions", label: `Subscriptions${subs.length > 0 ? ` (${subs.length})` : ""}` }, { key: "support", label: "Support" }].map(({ key, label }) => (
+              <button key={key} onClick={() => { setMembersTab(key); if (key === "support") { setSupportUser(null); setSupportResults([]); setSupportSearch(""); setSupportActionMsg(null); } }} style={{ background: membersTab === key ? "rgba(129,140,248,0.08)" : "transparent", border: `1px solid ${membersTab === key ? "rgba(129,140,248,0.3)" : "#e2e8f0"}`, borderRadius: 8, padding: "7px 16px", color: membersTab === key ? "#4f46e5" : "#6b7280", fontSize: 13, fontWeight: membersTab === key ? 600 : 400, cursor: "pointer" }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* ────── SUPPORT TAB ────── */}
-        {tab === "support" && (
+        {tab === "members" && membersTab === "support" && (
           <div style={{ display: "flex", gap: 28, alignItems: "flex-start" }}>
             {/* Left: search panel */}
             <div style={{ width: 320, flexShrink: 0 }}>
@@ -5406,7 +5415,7 @@ export function CMS({ onExit }) {
         )}
 
         {/* ────── USERS TAB ────── */}
-        {tab === "users" && (
+        {tab === "members" && membersTab === "users" && (
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
               <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Users</h2>
@@ -5477,7 +5486,7 @@ export function CMS({ onExit }) {
           </div>
         )}
 
-        {tab === "subscriptions" && (() => {
+        {tab === "members" && membersTab === "subscriptions" && (() => {
           const active = subs.filter(s => s.status === "active");
           const activePaid = active.filter(s => s.plan !== "comp");
           const activeComp = active.filter(s => s.plan === "comp");
@@ -5637,13 +5646,13 @@ export function CMS({ onExit }) {
         })()}
 
         {/* ────── THE BOSS TAB ────── */}
-        {tab === "boss" && bossView === "security" && (() => {
+        {tab === "security" && (() => {
           const now = new Date();
           return (
             <div style={{ maxWidth: 760 }}>
               {/* Header */}
               <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 32 }}>
-                <button onClick={() => setBossView("main")} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 14px", fontSize: 13, color: "#374151", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                <button onClick={() => setCreatorsTab("list")} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 14px", fontSize: 13, color: "#374151", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
                   ← Back
                 </button>
                 <div>
@@ -5775,7 +5784,7 @@ export function CMS({ onExit }) {
           );
         })()}
 
-        {tab === "boss" && bossView === "main" && (
+        {tab === "settings" && (
           <div style={{ maxWidth: 700 }}>
             <div style={{ marginBottom: 32 }}>
               <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>The Boss</h2>
@@ -5926,7 +5935,7 @@ export function CMS({ onExit }) {
             </div>
 
             {/* ── Creators Card ── */}
-            <div onClick={() => setBossView("creators")}
+            <div onClick={() => { setTab("creators"); setCreatorsTab("list"); }}
               style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "22px 28px", marginBottom: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "box-shadow 0.15s" }}
               onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"}
               onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
@@ -5943,7 +5952,7 @@ export function CMS({ onExit }) {
             </div>
 
             {/* ── Review Queue Card ── */}
-            <div onClick={() => setBossView("review")}
+            <div onClick={() => { setTab("creators"); setCreatorsTab("review"); }}
               style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "22px 28px", marginBottom: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "box-shadow 0.15s" }}
               onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"}
               onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
@@ -5963,7 +5972,7 @@ export function CMS({ onExit }) {
             </div>
 
             {/* ── Payouts Card ── */}
-            <div onClick={() => { setBossView("payouts"); setPayoutView("current"); }}
+            <div onClick={() => { setTab("creators"); setCreatorsTab("payouts"); setPayoutView("current"); }}
               style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "22px 28px", marginBottom: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "box-shadow 0.15s" }}
               onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"}
               onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
@@ -5980,7 +5989,7 @@ export function CMS({ onExit }) {
             </div>
 
             {/* ── Security Card ── */}
-            <div onClick={() => { setBossView("security"); loadSecurityData(); }}
+            <div onClick={() => { setTab("security"); loadSecurityData(); }}
               style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "22px 28px", marginBottom: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "box-shadow 0.15s" }}
               onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"}
               onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
@@ -6128,18 +6137,18 @@ export function CMS({ onExit }) {
               {/* Drawer header */}
               <div style={{ padding: "20px 24px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
                 <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "#0f172a" }}>
-                  {tab === "videos" && videoSubTab === "movies" && (editingId ? "Edit Movie" : "Add Movie")}
-                  {tab === "videos" && videoSubTab === "series" && (editingShowId ? "Edit Series" : "Add Series")}
-                  {tab === "videos" && videoSubTab === "episodes" && (editingEpisodeId ? "Edit Episode" : "Add Episode")}
-                  {tab === "videos" && videoSubTab === "podcasts" && (editingPodcastId ? "Edit Podcast" : "Add Podcast")}
-                  {tab === "videos" && videoSubTab === "music" && musicSubTab === "videos" && (editingMusicVideoId ? "Edit Music Video" : "Add Music Video")}
-                  {tab === "videos" && videoSubTab === "music" && musicSubTab === "songs" && (editingSongId ? "Edit Song" : "Add Song")}
-                  {tab === "videos" && videoSubTab === "music" && musicSubTab === "albums" && (editingAlbumId ? "Edit Album" : "Add Album")}
-                  {tab === "carousels" && (editingCarouselId ? "Edit Carousel" : "Add Carousel")}
+                  {tab === "content" && videoSubTab === "movies" && (editingId ? "Edit Movie" : "Add Movie")}
+                  {tab === "content" && videoSubTab === "series" && (editingShowId ? "Edit Series" : "Add Series")}
+                  {tab === "content" && videoSubTab === "episodes" && (editingEpisodeId ? "Edit Episode" : "Add Episode")}
+                  {tab === "content" && videoSubTab === "podcasts" && (editingPodcastId ? "Edit Podcast" : "Add Podcast")}
+                  {tab === "content" && videoSubTab === "music" && musicSubTab === "videos" && (editingMusicVideoId ? "Edit Music Video" : "Add Music Video")}
+                  {tab === "content" && videoSubTab === "music" && musicSubTab === "songs" && (editingSongId ? "Edit Song" : "Add Song")}
+                  {tab === "content" && videoSubTab === "music" && musicSubTab === "albums" && (editingAlbumId ? "Edit Album" : "Add Album")}
+                  {tab === "content" && videoSubTab === "carousels" && (editingCarouselId ? "Edit Carousel" : "Add Carousel")}
                   {tab === "live" && drawerFormType !== "epg" && drawerFormType !== "bulk" && (editingLiveId ? "Edit Stream" : "Add Stream")}
                   {tab === "live" && drawerFormType === "epg" && (editingEpgId ? "Edit Program" : "Add Program")}
                   {tab === "live" && drawerFormType === "bulk" && "Auto-Schedule Block"}
-                  {tab === "ads" && (editingAdId ? "Edit Ad Tag" : "Add Ad Tag")}
+                  {tab === "analytics" && analyticsTab === "ads" && (editingAdId ? "Edit Ad Tag" : "Add Ad Tag")}
                 </h2>
                 <button
                   onClick={closeDrawer}
@@ -6153,7 +6162,7 @@ export function CMS({ onExit }) {
               <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
 
                 {/* ── MOVIES FORM ── */}
-                {tab === "videos" && videoSubTab === "movies" && (
+                {tab === "content" && videoSubTab === "movies" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <FieldInput label="Title *" value={form.title} onChange={v => setForm(f => ({ ...f, title: v }))} placeholder="e.g. Metropolis" />
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -6214,7 +6223,7 @@ export function CMS({ onExit }) {
                 )}
 
                 {/* ── SERIES FORM ── */}
-                {tab === "videos" && videoSubTab === "series" && (
+                {tab === "content" && videoSubTab === "series" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <FieldInput label="Title *" value={showForm.title} onChange={v => setShowForm(f => ({ ...f, title: v }))} placeholder="e.g. The Twilight Zone" />
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -6255,7 +6264,7 @@ export function CMS({ onExit }) {
                 )}
 
                 {/* ── EPISODES FORM ── */}
-                {tab === "videos" && videoSubTab === "episodes" && (
+                {tab === "content" && videoSubTab === "episodes" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <div>
                       <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Show *</label>
@@ -6292,7 +6301,7 @@ export function CMS({ onExit }) {
                 )}
 
                 {/* ── PODCASTS FORM ── */}
-                {tab === "videos" && videoSubTab === "podcasts" && (
+                {tab === "content" && videoSubTab === "podcasts" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <FieldInput label="Title *" value={podcastForm.title} onChange={v => setPodcastForm(f => ({ ...f, title: v }))} placeholder="e.g. The Daily" />
                     <FieldInput label="Host" value={podcastForm.host} onChange={v => setPodcastForm(f => ({ ...f, host: v }))} placeholder="e.g. Michael Barbaro" />
@@ -6338,7 +6347,7 @@ export function CMS({ onExit }) {
                 )}
 
                 {/* ── MUSIC VIDEO FORM ── */}
-                {tab === "videos" && videoSubTab === "music" && musicSubTab === "videos" && (
+                {tab === "content" && videoSubTab === "music" && musicSubTab === "videos" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <FieldInput label="Artist *" value={musicVideoForm.artist} onChange={v => setMusicVideoForm(f => ({ ...f, artist: v }))} placeholder="e.g. Daft Punk" />
                     <FieldInput label="Title *" value={musicVideoForm.title} onChange={v => setMusicVideoForm(f => ({ ...f, title: v }))} placeholder="e.g. Get Lucky" />
@@ -6385,7 +6394,7 @@ export function CMS({ onExit }) {
                 )}
 
                 {/* ── SONG FORM ── */}
-                {tab === "videos" && videoSubTab === "music" && musicSubTab === "songs" && (
+                {tab === "content" && videoSubTab === "music" && musicSubTab === "songs" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
                     {[
                       { label: "Artist *", key: "artist", placeholder: "e.g. Doja Cat" },
@@ -6467,7 +6476,7 @@ export function CMS({ onExit }) {
                 )}
 
                 {/* ── ALBUM FORM ── */}
-                {tab === "videos" && videoSubTab === "music" && musicSubTab === "albums" && (
+                {tab === "content" && videoSubTab === "music" && musicSubTab === "albums" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
                     {[
                       { label: "Artist *", key: "artist", placeholder: "e.g. Doja Cat" },
@@ -6526,7 +6535,7 @@ export function CMS({ onExit }) {
                 )}
 
                 {/* ── CAROUSELS FORM ── */}
-                {tab === "carousels" && (
+                {tab === "content" && videoSubTab === "carousels" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
                     <p style={{ margin: "0 0 4px", fontSize: 12, color: "#6b7280" }}>A horizontal scrolling row shown on selected pages.</p>
 
@@ -7101,7 +7110,7 @@ export function CMS({ onExit }) {
                 })()}
 
                 {/* ── ADS FORM ── */}
-                {tab === "ads" && (
+                {tab === "analytics" && analyticsTab === "ads" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <div>
                       <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Name *</label>
@@ -7453,11 +7462,22 @@ export function CMS({ onExit }) {
         </div>
       </div>
     )}
-        {/* ────── CREATORS VIEW (inside Boss) ────── */}
-        {tab === "boss" && bossView === "creators" && (
+        {/* ────── CREATORS SUB-TAB BAR ────── */}
+        {tab === "creators" && (
+          <div style={{ display: "flex", gap: 6, marginBottom: 28, paddingBottom: 20, borderBottom: "1px solid #e2e8f0" }}>
+            {[{ key: "list", label: "Creators" }, { key: "review", label: `Review Queue${pendingCount > 0 ? ` (${pendingCount})` : ""}` }, { key: "payouts", label: "Payouts" }].map(({ key, label }) => (
+              <button key={key} onClick={() => setCreatorsTab(key)} style={{ background: creatorsTab === key ? "rgba(249,115,22,0.08)" : "transparent", border: `1px solid ${creatorsTab === key ? "rgba(249,115,22,0.3)" : "#e2e8f0"}`, borderRadius: 8, padding: "7px 16px", color: creatorsTab === key ? "#ea580c" : "#6b7280", fontSize: 13, fontWeight: creatorsTab === key ? 600 : 400, cursor: "pointer" }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* ────── CREATORS LIST ────── */}
+        {tab === "creators" && creatorsTab === "list" && (
           <div style={{ maxWidth: 1600, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28, flexWrap: "wrap" }}>
-              <button onClick={() => setBossView("main")} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 14px", fontSize: 13, color: "#374151", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>← Back</button>
+              <button onClick={() => setCreatorsTab("list")} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 14px", fontSize: 13, color: "#374151", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>← Back</button>
               <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Creators</h2>
               <span style={{ fontSize: 13, color: "#9ca3af" }}>{creatorsList.length} creator{creatorsList.length !== 1 ? "s" : ""}</span>
               <button onClick={() => openCreatorModal()} style={{ marginLeft: "auto", background: "#fb923c", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>+ Add Creator</button>
@@ -7684,10 +7704,10 @@ export function CMS({ onExit }) {
         )}
 
         {/* ────── REVIEW QUEUE VIEW (inside Boss) ────── */}
-        {tab === "boss" && bossView === "review" && (
+        {tab === "creators" && creatorsTab === "review" && (
           <div style={{ maxWidth: 1000, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28 }}>
-              <button onClick={() => setBossView("main")} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 14px", fontSize: 13, color: "#374151", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>← Back</button>
+              <button onClick={() => setCreatorsTab("list")} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 14px", fontSize: 13, color: "#374151", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>← Back</button>
               <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Review Queue</h2>
               {reviewEpisodes.length > 0 && <span style={{ fontSize: 13, color: "#9ca3af" }}>{reviewEpisodes.length} pending</span>}
             </div>
@@ -7768,10 +7788,10 @@ export function CMS({ onExit }) {
         )}
 
         {/* ────── PAYOUTS VIEW (inside Boss) ────── */}
-        {tab === "boss" && bossView === "payouts" && (
+        {tab === "creators" && creatorsTab === "payouts" && (
           <div style={{ maxWidth: 1600, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
             <div style={{ marginBottom: 24 }}>
-              <button onClick={() => setBossView("main")} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 14px", fontSize: 13, color: "#374151", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>← Back</button>
+              <button onClick={() => setCreatorsTab("list")} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 14px", fontSize: 13, color: "#374151", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>← Back</button>
             </div>
             {/* Sub-tab toggle */}
             <div style={{ display: "flex", gap: 8, marginBottom: 28 }}>
