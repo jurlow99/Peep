@@ -300,6 +300,7 @@ export function CMS({ onExit }) {
   const [creatorForm, setCreatorForm] = useState({ name: "", email: "", payment_method: "PayPal", payment_handle: "", routing_number: "", status: "active", notes: "", agreement_signed_at: "" });
   const [creatorSaving, setCreatorSaving] = useState(false);
   const [deleteCreatorConfirm, setDeleteCreatorConfirm] = useState(null);
+  const [resendingInvite, setResendingInvite] = useState(false);
 
   // Payouts state
   const [payoutMonth, setPayoutMonth] = useState(() => {
@@ -1162,6 +1163,25 @@ export function CMS({ onExit }) {
     } finally {
       setCreatorSaving(false);
     }
+  }
+
+  async function resendInvite(creator) {
+    setResendingInvite(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/invite-creator`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ name: creator.name, email: creator.email }),
+      });
+      const data = await res.json();
+      if (data.error) showToast(`Failed: ${data.error}`, "error");
+      else showToast("Invite resent successfully");
+    } catch (err) {
+      showToast(err.message, "error");
+    }
+    setResendingInvite(false);
   }
 
   async function deleteCreator(id) {
@@ -7668,7 +7688,12 @@ export function CMS({ onExit }) {
                     </div>
                   )}
 
-                  <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 24 }}>
+                  <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 24, flexWrap: "wrap" }}>
+                    {editingCreator && (
+                      <button onClick={() => resendInvite(editingCreator)} disabled={resendingInvite} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 16px", fontSize: 13, fontWeight: 600, color: "#475569", cursor: resendingInvite ? "not-allowed" : "pointer", opacity: resendingInvite ? 0.7 : 1, marginRight: "auto" }}>
+                        {resendingInvite ? "Sending…" : "↺ Resend Invite"}
+                      </button>
+                    )}
                     <button onClick={() => setCreatorModal(false)} style={{ background: "#f1f5f9", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 600, color: "#475569", cursor: "pointer" }}>Cancel</button>
                     <button onClick={saveCreator} disabled={creatorSaving} style={{ background: "#fb923c", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 700, color: "#fff", cursor: "pointer", opacity: creatorSaving ? 0.7 : 1 }}>
                       {creatorSaving ? "Saving…" : editingCreator ? "Save Changes" : "Add Creator"}
