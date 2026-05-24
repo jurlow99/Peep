@@ -1138,16 +1138,22 @@ export function CMS({ onExit }) {
       } else {
         const { error } = await supabase.from("creators").insert(payload);
         if (error) { showToast(error.message, "error"); return; }
-        setCreatorModal(false); loadCreators();
-        const { data: { session } } = await supabase.auth.getSession();
-        const invRes = await fetch(`${SUPABASE_URL}/functions/v1/invite-creator`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
-          body: JSON.stringify({ name: creatorForm.name.trim(), email: creatorForm.email.trim().toLowerCase() }),
-        });
-        const invData = await invRes.json();
-        if (invData.error) showToast(`Creator added but invite failed: ${invData.error}`, "error");
-        else showToast("Creator added — invite email sent");
+        loadCreators();
+        // Send invite
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const invRes = await fetch(`${SUPABASE_URL}/functions/v1/invite-creator`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
+            body: JSON.stringify({ name: creatorForm.name.trim(), email: creatorForm.email.trim().toLowerCase() }),
+          });
+          const invData = await invRes.json();
+          if (invData.error) showToast(`Creator added but invite failed: ${invData.error}`, "error");
+          else showToast("Creator added — invite email sent");
+        } catch (invErr) {
+          showToast(`Creator added but invite failed: ${invErr.message}`, "error");
+        }
+        setCreatorModal(false);
       }
     } finally {
       setCreatorSaving(false);
