@@ -100,19 +100,19 @@ Deno.serve(async (req) => {
       .single();
     if (insertErr) throw new Error(`Failed to create stream: ${insertErr.message}`);
 
-    // Generate magic link → redirects to /streamer dashboard after sign-in
+    // Generate a recovery link → streamer clicks, sets a password, lands on /streamer
     const siteUrl = "https://watchpeep.tv";
-    let dashboardLink = `${siteUrl}/streamer`;
+    let setPasswordLink = `${siteUrl}/set-password`;
     try {
       const { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({
-        type: "magiclink",
+        type: "recovery",
         email: app.email,
-        options: { redirectTo: `${siteUrl}/streamer` },
+        options: { redirectTo: `${siteUrl}/set-password` },
       });
       if (!linkErr && linkData?.properties?.action_link) {
-        dashboardLink = linkData.properties.action_link;
+        setPasswordLink = linkData.properties.action_link;
       }
-    } catch (_) { /* fall back to plain /streamer link */ }
+    } catch (_) { /* fall back to plain /set-password link */ }
 
     // Update application status
     await supabase
@@ -142,11 +142,11 @@ Deno.serve(async (req) => {
               Keep your stream key private — anyone with it can stream to your channel.
             </p>
 
-            <a href="${dashboardLink}" style="display:block;background:#facc15;color:#0a0a0a;text-align:center;padding:16px;border-radius:10px;text-decoration:none;font-weight:700;font-size:16px;margin-bottom:32px;">
-              Access Your Streamer Dashboard →
+            <a href="${setPasswordLink}" style="display:block;background:#facc15;color:#0a0a0a;text-align:center;padding:16px;border-radius:10px;text-decoration:none;font-weight:700;font-size:16px;margin-bottom:32px;">
+              Set Your Password →
             </a>
 
-            <p style="font-size:12px;color:#444;margin:0 0 32px;text-align:center;">This link logs you in automatically. It expires in 1 hour.</p>
+            <p style="font-size:12px;color:#444;margin:0 0 32px;text-align:center;">Click to set your password — then you can sign in at any time from <a href="${siteUrl}/signin" style="color:#facc15;">watchpeep.tv/signin</a>. Link expires in 24 hours.</p>
 
             <div style="background:#111;border:1px solid #1e1e1e;border-radius:12px;padding:24px;margin-bottom:20px;">
               <p style="margin:0 0 16px;font-size:11px;color:#555;text-transform:uppercase;letter-spacing:0.8px;font-weight:700;">OBS Stream Settings</p>

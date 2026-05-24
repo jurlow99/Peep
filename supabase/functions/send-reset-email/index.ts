@@ -20,7 +20,7 @@ Deno.serve(async (req) => {
     const { data, error: linkErr } = await supabase.auth.admin.generateLink({
       type: "recovery",
       email: email.trim(),
-      options: { redirectTo: "https://watchpeep.tv/" },
+      options: { redirectTo: "https://watchpeep.tv/set-password" },
     });
     if (linkErr) throw new Error(linkErr.message);
 
