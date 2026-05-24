@@ -175,8 +175,8 @@ function PaymentStep({ email, onSuccess }) {
 
   return (
     <div>
-      <h2 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 700 }}>Start watching</h2>
-      <p style={{ margin: "0 0 20px", fontSize: 13, color: "#555" }}>Unlimited access to everything on Peep.</p>
+      <h2 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 700, color: "#fff" }}>Start watching</h2>
+      <p style={{ margin: "0 0 20px", fontSize: 13, color: "#888" }}>Unlimited access to everything on Peep.</p>
 
       {/* Plan selector */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 20 }}>
