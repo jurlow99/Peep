@@ -250,7 +250,7 @@ function UploadModal({ user, showId, showTitle, creatorId, onClose, onSuccess })
       const { url, error: uploadErr } = await uploadVideo(file, path, setProgress);
       if (uploadErr) throw new Error(uploadErr);
 
-      const { error: dbErr } = await supabase.from("episodes").insert({
+      const { data: insertedEp, error: dbErr } = await supabase.from("episodes").insert({
         show_id: showId,
         title: form.title.trim(),
         episode_number: epNum,
@@ -258,19 +258,17 @@ function UploadModal({ user, showId, showTitle, creatorId, onClose, onSuccess })
         description: form.description.trim(),
         url,
         status: "pending",
-      });
+      }).select("id").single();
       if (dbErr) throw new Error(dbErr.message);
 
       // Notify admin
       const { data: { session } } = await supabase.auth.getSession();
-      const { data: ep } = await supabase.from("episodes").select("id").eq("url", url).maybeSingle();
-      if (ep?.id) {
-        fetch(`${SUPABASE_URL}/functions/v1/notify-episode-status`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
-          body: JSON.stringify({ type: "new_upload", episode_id: ep.id }),
-        });
-      }
+      const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
+      fetch(`${SUPABASE_URL}/functions/v1/notify-episode-status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ type: "new_upload", episode_id: insertedEp.id }),
+      });
 
       onSuccess();
     } catch (err) {

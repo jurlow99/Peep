@@ -1067,9 +1067,10 @@ export function CMS({ onExit }) {
     setFetchingRevenue(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
       const res = await fetch(`${SUPABASE_URL}/functions/v1/get-stripe-revenue`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({ month: payoutMonth }),
       });
       const data = await res.json();
@@ -1103,9 +1104,10 @@ export function CMS({ onExit }) {
     setPendingCount(c => Math.max(0, c - 1));
     showToast("Episode approved — it's now live");
     const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
     fetch(`${SUPABASE_URL}/functions/v1/notify-episode-status`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
       body: JSON.stringify({ type: "approved", episode_id: ep.id }),
     });
   }
@@ -1118,9 +1120,10 @@ export function CMS({ onExit }) {
     setRejectNote("");
     showToast("Episode rejected — creator notified");
     const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
     fetch(`${SUPABASE_URL}/functions/v1/notify-episode-status`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
       body: JSON.stringify({ type: "rejected", episode_id: ep.id, rejection_note: note || null }),
     });
   }

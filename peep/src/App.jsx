@@ -60,7 +60,11 @@ export default function App() {
   const [subscription, setSubscription] = useState(null);
   const [subChecked, setSubChecked] = useState(false);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
-  const [passwordRecovery, setPasswordRecovery] = useState(false);
+  const [passwordRecovery, setPasswordRecovery] = useState(() => {
+    // Catch invite links — Supabase puts type=invite in the hash; must read it before Supabase clears it
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    return hash.get("type") === "invite" ? "invite" : false;
+  });
   const [userRole, setUserRole] = useState(null);
   const [creatorRecord, setCreatorRecord] = useState(null);
   const [betaAck, setBetaAck] = useState(() => localStorage.getItem("peep_beta_ack") === "true");
@@ -254,7 +258,7 @@ export default function App() {
   );
 
   if (!authChecked) return null;
-  if (passwordRecovery) return <PasswordResetPage onDone={() => { setPasswordRecovery(false); window.location.href = "/"; }} />;
+  if (passwordRecovery) return <PasswordResetPage isInvite={passwordRecovery === "invite"} onDone={() => { setPasswordRecovery(false); window.location.href = "/"; }} />;
   if (!user) return <LandingPage />;
   if (!user.email_confirmed_at) return <EmailVerificationGate user={user} />;
   if (userRole === "creator") return <CreatorDashboard user={user} onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }} />;
@@ -5007,7 +5011,7 @@ function Footer({ onNavChange, onProfileOpen, onOpenModal }) {
 
 // ─── Password Reset Page ──────────────────────────────────────────────────────
 
-function PasswordResetPage({ onDone }) {
+function PasswordResetPage({ onDone, isInvite = false }) {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
@@ -5040,8 +5044,8 @@ function PasswordResetPage({ onDone }) {
             </div>
           ) : (
             <>
-              <h2 style={{ margin: "0 0 6px", fontSize: 22, fontWeight: 700, color: "#fff" }}>Set new password</h2>
-              <p style={{ margin: "0 0 28px", fontSize: 13, color: "#555" }}>Choose a new password for your account.</p>
+              <h2 style={{ margin: "0 0 6px", fontSize: 22, fontWeight: 700, color: "#fff" }}>{isInvite ? "Create your password" : "Set new password"}</h2>
+              <p style={{ margin: "0 0 28px", fontSize: 13, color: "#555" }}>{isInvite ? "Welcome to Peep. Set a password to access your creator dashboard." : "Choose a new password for your account."}</p>
               <form onSubmit={handleSubmit}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   <div>

@@ -28,10 +28,11 @@ Deno.serve(async (req) => {
     const inviteLink = data.properties.action_link;
 
     // Set role=creator on their profile
-    await supabase.from("profiles").upsert(
+    const { error: upsertErr } = await supabase.from("profiles").upsert(
       { id: userId, email: email.trim().toLowerCase(), role: "creator" },
       { onConflict: "id" }
     );
+    if (upsertErr) throw new Error(`Failed to set creator role: ${upsertErr.message}`);
 
     // Send branded invite email via Resend
     const res = await fetch("https://api.resend.com/emails", {
