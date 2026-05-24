@@ -205,6 +205,14 @@ export function CMS({ onExit, currentUser }) {
   const [deletePodEpConfirm, setDeletePodEpConfirm] = useState(null);
 
   // Live Streams state
+  const [liveSubTab, setLiveSubTab] = useState("streams");
+  const [applications, setApplications] = useState([]);
+  const [appsLoading, setAppsLoading] = useState(false);
+  const [approvingId, setApprovingId] = useState(null);
+  const [rejectingId, setRejectingId] = useState(null);
+  const [appRejectNote, setAppRejectNote] = useState("");
+  const [rejectTarget, setRejectTarget] = useState(null);
+  const [revealedKeys, setRevealedKeys] = useState({});
   const [liveList, setLiveList] = useState([]);
   const [liveLoading, setLiveLoading] = useState(true);
   const [editingLiveId, setEditingLiveId] = useState(null);
@@ -427,6 +435,7 @@ export function CMS({ onExit, currentUser }) {
     loadShows();
     loadPodcasts();
     loadLiveStreams();
+    loadApplications();
     loadMusicVideos();
     loadSongs();
     loadAlbums();
@@ -2410,6 +2419,57 @@ export function CMS({ onExit, currentUser }) {
 
   // ──── LIVE STREAMS ────
 
+  async function loadApplications() {
+    setAppsLoading(true);
+    const { data, error } = await supabase.from("streamer_applications").select("*").order("created_at", { ascending: false });
+    if (!error) setApplications(data || []);
+    setAppsLoading(false);
+  }
+
+  async function approveApplication(app) {
+    setApprovingId(app.id);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/approve-streamer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ application_id: app.id }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      showToast(`${app.name} approved — stream key sent to ${app.email}`);
+      await loadApplications();
+      await loadLiveStreams();
+    } catch (err) {
+      showToast(`Error: ${err.message}`, "error");
+    }
+    setApprovingId(null);
+  }
+
+  async function rejectApplication() {
+    if (!rejectTarget) return;
+    setRejectingId(rejectTarget.id);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/reject-streamer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ application_id: rejectTarget.id, note: appRejectNote }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      showToast(`${rejectTarget.name} rejected`);
+      setRejectTarget(null);
+      setAppRejectNote("");
+      await loadApplications();
+    } catch (err) {
+      showToast(`Error: ${err.message}`, "error");
+    }
+    setRejectingId(null);
+  }
+
   async function loadLiveStreams() {
     setLiveLoading(true);
     const [streamsRes, sourcesRes] = await Promise.all([
@@ -3555,6 +3615,87 @@ export function CMS({ onExit, currentUser }) {
         )}
         {tab === "live" && livePasscodeEntered && (
           <div>
+            {/* Sub-tab nav */}
+            <div style={{ display: "flex", gap: 4, marginBottom: 24, background: "#f1f5f9", borderRadius: 10, padding: 4, width: "fit-content" }}>
+              {[
+                { key: "streams", label: "Streams" },
+                { key: "applications", label: `Applications${applications.filter(a => a.status === "pending").length > 0 ? ` (${applications.filter(a => a.status === "pending").length})` : ""}` },
+              ].map(t => (
+                <button key={t.key} onClick={() => setLiveSubTab(t.key)}
+                  style={{ padding: "7px 16px", borderRadius: 7, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: liveSubTab === t.key ? "#fff" : "transparent", color: liveSubTab === t.key ? "#0f172a" : "#6b7280", boxShadow: liveSubTab === t.key ? "0 1px 4px rgba(0,0,0,0.08)" : "none", transition: "all 0.15s" }}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Applications sub-tab */}
+            {liveSubTab === "applications" && (
+              <div>
+                <div style={{ marginBottom: 20 }}>
+                  <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Streamer Applications</h2>
+                  <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Approve to create a Cloudflare live input and send stream key. Reject to notify the applicant.</p>
+                </div>
+                {appsLoading ? (
+                  <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>Loading…</div>
+                ) : applications.length === 0 ? (
+                  <div style={{ color: "#6b7280", padding: 40, textAlign: "center", border: "1px dashed #e2e8f0", borderRadius: 10 }}>No applications yet.</div>
+                ) : applications.map(app => (
+                  <div key={app.id} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "16px 20px", marginBottom: 12 }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>{app.name}</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 20, letterSpacing: 0.5,
+                            background: app.status === "pending" ? "rgba(234,179,8,0.1)" : app.status === "approved" ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)",
+                            color: app.status === "pending" ? "#a16207" : app.status === "approved" ? "#15803d" : "#dc2626",
+                            border: `1px solid ${app.status === "pending" ? "rgba(234,179,8,0.3)" : app.status === "approved" ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`,
+                          }}>{app.status.toUpperCase()}</span>
+                        </div>
+                        <p style={{ margin: "0 0 8px", fontSize: 13, color: "#6b7280" }}>{app.email}</p>
+                        <p style={{ margin: "0 0 6px", fontSize: 13, color: "#374151", lineHeight: 1.5 }}><strong>Why:</strong> {app.why_they_want_to_stream}</p>
+                        {app.social_links && <p style={{ margin: "0 0 6px", fontSize: 12, color: "#6b7280" }}><strong>Links:</strong> {app.social_links}</p>}
+                        {app.notes && <p style={{ margin: 0, fontSize: 12, color: "#dc2626" }}><strong>Note:</strong> {app.notes}</p>}
+                        <p style={{ margin: "6px 0 0", fontSize: 11, color: "#9ca3af" }}>{new Date(app.created_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
+                      </div>
+                      {app.status === "pending" && (
+                        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                          <button onClick={() => approveApplication(app)} disabled={approvingId === app.id}
+                            style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: 7, padding: "8px 16px", color: "#15803d", fontSize: 13, fontWeight: 600, cursor: approvingId === app.id ? "wait" : "pointer", opacity: approvingId === app.id ? 0.6 : 1 }}>
+                            {approvingId === app.id ? "Approving…" : "✓ Approve"}
+                          </button>
+                          <button onClick={() => { setRejectTarget(app); setAppRejectNote(""); }}
+                            style={{ background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 7, padding: "8px 16px", color: "#dc2626", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                            ✕ Reject
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Reject modal */}
+                {rejectTarget && (
+                  <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+                    <div style={{ background: "#fff", borderRadius: 14, padding: "32px 28px", width: "min(420px,100%)", boxShadow: "0 24px 64px rgba(0,0,0,0.15)" }}>
+                      <h3 style={{ margin: "0 0 6px", fontSize: 17, fontWeight: 700, color: "#0f172a" }}>Reject {rejectTarget.name}?</h3>
+                      <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>Optionally add a note — it'll be included in the rejection email.</p>
+                      <textarea value={appRejectNote} onChange={e => setAppRejectNote(e.target.value)} placeholder="Optional note to applicant…" rows={3}
+                        style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 13, outline: "none", boxSizing: "border-box", resize: "vertical", fontFamily: "inherit", marginBottom: 16 }} />
+                      <div style={{ display: "flex", gap: 10 }}>
+                        <button onClick={() => setRejectTarget(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                        <button onClick={rejectApplication} disabled={!!rejectingId}
+                          style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 8, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: rejectingId ? "wait" : "pointer", opacity: rejectingId ? 0.6 : 1 }}>
+                          {rejectingId ? "Rejecting…" : "Confirm Reject"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Streams sub-tab */}
+            {liveSubTab === "streams" && <div>
             {/* Header row with Add button */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div>
@@ -3639,6 +3780,22 @@ export function CMS({ onExit, currentUser }) {
                     {s.now_airing && <span style={{ color: "#6b7280" }}> · {s.now_airing}</span>}
                   </p>
                   {s.up_next && <p style={{ margin: "2px 0 0", fontSize: 11, color: "#9ca3af" }}>Up next: {s.up_next}</p>}
+                  {s.stream_key && (
+                    <div style={{ marginTop: 4, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 10, color: "#9ca3af", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Stream Key:</span>
+                      <code style={{ fontSize: 10, color: "#4f46e5", background: "rgba(79,70,229,0.07)", padding: "1px 6px", borderRadius: 3, letterSpacing: "0.05em" }}>
+                        {revealedKeys[s.id] ? s.stream_key : "••••••••••••"}
+                      </code>
+                      <button onClick={() => setRevealedKeys(k => ({ ...k, [s.id]: !k[s.id] }))}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: "#6366f1", fontSize: 10, padding: 0, fontWeight: 600 }}>
+                        {revealedKeys[s.id] ? "Hide" : "Reveal"}
+                      </button>
+                      <button onClick={() => { navigator.clipboard.writeText(s.stream_key); showToast("Stream key copied!"); }}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 10, padding: 0 }}>
+                        Copy
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center", flexWrap: "wrap" }}>
                   {channelStatuses[s.id] === "testing" && <span style={{ fontSize: 11, color: "#6b7280" }}>Testing…</span>}
@@ -4008,6 +4165,7 @@ export function CMS({ onExit, currentUser }) {
                 )}
               </div>
             )}
+            </div>}
           </div>
         )}
 
