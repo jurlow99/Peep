@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const PRICE_ID = "price_1TZkbxRgQH3TYy3QAYrrn4Ew";
+const DEFAULT_PRICE_ID = "price_1TZkbxRgQH3TYy3QAYrrn4Ew";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -13,7 +13,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { user_id, email, payment_method_id } = await req.json();
+    const { user_id, email, payment_method_id, price_id } = await req.json();
+    const activePriceId = price_id || DEFAULT_PRICE_ID;
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
 
     // Find or create Stripe customer
@@ -52,7 +53,7 @@ Deno.serve(async (req) => {
       headers: { "Authorization": `Bearer ${stripeKey}`, "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         customer: customerId,
-        "items[0][price]": PRICE_ID,
+        "items[0][price]": activePriceId,
         default_payment_method: payment_method_id,
         "expand[]": "latest_invoice.payment_intent",
         "metadata[user_id]": user_id,
@@ -71,6 +72,7 @@ Deno.serve(async (req) => {
       email,
       stripe_customer_id: customerId,
       stripe_subscription_id: sub.id,
+      plan_id: activePriceId,
       status: sub.status,
       current_period_end: sub.current_period_end
         ? new Date(sub.current_period_end * 1000).toISOString()

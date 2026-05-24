@@ -4758,9 +4758,14 @@ function SettingsPage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, 
                     <span style={{ background: subscription.status === "active" ? "rgba(74,222,128,0.1)" : "rgba(248,113,113,0.1)", color: subscription.status === "active" ? "#4ade80" : "#f87171", border: `1px solid ${subscription.status === "active" ? "rgba(74,222,128,0.2)" : "rgba(248,113,113,0.2)"}`, borderRadius: 20, padding: "3px 12px", fontSize: 11, fontWeight: 700, letterSpacing: 0.5 }}>
                       {subscription.plan === "comp" ? "COMPLIMENTARY" : subscription.status?.toUpperCase()}
                     </span>
+                    {subscription.plan_id === "price_1TafqJRgQH3TYy3QOCovduJf" && (
+                      <span style={{ background: "rgba(250,204,21,0.12)", color: "#facc15", border: "1px solid rgba(250,204,21,0.25)", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700, letterSpacing: 0.5 }}>
+                        ★ FOUNDING MEMBER
+                      </span>
+                    )}
                   </div>
                   <p style={{ margin: "0 0 2px", fontSize: 14, color: "#e5e5e5", fontWeight: 500 }}>
-                    {subscription.plan === "comp" ? "Free access" : "Peep Monthly — $10/mo"}
+                    {subscription.plan === "comp" ? "Free access" : subscription.plan_id === "price_1TafqJRgQH3TYy3QOCovduJf" ? "Founding Member — $2.99/mo" : "Peep Monthly — $10/mo"}
                   </p>
                   {subscription.current_period_end && subscription.plan !== "comp" && (
                     <p style={{ margin: 0, fontSize: 12, color: "#555" }}>

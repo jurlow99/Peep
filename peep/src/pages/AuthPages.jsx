@@ -101,6 +101,9 @@ function StrengthMeter({ password }) {
 
 // ─── PAYMENT STEP (inside Elements) ───────────────────────────────────────────
 
+const FOUNDING_PRICE_ID = "price_1TafqJRgQH3TYy3QOCovduJf";
+const STANDARD_PRICE_ID = "price_1TZkbxRgQH3TYy3QAYrrn4Ew";
+
 function PaymentStep({ email, onSuccess }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -110,6 +113,7 @@ function PaymentStep({ email, onSuccess }) {
   const [promoCode, setPromoCode] = useState("");
   const [promoLoading, setPromoLoading] = useState(false);
   const [promoError, setPromoError] = useState(null);
+  const [selectedPlan, setSelectedPlan] = useState(FOUNDING_PRICE_ID);
 
   async function handlePay(e) {
     e.preventDefault();
@@ -129,7 +133,7 @@ function PaymentStep({ email, onSuccess }) {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/create-subscription`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
-        body: JSON.stringify({ email, payment_method_id: paymentMethod.id, user_id: session.user.id }),
+        body: JSON.stringify({ email, payment_method_id: paymentMethod.id, user_id: session.user.id, price_id: selectedPlan }),
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
@@ -171,11 +175,37 @@ function PaymentStep({ email, onSuccess }) {
   return (
     <div>
       <h2 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 700 }}>Start watching</h2>
-      <p style={{ margin: "0 0 24px", fontSize: 13, color: "#555" }}>Unlimited access to everything on Peep.</p>
+      <p style={{ margin: "0 0 20px", fontSize: 13, color: "#555" }}>Unlimited access to everything on Peep.</p>
 
-      <div style={{ background: "#0d0d0d", border: "1px solid #1e1e1e", borderRadius: 10, padding: "14px 16px", marginBottom: 20, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ fontSize: 13, color: "#888" }}>Peep Monthly</span>
-        <span style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>$10 / mo</span>
+      {/* Plan selector */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
+        {[
+          { id: FOUNDING_PRICE_ID, label: "Founding Member", price: "$2.99", period: "/mo", badge: "LIMITED", perks: ["Ad-free forever", "Founding Member badge", "Lock in this price"] },
+          { id: STANDARD_PRICE_ID, label: "Standard", price: "$10", period: "/mo", badge: null, perks: ["All content", "Cancel anytime"] },
+        ].map(plan => {
+          const active = selectedPlan === plan.id;
+          return (
+            <div key={plan.id} onClick={() => setSelectedPlan(plan.id)}
+              style={{ border: `2px solid ${active ? YELLOW : "#222"}`, borderRadius: 12, padding: "14px 12px", cursor: "pointer", background: active ? "rgba(250,204,21,0.04)" : "#0d0d0d", transition: "all 0.15s", position: "relative" }}>
+              {plan.badge && (
+                <span style={{ position: "absolute", top: -1, right: -1, background: YELLOW, color: "#0a0a0a", fontSize: 9, fontWeight: 800, padding: "3px 8px", borderRadius: "0 10px 0 8px", letterSpacing: 0.5 }}>
+                  {plan.badge}
+                </span>
+              )}
+              <div style={{ fontSize: 12, color: active ? YELLOW : "#666", fontWeight: 600, marginBottom: 6 }}>{plan.label}</div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 2, marginBottom: 8 }}>
+                <span style={{ fontSize: 22, fontWeight: 700, color: "#fff" }}>{plan.price}</span>
+                <span style={{ fontSize: 11, color: "#555" }}>{plan.period}</span>
+              </div>
+              {plan.perks.map(p => (
+                <div key={p} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={active ? YELLOW : "#444"} strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                  <span style={{ fontSize: 11, color: active ? "#aaa" : "#555" }}>{p}</span>
+                </div>
+              ))}
+            </div>
+          );
+        })}
       </div>
 
       <form onSubmit={handlePay}>
@@ -186,7 +216,7 @@ function PaymentStep({ email, onSuccess }) {
         {error && <p style={{ color: "#f87171", fontSize: 13, margin: "0 0 12px" }}>{error}</p>}
         <button type="submit" disabled={loading || !stripe}
           style={{ ...btnStyle, opacity: loading || !stripe ? 0.7 : 1, cursor: loading || !stripe ? "not-allowed" : "pointer" }}>
-          {loading ? "Processing…" : "Subscribe — $10/mo"}
+          {loading ? "Processing…" : `Subscribe — ${selectedPlan === FOUNDING_PRICE_ID ? "$2.99/mo" : "$10/mo"}`}
         </button>
       </form>
 

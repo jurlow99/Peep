@@ -5,6 +5,9 @@ import { supabase } from "../supabase";
 
 const SUPABASE_URL = "https://iuozujwtuzuwubhsnhix.supabase.co";
 const stripePromise = loadStripe("pk_live_51TYZ17RgQH3TYy3Q51H1NPxizg1dHKpdRx0Vzes5cFI1jdrkCctrYp1ulMTuZL1Obxe9QBq0oKSEAHN7QNAvSSq700rFAyMhZn");
+const FOUNDING_PRICE_ID = "price_1TafqJRgQH3TYy3QOCovduJf";
+const STANDARD_PRICE_ID = "price_1TZkbxRgQH3TYy3QAYrrn4Ew";
+const YELLOW = "#facc15";
 
 const CARD_OPTIONS = {
   style: {
@@ -28,6 +31,7 @@ function CheckoutForm({ user, onSignOut }) {
   const [promoCode, setPromoCode] = useState("");
   const [promoLoading, setPromoLoading] = useState(false);
   const [promoError, setPromoError] = useState(null);
+  const [selectedPlan, setSelectedPlan] = useState(FOUNDING_PRICE_ID);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -48,7 +52,7 @@ function CheckoutForm({ user, onSignOut }) {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/create-subscription`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
-        body: JSON.stringify({ user_id: user.id, email: user.email, payment_method_id: paymentMethod.id }),
+        body: JSON.stringify({ user_id: user.id, email: user.email, payment_method_id: paymentMethod.id, price_id: selectedPlan }),
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
@@ -100,7 +104,7 @@ function CheckoutForm({ user, onSignOut }) {
 
         <button type="submit" disabled={loading || !stripe}
           style={{ width: "100%", background: "#facc15", border: "none", borderRadius: 10, padding: "14px", color: "#0a0a0a", fontSize: 15, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, transition: "opacity 0.15s" }}>
-          {loading ? "Processing…" : "Subscribe for $10/mo"}
+          {loading ? "Processing…" : `Subscribe — ${selectedPlan === FOUNDING_PRICE_ID ? "$2.99/mo" : "$10/mo"}`}
         </button>
       </form>
 
@@ -157,12 +161,35 @@ export function PaywallPage({ user, onSubscribed, onSignOut }) {
             </p>
           </div>
 
-          <div style={{ background: "#0a0a0a", border: "1px solid #1e1e1e", borderRadius: 12, padding: "20px", marginBottom: 24, textAlign: "center" }}>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 4, marginBottom: 6 }}>
-              <span style={{ fontSize: 42, fontWeight: 700, color: "#fff" }}>$10</span>
-              <span style={{ fontSize: 14, color: "#555" }}>/month</span>
-            </div>
-            <p style={{ margin: 0, fontSize: 12, color: "#444" }}>Cancel anytime</p>
+          {/* Plan selector */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 24 }}>
+            {[
+              { id: FOUNDING_PRICE_ID, label: "Founding Member", price: "$2.99", badge: "LIMITED", perks: ["Ad-free forever", "Founding badge", "Lock in this price"] },
+              { id: STANDARD_PRICE_ID, label: "Standard", price: "$10", badge: null, perks: ["All content", "Cancel anytime"] },
+            ].map(plan => {
+              const active = selectedPlan === plan.id;
+              return (
+                <div key={plan.id} onClick={() => setSelectedPlan(plan.id)}
+                  style={{ border: `2px solid ${active ? YELLOW : "#222"}`, borderRadius: 12, padding: "14px 12px", cursor: "pointer", background: active ? "rgba(250,204,21,0.04)" : "#0a0a0a", transition: "all 0.15s", position: "relative" }}>
+                  {plan.badge && (
+                    <span style={{ position: "absolute", top: -1, right: -1, background: YELLOW, color: "#0a0a0a", fontSize: 9, fontWeight: 800, padding: "3px 8px", borderRadius: "0 10px 0 8px", letterSpacing: 0.5 }}>
+                      {plan.badge}
+                    </span>
+                  )}
+                  <div style={{ fontSize: 12, color: active ? YELLOW : "#666", fontWeight: 600, marginBottom: 6 }}>{plan.label}</div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 2, marginBottom: 8 }}>
+                    <span style={{ fontSize: 22, fontWeight: 700, color: "#fff" }}>{plan.price}</span>
+                    <span style={{ fontSize: 11, color: "#555" }}>/mo</span>
+                  </div>
+                  {plan.perks.map(p => (
+                    <div key={p} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={active ? YELLOW : "#444"} strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                      <span style={{ fontSize: 11, color: active ? "#aaa" : "#555" }}>{p}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
