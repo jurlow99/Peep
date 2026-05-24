@@ -20,10 +20,24 @@ Deno.serve(async (req) => {
     if (!uid) throw new Error("No stream UID in payload");
 
     if (event === "live_input.connected" || event === "stream.live_input.connected") {
-      await supabase
+      const { data: stream } = await supabase
         .from("live_streams")
         .update({ is_live: true, live_started_at: new Date().toISOString() })
-        .eq("stream_uid", uid);
+        .eq("stream_uid", uid)
+        .select("id")
+        .single();
+
+      // Fire go-live notifications (non-blocking)
+      if (stream?.id) {
+        fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/notify-go-live`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${Deno.env.get("SERVICE_ROLE_KEY")}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ stream_id: stream.id }),
+        }).catch(() => {});
+      }
     } else if (
       event === "live_input.disconnected" ||
       event === "stream.live_input.disconnected" ||

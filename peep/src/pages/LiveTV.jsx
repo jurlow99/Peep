@@ -36,11 +36,38 @@ function ViewerBadge({ count, style = {} }) {
   );
 }
 
+const CATEGORIES = [
+  { value: "all",       label: "All" },
+  { value: "gaming",    label: "Gaming" },
+  { value: "music",     label: "Music" },
+  { value: "talk",      label: "Talk" },
+  { value: "irl",       label: "IRL" },
+  { value: "sports",    label: "Sports" },
+  { value: "education", label: "Education" },
+  { value: "creative",  label: "Creative" },
+];
+
 export function LiveTVPage({ streams, epgEntries, onPlay }) {
   const [tuningIn, setTuningIn] = useState(null);
   const [viewerCounts, setViewerCounts] = useState({});
+  const [activeCategory, setActiveCategory] = useState("all");
+  const [schedule, setSchedule] = useState([]);
   const now = useRef(new Date()).current;
   const isMobile = useIsMobile();
+
+  // Load upcoming schedules
+  useEffect(() => {
+    async function loadSchedule() {
+      const { data } = await supabase
+        .from("stream_schedule")
+        .select("*, live_streams(id, channel_name, title, thumbnail, category)")
+        .gte("scheduled_at", new Date().toISOString())
+        .order("scheduled_at")
+        .limit(10);
+      setSchedule(data || []);
+    }
+    loadSchedule();
+  }, []);
 
   // Build EPG maps
   const nowAiringMap = {};
@@ -124,12 +151,19 @@ export function LiveTVPage({ streams, epgEntries, onPlay }) {
     _viewers: viewerCounts[s.id] ?? 0,
   }));
 
-  // Pick hero: admin-pinned first, then has image, then first
-  const hero = enriched.find(s => s.is_hero) ?? enriched.find(s => s.hero_image || s.thumbnail) ?? enriched[0] ?? null;
+  const filtered = activeCategory === "all"
+    ? enriched
+    : enriched.filter(s => s.category === activeCategory);
+
+  // Pick hero from filtered set, live first
+  const hero = filtered.find(s => s.is_hero) ?? filtered.find(s => s.is_live && (s.hero_image || s.thumbnail)) ?? filtered[0] ?? null;
   const hasEpg = epgEntries.length > 0;
 
   // Total live viewers across all channels
   const totalViewers = Object.values(viewerCounts).reduce((a, b) => a + b, 0);
+
+  // Categories that actually have streams
+  const usedCategories = new Set(streams.map(s => s.category || "general"));
 
   return (
     <div style={{ paddingTop: 90, paddingBottom: 80, minHeight: "100vh" }}>
@@ -171,18 +205,29 @@ export function LiveTVPage({ streams, epgEntries, onPlay }) {
       ) : (
         <>
           {/* ── Header ── */}
-          <div style={{ padding: `0 ${PAD} 32px`, display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-            <div>
-              <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(28px, 4vw, 52px)", fontWeight: 400, margin: "0 0 6px", color: "#fff", lineHeight: 1 }}>Streams</h1>
-              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                <span style={{ fontSize: 13, color: "#3a3a4a" }}>{sorted.length} channel{sorted.length !== 1 ? "s" : ""}</span>
-                {totalViewers > 0 && (
-                  <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#4b5563" }}>
-                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", display: "inline-block", animation: "livepulse 2s ease-in-out infinite" }} />
-                    {totalViewers.toLocaleString()} watching now
-                  </span>
-                )}
+          <div style={{ padding: `0 ${PAD} 24px` }}>
+            <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 20 }}>
+              <div>
+                <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(28px, 4vw, 52px)", fontWeight: 400, margin: "0 0 6px", color: "#fff", lineHeight: 1 }}>Streams</h1>
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <span style={{ fontSize: 13, color: "#3a3a4a" }}>{sorted.length} channel{sorted.length !== 1 ? "s" : ""}</span>
+                  {totalViewers > 0 && (
+                    <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#4b5563" }}>
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", display: "inline-block", animation: "livepulse 2s ease-in-out infinite" }} />
+                      {totalViewers.toLocaleString()} watching now
+                    </span>
+                  )}
+                </div>
               </div>
+            </div>
+            {/* ── Category Pills ── */}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {CATEGORIES.filter(c => c.value === "all" || usedCategories.has(c.value)).map(c => (
+                <button key={c.value} onClick={() => setActiveCategory(c.value)}
+                  style={{ background: activeCategory === c.value ? "rgba(239,68,68,0.15)" : "rgba(255,255,255,0.04)", border: `1px solid ${activeCategory === c.value ? "rgba(239,68,68,0.4)" : "rgba(255,255,255,0.07)"}`, borderRadius: 20, padding: "6px 16px", color: activeCategory === c.value ? "#f87171" : "#4b5563", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>
+                  {c.label}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -203,16 +248,46 @@ export function LiveTVPage({ streams, epgEntries, onPlay }) {
               ? { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12 }
               : { display: "grid", gridTemplateRows: "repeat(2, auto)", gridAutoFlow: "column", gridAutoColumns: "clamp(180px, 14vw, 230px)", gap: 14, overflowX: "auto", paddingBottom: 8 }
             }>
-              {enriched.map(s => (
-                <ChannelTile
-                  key={s.id}
-                  stream={s}
-                  onTuneIn={tuneIn}
-                  tuning={tuningIn === s.id}
-                />
+              {filtered.length === 0 ? (
+                <p style={{ color: "#3a3a4a", fontSize: 13, padding: "20px 0" }}>No streams in this category yet.</p>
+              ) : filtered.map(s => (
+                <ChannelTile key={s.id} stream={s} onTuneIn={tuneIn} tuning={tuningIn === s.id} />
               ))}
             </div>
           </div>
+
+          {/* ── Upcoming Streams ── */}
+          {schedule.length > 0 && (
+            <div style={{ padding: `0 ${PAD} 60px` }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: "#3a3a4a", letterSpacing: "0.12em", textTransform: "uppercase" }}>Coming Up</p>
+                <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.04)" }} />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
+                {schedule.map(s => {
+                  const ch = s.live_streams;
+                  const d = new Date(s.scheduled_at);
+                  return (
+                    <div key={s.id} style={{ background: "#0e0e11", border: "1px solid rgba(255,255,255,0.05)", borderRadius: 12, padding: "16px 18px", display: "flex", gap: 14, alignItems: "flex-start" }}>
+                      {ch?.thumbnail
+                        ? <img src={ch.thumbnail} alt="" style={{ width: 48, height: 48, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
+                        : <div style={{ width: 48, height: 48, borderRadius: 8, background: "linear-gradient(135deg,#1e1b4b,#312e81)", flexShrink: 0 }} />
+                      }
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 700, color: "#e5e5e5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.title}</p>
+                        <p style={{ margin: "0 0 4px", fontSize: 12, color: "#555", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch?.channel_name || ch?.title}</p>
+                        <p style={{ margin: 0, fontSize: 11, color: "#4b5563" }}>
+                          {d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                          {" · "}
+                          {d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* ── EPG ── */}
           {hasEpg && (
@@ -461,18 +536,21 @@ function ChannelTile({ stream, onTuneIn, tuning }) {
 
       {/* Info row */}
       <div style={{ padding: "11px 14px 13px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
           {stream.channel_number != null && stream.channel_number !== "" && (
             <span style={{ fontSize: 9, fontWeight: 700, color: "#252535", flexShrink: 0 }}>CH{stream.channel_number}</span>
           )}
-          <span style={{ fontSize: 13, fontWeight: 700, color: "#e5e5e5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{stream.title}</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#e5e5e5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{stream.channel_name || stream.title}</span>
         </div>
+        {stream.stream_title && (
+          <p style={{ margin: "0 0 4px", fontSize: 11, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{stream.stream_title}</p>
+        )}
         {nowTitle
           ? <p style={{ margin: "0 0 7px", fontSize: 11, color: "#555", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               <span style={{ display: "inline-block", width: 5, height: 5, borderRadius: "50%", background: "#ef4444", marginRight: 6, verticalAlign: "middle", animation: "livepulse 2s infinite" }} />
               {nowTitle}
             </p>
-          : <p style={{ margin: "0 0 7px", fontSize: 11, color: "#222" }}>No guide data</p>
+          : <p style={{ margin: "0 0 7px", fontSize: 11, color: "#222" }}>{stream.category && stream.category !== "general" ? stream.category.charAt(0).toUpperCase() + stream.category.slice(1) : ""}</p>
         }
         <div style={{ height: 2, background: "rgba(255,255,255,0.05)", borderRadius: 2, overflow: "hidden" }}>
           <div style={{ height: "100%", width: `${progress * 100}%`, background: "linear-gradient(90deg, #4f46e5, #818cf8)", borderRadius: 2 }} />
