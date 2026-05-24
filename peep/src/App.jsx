@@ -263,7 +263,8 @@ export default function App() {
   if (!user.email_confirmed_at) return <EmailVerificationGate user={user} />;
   if (userRole === "creator") return <CreatorDashboard user={user} onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }} />;
   if (!activeProfile) return <ProfileSelect user={user} onSelect={selectProfile} />;
-  if (subChecked && (!subscription || subscription.status !== "active")) {
+  const isOwner = user?.email?.toLowerCase() === "jacob.furlow@outlook.com";
+  if (!isOwner && subChecked && (!subscription || subscription.status !== "active")) {
     return <PaywallPage user={user} onSubscribed={() => window.location.href = "/?subscribed=1"} onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }} />;
   }
 
@@ -350,6 +351,7 @@ export default function App() {
         <SettingsPage
           user={user}
           activeProfile={activeProfile}
+          isOwner={isOwner}
           onBack={() => setPage("home")}
           onGoHome={goHome}
           onProfileUpdate={updated => {
@@ -4655,7 +4657,7 @@ function DeleteAccountSection({ user, onSignOut, inline }) {
   );
 }
 
-function SettingsPage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, onAvatarChange, onSignOut }) {
+function SettingsPage({ user, activeProfile, isOwner, onBack, onGoHome, onProfileUpdate, onAvatarChange, onSignOut }) {
   const [autoplayNext, setAutoplayNext] = useState(() => getPref(PREF_AUTOPLAY_NEXT));
   const [autoplayPreviews, setAutoplayPreviews] = useState(() => getPref(PREF_AUTOPLAY_PREVIEWS));
   const [subscription, setSubscription] = useState(null);
@@ -4751,7 +4753,14 @@ function SettingsPage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, 
             <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Your plan and payment details</p>
           </div>
           <div style={cardBody}>
-            {subscription ? (
+            {isOwner ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <span style={{ background: "rgba(250,204,21,0.12)", color: "#facc15", border: "1px solid rgba(250,204,21,0.25)", borderRadius: 20, padding: "3px 12px", fontSize: 11, fontWeight: 700, letterSpacing: 0.5 }}>
+                  👑 OWNER
+                </span>
+                <p style={{ margin: 0, fontSize: 14, color: "#e5e5e5", fontWeight: 500 }}>Full access — no billing required.</p>
+              </div>
+            ) : subscription ? (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
@@ -4831,6 +4840,27 @@ function SettingsPage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, 
             </button>
           </div>
         </div>
+
+        {/* Owner panel — only visible to jacob.furlow@outlook.com */}
+        {isOwner && (
+          <div style={{ ...card, border: "1px solid rgba(250,204,21,0.2)", background: "rgba(250,204,21,0.03)" }}>
+            <div style={{ ...cardHead, borderBottom: "1px solid rgba(250,204,21,0.1)" }}>
+              <p style={{ margin: "0 0 2px", fontSize: 15, fontWeight: 600, color: "#facc15" }}>👑 Owner</p>
+              <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Tools only you can see</p>
+            </div>
+            <div style={{ ...cardBody, display: "flex", flexDirection: "column", gap: 12 }}>
+              <a href="/admin" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#0d0d0d", border: "1px solid #1e1e1e", borderRadius: 10, padding: "14px 18px", textDecoration: "none", color: "#fff" }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = "#facc15"}
+                onMouseLeave={e => e.currentTarget.style.borderColor = "#1e1e1e"}>
+                <div>
+                  <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 600 }}>Admin Dashboard</p>
+                  <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Manage content, users, and settings</p>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#facc15" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+              </a>
+            </div>
+          </div>
+        )}
 
         {/* Sign out + Delete — separate from account card */}
         <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
