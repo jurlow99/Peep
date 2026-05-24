@@ -6,6 +6,7 @@ import { supabase } from "../supabase";
 const SUPABASE_URL = "https://iuozujwtuzuwubhsnhix.supabase.co";
 const stripePromise = loadStripe("pk_live_51TYZ17RgQH3TYy3Q51H1NPxizg1dHKpdRx0Vzes5cFI1jdrkCctrYp1ulMTuZL1Obxe9QBq0oKSEAHN7QNAvSSq700rFAyMhZn");
 const FOUNDING_PRICE_ID = "price_1TafqJRgQH3TYy3QOCovduJf";
+const FOUNDING_ANNUAL_PRICE_ID = "price_1Tag3FRgQH3TYy3Ql0KuQNeA";
 const STANDARD_PRICE_ID = "price_1TZkbxRgQH3TYy3QAYrrn4Ew";
 const YELLOW = "#facc15";
 
@@ -104,7 +105,7 @@ function CheckoutForm({ user, onSignOut }) {
 
         <button type="submit" disabled={loading || !stripe}
           style={{ width: "100%", background: "#facc15", border: "none", borderRadius: 10, padding: "14px", color: "#0a0a0a", fontSize: 15, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, transition: "opacity 0.15s" }}>
-          {loading ? "Processing…" : `Subscribe — ${selectedPlan === FOUNDING_PRICE_ID ? "$2.99/mo" : "$10/mo"}`}
+          {loading ? "Processing…" : `Subscribe — ${selectedPlan === FOUNDING_PRICE_ID ? "$2.99/mo" : selectedPlan === FOUNDING_ANNUAL_PRICE_ID ? "$19.99/yr" : "$10/mo"}`}
         </button>
       </form>
 
@@ -162,10 +163,11 @@ export function PaywallPage({ user, onSubscribed, onSignOut }) {
           </div>
 
           {/* Plan selector */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 24 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 24 }}>
             {[
-              { id: FOUNDING_PRICE_ID, label: "Founding Member", price: "$2.99", badge: "LIMITED", perks: ["Ad-free forever", "Founding badge", "Lock in this price"] },
-              { id: STANDARD_PRICE_ID, label: "Standard", price: "$10", badge: null, perks: ["All content", "Cancel anytime"] },
+              { id: FOUNDING_PRICE_ID, label: "Founding Member", price: "$2.99", period: "/mo", badge: "LIMITED", perks: ["Ad-free forever", "Founding badge", "Lock in this price"] },
+              { id: FOUNDING_ANNUAL_PRICE_ID, label: "Founding Annual", price: "$19.99", period: "/yr", badge: "BEST VALUE", perks: ["Ad-free forever", "Founding badge", "Save 44%"] },
+              { id: STANDARD_PRICE_ID, label: "Standard", price: "$10", period: "/mo", badge: null, perks: ["All content", "Cancel anytime"] },
             ].map(plan => {
               const active = selectedPlan === plan.id;
               return (

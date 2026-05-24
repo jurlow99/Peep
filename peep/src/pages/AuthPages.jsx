@@ -102,6 +102,7 @@ function StrengthMeter({ password }) {
 // ─── PAYMENT STEP (inside Elements) ───────────────────────────────────────────
 
 const FOUNDING_PRICE_ID = "price_1TafqJRgQH3TYy3QOCovduJf";
+const FOUNDING_ANNUAL_PRICE_ID = "price_1Tag3FRgQH3TYy3Ql0KuQNeA";
 const STANDARD_PRICE_ID = "price_1TZkbxRgQH3TYy3QAYrrn4Ew";
 
 function PaymentStep({ email, onSuccess }) {
@@ -178,9 +179,10 @@ function PaymentStep({ email, onSuccess }) {
       <p style={{ margin: "0 0 20px", fontSize: 13, color: "#555" }}>Unlimited access to everything on Peep.</p>
 
       {/* Plan selector */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 20 }}>
         {[
-          { id: FOUNDING_PRICE_ID, label: "Founding Member", price: "$2.99", period: "/mo", badge: "LIMITED", perks: ["Ad-free forever", "Founding Member badge", "Lock in this price"] },
+          { id: FOUNDING_PRICE_ID, label: "Founding Member", price: "$2.99", period: "/mo", badge: "LIMITED", perks: ["Ad-free forever", "Founding badge", "Lock in this price"] },
+          { id: FOUNDING_ANNUAL_PRICE_ID, label: "Founding Annual", price: "$19.99", period: "/yr", badge: "BEST VALUE", perks: ["Ad-free forever", "Founding badge", "Save 44%"] },
           { id: STANDARD_PRICE_ID, label: "Standard", price: "$10", period: "/mo", badge: null, perks: ["All content", "Cancel anytime"] },
         ].map(plan => {
           const active = selectedPlan === plan.id;
@@ -216,7 +218,7 @@ function PaymentStep({ email, onSuccess }) {
         {error && <p style={{ color: "#f87171", fontSize: 13, margin: "0 0 12px" }}>{error}</p>}
         <button type="submit" disabled={loading || !stripe}
           style={{ ...btnStyle, opacity: loading || !stripe ? 0.7 : 1, cursor: loading || !stripe ? "not-allowed" : "pointer" }}>
-          {loading ? "Processing…" : `Subscribe — ${selectedPlan === FOUNDING_PRICE_ID ? "$2.99/mo" : "$10/mo"}`}
+          {loading ? "Processing…" : `Subscribe — ${selectedPlan === FOUNDING_PRICE_ID ? "$2.99/mo" : selectedPlan === FOUNDING_ANNUAL_PRICE_ID ? "$19.99/yr" : "$10/mo"}`}
         </button>
       </form>
 
