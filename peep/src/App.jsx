@@ -7,6 +7,7 @@ import { PaywallPage } from "./pages/PaywallPage";
 import { LiveTVPage } from "./pages/LiveTV";
 import { ProfileScreen, avatarForId, PRESET_AVATARS } from "./components/ProfileScreen";
 import { ProfileSelect } from "./components/ProfileSelect";
+import { CreatorDashboard } from "./pages/CreatorDashboard";
 
 class PlayerErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null }; }
@@ -60,6 +61,7 @@ export default function App() {
   const [subChecked, setSubChecked] = useState(false);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [passwordRecovery, setPasswordRecovery] = useState(false);
+  const [userRole, setUserRole] = useState(null);
   const [creatorRecord, setCreatorRecord] = useState(null);
   const [betaAck, setBetaAck] = useState(() => localStorage.getItem("peep_beta_ack") === "true");
   // Capture deep-link params before any effect clears the URL
@@ -81,8 +83,11 @@ export default function App() {
       if (session?.user) {
         const { data: blocked } = await supabase.from("blocked_users").select("id").eq("email", session.user.email).maybeSingle();
         if (blocked) { await supabase.auth.signOut(); setAuthChecked(true); return; }
-        loadAvatarId(session.user.id);
         userIdRef.current = session.user.id;
+        // Load avatar + role in one query
+        const { data: profile } = await supabase.from("profiles").select("avatar_id, role").eq("id", session.user.id).maybeSingle();
+        if (profile?.avatar_id) setUserAvatarId(profile.avatar_id);
+        setUserRole(profile?.role || "viewer");
       }
       setUser(session?.user ?? null);
       setAuthChecked(true);
@@ -95,10 +100,17 @@ export default function App() {
         supabase.from("profiles").update({ email }).eq("id", id);
         supabase.from("subscriptions").update({ email }).eq("user_id", id);
       }
-      if (_event === "SIGNED_IN") sessionStorage.removeItem("lastAdAt");
+      if (_event === "SIGNED_IN") {
+        sessionStorage.removeItem("lastAdAt");
+        if (session?.user) {
+          supabase.from("profiles").select("avatar_id, role").eq("id", session.user.id).maybeSingle()
+            .then(({ data }) => { if (data?.avatar_id) setUserAvatarId(data.avatar_id); setUserRole(data?.role || "viewer"); });
+        }
+      }
       if (!session?.user) {
         setMyList({});
         setActiveProfile(null);
+        setUserRole(null);
         if (userIdRef.current) localStorage.removeItem(`peep_profile_${userIdRef.current}`);
         userIdRef.current = null;
       } else {
@@ -108,13 +120,13 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Check if logged-in user is a creator
+  // Check if viewer-role user is also a creator partner (for in-app creator portal link)
   useEffect(() => {
-    if (!user?.email) { setCreatorRecord(null); return; }
+    if (!user?.email || userRole === "creator") { setCreatorRecord(null); return; }
     supabase.from("creators").select("id, name, email, payment_method, payment_handle, status")
       .eq("email", user.email.toLowerCase()).eq("status", "active").maybeSingle()
       .then(({ data }) => setCreatorRecord(data ?? null));
-  }, [user?.email]);
+  }, [user?.email, userRole]);
 
   // Load saved profile from localStorage when user is known
   useEffect(() => {
@@ -245,6 +257,7 @@ export default function App() {
   if (passwordRecovery) return <PasswordResetPage onDone={() => { setPasswordRecovery(false); window.location.href = "/"; }} />;
   if (!user) return <LandingPage />;
   if (!user.email_confirmed_at) return <EmailVerificationGate user={user} />;
+  if (userRole === "creator") return <CreatorDashboard user={user} onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }} />;
   if (!activeProfile) return <ProfileSelect user={user} onSelect={selectProfile} />;
   if (subChecked && (!subscription || subscription.status !== "active")) {
     return <PaywallPage user={user} onSubscribed={() => window.location.href = "/?subscribed=1"} onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }} />;

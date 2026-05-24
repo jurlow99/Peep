@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
     ] = await Promise.all([
       supabase.from("content_creators").select("*").eq("creator_id", creator.id),
       supabase.from("movies").select("id, title"),
-      supabase.from("shows").select("id, title"),
+      supabase.from("shows").select("id, title, thumbnail, poster"),
       supabase.from("podcasts").select("id, title"),
       supabase.from("creator_payouts").select("*").eq("creator_id", creator.id).order("month", { ascending: false }),
       supabase.from("episodes").select("id, show_id"),
@@ -54,11 +54,29 @@ Deno.serve(async (req) => {
 
     const contentList = (links || []).map(l => {
       let title = l.content_id;
-      if (l.content_type === "movie") title = movies?.find(m => String(m.id) === l.content_id)?.title || title;
-      if (l.content_type === "show") title = shows?.find(s => String(s.id) === l.content_id)?.title || title;
+      let thumbnail = null;
+      const show = shows?.find(s => String(s.id) === l.content_id);
+      if (l.content_type === "movie") { const m = movies?.find(m => String(m.id) === l.content_id); title = m?.title || title; }
+      if (l.content_type === "show") { title = show?.title || title; thumbnail = show?.thumbnail || show?.poster || null; }
       if (l.content_type === "podcast") title = podcasts?.find(p => String(p.id) === l.content_id)?.title || title;
-      return { id: l.id, content_type: l.content_type, content_id: l.content_id, title };
+      return { id: l.id, content_type: l.content_type, content_id: l.content_id, title, thumbnail };
     });
+
+    // Load episodes for creator's shows (for upload management)
+    const showIds = (links || []).filter(l => l.content_type === "show").map(l => l.content_id);
+    let episodesByShow: Record<string, any[]> = {};
+    if (showIds.length > 0) {
+      const { data: showEps } = await supabase
+        .from("episodes")
+        .select("id, show_id, title, episode_number, season, status, rejection_note, url, created_at")
+        .in("show_id", showIds)
+        .order("season").order("episode_number");
+      (showEps || []).forEach(ep => {
+        const key = String(ep.show_id);
+        if (!episodesByShow[key]) episodesByShow[key] = [];
+        episodesByShow[key].push(ep);
+      });
+    }
 
     // Current month watch stats
     const now = new Date();
@@ -108,6 +126,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({
       creator,
       contentList,
+      episodesByShow,
       payouts: payouts || [],
       currentMonth: {
         month: monthStart.slice(0, 7),
