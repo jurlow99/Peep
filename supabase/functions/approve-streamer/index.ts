@@ -86,6 +86,7 @@ Deno.serve(async (req) => {
       .from("live_streams")
       .insert({
         title: app.name,
+        channel_name: app.name,
         description: "",
         stream_url: hlsUrl,
         stream_key: streamKey,
@@ -101,12 +102,17 @@ Deno.serve(async (req) => {
 
     // Generate magic link → redirects to /streamer dashboard after sign-in
     const siteUrl = "https://watchpeep.tv";
-    const { data: linkData } = await supabase.auth.admin.generateLink({
-      type: "magiclink",
-      email: app.email,
-      options: { redirectTo: `${siteUrl}/streamer` },
-    });
-    const dashboardLink = linkData?.properties?.action_link ?? `${siteUrl}/streamer`;
+    let dashboardLink = `${siteUrl}/streamer`;
+    try {
+      const { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({
+        type: "magiclink",
+        email: app.email,
+        options: { redirectTo: `${siteUrl}/streamer` },
+      });
+      if (!linkErr && linkData?.properties?.action_link) {
+        dashboardLink = linkData.properties.action_link;
+      }
+    } catch (_) { /* fall back to plain /streamer link */ }
 
     // Update application status
     await supabase

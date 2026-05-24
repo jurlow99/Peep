@@ -2088,7 +2088,7 @@ function LiveCard({ stream, onPlay }) {
         )}
       </div>
       <div style={{ padding: "14px 16px" }}>
-        <p style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 600, color: "#fff" }}>{stream.title}</p>
+        <p style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 600, color: "#fff" }}>{stream.channel_name || stream.title}</p>
         {stream.now_airing && (
           <p style={{ margin: "0 0 3px", fontSize: 12, color: "#ef4444", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             Now: {stream.now_airing}

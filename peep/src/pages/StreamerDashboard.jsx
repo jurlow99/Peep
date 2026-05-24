@@ -60,7 +60,7 @@ export function StreamerDashboard() {
       .eq("user_id", userId)
       .maybeSingle();
     setStream(data ?? null);
-    if (data) setDisplayName(data.title || "");
+    if (data) setDisplayName(data.channel_name || data.title || "");
     setLoading(false);
   }
 
@@ -97,13 +97,10 @@ export function StreamerDashboard() {
     if (!displayName.trim() || !stream) return;
     setSavingName(true);
     const name = displayName.trim();
-    await Promise.all([
-      supabase.from("live_streams").update({ title: name }).eq("id", stream.id),
-      supabase.from("profiles").update({ full_name: name }).eq("id", user.id),
-    ]);
-    setStream(s => ({ ...s, title: name }));
+    await supabase.from("live_streams").update({ channel_name: name }).eq("id", stream.id);
+    setStream(s => ({ ...s, channel_name: name }));
     setSavingName(false);
-    showToast("Name updated!");
+    showToast("Channel name updated!");
   }
 
   async function signOut() {
@@ -279,7 +276,7 @@ export function StreamerDashboard() {
             />
             <button
               onClick={saveName}
-              disabled={savingName || !displayName.trim() || displayName.trim() === stream.title}
+              disabled={savingName || !displayName.trim() || displayName.trim() === (stream.channel_name || stream.title)}
               style={{ flexShrink: 0, background: YELLOW, border: "none", borderRadius: 10, padding: "12px 20px", color: "#0a0a0a", fontSize: 14, fontWeight: 700, cursor: "pointer", opacity: savingName || !displayName.trim() || displayName.trim() === stream.title ? 0.5 : 1 }}>
               {savingName ? "Saving…" : "Save"}
             </button>
