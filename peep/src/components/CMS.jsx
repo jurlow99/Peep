@@ -1142,9 +1142,10 @@ export function CMS({ onExit }) {
         // Send invite
         try {
           const { data: { session } } = await supabase.auth.getSession();
+          const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
           const invRes = await fetch(`${SUPABASE_URL}/functions/v1/invite-creator`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
             body: JSON.stringify({ name: creatorForm.name.trim(), email: creatorForm.email.trim().toLowerCase() }),
           });
           const invData = await invRes.json();
