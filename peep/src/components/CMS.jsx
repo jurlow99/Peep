@@ -950,7 +950,12 @@ export function CMS({ onExit, currentUser }) {
   }
 
   async function saveSetting(key, value) {
-    await supabase.from("app_settings").upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: "key" });
+    const { error } = await supabase.from("app_settings").upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: "key" });
+    if (error) {
+      console.error("saveSetting error:", error);
+      showToast(`Failed to save setting: ${error.message}`, "error");
+      return;
+    }
     setBossSettings(prev => ({ ...prev, [key]: value }));
   }
 
