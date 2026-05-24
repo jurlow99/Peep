@@ -140,16 +140,40 @@ export function LiveTVPage({ streams, epgEntries, onPlay }) {
       `}</style>
 
       {sorted.length === 0 ? (
-        <div style={{ padding: `80px ${PAD}`, textAlign: "center", color: "#444" }}>
-          <p style={{ fontSize: 16 }}>No channels set up yet.</p>
-          <p style={{ fontSize: 13, marginTop: 8 }}>Add live streams in the admin panel.</p>
+        <div style={{ padding: `clamp(60px, 10vw, 120px) ${PAD}`, display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
+          <style>{`@keyframes livepulse2{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.5;transform:scale(1.25);}}`}</style>
+          {/* Animated icon */}
+          <div style={{ position: "relative", marginBottom: 32 }}>
+            <div style={{ width: 80, height: 80, borderRadius: "50%", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="rgba(239,68,68,0.7)" strokeWidth="1.5">
+                <path d="M15.6 11.6A4 4 0 0 0 12 8a4 4 0 0 0-3.6 3.6" />
+                <path d="M18.4 9A8 8 0 0 0 12 6a8 8 0 0 0-6.4 3" />
+                <path d="M21.2 6.4A12 12 0 0 0 12 4a12 12 0 0 0-9.2 2.4" />
+                <circle cx="12" cy="14" r="1.5" fill="rgba(239,68,68,0.7)" stroke="none" />
+                <line x1="12" y1="15.5" x2="12" y2="20" strokeWidth="1.5" />
+              </svg>
+            </div>
+            <div style={{ position: "absolute", top: 10, right: 10, width: 10, height: 10, borderRadius: "50%", background: "#ef4444", animation: "livepulse2 2s ease-in-out infinite" }} />
+          </div>
+          <h2 style={{ margin: "0 0 12px", fontSize: "clamp(22px, 3.5vw, 32px)", fontFamily: "'DM Serif Display', serif", fontWeight: 400, color: "#fff", lineHeight: 1.2 }}>
+            No one's live right now
+          </h2>
+          <p style={{ margin: "0 0 32px", fontSize: 15, color: "#3a3a4a", maxWidth: 380, lineHeight: 1.7 }}>
+            When a creator goes live on Peep, their stream will appear here. Check back soon.
+          </p>
+          <a href="/apply-to-stream" style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 10, padding: "12px 24px", color: "#f87171", fontSize: 14, fontWeight: 600, textDecoration: "none", transition: "background 0.2s" }}
+            onMouseEnter={e => e.currentTarget.style.background = "rgba(239,68,68,0.18)"}
+            onMouseLeave={e => e.currentTarget.style.background = "rgba(239,68,68,0.1)"}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+            Apply to stream on Peep
+          </a>
         </div>
       ) : (
         <>
           {/* ── Header ── */}
           <div style={{ padding: `0 ${PAD} 32px`, display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
             <div>
-              <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(28px, 4vw, 52px)", fontWeight: 400, margin: "0 0 6px", color: "#fff", lineHeight: 1 }}>Live TV</h1>
+              <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(28px, 4vw, 52px)", fontWeight: 400, margin: "0 0 6px", color: "#fff", lineHeight: 1 }}>Streams</h1>
               <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                 <span style={{ fontSize: 13, color: "#3a3a4a" }}>{sorted.length} channel{sorted.length !== 1 ? "s" : ""}</span>
                 {totalViewers > 0 && (

@@ -499,6 +499,10 @@ export function CMS({ onExit, currentUser }) {
   }, [creatorsTab]);
 
   useEffect(() => {
+    if (liveSubTab === "applications") loadApplications();
+  }, [liveSubTab]);
+
+  useEffect(() => {
     if (tab !== "analytics") return;
     const fiveMin = setInterval(() => { loadAdAnalytics(); loadReports(); loadTodayStats(); }, 5 * 60 * 1000);
     const oneMin = setInterval(() => { loadTodayStats(); loadOnlineUsers(); }, 60 * 1000);
@@ -3631,9 +3635,15 @@ export function CMS({ onExit, currentUser }) {
             {/* Applications sub-tab */}
             {liveSubTab === "applications" && (
               <div>
-                <div style={{ marginBottom: 20 }}>
-                  <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Streamer Applications</h2>
-                  <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Approve to create a Cloudflare live input and send stream key. Reject to notify the applicant.</p>
+                <div style={{ marginBottom: 20, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                  <div>
+                    <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Streamer Applications</h2>
+                    <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Approve to create a Cloudflare live input and send stream key. Reject to notify the applicant.</p>
+                  </div>
+                  <button onClick={loadApplications} disabled={appsLoading}
+                    style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, color: "#374151", cursor: appsLoading ? "wait" : "pointer", opacity: appsLoading ? 0.6 : 1, flexShrink: 0 }}>
+                    {appsLoading ? "Refreshing…" : "↻ Refresh"}
+                  </button>
                 </div>
                 {appsLoading ? (
                   <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>Loading…</div>

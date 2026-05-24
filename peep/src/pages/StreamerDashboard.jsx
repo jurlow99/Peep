@@ -250,10 +250,16 @@ export function StreamerDashboard() {
 
         {/* OBS setup */}
         <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "24px", marginBottom: 20 }}>
-          <p style={{ margin: "0 0 16px", fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700 }}>OBS Setup</p>
+          <p style={{ margin: "0 0 12px", fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700 }}>OBS Setup</p>
+          <div style={{ background: "rgba(234,179,8,0.07)", border: "1px solid rgba(234,179,8,0.2)", borderRadius: 8, padding: "10px 14px", marginBottom: 16, display: "flex", gap: 10, alignItems: "flex-start" }}>
+            <span style={{ fontSize: 15, flexShrink: 0, marginTop: 1 }}>⚠️</span>
+            <p style={{ margin: 0, fontSize: 13, color: "#a16207", lineHeight: 1.5 }}>
+              <strong>Skip the Auto-Configuration Wizard.</strong> It only works with Twitch/YouTube and will always fail for Peep. Use the manual steps below instead.
+            </p>
+          </div>
           <ol style={{ margin: 0, paddingLeft: 18, color: "#888", fontSize: 14, lineHeight: 2.2 }}>
             <li>Open OBS → <strong style={{ color: "#ccc" }}>Settings → Stream</strong></li>
-            <li>Service: <strong style={{ color: "#ccc" }}>Custom</strong></li>
+            <li>Service: <strong style={{ color: "#ccc" }}>Custom...</strong></li>
             <li>Server: paste your <strong style={{ color: YELLOW }}>RTMP Server</strong> above</li>
             <li>Stream Key: paste your <strong style={{ color: YELLOW }}>Stream Key</strong> above</li>
             <li>Recommended: <strong style={{ color: "#ccc" }}>1080p, 6000 kbps, H.264</strong></li>
