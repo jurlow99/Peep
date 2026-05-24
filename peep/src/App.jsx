@@ -4662,6 +4662,10 @@ function SettingsPage({ user, activeProfile, isOwner, onBack, onGoHome, onProfil
   const [autoplayPreviews, setAutoplayPreviews] = useState(() => getPref(PREF_AUTOPLAY_PREVIEWS));
   const [subscription, setSubscription] = useState(null);
   const [portalLoading, setPortalLoading] = useState(false);
+  const [cancelFlow, setCancelFlow] = useState(null); // null | "confirm" | "success"
+  const [cancelMode, setCancelMode] = useState("end_of_period");
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelResult, setCancelResult] = useState(null);
   const [autoplayHero, setAutoplayHero] = useState(() => getPref(PREF_AUTOPLAY_HERO));
   const [newEmail, setNewEmail] = useState("");
   const [emailSaving, setEmailSaving] = useState(false);
@@ -4693,6 +4697,26 @@ function SettingsPage({ user, activeProfile, isOwner, onBack, onGoHome, onProfil
       alert(err.message);
     }
     setPortalLoading(false);
+  }
+
+  async function handleCancelSubscription() {
+    setCancelLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${SUPABASE_URL_SETTINGS}/functions/v1/cancel-subscription`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
+        body: JSON.stringify({ mode: cancelMode }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setCancelResult(data);
+      setCancelFlow("success");
+      setSubscription(prev => ({ ...prev, status: cancelMode === "immediate" ? "canceled" : "canceling" }));
+    } catch (err) {
+      alert(err.message);
+    }
+    setCancelLoading(false);
   }
 
   function toggleAutoplayNext(val) { setAutoplayNext(val); setPref(PREF_AUTOPLAY_NEXT, val); }
@@ -4785,15 +4809,67 @@ function SettingsPage({ user, activeProfile, isOwner, onBack, onGoHome, onProfil
                     <p style={{ margin: "4px 0 0", fontSize: 12, color: "#444" }}>Complimentary access — no billing required.</p>
                   )}
                 </div>
-                {subscription.stripe_customer_id && (
-                  <button onClick={openBillingPortal} disabled={portalLoading}
-                    style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 10, padding: "11px 22px", color: "#facc15", fontSize: 13, fontWeight: 600, cursor: portalLoading ? "not-allowed" : "pointer", opacity: portalLoading ? 0.7 : 1, whiteSpace: "nowrap", flexShrink: 0 }}>
-                    {portalLoading ? "Loading…" : "Manage Billing →"}
+                {subscription.stripe_customer_id && cancelFlow === null && (
+                  <button onClick={() => setCancelFlow("confirm")}
+                    style={{ background: "transparent", border: "1px solid #2a2a2a", borderRadius: 10, padding: "11px 22px", color: "#888", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
+                    Cancel Subscription
                   </button>
                 )}
               </div>
             ) : (
               <p style={{ margin: 0, fontSize: 14, color: "#555" }}>No active subscription.</p>
+            )}
+
+            {/* Cancel confirmation panel */}
+            {cancelFlow === "confirm" && (
+              <div style={{ marginTop: 20, background: "#0d0d0d", border: "1px solid #2a2a2a", borderRadius: 12, padding: 20 }}>
+                <p style={{ margin: "0 0 16px", fontSize: 14, fontWeight: 600, color: "#fff" }}>How would you like to cancel?</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+                  {[
+                    { id: "end_of_period", title: "Cancel at end of billing period", desc: `You'll keep access until ${subscription?.current_period_end ? new Date(subscription.current_period_end).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "your next renewal date"}. No refund.` },
+                    { id: "immediate", title: "Cancel immediately", desc: "Access ends now. You'll receive a prorated refund for the unused portion of your billing period." },
+                  ].map(opt => (
+                    <div key={opt.id} onClick={() => setCancelMode(opt.id)}
+                      style={{ border: `2px solid ${cancelMode === opt.id ? "#f87171" : "#222"}`, borderRadius: 10, padding: "14px 16px", cursor: "pointer", background: cancelMode === opt.id ? "rgba(248,113,113,0.04)" : "transparent", transition: "all 0.15s" }}>
+                      <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 600, color: cancelMode === opt.id ? "#f87171" : "#aaa" }}>{opt.title}</p>
+                      <p style={{ margin: 0, fontSize: 12, color: "#555" }}>{opt.desc}</p>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button onClick={() => setCancelFlow(null)}
+                    style={{ flex: 1, background: "transparent", border: "1px solid #2a2a2a", borderRadius: 10, padding: "12px", color: "#666", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                    Keep Subscription
+                  </button>
+                  <button onClick={handleCancelSubscription} disabled={cancelLoading}
+                    style={{ flex: 1, background: "#f87171", border: "none", borderRadius: 10, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: cancelLoading ? "not-allowed" : "pointer", opacity: cancelLoading ? 0.7 : 1 }}>
+                    {cancelLoading ? "Cancelling…" : "Confirm Cancellation"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Cancel success panel */}
+            {cancelFlow === "success" && cancelResult && (
+              <div style={{ marginTop: 20, background: "#0d0d0d", border: "1px solid #2a2a2a", borderRadius: 12, padding: 20, textAlign: "center" }}>
+                {cancelResult.mode === "immediate" ? (
+                  <>
+                    <p style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 600, color: "#fff" }}>Subscription cancelled</p>
+                    <p style={{ margin: 0, fontSize: 13, color: "#555" }}>
+                      {cancelResult.refund_issued
+                        ? `A refund of $${(cancelResult.refund_amount / 100).toFixed(2)} has been issued to your card.`
+                        : "Your subscription has been cancelled immediately."}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 600, color: "#fff" }}>Cancellation scheduled</p>
+                    <p style={{ margin: 0, fontSize: 13, color: "#555" }}>
+                      You'll keep full access until {new Date(cancelResult.access_until).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}. No charge after that.
+                    </p>
+                  </>
+                )}
+              </div>
             )}
           </div>
         </div>
