@@ -183,7 +183,7 @@ function PaymentStep({ email, onSuccess }) {
         {[
           { id: FOUNDING_PRICE_ID, label: "Founding Member", price: "$2.99", period: "/mo", badge: "LIMITED", perks: ["Ad-free forever", "Founding badge", "Lock in this price"] },
           { id: FOUNDING_ANNUAL_PRICE_ID, label: "Founding Annual", price: "$19.99", period: "/yr", badge: "BEST VALUE", perks: ["Ad-free forever", "Founding badge", "Save 44%"] },
-          { id: STANDARD_PRICE_ID, label: "Standard", price: "$10", period: "/mo", badge: null, perks: ["All content", "Cancel anytime"] },
+          { id: STANDARD_PRICE_ID, label: "Standard", price: "$10", period: "/mo", badge: "FLEXIBLE", perks: ["All content", "Cancel anytime"] },
         ].map(plan => {
           const active = selectedPlan === plan.id;
           return (
@@ -245,7 +245,9 @@ function PaymentStep({ email, onSuccess }) {
         {promoError && <p style={{ color: "#f87171", fontSize: 12, margin: "6px 0 0" }}>{promoError}</p>}
       </div>
 
-      <p style={{ margin: "16px 0 0", fontSize: 11, color: "#333", textAlign: "center" }}>Cancel anytime. Billed monthly.</p>
+      <p style={{ margin: "16px 0 0", fontSize: 11, color: "#333", textAlign: "center" }}>
+        {selectedPlan === FOUNDING_ANNUAL_PRICE_ID ? "Cancel anytime. Billed annually." : "Cancel anytime. Billed monthly."}
+      </p>
     </div>
   );
 }
