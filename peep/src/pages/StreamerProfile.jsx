@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import Hls from "hls.js";
 import { supabase } from "../supabase";
 
 const PAD = "clamp(16px, 5vw, 96px)";
@@ -10,12 +11,54 @@ const CATEGORY_LABELS = {
   education: "Education", creative: "Creative",
 };
 
-export function StreamerProfile({ onPlay }) {
+function InlinePlayer({ url, title, onClose }) {
+  const videoRef = useRef(null);
+  const hlsRef = useRef(null);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el || !url) return;
+    if (url.includes(".m3u8")) {
+      if (Hls.isSupported()) {
+        const hls = new Hls();
+        hls.loadSource(url);
+        hls.attachMedia(el);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => el.play().catch(() => {}));
+        hlsRef.current = hls;
+      } else if (el.canPlayType("application/vnd.apple.mpegurl")) {
+        el.src = url;
+        el.play().catch(() => {});
+      }
+    } else {
+      el.src = url;
+      el.play().catch(() => {});
+    }
+    return () => {
+      el.pause(); el.src = "";
+      if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
+    };
+  }, [url]);
+
+  return (
+    <div style={{ position: "sticky", top: 60, zIndex: 50, background: "#000", borderBottom: "1px solid #1e1e1e" }}>
+      <div style={{ position: "relative", maxWidth: 860, margin: "0 auto" }}>
+        <video ref={videoRef} controls style={{ width: "100%", display: "block", maxHeight: "56vw" }} />
+        <button onClick={onClose}
+          style={{ position: "absolute", top: 10, right: 10, background: "rgba(0,0,0,0.7)", border: "none", borderRadius: "50%", width: 32, height: 32, color: "#fff", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
+          ×
+        </button>
+        {title && <p style={{ margin: 0, padding: "8px 14px", fontSize: 12, color: "#888", background: "#0a0a0a" }}>{title}</p>}
+      </div>
+    </div>
+  );
+}
+
+export function StreamerProfile() {
   const username = window.location.pathname.replace("/stream/", "").replace(/\/$/, "").toLowerCase();
 
   const [stream, setStream]       = useState(null);
   const [loading, setLoading]     = useState(true);
-  const [user, setUser]           = useState(null);
+  const [activeVideo, setActiveVideo] = useState(null);
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [followers, setFollowers] = useState(0);
@@ -25,9 +68,6 @@ export function StreamerProfile({ onPlay }) {
   const [schedule, setSchedule]   = useState([]);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-    });
     loadStream();
   }, []);
 
@@ -169,6 +209,10 @@ export function StreamerProfile({ onPlay }) {
         <a href="/?nav=Streams" style={{ color: "#555", fontSize: 13, textDecoration: "none" }}>← Streams</a>
       </nav>
 
+      {activeVideo && (
+        <InlinePlayer url={activeVideo.url} title={activeVideo.title} onClose={() => setActiveVideo(null)} />
+      )}
+
       {/* Hero banner */}
       <div style={{ position: "relative", height: "clamp(180px, 28vw, 320px)", background: stream.hero_image || stream.thumbnail ? "none" : "linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #0f172a 100%)", overflow: "hidden" }}>
         {(stream.hero_image || stream.thumbnail) && (
@@ -206,7 +250,7 @@ export function StreamerProfile({ onPlay }) {
           </div>
           <div style={{ display: "flex", gap: 10 }}>
             {stream.is_live && (
-              <button onClick={() => onPlay && onPlay({ ...stream, url: stream.stream_url, _type: "live" })}
+              <button onClick={() => setActiveVideo({ url: stream.stream_url, title: `${stream.channel_name || stream.title} — Live` })}
                 style={{ background: "#ef4444", border: "none", borderRadius: 10, padding: "11px 22px", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
                 ▶ Watch Live
               </button>
@@ -272,7 +316,7 @@ export function StreamerProfile({ onPlay }) {
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 16 }}>
               {vods.map(v => (
-                <div key={v.uid} onClick={() => onPlay && onPlay({ title: v.meta?.name || "Past Stream", url: v.playback?.hls, thumbnail: v.thumbnail, _type: "vod" })}
+                <div key={v.uid} onClick={() => setActiveVideo({ url: v.playback?.hls, title: v.meta?.name || "Past Stream" })}
                   style={{ background: "#0e0e11", border: "1px solid rgba(255,255,255,0.05)", borderRadius: 12, overflow: "hidden", cursor: "pointer" }}>
                   <div style={{ position: "relative", aspectRatio: "16/9", background: "#090910" }}>
                     {v.thumbnail
