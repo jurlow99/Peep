@@ -1128,18 +1128,17 @@ export function CMS({ onExit }) {
   async function saveCreator() {
     if (!creatorForm.name.trim() || !creatorForm.email.trim()) return;
     setCreatorSaving(true);
-    const { agreement_signed_at, notes, ...rest } = creatorForm;
-    const payload = { ...rest, email: creatorForm.email.trim().toLowerCase(), notes: buildNotesWithAgreement(notes, agreement_signed_at) };
-    let error;
-    if (editingCreator) {
-      ({ error } = await supabase.from("creators").update(payload).eq("id", editingCreator.id));
-      if (!error) { showToast("Creator updated"); setCreatorModal(false); loadCreators(); }
-      else showToast(error.message, "error");
-    } else {
-      ({ error } = await supabase.from("creators").insert(payload));
-      if (!error) {
+    try {
+      const { agreement_signed_at, notes, ...rest } = creatorForm;
+      const payload = { ...rest, email: creatorForm.email.trim().toLowerCase(), notes: buildNotesWithAgreement(notes, agreement_signed_at) };
+      if (editingCreator) {
+        const { error } = await supabase.from("creators").update(payload).eq("id", editingCreator.id);
+        if (error) { showToast(error.message, "error"); return; }
+        showToast("Creator updated"); setCreatorModal(false); loadCreators();
+      } else {
+        const { error } = await supabase.from("creators").insert(payload);
+        if (error) { showToast(error.message, "error"); return; }
         setCreatorModal(false); loadCreators();
-        // Send invite email + create auth account
         const { data: { session } } = await supabase.auth.getSession();
         const invRes = await fetch(`${SUPABASE_URL}/functions/v1/invite-creator`, {
           method: "POST",
@@ -1149,11 +1148,10 @@ export function CMS({ onExit }) {
         const invData = await invRes.json();
         if (invData.error) showToast(`Creator added but invite failed: ${invData.error}`, "error");
         else showToast("Creator added — invite email sent");
-      } else {
-        showToast(error.message, "error");
       }
+    } finally {
+      setCreatorSaving(false);
     }
-    setCreatorSaving(false);
   }
 
   async function deleteCreator(id) {
