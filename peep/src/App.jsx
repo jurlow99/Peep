@@ -2597,6 +2597,11 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
   const [guideExpanded, setGuideExpanded] = useState(false);
   const [currentViewers, setCurrentViewers] = useState(0);
   const guideHideRef = useRef(null);
+  const [streamEnded, setStreamEnded] = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatSending, setChatSending] = useState(false);
+  const chatBottomRef = useRef(null);
 
   useEffect(() => {
     Promise.all([
@@ -2620,6 +2625,50 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
       if (epgRes.data) setLiveEpg(epgRes.data);
     });
   }, [isLive]);
+
+  // Cloudflare stream: subscribe to is_live changes for stream ended state
+  useEffect(() => {
+    if (!video.stream_uid) return;
+    const ch = supabase
+      .channel(`live-status-${video.id}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "live_streams", filter: `id=eq.${video.id}` },
+        ({ new: row }) => { if (!row.is_live) setStreamEnded(true); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [video.id, video.stream_uid]);
+
+  // Cloudflare stream: load and subscribe to chat messages
+  useEffect(() => {
+    if (!video.stream_uid) return;
+    supabase.from("stream_chat").select("id, message, user_id, display_name, created_at")
+      .eq("stream_id", video.id).order("created_at", { ascending: true }).limit(200)
+      .then(({ data }) => { if (data) setChatMessages(data); });
+    const ch = supabase
+      .channel(`chat-${video.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "stream_chat", filter: `stream_id=eq.${video.id}` },
+        ({ new: msg }) => {
+          setChatMessages(prev => [...prev, msg]);
+          setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [video.id, video.stream_uid]);
+
+  async function sendChat() {
+    if (!chatInput.trim() || !user || chatSending) return;
+    setChatSending(true);
+    const msg = chatInput.trim();
+    setChatInput("");
+    await supabase.from("stream_chat").insert({
+      stream_id: video.id,
+      user_id: user.id,
+      display_name: activeProfile?.name || user.email.split("@")[0],
+      message: msg,
+    });
+    setChatSending(false);
+  }
 
   useEffect(() => {
     setNextEpisode(null);
@@ -3197,6 +3246,13 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
               </video>
             )}
             <div ref={adContainerRef} style={{ position: "absolute", inset: 0, zIndex: 10, pointerEvents: adPlaying ? "auto" : "none" }} />
+            {streamEnded && (
+              <div style={{ position: "absolute", inset: 0, zIndex: 20, background: "rgba(0,0,0,0.92)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
+                <div style={{ fontSize: 52, lineHeight: 1 }}>📺</div>
+                <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#fff" }}>Stream Ended</p>
+                <p style={{ margin: 0, fontSize: 14, color: "#6b7280" }}>The streamer has disconnected.</p>
+              </div>
+            )}
           </div>
           {!getEmbedUrl(video.url) && (
             <button onClick={toggleFullscreen} title={isFullscreen ? "Exit fullscreen" : "Fullscreen"} style={{ position: "absolute", bottom: isFullscreen ? 60 : 12, right: 16, zIndex: 1000, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 7, padding: "7px 9px", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center" }}>
@@ -3334,6 +3390,55 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
                 {currentViewers.toLocaleString()} watching now
               </div>
             )}
+          </div>
+        )}
+
+        {/* Live chat — Cloudflare-managed streams only */}
+        {video.stream_uid && (
+          <div style={{ marginBottom: 24, background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, overflow: "hidden" }}>
+            <div style={{ padding: "12px 16px", borderBottom: "1px solid #1e1e1e", display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite", flexShrink: 0 }} />
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>Live Chat</span>
+            </div>
+            <div style={{ height: 280, overflowY: "auto", padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+              {chatMessages.length === 0 ? (
+                <p style={{ margin: "auto", fontSize: 13, color: "#444", textAlign: "center" }}>No messages yet. Be the first to say hi!</p>
+              ) : chatMessages.map(m => (
+                <div key={m.id} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                  <div style={{ width: 26, height: 26, borderRadius: "50%", background: "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
+                    {(m.display_name || "?")[0].toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#facc15", marginRight: 6 }}>{m.display_name || "Viewer"}</span>
+                    <span style={{ fontSize: 13, color: "#e5e5e5", wordBreak: "break-word" }}>{m.message}</span>
+                  </div>
+                </div>
+              ))}
+              <div ref={chatBottomRef} />
+            </div>
+            <div style={{ borderTop: "1px solid #1e1e1e", padding: "10px 12px", display: "flex", gap: 8 }}>
+              {user ? (
+                <>
+                  <input
+                    value={chatInput}
+                    onChange={e => setChatInput(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendChat()}
+                    placeholder="Say something…"
+                    maxLength={200}
+                    style={{ flex: 1, background: "#0d0d0d", border: "1px solid #1e1e1e", borderRadius: 8, padding: "9px 12px", color: "#fff", fontSize: 13, outline: "none", fontFamily: "inherit" }}
+                  />
+                  <button onClick={sendChat} disabled={!chatInput.trim() || chatSending}
+                    style={{ background: "#facc15", border: "none", borderRadius: 8, padding: "9px 16px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: chatInput.trim() ? "pointer" : "not-allowed", opacity: chatInput.trim() ? 1 : 0.5, flexShrink: 0 }}>
+                    Send
+                  </button>
+                </>
+              ) : (
+                <p style={{ margin: 0, fontSize: 13, color: "#555", flex: 1, textAlign: "center", padding: "8px 0" }}>
+                  <button onClick={onAuthOpen} style={{ background: "none", border: "none", color: "#facc15", cursor: "pointer", fontSize: 13, fontWeight: 600, padding: 0 }}>Sign in</button>
+                  {" "}to join the chat
+                </p>
+              )}
+            </div>
           </div>
         )}
 
