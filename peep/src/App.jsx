@@ -2658,8 +2658,16 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
 
   async function sendChat() {
     if (!chatInput.trim() || !user || chatSending) return;
-    setChatSending(true);
     const msg = chatInput.trim();
+    const bannedWords = video.banned_words || [];
+    if (bannedWords.length > 0) {
+      const lower = msg.toLowerCase();
+      if (bannedWords.some(w => lower.includes(w.toLowerCase()))) {
+        setChatInput("");
+        return;
+      }
+    }
+    setChatSending(true);
     setChatInput("");
     await supabase.from("stream_chat").insert({
       stream_id: video.id,

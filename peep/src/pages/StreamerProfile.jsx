@@ -153,6 +153,7 @@ export function StreamerProfile() {
   async function toggleFollow() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) { window.location.href = "/signin"; return; }
+    if (session.user.id === stream?.user_id) return;
 
     setFollowLoading(true);
     if (isFollowing) {

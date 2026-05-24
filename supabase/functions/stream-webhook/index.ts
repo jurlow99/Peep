@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
         .update({ is_live: true, live_started_at: new Date().toISOString() })
         .eq("stream_uid", uid)
         .select("id")
-        .single();
+        .maybeSingle();
 
       // Fire go-live notifications (non-blocking)
       if (stream?.id) {

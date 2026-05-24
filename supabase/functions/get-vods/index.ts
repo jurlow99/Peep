@@ -8,6 +8,17 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const token = authHeader.replace("Bearer ", "");
+    if (!token) throw new Error("Unauthorized");
+
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SERVICE_ROLE_KEY")!
+    );
+    const { data: { user } } = await supabase.auth.getUser(token);
+    if (!user) throw new Error("Unauthorized");
+
     const url = new URL(req.url);
     const streamUid = url.searchParams.get("stream_uid");
     if (!streamUid) throw new Error("stream_uid is required");
