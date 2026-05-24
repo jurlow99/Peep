@@ -270,7 +270,8 @@ export function SignupPage() {
     setEmailStatus("checking");
     clearTimeout(emailTimer.current);
     emailTimer.current = setTimeout(async () => {
-      const { data } = await supabase.from("profiles").select("email").eq("email", email.toLowerCase()).maybeSingle();
+      const { data, error } = await supabase.from("profiles").select("email").eq("email", email.toLowerCase()).maybeSingle();
+      if (error) { setEmailStatus(null); return; }
       setEmailStatus(data ? "taken" : null);
     }, 400);
     return () => clearTimeout(emailTimer.current);
