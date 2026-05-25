@@ -56,36 +56,37 @@ function InlinePlayer({ url, title, onClose }) {
 export function StreamerProfile() {
   const username = window.location.pathname.replace("/stream/", "").replace(/\/$/, "").toLowerCase();
 
-  const [stream, setStream]       = useState(null);
-  const [loading, setLoading]     = useState(true);
+  const [stream, setStream]           = useState(null);
+  const [loading, setLoading]         = useState(true);
   const [activeVideo, setActiveVideo] = useState(null);
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
-  const [followers, setFollowers] = useState(0);
-  const [viewers, setViewers]     = useState(0);
-  const [vods, setVods]           = useState([]);
+  const [followers, setFollowers]     = useState(0);
+  const [viewers, setViewers]         = useState(0);
+  const [vods, setVods]               = useState([]);
   const [vodsLoading, setVodsLoading] = useState(false);
-  const [schedule, setSchedule]   = useState([]);
+  const [schedule, setSchedule]       = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // Chat state
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput]       = useState("");
+  const [chatSending, setChatSending]   = useState(false);
+  const chatBottomRef = useRef(null);
 
   useEffect(() => {
     loadStream();
+    supabase.auth.getSession().then(({ data: { session } }) => setCurrentUser(session?.user ?? null));
   }, []);
 
   async function loadStream() {
-    // Match by channel_name slug
-    const { data: streams } = await supabase
-      .from("live_streams")
-      .select("*")
-      .order("id");
-
+    const { data: streams } = await supabase.from("live_streams").select("*").order("id");
     const match = streams?.find(s => {
       const slug = (s.channel_name || s.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
       return slug === username;
     });
-
     setStream(match ?? null);
     setLoading(false);
-
     if (match) {
       loadFollowers(match.id);
       loadViewers(match.id);
@@ -94,43 +95,97 @@ export function StreamerProfile() {
     }
   }
 
+  // Viewer heartbeat — fires while InlinePlayer is open and stream is live
+  useEffect(() => {
+    if (!activeVideo || !stream?.is_live || !stream?.id) return;
+    const sid = Math.random().toString(36).slice(2);
+    const ping = () => supabase.from("live_viewers").upsert(
+      { session_id: sid, channel_id: stream.id, last_ping: new Date().toISOString() },
+      { onConflict: "session_id" }
+    );
+    ping();
+    const t = setInterval(ping, 30000);
+    return () => {
+      clearInterval(t);
+      supabase.from("live_viewers").delete().eq("session_id", sid);
+    };
+  }, [activeVideo, stream?.is_live, stream?.id]);
+
+  // Refresh viewer count every 30s while live
+  useEffect(() => {
+    if (!stream?.id || !stream?.is_live) return;
+    const t = setInterval(() => loadViewers(stream.id), 30000);
+    return () => clearInterval(t);
+  }, [stream?.id, stream?.is_live]);
+
+  // Chat — load history + subscribe to new messages while watching live
+  useEffect(() => {
+    if (!activeVideo || !stream?.is_live || !stream?.id) {
+      setChatMessages([]);
+      return;
+    }
+    supabase.from("stream_chat")
+      .select("id, message, user_id, display_name, created_at")
+      .eq("stream_id", stream.id)
+      .order("created_at", { ascending: true })
+      .limit(200)
+      .then(({ data }) => { if (data) setChatMessages(data); });
+
+    const ch = supabase
+      .channel(`profile-chat-${stream.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "stream_chat", filter: `stream_id=eq.${stream.id}` },
+        ({ new: msg }) => {
+          setChatMessages(prev => [...prev, msg]);
+          setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [activeVideo, stream?.is_live, stream?.id]);
+
+  async function sendChat() {
+    if (!chatInput.trim() || !currentUser || chatSending) return;
+    const msg = chatInput.trim();
+    const bannedWords = stream?.banned_words || [];
+    if (bannedWords.length > 0 && bannedWords.some(w => msg.toLowerCase().includes(w.toLowerCase()))) {
+      setChatInput("");
+      return;
+    }
+    setChatSending(true);
+    setChatInput("");
+    await supabase.from("stream_chat").insert({
+      stream_id: stream.id,
+      user_id: currentUser.id,
+      display_name: currentUser.user_metadata?.full_name || currentUser.email?.split("@")[0] || "Viewer",
+      message: msg,
+    });
+    setChatSending(false);
+  }
+
   async function loadFollowers(streamId) {
     const { count } = await supabase
-      .from("streamer_follows")
-      .select("*", { count: "exact", head: true })
-      .eq("stream_id", streamId);
+      .from("streamer_follows").select("*", { count: "exact", head: true }).eq("stream_id", streamId);
     setFollowers(count ?? 0);
-
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
-      const { data } = await supabase
-        .from("streamer_follows")
-        .select("id")
-        .eq("stream_id", streamId)
-        .eq("follower_id", session.user.id)
-        .maybeSingle();
+      const { data } = await supabase.from("streamer_follows").select("id")
+        .eq("stream_id", streamId).eq("follower_id", session.user.id).maybeSingle();
       setIsFollowing(!!data);
     }
   }
 
   async function loadViewers(streamId) {
     const cutoff = new Date(Date.now() - 90000).toISOString();
-    const { count } = await supabase
-      .from("live_viewers")
+    const { count } = await supabase.from("live_viewers")
       .select("*", { count: "exact", head: true })
-      .eq("channel_id", streamId)
-      .gte("last_ping", cutoff);
+      .eq("channel_id", streamId).gte("last_ping", cutoff);
     setViewers(count ?? 0);
   }
 
   async function loadSchedule(streamId) {
-    const { data } = await supabase
-      .from("stream_schedule")
-      .select("*")
-      .eq("stream_id", streamId)
-      .gte("scheduled_at", new Date().toISOString())
-      .order("scheduled_at")
-      .limit(5);
+    const { data } = await supabase.from("stream_schedule").select("*")
+      .eq("stream_id", streamId).gte("scheduled_at", new Date().toISOString())
+      .order("scheduled_at").limit(5);
     setSchedule(data || []);
   }
 
@@ -154,18 +209,14 @@ export function StreamerProfile() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) { window.location.href = "/signin"; return; }
     if (session.user.id === stream?.user_id) return;
-
     setFollowLoading(true);
     if (isFollowing) {
-      await supabase.from("streamer_follows")
-        .delete()
-        .eq("stream_id", stream.id)
-        .eq("follower_id", session.user.id);
+      await supabase.from("streamer_follows").delete()
+        .eq("stream_id", stream.id).eq("follower_id", session.user.id);
       setIsFollowing(false);
       setFollowers(f => Math.max(0, f - 1));
     } else {
-      await supabase.from("streamer_follows")
-        .insert({ stream_id: stream.id, follower_id: session.user.id });
+      await supabase.from("streamer_follows").insert({ stream_id: stream.id, follower_id: session.user.id });
       setIsFollowing(true);
       setFollowers(f => f + 1);
     }
@@ -194,6 +245,8 @@ export function StreamerProfile() {
     );
   }
 
+  const isWatchingLive = !!activeVideo && stream.is_live;
+
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
       <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
@@ -210,8 +263,53 @@ export function StreamerProfile() {
         <a href="/?nav=Streams" style={{ color: "#555", fontSize: 13, textDecoration: "none" }}>← Streams</a>
       </nav>
 
+      {/* Inline player + live chat */}
       {activeVideo && (
-        <InlinePlayer url={activeVideo.url} title={activeVideo.title} onClose={() => setActiveVideo(null)} />
+        <>
+          <InlinePlayer url={activeVideo.url} title={activeVideo.title} onClose={() => setActiveVideo(null)} />
+
+          {/* Live chat — only shown when watching live, not VODs */}
+          {isWatchingLive && (
+            <div style={{ background: "#0a0a0a", borderBottom: "1px solid #1e1e1e" }}>
+              <div style={{ maxWidth: 860, margin: "0 auto", padding: "0 0 12px" }}>
+                <div style={{ height: 180, overflowY: "auto", padding: "10px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
+                  {chatMessages.length === 0 && (
+                    <p style={{ color: "#2a2a2a", fontSize: 12, margin: "auto 0" }}>No messages yet — say something!</p>
+                  )}
+                  {chatMessages.map(m => (
+                    <div key={m.id} style={{ fontSize: 13, lineHeight: 1.5 }}>
+                      <span style={{ color: YELLOW, fontWeight: 600, marginRight: 6 }}>{m.display_name}</span>
+                      <span style={{ color: "#aaa" }}>{m.message}</span>
+                    </div>
+                  ))}
+                  <div ref={chatBottomRef} />
+                </div>
+                <div style={{ padding: "0 14px" }}>
+                  {currentUser ? (
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <input
+                        value={chatInput}
+                        onChange={e => setChatInput(e.target.value)}
+                        onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendChat()}
+                        placeholder="Say something…"
+                        maxLength={300}
+                        style={{ flex: 1, background: "#111", border: "1px solid #1e1e1e", borderRadius: 8, padding: "9px 12px", color: "#fff", fontSize: 13, outline: "none", fontFamily: "inherit" }}
+                      />
+                      <button onClick={sendChat} disabled={!chatInput.trim() || chatSending}
+                        style={{ background: YELLOW, border: "none", borderRadius: 8, padding: "9px 16px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: !chatInput.trim() || chatSending ? "not-allowed" : "pointer", opacity: !chatInput.trim() || chatSending ? 0.5 : 1 }}>
+                        Send
+                      </button>
+                    </div>
+                  ) : (
+                    <a href="/signin" style={{ display: "block", textAlign: "center", color: "#444", fontSize: 12, textDecoration: "none" }}>
+                      <span style={{ color: YELLOW }}>Sign in</span> to chat
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Hero banner */}
@@ -309,7 +407,6 @@ export function StreamerProfile() {
             <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: "#3a3a4a", letterSpacing: "0.12em", textTransform: "uppercase" }}>Past Streams</p>
             <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.04)" }} />
           </div>
-
           {vodsLoading ? (
             <p style={{ color: "#333", fontSize: 13 }}>Loading past streams…</p>
           ) : vods.length === 0 ? (
