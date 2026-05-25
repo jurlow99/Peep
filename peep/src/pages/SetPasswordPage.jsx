@@ -74,8 +74,10 @@ export function SetPasswordPage() {
       setError(error.message);
       setLoading(false);
     } else {
+      // Refresh session so new tokens are committed before navigating away
+      await supabase.auth.refreshSession();
       setDone(true);
-      setTimeout(() => { window.location.href = "/streamer"; }, 2000);
+      setTimeout(() => { window.location.href = "/streamer"; }, 1500);
     }
   }
 
