@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import Hls from "hls.js";
 import { supabase } from "../supabase";
 
-const PAD = "clamp(16px, 5vw, 96px)";
 const YELLOW = "#facc15";
+const CHAT_WIDTH = 340;
 
 const CATEGORY_LABELS = {
   general: "General", gaming: "Gaming", music: "Music",
@@ -11,46 +11,30 @@ const CATEGORY_LABELS = {
   education: "Education", creative: "Creative",
 };
 
-function InlinePlayer({ url, title, onClose }) {
-  const videoRef = useRef(null);
+function VideoPlayer({ url, style = {} }) {
+  const ref = useRef(null);
   const hlsRef = useRef(null);
-
   useEffect(() => {
-    const el = videoRef.current;
+    const el = ref.current;
     if (!el || !url) return;
     if (url.includes(".m3u8")) {
       if (Hls.isSupported()) {
-        const hls = new Hls();
-        hls.loadSource(url);
-        hls.attachMedia(el);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => el.play().catch(() => {}));
-        hlsRef.current = hls;
+        const h = new Hls();
+        h.loadSource(url); h.attachMedia(el);
+        h.on(Hls.Events.MANIFEST_PARSED, () => el.play().catch(() => {}));
+        hlsRef.current = h;
       } else if (el.canPlayType("application/vnd.apple.mpegurl")) {
-        el.src = url;
-        el.play().catch(() => {});
+        el.src = url; el.play().catch(() => {});
       }
     } else {
-      el.src = url;
-      el.play().catch(() => {});
+      el.src = url; el.play().catch(() => {});
     }
     return () => {
       el.pause(); el.src = "";
-      if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
+      hlsRef.current?.destroy(); hlsRef.current = null;
     };
   }, [url]);
-
-  return (
-    <div style={{ position: "sticky", top: 60, zIndex: 50, background: "#000", borderBottom: "1px solid #1e1e1e" }}>
-      <div style={{ position: "relative", maxWidth: 860, margin: "0 auto" }}>
-        <video ref={videoRef} controls style={{ width: "100%", display: "block", maxHeight: "56vw" }} />
-        <button onClick={onClose}
-          style={{ position: "absolute", top: 10, right: 10, background: "rgba(0,0,0,0.7)", border: "none", borderRadius: "50%", width: 32, height: 32, color: "#fff", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
-          ×
-        </button>
-        {title && <p style={{ margin: 0, padding: "8px 14px", fontSize: 12, color: "#888", background: "#0a0a0a" }}>{title}</p>}
-      </div>
-    </div>
-  );
+  return <video ref={ref} controls style={{ display: "block", background: "#000", ...style }} />;
 }
 
 export function StreamerProfile() {
@@ -58,7 +42,7 @@ export function StreamerProfile() {
 
   const [stream, setStream]           = useState(null);
   const [loading, setLoading]         = useState(true);
-  const [activeVideo, setActiveVideo] = useState(null);
+  const [vodPlaying, setVodPlaying]   = useState(null);
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [followers, setFollowers]     = useState(0);
@@ -67,11 +51,9 @@ export function StreamerProfile() {
   const [vodsLoading, setVodsLoading] = useState(false);
   const [schedule, setSchedule]       = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
-
-  // Chat state
   const [chatMessages, setChatMessages] = useState([]);
-  const [chatInput, setChatInput]       = useState("");
-  const [chatSending, setChatSending]   = useState(false);
+  const [chatInput, setChatInput]     = useState("");
+  const [chatSending, setChatSending] = useState(false);
   const chatBottomRef = useRef(null);
 
   useEffect(() => {
@@ -95,9 +77,9 @@ export function StreamerProfile() {
     }
   }
 
-  // Viewer heartbeat — fires while InlinePlayer is open and stream is live
+  // Heartbeat — count everyone viewing the page while live
   useEffect(() => {
-    if (!activeVideo || !stream?.is_live || !stream?.id) return;
+    if (!stream?.is_live || !stream?.id) return;
     const sid = Math.random().toString(36).slice(2);
     const ping = () => supabase.from("live_viewers").upsert(
       { session_id: sid, channel_id: stream.id, last_ping: new Date().toISOString() },
@@ -105,57 +87,45 @@ export function StreamerProfile() {
     );
     ping();
     const t = setInterval(ping, 30000);
-    return () => {
-      clearInterval(t);
-      supabase.from("live_viewers").delete().eq("session_id", sid);
-    };
-  }, [activeVideo, stream?.is_live, stream?.id]);
+    return () => { clearInterval(t); supabase.from("live_viewers").delete().eq("session_id", sid); };
+  }, [stream?.id, stream?.is_live]);
 
-  // Refresh viewer count every 30s while live
+  // Refresh viewer count
   useEffect(() => {
     if (!stream?.id || !stream?.is_live) return;
     const t = setInterval(() => loadViewers(stream.id), 30000);
     return () => clearInterval(t);
   }, [stream?.id, stream?.is_live]);
 
-  // Chat — load history + subscribe to new messages while watching live
+  // Chat subscription
   useEffect(() => {
-    if (!activeVideo || !stream?.is_live || !stream?.id) {
-      setChatMessages([]);
-      return;
-    }
+    if (!stream?.is_live || !stream?.id) { setChatMessages([]); return; }
     supabase.from("stream_chat")
       .select("id, message, user_id, display_name, created_at")
       .eq("stream_id", stream.id)
       .order("created_at", { ascending: true })
       .limit(200)
       .then(({ data }) => { if (data) setChatMessages(data); });
-
-    const ch = supabase
-      .channel(`profile-chat-${stream.id}`)
+    const ch = supabase.channel(`chat-${stream.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "stream_chat", filter: `stream_id=eq.${stream.id}` },
         ({ new: msg }) => {
           setChatMessages(prev => [...prev, msg]);
           setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
         }
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [activeVideo, stream?.is_live, stream?.id]);
+      ).subscribe();
+    return () => supabase.removeChannel(ch);
+  }, [stream?.id, stream?.is_live]);
 
   async function sendChat() {
     if (!chatInput.trim() || !currentUser || chatSending) return;
     const msg = chatInput.trim();
-    const bannedWords = stream?.banned_words || [];
-    if (bannedWords.length > 0 && bannedWords.some(w => msg.toLowerCase().includes(w.toLowerCase()))) {
-      setChatInput("");
-      return;
+    const banned = stream?.banned_words || [];
+    if (banned.length > 0 && banned.some(w => msg.toLowerCase().includes(w.toLowerCase()))) {
+      setChatInput(""); return;
     }
-    setChatSending(true);
-    setChatInput("");
+    setChatSending(true); setChatInput("");
     await supabase.from("stream_chat").insert({
-      stream_id: stream.id,
-      user_id: currentUser.id,
+      stream_id: stream.id, user_id: currentUser.id,
       display_name: currentUser.user_metadata?.full_name || currentUser.email?.split("@")[0] || "Viewer",
       message: msg,
     });
@@ -163,8 +133,8 @@ export function StreamerProfile() {
   }
 
   async function loadFollowers(streamId) {
-    const { count } = await supabase
-      .from("streamer_follows").select("*", { count: "exact", head: true }).eq("stream_id", streamId);
+    const { count } = await supabase.from("streamer_follows")
+      .select("*", { count: "exact", head: true }).eq("stream_id", streamId);
     setFollowers(count ?? 0);
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
@@ -213,12 +183,10 @@ export function StreamerProfile() {
     if (isFollowing) {
       await supabase.from("streamer_follows").delete()
         .eq("stream_id", stream.id).eq("follower_id", session.user.id);
-      setIsFollowing(false);
-      setFollowers(f => Math.max(0, f - 1));
+      setIsFollowing(false); setFollowers(f => Math.max(0, f - 1));
     } else {
       await supabase.from("streamer_follows").insert({ stream_id: stream.id, follower_id: session.user.id });
-      setIsFollowing(true);
-      setFollowers(f => f + 1);
+      setIsFollowing(true); setFollowers(f => f + 1);
     }
     setFollowLoading(false);
   }
@@ -243,154 +211,183 @@ export function StreamerProfile() {
     );
   }
 
-  const isWatchingLive = !!activeVideo && stream.is_live;
+  const channelName = stream.channel_name || stream.title;
+  const avatarLetter = channelName[0]?.toUpperCase() || "?";
+
+  const FollowBtn = () => (
+    <button onClick={toggleFollow} disabled={followLoading}
+      style={{ background: isFollowing ? "rgba(255,255,255,0.06)" : YELLOW, border: isFollowing ? "1px solid #282828" : "none", borderRadius: 8, padding: "9px 22px", color: isFollowing ? "#888" : "#0a0a0a", fontSize: 14, fontWeight: 700, cursor: "pointer", transition: "all 0.15s", flexShrink: 0 }}>
+      {followLoading ? "…" : isFollowing ? "Following" : "+ Follow"}
+    </button>
+  );
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
-      <style>{`
-        @keyframes livepulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(1.3)} }
-        @keyframes spin { to { transform: rotate(360deg); } }
-      `}</style>
+      <style>{`@keyframes livepulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.3)}}`}</style>
 
       {/* Nav */}
-      <nav style={{ position: "sticky", top: 0, zIndex: 100, height: 60, display: "flex", alignItems: "center", padding: `0 ${PAD}`, background: "rgba(10,10,10,0.95)", backdropFilter: "blur(12px)", borderBottom: "1px solid #1e1e1e", justifyContent: "space-between" }}>
+      <nav style={{ position: "sticky", top: 0, zIndex: 100, height: 52, display: "flex", alignItems: "center", padding: "0 18px", background: "#0a0a0a", borderBottom: "1px solid #1a1a1a", justifyContent: "space-between" }}>
         <a href="/" style={{ textDecoration: "none" }}>
           <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, color: YELLOW }}>peep.</span>
         </a>
         <a href="/?nav=Streams" style={{ color: "#555", fontSize: 13, textDecoration: "none" }}>← Streams</a>
       </nav>
 
-      {/* Inline player + live chat */}
-      {activeVideo && (
+      {stream.is_live ? (
+        /* ── LIVE LAYOUT ── */
         <>
-          <InlinePlayer url={activeVideo.url} title={activeVideo.title} onClose={() => setActiveVideo(null)} />
+          {/* Player + Chat side by side */}
+          <div style={{ display: "flex", background: "#000", borderBottom: "1px solid #1a1a1a" }}>
+            {/* Video fills remaining width */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <VideoPlayer
+                key={stream.stream_url}
+                url={stream.stream_url}
+                style={{ width: "100%", aspectRatio: "16/9" }}
+              />
+            </div>
 
-          {/* Live chat — only shown when watching live, not VODs */}
-          {isWatchingLive && (
-            <div style={{ background: "#0a0a0a", borderBottom: "1px solid #1e1e1e" }}>
-              <div style={{ maxWidth: 860, margin: "0 auto", padding: "0 0 12px" }}>
-                <div style={{ height: 180, overflowY: "auto", padding: "10px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
-                  {chatMessages.length === 0 && (
-                    <p style={{ color: "#2a2a2a", fontSize: 12, margin: "auto 0" }}>No messages yet — say something!</p>
-                  )}
-                  {chatMessages.map(m => (
-                    <div key={m.id} style={{ fontSize: 13, lineHeight: 1.5 }}>
-                      <span style={{ color: YELLOW, fontWeight: 600, marginRight: 6 }}>{m.display_name}</span>
-                      <span style={{ color: "#aaa" }}>{m.message}</span>
+            {/* Chat sidebar */}
+            <div style={{ width: CHAT_WIDTH, flexShrink: 0, display: "flex", flexDirection: "column", borderLeft: "1px solid #1a1a1a", background: "#0d0d0d" }}>
+              <div style={{ padding: "10px 14px", borderBottom: "1px solid #1a1a1a", display: "flex", alignItems: "center", gap: 7 }}>
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite", flexShrink: 0 }} />
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#fff", letterSpacing: 0.5 }}>LIVE CHAT</span>
+              </div>
+
+              <div style={{ flex: 1, overflowY: "auto", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 5 }}>
+                {chatMessages.length === 0
+                  ? <p style={{ color: "#282828", fontSize: 12, margin: "auto 0", textAlign: "center" }}>No messages yet</p>
+                  : chatMessages.map(m => (
+                    <div key={m.id} style={{ fontSize: 13, lineHeight: 1.55, wordBreak: "break-word" }}>
+                      <span style={{ color: YELLOW, fontWeight: 600, marginRight: 5 }}>{m.display_name}:</span>
+                      <span style={{ color: "#ccc" }}>{m.message}</span>
                     </div>
-                  ))}
-                  <div ref={chatBottomRef} />
-                </div>
-                <div style={{ padding: "0 14px" }}>
-                  {currentUser ? (
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <input
-                        value={chatInput}
-                        onChange={e => setChatInput(e.target.value)}
-                        onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendChat()}
-                        placeholder="Say something…"
-                        maxLength={300}
-                        style={{ flex: 1, background: "#111", border: "1px solid #1e1e1e", borderRadius: 8, padding: "9px 12px", color: "#fff", fontSize: 13, outline: "none", fontFamily: "inherit" }}
-                      />
-                      <button onClick={sendChat} disabled={!chatInput.trim() || chatSending}
-                        style={{ background: YELLOW, border: "none", borderRadius: 8, padding: "9px 16px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: !chatInput.trim() || chatSending ? "not-allowed" : "pointer", opacity: !chatInput.trim() || chatSending ? 0.5 : 1 }}>
-                        Send
-                      </button>
-                    </div>
-                  ) : (
-                    <a href="/signin" style={{ display: "block", textAlign: "center", color: "#444", fontSize: 12, textDecoration: "none" }}>
-                      <span style={{ color: YELLOW }}>Sign in</span> to chat
-                    </a>
-                  )}
-                </div>
+                  ))
+                }
+                <div ref={chatBottomRef} />
+              </div>
+
+              <div style={{ padding: "10px 12px", borderTop: "1px solid #1a1a1a" }}>
+                {currentUser ? (
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <input
+                      value={chatInput}
+                      onChange={e => setChatInput(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendChat()}
+                      placeholder="Say something…"
+                      maxLength={300}
+                      style={{ flex: 1, background: "#111", border: "1px solid #1e1e1e", borderRadius: 6, padding: "8px 10px", color: "#fff", fontSize: 13, outline: "none", fontFamily: "inherit", minWidth: 0 }}
+                    />
+                    <button onClick={sendChat} disabled={!chatInput.trim() || chatSending}
+                      style={{ background: YELLOW, border: "none", borderRadius: 6, padding: "8px 12px", color: "#0a0a0a", fontSize: 12, fontWeight: 700, cursor: !chatInput.trim() || chatSending ? "not-allowed" : "pointer", opacity: !chatInput.trim() || chatSending ? 0.5 : 1, flexShrink: 0 }}>
+                      Send
+                    </button>
+                  </div>
+                ) : (
+                  <a href="/signin" style={{ display: "block", textAlign: "center", color: "#444", fontSize: 12, textDecoration: "none", padding: "4px 0" }}>
+                    <span style={{ color: YELLOW }}>Sign in</span> to chat
+                  </a>
+                )}
               </div>
             </div>
-          )}
+          </div>
+
+          {/* Channel info bar */}
+          <div style={{ padding: "14px 20px", borderBottom: "1px solid #1a1a1a", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+            <div style={{ width: 42, height: 42, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
+              {avatarLetter}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 2 }}>
+                <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#fff" }}>{channelName}</h1>
+                {stream.category && stream.category !== "general" && (
+                  <span style={{ fontSize: 11, color: "#666", background: "#111", border: "1px solid #1e1e1e", borderRadius: 4, padding: "2px 8px" }}>
+                    {CATEGORY_LABELS[stream.category] || stream.category}
+                  </span>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                {stream.stream_title && (
+                  <span style={{ fontSize: 13, color: "#888" }}>{stream.stream_title}</span>
+                )}
+                <span style={{ fontSize: 13, color: "#555" }}>
+                  <strong style={{ color: "#ddd" }}>{followers.toLocaleString()}</strong> followers
+                </span>
+                {viewers > 0 && (
+                  <span style={{ fontSize: 13, color: "#555" }}>
+                    <strong style={{ color: "#ef4444" }}>{viewers.toLocaleString()}</strong> watching
+                  </span>
+                )}
+              </div>
+            </div>
+            <FollowBtn />
+          </div>
+        </>
+      ) : (
+        /* ── OFFLINE LAYOUT ── */
+        <>
+          {/* Hero */}
+          <div style={{ position: "relative", height: "clamp(140px, 18vw, 220px)", background: "#0e0e0e", overflow: "hidden", borderBottom: "1px solid #1a1a1a" }}>
+            {(stream.hero_image || stream.thumbnail) && (
+              <img src={stream.hero_image || stream.thumbnail} alt=""
+                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.3)" }} />
+            )}
+            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, #0a0a0a 0%, transparent 70%)" }} />
+          </div>
+
+          {/* Channel info */}
+          <div style={{ padding: "18px 22px", borderBottom: "1px solid #1a1a1a", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginTop: -28, position: "relative", zIndex: 2 }}>
+            <div style={{ width: 56, height: 56, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 700, color: "#fff", flexShrink: 0, border: "3px solid #0a0a0a" }}>
+              {avatarLetter}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <h1 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#fff" }}>{channelName}</h1>
+              <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 13, color: "#555" }}>
+                  <strong style={{ color: "#ddd" }}>{followers.toLocaleString()}</strong> followers
+                </span>
+                {stream.category && stream.category !== "general" && (
+                  <span style={{ fontSize: 13, color: "#555" }}>{CATEGORY_LABELS[stream.category] || stream.category}</span>
+                )}
+                <span style={{ fontSize: 13, color: "#333" }}>Offline</span>
+              </div>
+            </div>
+            <FollowBtn />
+          </div>
         </>
       )}
 
-      {/* Hero banner */}
-      <div style={{ position: "relative", height: "clamp(180px, 28vw, 320px)", background: stream.hero_image || stream.thumbnail ? "none" : "linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #0f172a 100%)", overflow: "hidden" }}>
-        {(stream.hero_image || stream.thumbnail) && (
-          <img src={stream.hero_image || stream.thumbnail} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.4) saturate(1.1)" }} />
-        )}
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, #0a0a0a 0%, transparent 60%)" }} />
-        {stream.is_live && (
-          <div style={{ position: "absolute", top: 20, left: PAD, display: "flex", alignItems: "center", gap: 6, background: "rgba(239,68,68,0.9)", borderRadius: 6, padding: "5px 12px" }}>
-            <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#fff", animation: "livepulse 1.5s infinite" }} />
-            <span style={{ fontSize: 11, fontWeight: 800, color: "#fff", letterSpacing: 1 }}>LIVE NOW</span>
-          </div>
-        )}
-      </div>
-
-      {/* Profile info */}
-      <div style={{ padding: `0 ${PAD}`, marginTop: -60, position: "relative", zIndex: 2, marginBottom: 48 }}>
-        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
-          <div>
-            <h1 style={{ margin: "0 0 8px", fontSize: "clamp(24px, 4vw, 42px)", fontFamily: "'DM Serif Display', serif", fontWeight: 400, color: "#fff", lineHeight: 1 }}>
-              {stream.channel_name || stream.title}
-            </h1>
-            <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 13, color: "#555" }}>
-                <strong style={{ color: "#fff" }}>{followers.toLocaleString()}</strong> followers
-              </span>
-              {stream.is_live && viewers > 0 && (
-                <span style={{ fontSize: 13, color: "#555" }}>
-                  <strong style={{ color: "#ef4444" }}>{viewers.toLocaleString()}</strong> watching now
-                </span>
-              )}
-              {stream.category && stream.category !== "general" && (
-                <span style={{ fontSize: 13, color: "#555" }}>{CATEGORY_LABELS[stream.category] || stream.category}</span>
-              )}
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: 10 }}>
-            {stream.is_live && (
-              <button onClick={() => setActiveVideo({ url: stream.stream_url, title: `${stream.channel_name || stream.title} — Live` })}
-                style={{ background: "#ef4444", border: "none", borderRadius: 10, padding: "11px 22px", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-                ▶ Watch Live
-              </button>
-            )}
-            <button onClick={toggleFollow} disabled={followLoading}
-              style={{ background: isFollowing ? "rgba(255,255,255,0.07)" : YELLOW, border: isFollowing ? "1px solid #333" : "none", borderRadius: 10, padding: "11px 22px", color: isFollowing ? "#888" : "#0a0a0a", fontSize: 14, fontWeight: 700, cursor: "pointer", transition: "all 0.2s" }}>
-              {followLoading ? "…" : isFollowing ? "Following" : "+ Follow"}
-            </button>
-          </div>
+      {/* VOD player (offline only) */}
+      {vodPlaying && !stream.is_live && (
+        <div style={{ position: "relative", background: "#000", borderBottom: "1px solid #1a1a1a" }}>
+          <VideoPlayer key={vodPlaying.url} url={vodPlaying.url} style={{ width: "100%", maxHeight: "60vh" }} />
+          <button onClick={() => setVodPlaying(null)}
+            style={{ position: "absolute", top: 10, right: 10, background: "rgba(0,0,0,0.75)", border: "none", borderRadius: "50%", width: 32, height: 32, color: "#fff", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>×</button>
+          {vodPlaying.title && (
+            <p style={{ margin: 0, padding: "8px 16px", fontSize: 12, color: "#555", background: "#0a0a0a", borderBottom: "1px solid #1a1a1a" }}>{vodPlaying.title}</p>
+          )}
         </div>
+      )}
 
-        {stream.stream_title && stream.is_live && (
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.04)", border: "1px solid #1e1e1e", borderRadius: 8, padding: "8px 14px" }}>
-            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite" }} />
-            <span style={{ fontSize: 13, color: "#ccc" }}>{stream.stream_title}</span>
-          </div>
-        )}
-      </div>
-
-      <div style={{ padding: `0 ${PAD} 80px` }}>
+      {/* Content */}
+      <div style={{ padding: "28px 22px 80px" }}>
 
         {/* Upcoming schedule */}
         {schedule.length > 0 && (
-          <div style={{ marginBottom: 52 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
-              <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: "#3a3a4a", letterSpacing: "0.12em", textTransform: "uppercase" }}>Upcoming</p>
-              <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.04)" }} />
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ marginBottom: 44 }}>
+            <p style={{ margin: "0 0 12px", fontSize: 11, fontWeight: 700, color: "#333", letterSpacing: "0.12em", textTransform: "uppercase" }}>Upcoming</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {schedule.map(s => {
                 const d = new Date(s.scheduled_at);
                 return (
-                  <div key={s.id} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                  <div key={s.id} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
                     <div>
-                      <p style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 600, color: "#fff" }}>{s.title}</p>
+                      <p style={{ margin: "0 0 3px", fontSize: 14, fontWeight: 600, color: "#fff" }}>{s.title}</p>
                       <p style={{ margin: 0, fontSize: 12, color: "#555" }}>
-                        {d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
-                        {" at "}
-                        {d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
+                        {d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })} at {d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
                       </p>
                     </div>
-                    <div style={{ background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.15)", borderRadius: 6, padding: "4px 10px", fontSize: 11, color: "#a16207", fontWeight: 600 }}>
-                      Scheduled
-                    </div>
+                    <div style={{ background: "rgba(250,204,21,0.07)", border: "1px solid rgba(250,204,21,0.15)", borderRadius: 6, padding: "4px 10px", fontSize: 11, color: "#a16207", fontWeight: 600 }}>Scheduled</div>
                   </div>
                 );
               })}
@@ -398,26 +395,26 @@ export function StreamerProfile() {
           </div>
         )}
 
-        {/* Past streams / VODs */}
+        {/* Past streams */}
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
-            <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: "#3a3a4a", letterSpacing: "0.12em", textTransform: "uppercase" }}>Past Streams</p>
-            <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.04)" }} />
-          </div>
+          <p style={{ margin: "0 0 14px", fontSize: 11, fontWeight: 700, color: "#333", letterSpacing: "0.12em", textTransform: "uppercase" }}>Past Streams</p>
           {vodsLoading ? (
-            <p style={{ color: "#333", fontSize: 13 }}>Loading past streams…</p>
+            <p style={{ color: "#333", fontSize: 13 }}>Loading…</p>
           ) : vods.length === 0 ? (
-            <p style={{ color: "#252525", fontSize: 13 }}>No past streams yet.</p>
+            <p style={{ color: "#222", fontSize: 13 }}>No past streams yet.</p>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
               {vods.map(v => (
-                <div key={v.uid} onClick={() => setActiveVideo({ url: v.playback?.hls, title: v.meta?.name || "Past Stream" })}
-                  style={{ background: "#0e0e11", border: "1px solid rgba(255,255,255,0.05)", borderRadius: 12, overflow: "hidden", cursor: "pointer" }}>
+                <div key={v.uid}
+                  onClick={() => !stream.is_live && setVodPlaying({ url: v.playback?.hls, title: v.meta?.name || "Past Stream" })}
+                  style={{ background: "#0e0e11", border: "1px solid rgba(255,255,255,0.05)", borderRadius: 10, overflow: "hidden", cursor: stream.is_live ? "default" : "pointer", transition: "transform 0.15s" }}
+                  onMouseEnter={e => { if (!stream.is_live) e.currentTarget.style.transform = "translateY(-2px)"; }}
+                  onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}>
                   <div style={{ position: "relative", aspectRatio: "16/9", background: "#090910" }}>
                     {v.thumbnail
                       ? <img src={v.thumbnail} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                       : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <svg width="28" height="28" viewBox="0 0 24 24" fill="rgba(255,255,255,0.1)"><polygon points="5,3 19,12 5,21" /></svg>
+                          <svg width="28" height="28" viewBox="0 0 24 24" fill="rgba(255,255,255,0.08)"><polygon points="5,3 19,12 5,21" /></svg>
                         </div>
                     }
                     {v.duration && (
@@ -427,7 +424,7 @@ export function StreamerProfile() {
                     )}
                   </div>
                   <div style={{ padding: "10px 12px 12px" }}>
-                    <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 600, color: "#e5e5e5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 600, color: "#e0e0e0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {v.meta?.name || "Past Stream"}
                     </p>
                     <p style={{ margin: 0, fontSize: 11, color: "#444" }}>
