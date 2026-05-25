@@ -61,6 +61,20 @@ export function StreamerProfile() {
     supabase.auth.getSession().then(({ data: { session } }) => setCurrentUser(session?.user ?? null));
   }, []);
 
+  // Realtime: update stream record when is_live or other fields change
+  useEffect(() => {
+    if (!stream?.id) return;
+    const ch = supabase.channel(`stream-status-${stream.id}`)
+      .on("postgres_changes", {
+        event: "UPDATE", schema: "public", table: "live_streams",
+        filter: `id=eq.${stream.id}`,
+      }, ({ new: updated }) => {
+        setStream(prev => ({ ...prev, ...updated }));
+      })
+      .subscribe();
+    return () => supabase.removeChannel(ch);
+  }, [stream?.id]);
+
   async function loadStream() {
     const { data: streams } = await supabase.from("live_streams").select("*").order("id");
     const match = streams?.find(s => {
