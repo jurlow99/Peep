@@ -3707,63 +3707,14 @@ export function CMS({ onExit, currentUser }) {
                 <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 600, color: "#0f172a" }}>All Streams ({liveList.length})</h2>
                 <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Toggle a stream to Live to show it on the homepage "Live Now" section.</p>
               </div>
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                {testingChannels && (
-                  <span style={{ fontSize: 12, color: "#6b7280" }}>Testing {testProgress.done}/{testProgress.total}…</span>
-                )}
-                {Object.keys(channelStatuses).length > 0 && !testingChannels && (
-                  <span style={{ fontSize: 12, color: "#6b7280" }}>
-                    ✓ {Object.values(channelStatuses).filter(s => s === "ok").length} working &nbsp;
-                    ✗ {Object.values(channelStatuses).filter(s => s === "error").length} failed
-                  </span>
-                )}
-                <button onClick={testAllChannels} disabled={testingChannels || liveList.length === 0}
-                  style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 14px", color: "#374151", fontSize: 13, fontWeight: 600, cursor: testingChannels ? "wait" : "pointer", opacity: testingChannels ? 0.6 : 1 }}>
-                  {testingChannels ? "Testing…" : "🔍 Test Channels"}
-                </button>
-                <button
-                  onClick={() => { setM3uOpen(true); setM3uUrl(""); setM3uChannels([]); setM3uSelected(new Set()); setM3uError(""); setM3uSearch(""); setM3uPage(0); setM3uImportDone(null); }}
-                  style={{ background: "#0f172a", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
-                >
-                  📋 Import Playlist
-                </button>
-                <button
-                  onClick={() => { setLiveForm(EMPTY_LIVE_STREAM); setEditingLiveId(null); setDrawerOpen(true); }}
-                  style={{ background: "#ef4444", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
-                >
-                  + Add Stream
-                </button>
-              </div>
+              <button
+                onClick={() => { setLiveForm(EMPTY_LIVE_STREAM); setEditingLiveId(null); setDrawerOpen(true); }}
+                style={{ background: "#ef4444", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+              >
+                + Add Stream
+              </button>
             </div>
 
-            {/* ── Imported Playlists ── */}
-            {(() => {
-              const sources = {};
-              liveList.forEach(s => { if (s.playlist_source) { sources[s.playlist_source] = (sources[s.playlist_source] || 0) + 1; } });
-              const entries = Object.entries(sources);
-              if (entries.length === 0) return null;
-              return (
-                <div style={{ marginBottom: 20, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, overflow: "hidden" }}>
-                  <div style={{ padding: "10px 16px", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: 0.6 }}>Imported Playlists</span>
-                    <span style={{ fontSize: 11, color: "#9ca3af" }}>{entries.length} source{entries.length !== 1 ? "s" : ""}</span>
-                  </div>
-                  {entries.map(([src, count]) => (
-                    <div key={src} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", borderBottom: "1px solid #f1f5f9" }}>
-                      <span style={{ fontSize: 11, color: "#6366f1" }}>📋</span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12, color: "#0f172a", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{src}</div>
-                        <div style={{ fontSize: 11, color: "#9ca3af" }}>{count} channel{count !== 1 ? "s" : ""}</div>
-                      </div>
-                      <button onClick={() => setDeletePlaylistConfirm({ src, count })}
-                        style={{ background: "rgba(220,38,38,0.07)", border: "1px solid rgba(220,38,38,0.15)", borderRadius: 6, padding: "5px 12px", color: "#dc2626", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
-                        Delete all {count}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
 
             {liveLoading ? (
               <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>Loading...</div>
@@ -3771,20 +3722,13 @@ export function CMS({ onExit, currentUser }) {
               <div style={{ color: "#6b7280", padding: 40, textAlign: "center", border: "1px dashed #e2e8f0", borderRadius: 10 }}>No streams yet.</div>
             ) : liveList.map(s => (
               <div key={s.id} style={{ background: "#ffffff", border: `1px solid ${s.is_live ? "rgba(239,68,68,0.3)" : "#e2e8f0"}`, borderRadius: 10, padding: "12px 16px", marginBottom: 12, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-                {s.channel_number != null && s.channel_number !== "" && (
-                  <div style={{ flexShrink: 0, width: 40, height: 40, borderRadius: 8, background: "#f1f5f9", border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                    <span style={{ fontSize: 9, color: "#94a3b8", fontWeight: 600, letterSpacing: 0.5, textTransform: "uppercase" }}>CH</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "#374151", lineHeight: 1 }}>{s.channel_number}</span>
-                  </div>
-                )}
                 {s.thumbnail && <img src={s.thumbnail} alt={s.title} style={{ width: 80, height: 45, objectFit: "cover", borderRadius: 6, flexShrink: 0 }} onError={e => { e.target.style.display = "none"; }} />}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ margin: "0 0 3px", fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{s.title}</p>
+                  <p style={{ margin: "0 0 3px", fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{s.channel_name || s.title}</p>
                   <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>
                     <span style={{ color: s.is_live ? "#ef4444" : "#9ca3af", fontWeight: s.is_live ? 600 : 400 }}>{s.is_live ? "🔴 LIVE" : "○ Offline"}</span>
-                    {s.now_airing && <span style={{ color: "#6b7280" }}> · {s.now_airing}</span>}
+                    {s.stream_title && <span style={{ color: "#6b7280" }}> · {s.stream_title}</span>}
                   </p>
-                  {s.up_next && <p style={{ margin: "2px 0 0", fontSize: 11, color: "#9ca3af" }}>Up next: {s.up_next}</p>}
                   {s.stream_key && (
                     <div style={{ marginTop: 4, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 10, color: "#9ca3af", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Stream Key:</span>
@@ -3820,8 +3764,7 @@ export function CMS({ onExit, currentUser }) {
               </div>
             ))}
 
-            {/* ── M3U Import Modal ── */}
-            {m3uOpen && (
+            {false && m3uOpen && (
               <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
                 <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 780, maxHeight: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 80px rgba(0,0,0,0.2)", overflow: "hidden" }}>
 
@@ -3952,7 +3895,7 @@ export function CMS({ onExit, currentUser }) {
               </div>
             )}
 
-            {deletePlaylistConfirm && (
+            {false && deletePlaylistConfirm && (
               <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "36px 40px", width: 460, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
                   <p style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, color: "#0f172a" }}>Delete entire playlist?</p>
@@ -3981,8 +3924,7 @@ export function CMS({ onExit, currentUser }) {
               </div>
             )}
 
-            {/* ── EPG SCHEDULE SECTION ── */}
-            {liveList.length > 0 && (
+            {false && liveList.length > 0 && (
               <div style={{ marginTop: 40, paddingTop: 32, borderTop: "2px solid #e2e8f0" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
                   <div>
