@@ -44,7 +44,6 @@ export function ApplyToStreamPage() {
 
   return (
     <div style={{ background: BG, minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 16px", fontFamily: "'Space Grotesk', sans-serif" }}>
-      <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
 
       <div style={{ width: "min(520px, 100%)" }}>
         <div style={{ textAlign: "center", marginBottom: 40 }}>

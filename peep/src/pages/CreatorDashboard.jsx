@@ -50,7 +50,6 @@ export function CreatorDashboard({ user, onSignOut }) {
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
-      <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
 
       {/* Nav */}
       <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 50, display: "flex", alignItems: "center", padding: "0 clamp(16px,5vw,64px)", height: 64, gap: 16, background: "rgba(10,10,10,0.95)", backdropFilter: "blur(16px)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>

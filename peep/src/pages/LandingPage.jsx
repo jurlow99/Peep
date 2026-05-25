@@ -85,30 +85,6 @@ export function LandingPage() {
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
-      <link href="https://fonts.googleapis.com/css2?family=Righteous&family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
-      <style>{`
-        @keyframes scrollL { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-        @keyframes scrollR { from { transform: translateX(-50%); } to { transform: translateX(0); } }
-        @keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes glow {
-          0%, 100% { text-shadow: 0 0 40px rgba(250,204,21,0.3), 0 0 80px rgba(250,204,21,0.12); }
-          50% { text-shadow: 0 0 60px rgba(250,204,21,0.55), 0 0 120px rgba(250,204,21,0.22); }
-        }
-        @keyframes flicker {
-          0%, 94%, 100% { opacity: 1; } 95% { opacity: 0.55; } 96% { opacity: 1; } 97.5% { opacity: 0.35; } 98% { opacity: 1; }
-        }
-        .lp-cta-btn:hover { transform: scale(1.04) !important; box-shadow: 0 0 40px rgba(250,204,21,0.45), 0 8px 28px rgba(250,204,21,0.2) !important; }
-        .lp-ghost:hover { border-color: rgba(250,204,21,0.3) !important; color: #fff !important; }
-        .lp-feat-card:hover { border-color: rgba(250,204,21,0.22) !important; transform: translateY(-5px) !important; box-shadow: 0 20px 60px rgba(0,0,0,0.5) !important; }
-        .lp-nav-link:hover { color: #fff !important; }
-        .reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.7s ease, transform 0.7s ease; }
-        .reveal.revealed { opacity: 1; transform: translateY(0); }
-        .reveal-delay-1 { transition-delay: 0.1s; }
-        .reveal-delay-2 { transition-delay: 0.2s; }
-        .reveal-delay-3 { transition-delay: 0.3s; }
-        .reveal-delay-4 { transition-delay: 0.4s; }
-      `}</style>
 
       {/* Nav */}
       <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "space-between", padding: `16px ${PAD}`, background: "rgba(10,10,10,0.88)", backdropFilter: "blur(18px)", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>

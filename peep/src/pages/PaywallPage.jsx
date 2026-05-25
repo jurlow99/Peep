@@ -144,7 +144,6 @@ function CheckoutForm({ user, onSignOut }) {
 export function PaywallPage({ user, onSubscribed, onSignOut }) {
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", padding: 24 }}>
-      <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
 
       <div style={{ width: "100%", maxWidth: 440 }}>
         <div style={{ textAlign: "center", marginBottom: 40 }}>

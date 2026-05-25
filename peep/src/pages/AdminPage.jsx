@@ -49,7 +49,6 @@ export function AdminPage() {
   if (!isAdmin) {
     return (
       <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif" }}>
-        <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
         <div style={{ width: 360, padding: "48px 40px", background: "#111", border: "1px solid #1e1e1e", borderRadius: 16 }}>
           <div style={{ textAlign: "center", marginBottom: 32 }}>
             <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 28, color: "#facc15" }}>peep.</span>

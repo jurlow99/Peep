@@ -96,7 +96,6 @@ export function ProfileSelect({ user, onSelect }) {
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", color: "#fff", padding: "80px 24px" }}>
-      <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       <div style={{ position: "absolute", top: 28, left: 40 }}>

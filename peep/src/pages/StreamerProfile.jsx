@@ -226,7 +226,6 @@ export function StreamerProfile() {
   if (loading) {
     return (
       <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
         <p style={{ color: "#555", fontSize: 14, fontFamily: "'Space Grotesk', sans-serif" }}>Loading…</p>
       </div>
     );
@@ -235,7 +234,6 @@ export function StreamerProfile() {
   if (!stream) {
     return (
       <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", padding: "40px 16px" }}>
-        <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
         <a href="/" style={{ textDecoration: "none", marginBottom: 32 }}>
           <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 36, color: YELLOW }}>peep.</span>
         </a>
@@ -249,7 +247,6 @@ export function StreamerProfile() {
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
-      <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
       <style>{`
         @keyframes livepulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(1.3)} }
         @keyframes spin { to { transform: rotate(360deg); } }

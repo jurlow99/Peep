@@ -250,7 +250,6 @@ export default function App() {
 
   if (maintenanceMode) return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", gap: 16 }}>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&display=swap" rel="stylesheet" />
       <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 48, color: "#facc15" }}>peep.</span>
       <p style={{ color: "#fff", fontSize: 22, fontWeight: 600, margin: 0 }}>We'll be right back.</p>
       <p style={{ color: "#555", fontSize: 14, margin: 0 }}>We're doing some maintenance. Check back shortly.</p>
@@ -826,7 +825,6 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
       <style>{`.scroll-row::-webkit-scrollbar { display: none; }`}</style>
-      <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
 
       {/* Navbar */}
       <nav style={{
@@ -3215,7 +3213,6 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
-      <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
       <nav style={{ position: "sticky", top: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "space-between", padding: `0 ${PAD}`, height: 68, background: "rgba(10,10,10,0.95)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
           <button onClick={onBack} style={{ background: "rgba(255,255,255,0.07)", border: "none", color: "#ccc", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6 }}>
@@ -3689,7 +3686,6 @@ function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
       {trailerOpen && <TrailerModal url={show.trailer_url} title={show.title} onClose={() => setTrailerOpen(false)} />}
-      <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
 
       {/* ── Hero ── */}
       <div style={{ position: "relative", height: isMobile ? "65vh" : "72vh", minHeight: 480, overflow: "hidden" }}>
@@ -3955,7 +3951,6 @@ function PodcastDetail({ podcast, onBack, onGoHome, onPlay, onProfileOpen, userA
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
-      <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
 
       {/* ── Hero ── */}
       <div style={{ position: "relative", overflow: "hidden" }}>
@@ -4143,7 +4138,6 @@ function PodcastPlayerView({ episode, podcast, onBack, onGoHome, onSelect, onPro
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff", display: "flex", flexDirection: "column" }}>
-      <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
 
       {/* Blurred background */}
       {podcast.artwork_url && (
@@ -4318,7 +4312,6 @@ function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, o
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
-      <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
 
       {/* Nav */}
       <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 50, display: "flex", alignItems: "center", padding: `0 ${PAD}`, height: 68, gap: 24, background: "rgba(10,10,10,0.92)", backdropFilter: "blur(16px)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
@@ -4482,7 +4475,6 @@ function CreatorPortalPage({ user, onBack, onGoHome }) {
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
-      <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
 
       <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 50, display: "flex", alignItems: "center", padding: `0 ${PAD}`, height: 64, gap: 20, background: "rgba(10,10,10,0.92)", backdropFilter: "blur(16px)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
         <button onClick={onBack} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)", color: "#aaa", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8 }}>
@@ -4866,7 +4858,6 @@ function SettingsPage({ user, activeProfile, isOwner, onBack, onGoHome, onProfil
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
-      <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
 
       <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 50, display: "flex", alignItems: "center", padding: `0 ${PAD}`, height: 64, gap: 20, background: "rgba(10,10,10,0.92)", backdropFilter: "blur(16px)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
         <button onClick={onBack} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)", color: "#aaa", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8 }}>
@@ -5255,7 +5246,6 @@ function PasswordResetPage({ onDone, isInvite = false }) {
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", padding: 24 }}>
-      <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
       <div style={{ width: "min(420px, 100%)" }}>
         <div style={{ textAlign: "center", marginBottom: 36 }}>
           <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 36, color: "#facc15" }}>peep.</span>
@@ -5329,7 +5319,6 @@ function EmailVerificationGate({ user }) {
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", padding: 24 }}>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
       <div style={{ width: "min(420px, 100%)", textAlign: "center" }}>
         <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 32, color: "#facc15", display: "block", marginBottom: 36 }}>peep.</span>
 
