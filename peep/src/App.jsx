@@ -1003,7 +1003,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       )}
 
       {activeNav === "Streams" && (
-        <LiveTVPage streams={liveStreams.filter(s => s.is_live)} epgEntries={epgEntries} onPlay={onPlay} />
+        <LiveTVPage streams={liveStreams.filter(s => s.is_live)} />
       )}
 
       {activeNav === "Music" && !loading && (

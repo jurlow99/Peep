@@ -60,10 +60,6 @@ const EMPTY_LIVE_STREAM = {
   hero_image: "",
   is_live: true,
   is_hero: false,
-  badge_text: "LIVE",
-  channel_number: "",
-  now_airing: "",
-  up_next: "",
 };
 
 const EMPTY_PODCAST = {
@@ -2493,7 +2489,7 @@ export function CMS({ onExit, currentUser }) {
   function startLiveEdit(s) {
     setEditingLiveId(s.id);
     setDrawerOpen(true);
-    setLiveForm({ title: s.title ?? "", description: s.description ?? "", stream_url: s.stream_url ?? "", thumbnail: s.thumbnail ?? "", hero_image: s.hero_image ?? "", is_live: s.is_live ?? true, is_hero: s.is_hero ?? false, badge_text: s.badge_text ?? "LIVE", channel_number: s.channel_number ?? "", now_airing: s.now_airing ?? "", up_next: s.up_next ?? "" });
+    setLiveForm({ title: s.title ?? "", description: s.description ?? "", stream_url: s.stream_url ?? "", thumbnail: s.thumbnail ?? "", hero_image: s.hero_image ?? "", is_live: s.is_live ?? true, is_hero: s.is_hero ?? false });
   }
 
   function cancelLiveEdit() { setEditingLiveId(null); setLiveForm(EMPTY_LIVE_STREAM); setDrawerOpen(false); }
@@ -6979,33 +6975,20 @@ export function CMS({ onExit, currentUser }) {
                     {/* Section: Basics */}
                     <p style={{ margin: "0 0 10px", fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 1 }}>Basics</p>
                     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
-                      <div style={{ display: "grid", gridTemplateColumns: "80px 1fr", gap: 10 }}>
-                        <FieldInput label="Ch #" value={liveForm.channel_number} onChange={v => setLiveForm(f => ({ ...f, channel_number: v }))} placeholder="1" type="number" />
-                        <FieldInput label="Title *" value={liveForm.title} onChange={v => setLiveForm(f => ({ ...f, title: v }))} placeholder="e.g. Peep News Network" />
-                      </div>
-                      <FieldInput label="Description" value={liveForm.description} onChange={v => setLiveForm(f => ({ ...f, description: v }))} placeholder="What's on this channel..." />
-                    </div>
-
-                    {/* Section: On Air */}
-                    <p style={{ margin: "0 0 10px", fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 1 }}>On Air</p>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
-                      <FieldInput label="Now Airing" value={liveForm.now_airing} onChange={v => setLiveForm(f => ({ ...f, now_airing: v }))} placeholder="e.g. The Daily Briefing · Ep 3" />
-                      <FieldInput label="Up Next" value={liveForm.up_next} onChange={v => setLiveForm(f => ({ ...f, up_next: v }))} placeholder="e.g. Evening Report · Ep 4" />
+                      <FieldInput label="Title *" value={liveForm.title} onChange={v => setLiveForm(f => ({ ...f, title: v }))} placeholder="Channel name" />
+                      <FieldInput label="Description" value={liveForm.description} onChange={v => setLiveForm(f => ({ ...f, description: v }))} placeholder="About this stream..." />
                     </div>
 
                     {/* Section: Stream */}
                     <p style={{ margin: "0 0 10px", fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 1 }}>Stream</p>
                     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
                       <FieldInput label="Stream URL" value={liveForm.stream_url} onChange={v => setLiveForm(f => ({ ...f, stream_url: v }))} placeholder="https://... (.m3u8)" />
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                        <FieldInput label="Badge Text" value={liveForm.badge_text} onChange={v => setLiveForm(f => ({ ...f, badge_text: v }))} placeholder="LIVE" />
-                        <div>
-                          <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.7 }}>Status</label>
-                          <button onClick={() => setLiveForm(f => ({ ...f, is_live: !f.is_live }))}
-                            style={{ width: "100%", background: liveForm.is_live ? "rgba(239,68,68,0.12)" : "rgba(107,114,128,0.1)", border: `1px solid ${liveForm.is_live ? "rgba(239,68,68,0.35)" : "rgba(107,114,128,0.3)"}`, borderRadius: 7, padding: "10px 12px", color: liveForm.is_live ? "#ef4444" : "#888", fontSize: 13, cursor: "pointer", fontWeight: 500 }}>
-                            {liveForm.is_live ? "🔴 Live" : "○ Offline"}
-                          </button>
-                        </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.7 }}>Status</label>
+                        <button onClick={() => setLiveForm(f => ({ ...f, is_live: !f.is_live }))}
+                          style={{ width: "100%", background: liveForm.is_live ? "rgba(239,68,68,0.12)" : "rgba(107,114,128,0.1)", border: `1px solid ${liveForm.is_live ? "rgba(239,68,68,0.35)" : "rgba(107,114,128,0.3)"}`, borderRadius: 7, padding: "10px 12px", color: liveForm.is_live ? "#ef4444" : "#888", fontSize: 13, cursor: "pointer", fontWeight: 500 }}>
+                          {liveForm.is_live ? "🔴 Live" : "○ Offline"}
+                        </button>
                       </div>
                     </div>
 
