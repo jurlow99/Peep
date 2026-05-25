@@ -158,7 +158,7 @@ export function LandingPage() {
             Weird TV. Adult animation. All of it.
           </p>
 
-          <p style={{ animation: "fadeUp 0.7s 0.5s ease both", margin: "0 auto 44px", fontSize: 14, color: "#444" }}>$10/month. Cancel anytime.</p>
+          <p style={{ animation: "fadeUp 0.7s 0.5s ease both", margin: "0 auto 44px", fontSize: 14, color: "#555" }}>Founding membership from <span style={{ color: YELLOW, fontWeight: 700 }}>$2.99/mo</span> — limited spots.</p>
 
           <div style={{ animation: "fadeUp 0.7s 0.6s ease both", display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
             <a href="/signup" className="lp-cta-btn" style={{ background: YELLOW, color: "#0a0a0a", fontSize: 15, fontWeight: 700, textDecoration: "none", padding: "15px 40px", borderRadius: 10, display: "inline-block", transition: "transform 0.2s, box-shadow 0.2s" }}>
@@ -212,6 +212,85 @@ export function LandingPage() {
           <p style={{ fontSize: 15, color: "#555", lineHeight: 1.9, margin: 0 }}>
             Weird cartoons for adults. That's it. That's the pitch.
           </p>
+        </div>
+      </section>
+
+      {/* Pricing */}
+      <section style={{ padding: `96px ${PAD}`, borderTop: "1px solid #111" }}>
+        <div style={{ maxWidth: 900, margin: "0 auto" }}>
+          <div className="reveal" style={{ textAlign: "center", marginBottom: 56 }}>
+            <h2 style={{ fontFamily: "'Righteous', sans-serif", fontWeight: 400, margin: "0 0 10px", fontSize: "clamp(28px, 4vw, 44px)" }}>Pick your plan</h2>
+            <p style={{ color: "#444", fontSize: 15, margin: 0 }}>Founding spots are limited. Lock in the low price before they're gone.</p>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
+
+            {/* Founding Member */}
+            <div className="reveal reveal-delay-1" style={{ position: "relative", background: "rgba(250,204,21,0.03)", border: `2px solid ${YELLOW}`, borderRadius: 18, padding: "32px 28px", display: "flex", flexDirection: "column" }}>
+              <div style={{ position: "absolute", top: -1, right: 20, background: YELLOW, color: "#0a0a0a", fontSize: 10, fontWeight: 800, padding: "4px 12px", borderRadius: "0 0 8px 8px", letterSpacing: 1, textTransform: "uppercase" }}>Limited</div>
+              <p style={{ margin: "0 0 6px", fontSize: 12, color: YELLOW, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Founding Member</p>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 4, margin: "0 0 6px" }}>
+                <span style={{ fontSize: 42, fontWeight: 800, color: "#fff", letterSpacing: -1 }}>$2.99</span>
+                <span style={{ fontSize: 14, color: "#555" }}>/mo</span>
+              </div>
+              <p style={{ margin: "0 0 24px", fontSize: 12, color: "#555" }}>Billed monthly</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 32, flex: 1 }}>
+                {["Everything on Peep", "Ad-free forever", "Founding badge on your profile", "Lock in this price forever", "Cancel anytime"].map(perk => (
+                  <div key={perk} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={YELLOW} strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                    <span style={{ fontSize: 13, color: "#aaa" }}>{perk}</span>
+                  </div>
+                ))}
+              </div>
+              <a href="/signup" className="lp-cta-btn" style={{ background: YELLOW, color: "#0a0a0a", fontSize: 14, fontWeight: 700, textDecoration: "none", padding: "13px", borderRadius: 10, display: "block", textAlign: "center", transition: "transform 0.2s, box-shadow 0.2s" }}>
+                Get Founding Access →
+              </a>
+            </div>
+
+            {/* Founding Annual */}
+            <div className="reveal reveal-delay-2" style={{ position: "relative", background: "#0e0e0e", border: "1px solid #1c1c1c", borderRadius: 18, padding: "32px 28px", display: "flex", flexDirection: "column" }}>
+              <div style={{ position: "absolute", top: -1, right: 20, background: "#22c55e", color: "#fff", fontSize: 10, fontWeight: 800, padding: "4px 12px", borderRadius: "0 0 8px 8px", letterSpacing: 1, textTransform: "uppercase" }}>Best Value</div>
+              <p style={{ margin: "0 0 6px", fontSize: 12, color: "#22c55e", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Founding Annual</p>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 4, margin: "0 0 6px" }}>
+                <span style={{ fontSize: 42, fontWeight: 800, color: "#fff", letterSpacing: -1 }}>$19.99</span>
+                <span style={{ fontSize: 14, color: "#555" }}>/yr</span>
+              </div>
+              <p style={{ margin: "0 0 24px", fontSize: 12, color: "#555" }}>That's $1.67/mo — save 44%</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 32, flex: 1 }}>
+                {["Everything on Peep", "Ad-free forever", "Founding badge on your profile", "Biggest savings available", "Cancel anytime"].map(perk => (
+                  <div key={perk} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                    <span style={{ fontSize: 13, color: "#aaa" }}>{perk}</span>
+                  </div>
+                ))}
+              </div>
+              <a href="/signup" style={{ background: "#111", border: "1px solid #2a2a2a", color: "#fff", fontSize: 14, fontWeight: 700, textDecoration: "none", padding: "13px", borderRadius: 10, display: "block", textAlign: "center" }}>
+                Get Annual Access →
+              </a>
+            </div>
+
+            {/* Standard */}
+            <div className="reveal reveal-delay-3" style={{ background: "#0e0e0e", border: "1px solid #1c1c1c", borderRadius: 18, padding: "32px 28px", display: "flex", flexDirection: "column" }}>
+              <p style={{ margin: "0 0 6px", fontSize: 12, color: "#555", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Standard</p>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 4, margin: "0 0 6px" }}>
+                <span style={{ fontSize: 42, fontWeight: 800, color: "#fff", letterSpacing: -1 }}>$10</span>
+                <span style={{ fontSize: 14, color: "#555" }}>/mo</span>
+              </div>
+              <p style={{ margin: "0 0 24px", fontSize: 12, color: "#555" }}>Billed monthly</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 32, flex: 1 }}>
+                {["Everything on Peep", "Cancel anytime", "No long-term commitment"].map(perk => (
+                  <div key={perk} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                    <span style={{ fontSize: 13, color: "#555" }}>{perk}</span>
+                  </div>
+                ))}
+              </div>
+              <a href="/signup" style={{ background: "#111", border: "1px solid #2a2a2a", color: "#777", fontSize: 14, fontWeight: 700, textDecoration: "none", padding: "13px", borderRadius: 10, display: "block", textAlign: "center" }}>
+                Get Started →
+              </a>
+            </div>
+
+          </div>
         </div>
       </section>
 
@@ -273,7 +352,7 @@ export function LandingPage() {
         <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 560, height: 280, background: "radial-gradient(ellipse, rgba(250,204,21,0.06) 0%, transparent 70%)", pointerEvents: "none" }} />
         <div className="reveal" style={{ position: "relative" }}>
           <h2 style={{ fontFamily: "'Righteous', sans-serif", fontWeight: 400, margin: "0 0 14px", fontSize: "clamp(28px, 5vw, 52px)" }}>Ready to watch something weird?</h2>
-          <p style={{ margin: "0 0 38px", fontSize: 15, color: "#444" }}>$10/month. Cancel anytime.</p>
+          <p style={{ margin: "0 0 38px", fontSize: 15, color: "#444" }}>Founding membership from $2.99/mo — limited spots.</p>
           <a href="/signup" className="lp-cta-btn" style={{ background: YELLOW, color: "#0a0a0a", fontSize: 15, fontWeight: 700, textDecoration: "none", padding: "15px 48px", borderRadius: 10, display: "inline-block", transition: "transform 0.2s, box-shadow 0.2s" }}>
             Create Your Account →
           </a>
