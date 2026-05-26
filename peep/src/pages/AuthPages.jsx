@@ -523,6 +523,16 @@ export function SigninPage() {
             <a href="/signup" style={{ color: YELLOW, textDecoration: "none", fontWeight: 600 }}>Create one</a>
           </p>
         </div>
+
+        <div style={{ marginTop: 16, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 16, padding: "20px clamp(20px, 6vw, 40px)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+          <div>
+            <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 600, color: "#fff" }}>Are you a streamer?</p>
+            <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Access your dashboard, stream key, and analytics.</p>
+          </div>
+          <a href="/streamer" style={{ flexShrink: 0, background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "9px 18px", color: YELLOW, fontSize: 13, fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap" }}>
+            Streamer Dashboard →
+          </a>
+        </div>
       </div>
     </div>
   );
