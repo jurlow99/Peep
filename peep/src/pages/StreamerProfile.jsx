@@ -19,9 +19,12 @@ function VideoPlayer({ url, style = {} }) {
     if (!el || !url) return;
     if (url.includes(".m3u8")) {
       if (Hls.isSupported()) {
-        const h = new Hls();
+        const h = new Hls({ startLevel: -1, abrEwmaDefaultEstimate: 8000000, capLevelToPlayerSize: false });
         h.loadSource(url); h.attachMedia(el);
-        h.on(Hls.Events.MANIFEST_PARSED, () => el.play().catch(() => {}));
+        h.on(Hls.Events.MANIFEST_PARSED, () => {
+          h.currentLevel = h.levels.length - 1;
+          el.play().catch(() => {});
+        });
         hlsRef.current = h;
       } else if (el.canPlayType("application/vnd.apple.mpegurl")) {
         el.src = url; el.play().catch(() => {});
