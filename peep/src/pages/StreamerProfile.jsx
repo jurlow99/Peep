@@ -340,17 +340,17 @@ export function StreamerProfile() {
       ) : (
         /* ── OFFLINE LAYOUT ── */
         <>
-          {/* Hero */}
-          <div style={{ position: "relative", height: "clamp(140px, 18vw, 220px)", background: "#0e0e0e", overflow: "hidden", borderBottom: "1px solid #1a1a1a" }}>
-            {(stream.hero_image || stream.thumbnail) && (
+          {/* Hero — only render if there's an actual image */}
+          {(stream.hero_image || stream.thumbnail) && (
+            <div style={{ position: "relative", height: "clamp(140px, 18vw, 220px)", background: "#0e0e0e", overflow: "hidden", borderBottom: "1px solid #1a1a1a" }}>
               <img src={stream.hero_image || stream.thumbnail} alt=""
                 style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.3)" }} />
-            )}
-            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, #0a0a0a 0%, transparent 70%)" }} />
-          </div>
+              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, #0a0a0a 0%, transparent 70%)" }} />
+            </div>
+          )}
 
           {/* Channel info */}
-          <div style={{ padding: "18px 22px", borderBottom: "1px solid #1a1a1a", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginTop: -28, position: "relative", zIndex: 2 }}>
+          <div style={{ padding: "18px 22px", borderBottom: "1px solid #1a1a1a", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", position: "relative", zIndex: 2 }}>
             <div style={{ width: 56, height: 56, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 700, color: "#fff", flexShrink: 0, border: "3px solid #0a0a0a" }}>
               {avatarLetter}
             </div>
@@ -439,10 +439,10 @@ export function StreamerProfile() {
                   </div>
                   <div style={{ padding: "10px 12px 12px" }}>
                     <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 600, color: "#e0e0e0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {v.meta?.name || "Past Stream"}
+                      {stream.stream_title || channelName}
                     </p>
                     <p style={{ margin: 0, fontSize: 11, color: "#444" }}>
-                      {new Date(v.created).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                      {new Date(v.created).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
                     </p>
                   </div>
                 </div>
