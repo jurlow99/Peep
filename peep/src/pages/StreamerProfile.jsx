@@ -11,13 +11,38 @@ const CATEGORY_LABELS = {
   education: "Education", creative: "Creative",
 };
 
-function VideoPlayer({ url, style = {} }) {
+function VideoPlayer({ url, live = false, style = {} }) {
+  const containerRef = useRef(null);
   const ref = useRef(null);
   const hlsRef = useRef(null);
   const retryTimer = useRef(null);
+  const hideTimer = useRef(null);
   const alive = useRef(true);
+
   const [showPlay, setShowPlay] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [paused, setPaused] = useState(true);
+  const [muted, setMuted] = useState(false);
+  const [ctrlVisible, setCtrlVisible] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const onPlay = () => { setPaused(false); setShowPlay(false); };
+    const onPause = () => setPaused(true);
+    const onVolume = () => setMuted(el.muted);
+    el.addEventListener("play", onPlay);
+    el.addEventListener("pause", onPause);
+    el.addEventListener("volumechange", onVolume);
+    return () => { el.removeEventListener("play", onPlay); el.removeEventListener("pause", onPause); el.removeEventListener("volumechange", onVolume); };
+  }, []);
+
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
 
   function attachHls(el, src, attempt = 0) {
     if (!alive.current) return;
@@ -33,9 +58,7 @@ function VideoPlayer({ url, style = {} }) {
       if (!alive.current || !d.fatal) return;
       h.destroy();
       setStarting(true);
-      // Cloudflare needs ~15-30s after OBS starts before HLS segments exist — keep retrying
-      const delay = Math.min(5000 + attempt * 3000, 15000);
-      retryTimer.current = setTimeout(() => attachHls(el, src, attempt + 1), delay);
+      retryTimer.current = setTimeout(() => attachHls(el, src, attempt + 1), Math.min(5000 + attempt * 3000, 15000));
     });
     hlsRef.current = h;
   }
@@ -55,27 +78,94 @@ function VideoPlayer({ url, style = {} }) {
     return () => {
       alive.current = false;
       clearTimeout(retryTimer.current);
+      clearTimeout(hideTimer.current);
       el.pause(); el.src = "";
       hlsRef.current?.destroy(); hlsRef.current = null;
     };
   }, [url]);
 
-  return (
-    <div style={{ position: "relative", background: "#000", ...style }}>
-      <video ref={ref} controls style={{ display: "block", width: "100%", height: "100%", background: "#000" }} />
+  function nudgeControls() {
+    setCtrlVisible(true);
+    clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => setCtrlVisible(false), 3000);
+  }
+
+  function togglePlay() { const el = ref.current; if (!el) return; el.paused ? el.play().catch(() => {}) : el.pause(); }
+  function toggleMute() { const el = ref.current; if (el) el.muted = !el.muted; }
+  function toggleFullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else containerRef.current?.requestFullscreen().catch(() => {});
+  }
+
+  const overlays = (
+    <>
       {starting && (
-        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2 }}>
+        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 3, pointerEvents: "none" }}>
           <p style={{ margin: 0, color: "#555", fontSize: 13, fontFamily: "'Space Grotesk', sans-serif" }}>Stream is starting up…</p>
         </div>
       )}
       {showPlay && !starting && (
-        <div onClick={() => ref.current?.play().then(() => setShowPlay(false)).catch(() => {})}
-          style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 2 }}>
+        <div onClick={e => { e.stopPropagation(); ref.current?.play().then(() => setShowPlay(false)).catch(() => {}); }}
+          style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 3 }}>
           <div style={{ width: 72, height: 72, borderRadius: "50%", background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <svg width="28" height="28" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg>
           </div>
         </div>
       )}
+    </>
+  );
+
+  if (!live) {
+    return (
+      <div style={{ position: "relative", background: "#000", ...style }}>
+        <video ref={ref} controls style={{ display: "block", width: "100%", height: "100%", background: "#000" }} />
+        {overlays}
+      </div>
+    );
+  }
+
+  const btnStyle = { background: "none", border: "none", color: "#fff", cursor: "pointer", padding: "6px 8px", display: "flex", alignItems: "center", flexShrink: 0 };
+
+  return (
+    <div
+      ref={containerRef}
+      onMouseMove={nudgeControls}
+      onMouseEnter={nudgeControls}
+      onMouseLeave={() => { clearTimeout(hideTimer.current); setCtrlVisible(false); }}
+      onClick={togglePlay}
+      style={{ position: "relative", background: "#000", cursor: ctrlVisible || paused ? "default" : "none", userSelect: "none", ...style }}>
+      <video ref={ref} style={{ display: "block", width: "100%", height: "100%", background: "#000" }} />
+
+      {/* Custom controls bar */}
+      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", justifyContent: "flex-end", opacity: ctrlVisible || paused ? 1 : 0, transition: "opacity 0.25s", pointerEvents: ctrlVisible || paused ? "auto" : "none" }}>
+        <div style={{ background: "linear-gradient(transparent, rgba(0,0,0,0.82))", padding: "48px 12px 10px", display: "flex", alignItems: "center", gap: 6 }}>
+          <button onClick={e => { e.stopPropagation(); togglePlay(); }} style={btnStyle}>
+            {paused
+              ? <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg>
+              : <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+            }
+          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 5, background: "#ef4444", borderRadius: 4, padding: "3px 8px", flexShrink: 0 }}>
+            <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#fff", animation: "livepulse 1.5s infinite" }} />
+            <span style={{ fontSize: 10, fontWeight: 800, color: "#fff", letterSpacing: 0.8 }}>LIVE</span>
+          </div>
+          <div style={{ flex: 1 }} />
+          <button onClick={e => { e.stopPropagation(); toggleMute(); }} style={btnStyle}>
+            {muted
+              ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+              : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><path d="M15.54,8.46a5,5,0,0,1,0,7.07"/><path d="M19.07,4.93a10,10,0,0,1,0,14.14"/></svg>
+            }
+          </button>
+          <button onClick={e => { e.stopPropagation(); toggleFullscreen(); }} style={btnStyle}>
+            {isFullscreen
+              ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M8 3v5H3"/><path d="M21 8h-5V3"/><path d="M3 16h5v5"/><path d="M16 21v-5h5"/></svg>
+              : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+            }
+          </button>
+        </div>
+      </div>
+
+      {overlays}
     </div>
   );
 }
@@ -363,6 +453,7 @@ export function StreamerProfile() {
                 <VideoPlayer
                   key={stream.stream_url}
                   url={stream.stream_url}
+                  live={true}
                   style={{ width: "100%", aspectRatio: "16/9" }}
                 />
               )}
