@@ -148,15 +148,19 @@ export function StreamerDashboard() {
       )
       .subscribe();
 
-    // Poll every 8s as backup in case realtime misses the webhook update
+    // Poll Cloudflare directly every 8s — more reliable than waiting for webhook
     async function pollLive() {
-      const { data } = await supabase
-        .from("live_streams")
-        .select("is_live")
-        .eq("id", stream.id)
-        .maybeSingle();
-      if (data) setStream(s => s.is_live !== data.is_live ? { ...s, is_live: data.is_live } : s);
+      try {
+        const res = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/check-live-status?stream_uid=${stream.stream_uid}&stream_id=${stream.id}`
+        );
+        const json = await res.json();
+        if (typeof json.is_live === "boolean") {
+          setStream(s => s.is_live !== json.is_live ? { ...s, is_live: json.is_live } : s);
+        }
+      } catch {}
     }
+    pollLive(); // check immediately on load
     const t = setInterval(pollLive, 8000);
 
     return () => { supabase.removeChannel(ch); clearInterval(t); };
