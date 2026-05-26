@@ -59,6 +59,7 @@ export default function App() {
   const userIdRef = useRef(null);
   const [subscription, setSubscription] = useState(null);
   const [subChecked, setSubChecked] = useState(false);
+  const [isStreamer, setIsStreamer] = useState(false);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [passwordRecovery, setPasswordRecovery] = useState(() => {
     // Catch invite links — Supabase puts type=invite in the hash; must read it before Supabase clears it
@@ -146,6 +147,13 @@ export default function App() {
     if (!user || !activeProfile) { setMyList({}); return; }
     loadMyList(user.id, activeProfile.id);
   }, [user?.id, activeProfile?.id]);
+
+  // Check if user is a streamer — redirect them to /streamer instead of showing main app
+  useEffect(() => {
+    if (!user) { setIsStreamer(false); return; }
+    supabase.from("live_streams").select("id").eq("user_id", user.id).maybeSingle()
+      .then(({ data }) => { if (data) window.location.href = "/streamer"; });
+  }, [user?.id]);
 
   // Check subscription status
   useEffect(() => {
