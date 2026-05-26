@@ -59,6 +59,7 @@ export function StreamerDashboard() {
   const [uploadingThumb, setUploadingThumb]   = useState(false);
   const [uploadingHero, setUploadingHero]     = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [pendingFiles, setPendingFiles]       = useState({ thumbnail: null, hero: null, avatar: null });
 
   // Stream key
   const [revealKey, setRevealKey]     = useState(false);
@@ -301,52 +302,34 @@ export function StreamerDashboard() {
     return `${publicUrl}?t=${Date.now()}`;
   }
 
-  async function handleThumbnailUpload(e) {
+  function handleImagePick(e, key) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setUploadingThumb(true);
-    try {
-      const url = await uploadChannelImage(file, "thumbnail");
-      await supabase.from("live_streams").update({ thumbnail: url }).eq("id", stream.id);
-      setStream(s => ({ ...s, thumbnail: url }));
-      showToast("Thumbnail updated!");
-    } catch (err) {
-      showToast("Upload failed: " + err.message);
-    }
-    setUploadingThumb(false);
+    const previewUrl = URL.createObjectURL(file);
+    setPendingFiles(p => ({ ...p, [key]: { file, previewUrl } }));
     e.target.value = "";
   }
 
-  async function handleHeroUpload(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadingHero(true);
-    try {
-      const url = await uploadChannelImage(file, "hero");
-      await supabase.from("live_streams").update({ hero_image: url }).eq("id", stream.id);
-      setStream(s => ({ ...s, hero_image: url }));
-      showToast("Banner updated!");
-    } catch (err) {
-      showToast("Upload failed: " + err.message);
-    }
-    setUploadingHero(false);
-    e.target.value = "";
+  function cancelPending(key) {
+    if (pendingFiles[key]) URL.revokeObjectURL(pendingFiles[key].previewUrl);
+    setPendingFiles(p => ({ ...p, [key]: null }));
   }
 
-  async function handleAvatarUpload(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadingAvatar(true);
+  async function saveImage(key, dbField, setUploading, toastMsg) {
+    const pending = pendingFiles[key];
+    if (!pending) return;
+    setUploading(true);
     try {
-      const url = await uploadChannelImage(file, "avatar");
-      await supabase.from("live_streams").update({ avatar_url: url }).eq("id", stream.id);
-      setStream(s => ({ ...s, avatar_url: url }));
-      showToast("Profile picture updated!");
+      const url = await uploadChannelImage(pending.file, key);
+      await supabase.from("live_streams").update({ [dbField]: url }).eq("id", stream.id);
+      setStream(s => ({ ...s, [dbField]: url }));
+      URL.revokeObjectURL(pending.previewUrl);
+      setPendingFiles(p => ({ ...p, [key]: null }));
+      showToast(toastMsg);
     } catch (err) {
       showToast("Upload failed: " + err.message);
     }
-    setUploadingAvatar(false);
-    e.target.value = "";
+    setUploading(false);
   }
 
   async function clearImage(field) {
@@ -543,18 +526,32 @@ export function StreamerDashboard() {
             <div style={{ marginBottom: 20 }}>
               <Label>Profile Picture <span style={{ color: "#2a2a2a", fontWeight: 400 }}>— circle</span></Label>
               <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                <div style={{ width: 72, height: 72, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 700, color: "#fff", flexShrink: 0, overflow: "hidden", border: `2px solid ${BORDER}` }}>
-                  {stream.avatar_url
-                    ? <img src={stream.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    : <span style={{ color: "#fff" }}>{(stream.channel_name || stream.title || "?")[0].toUpperCase()}</span>}
+                <div style={{ width: 72, height: 72, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 700, color: "#fff", flexShrink: 0, overflow: "hidden", border: `2px solid ${pendingFiles.avatar ? YELLOW : BORDER}` }}>
+                  {pendingFiles.avatar
+                    ? <img src={pendingFiles.avatar.previewUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    : stream.avatar_url
+                      ? <img src={stream.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      : <span>{(stream.channel_name || stream.title || "?")[0].toUpperCase()}</span>}
                 </div>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <label style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 16px", color: uploadingAvatar ? "#444" : "#bbb", fontSize: 12, fontWeight: 600, cursor: uploadingAvatar ? "wait" : "pointer" }}>
-                    <input type="file" accept="image/*" onChange={handleAvatarUpload} style={{ display: "none" }} disabled={uploadingAvatar} />
-                    {uploadingAvatar ? "Uploading…" : "Upload"}
-                  </label>
-                  {stream.avatar_url && (
-                    <button onClick={() => clearImage("avatar_url")} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 12px", color: "#444", fontSize: 11, cursor: "pointer" }}>Remove</button>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {pendingFiles.avatar ? (
+                    <>
+                      <button onClick={() => saveImage("avatar", "avatar_url", setUploadingAvatar, "Profile picture updated!")} disabled={uploadingAvatar}
+                        style={{ background: YELLOW, border: "none", borderRadius: 8, padding: "8px 16px", color: "#0a0a0a", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: uploadingAvatar ? 0.6 : 1 }}>
+                        {uploadingAvatar ? "Saving…" : "Save"}
+                      </button>
+                      <button onClick={() => cancelPending("avatar")} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 12px", color: "#666", fontSize: 12, cursor: "pointer" }}>Cancel</button>
+                    </>
+                  ) : (
+                    <>
+                      <label style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 16px", color: "#bbb", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                        <input type="file" accept="image/*" onChange={e => handleImagePick(e, "avatar")} style={{ display: "none" }} />
+                        Choose Image
+                      </label>
+                      {stream.avatar_url && (
+                        <button onClick={() => clearImage("avatar_url")} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 12px", color: "#444", fontSize: 11, cursor: "pointer" }}>Remove</button>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -564,28 +561,44 @@ export function StreamerDashboard() {
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
               {[
-                { label: "Stream Thumbnail", hint: "16:9", field: "thumbnail", uploading: uploadingThumb, handler: handleThumbnailUpload, current: stream.thumbnail },
-                { label: "Profile Banner", hint: "wide", field: "hero_image", uploading: uploadingHero, handler: handleHeroUpload, current: stream.hero_image },
-              ].map(({ label, hint, field, uploading, handler, current }) => (
-                <div key={field}>
-                  <Label>{label} <span style={{ color: "#2a2a2a", fontWeight: 400 }}>{hint}</span></Label>
-                  <div style={{ aspectRatio: "16/9", background: "#0d0d0d", border: `1px solid ${BORDER}`, borderRadius: 10, overflow: "hidden", marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    {current
-                      ? <img src={current} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                      : <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2a2a2a" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                    }
+                { label: "Stream Thumbnail", hint: "16:9", pendingKey: "thumbnail", dbField: "thumbnail", uploading: uploadingThumb, setUploading: setUploadingThumb, toastMsg: "Thumbnail updated!", current: stream.thumbnail },
+                { label: "Profile Banner", hint: "wide", pendingKey: "hero", dbField: "hero_image", uploading: uploadingHero, setUploading: setUploadingHero, toastMsg: "Banner updated!", current: stream.hero_image },
+              ].map(({ label, hint, pendingKey, dbField, uploading, setUploading, toastMsg, current }) => {
+                const pending = pendingFiles[pendingKey];
+                const preview = pending?.previewUrl || current;
+                return (
+                  <div key={pendingKey}>
+                    <Label>{label} <span style={{ color: "#2a2a2a", fontWeight: 400 }}>{hint}</span></Label>
+                    <div style={{ aspectRatio: "16/9", background: "#0d0d0d", border: `1px solid ${pending ? YELLOW : BORDER}`, borderRadius: 10, overflow: "hidden", marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {preview
+                        ? <img src={preview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        : <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2a2a2a" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                      }
+                    </div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      {pending ? (
+                        <>
+                          <button onClick={() => saveImage(pendingKey, dbField, setUploading, toastMsg)} disabled={uploading}
+                            style={{ flex: 1, background: YELLOW, border: "none", borderRadius: 8, padding: "8px 0", color: "#0a0a0a", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: uploading ? 0.6 : 1 }}>
+                            {uploading ? "Saving…" : "Save"}
+                          </button>
+                          <button onClick={() => cancelPending(pendingKey)} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 10px", color: "#666", fontSize: 12, cursor: "pointer" }}>Cancel</button>
+                        </>
+                      ) : (
+                        <>
+                          <label style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "7px 0", color: "#bbb", fontSize: 12, fontWeight: 600, cursor: "pointer", textAlign: "center" }}>
+                            <input type="file" accept="image/*" onChange={e => handleImagePick(e, pendingKey)} style={{ display: "none" }} />
+                            Choose Image
+                          </label>
+                          {current && (
+                            <button onClick={() => clearImage(dbField)} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "7px 10px", color: "#444", fontSize: 11, cursor: "pointer" }}>Remove</button>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <label style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "7px 0", color: uploading ? "#444" : "#bbb", fontSize: 12, fontWeight: 600, cursor: uploading ? "wait" : "pointer", textAlign: "center" }}>
-                      <input type="file" accept="image/*" onChange={handler} style={{ display: "none" }} disabled={uploading} />
-                      {uploading ? "Uploading…" : "Upload"}
-                    </label>
-                    {current && (
-                      <button onClick={() => clearImage(field)} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "7px 10px", color: "#444", fontSize: 11, cursor: "pointer" }}>Remove</button>
-                    )}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </SectionCard>
 
