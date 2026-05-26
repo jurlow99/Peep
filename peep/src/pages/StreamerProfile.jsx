@@ -406,12 +406,12 @@ export function StreamerProfile() {
         /* ── OFFLINE LAYOUT ── */
         <>
           {/* Banner — only use hero_image; thumbnail is a card image not a banner */}
-          <div style={{ position: "relative", height: "clamp(160px, 22vw, 280px)", background: stream.hero_image ? "#0e0e0e" : "linear-gradient(135deg, #1e1b4b 0%, #312e81 60%, #1e1b4b 100%)", overflow: "hidden" }}>
+          <div style={{ position: "relative", height: "clamp(200px, 28vw, 360px)", background: stream.hero_image ? "#0e0e0e" : "linear-gradient(135deg, #1e1b4b 0%, #312e81 60%, #1e1b4b 100%)", overflow: "hidden" }}>
             {stream.hero_image && (
               <img src={stream.hero_image} alt=""
                 style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center center" }} />
             )}
-            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, #0a0a0a 0%, rgba(0,0,0,0.15) 60%, transparent 100%)" }} />
+            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(10,10,10,0.85) 0%, rgba(10,10,10,0.2) 35%, transparent 70%)" }} />
           </div>
 
           {/* Profile row — avatar overlaps banner */}
