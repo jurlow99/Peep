@@ -273,7 +273,6 @@ export default function App() {
     const isLiveVideo = selectedVideo._type === "live" || selectedVideo._type === "live_epg";
     const handleBack = () => {
       if (isLiveVideo) sessionStorage.setItem("peep_goto_nav", "Streams");
-      if (selectedVideo._type === "music_video") sessionStorage.setItem("peep_goto_nav", "Music");
       setPage(selectedShow ? "show" : "home");
       setSelectedVideo(null);
     };
@@ -449,11 +448,6 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
   const [podcasts, setPodcasts] = useState([]);
   const [liveStreams, setLiveStreams] = useState([]);
   const [epgEntries, setEpgEntries] = useState([]);
-  const [musicVideos, setMusicVideos] = useState([]);
-  const [songs, setSongs] = useState([]);
-  const [albums, setAlbums] = useState([]);
-  const [playingSong, setPlayingSong] = useState(null);
-  const [songPaused, setSongPaused] = useState(false);
   const [continueWatching, setContinueWatching] = useState([]);
   const [loading, setLoading] = useState(true);
   const [scrolled, setScrolled] = useState(false);
@@ -493,16 +487,6 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     const epgChannel = supabase.channel("epg-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "epg_entries" }, fetchAll)
       .subscribe();
-    const musicChannel = supabase.channel("music-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "music_videos" }, fetchAll)
-      .subscribe();
-    const songsChannel = supabase.channel("songs-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "songs" }, fetchAll)
-      .subscribe();
-    const albumsChannel = supabase.channel("albums-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "albums" }, fetchAll)
-      .subscribe();
-
     const handler = () => setScrolled(window.scrollY > 60);
     window.addEventListener("scroll", handler);
 
@@ -513,9 +497,6 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       supabase.removeChannel(podcastChannel);
       supabase.removeChannel(liveChannel);
       supabase.removeChannel(epgChannel);
-      supabase.removeChannel(musicChannel);
-      supabase.removeChannel(songsChannel);
-      supabase.removeChannel(albumsChannel);
       window.removeEventListener("scroll", handler);
     };
   }, []);
@@ -530,16 +511,13 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
   async function fetchAll() {
     const epgWindowStart = new Date(Date.now() - 60 * 60 * 1000);
     const epgWindowEnd = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    const [videosRes, showsRes, carouselsRes, podcastsRes, liveRes, epgRes, musicRes, songsRes, albumsRes] = await Promise.all([
+    const [videosRes, showsRes, carouselsRes, podcastsRes, liveRes, epgRes] = await Promise.all([
       supabase.from("videos").select("*").order("id", { ascending: true }),
       supabase.from("shows").select("*").order("id", { ascending: true }),
       supabase.from("carousels").select("*").eq("enabled", true).order("position", { ascending: true }),
       supabase.from("podcasts").select("*").order("id", { ascending: true }),
       supabase.from("live_streams").select("*").order("id", { ascending: true }),
       supabase.from("epg_entries").select("*").gte("end_time", epgWindowStart.toISOString()).lte("start_time", epgWindowEnd.toISOString()).order("start_time", { ascending: true }),
-      supabase.from("music_videos").select("*").eq("enabled", true).order("artist", { ascending: true }),
-      supabase.from("songs").select("*").eq("enabled", true).order("artist", { ascending: true }),
-      supabase.from("albums").select("*").eq("enabled", true).order("title", { ascending: true }),
     ]);
     if (videosRes.data) setVideos(videosRes.data);
     if (showsRes.data) setShows(showsRes.data);
@@ -547,9 +525,6 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     if (podcastsRes.data) setPodcasts(podcastsRes.data.filter(p => p.enabled !== false));
     if (liveRes.data) setLiveStreams(liveRes.data);
     if (epgRes.data) setEpgEntries(epgRes.data);
-    if (musicRes.data) setMusicVideos(musicRes.data);
-    if (songsRes.data) setSongs(songsRes.data);
-    if (albumsRes.data) setAlbums(albumsRes.data);
     setLoading(false);
 
     // Resolve deep link
@@ -698,7 +673,6 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     if (activeNav === "Home") return pages.includes("home");
     if (activeNav === "Movies") return pages.includes("movies");
     if (activeNav === "Series") return pages.includes("series");
-    if (activeNav === "Music") return pages.includes("music") || pages.includes("music_videos");
     return false;
   }), [carousels, activeNav]);
 
@@ -706,28 +680,6 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     ? []
     : activeNav === "Streams"
     ? []
-    : activeNav === "Music"
-    ? visibleCarousels.flatMap(c => {
-        const filterVal = c.filter_value?.toLowerCase();
-        if (c.content_type === "songs") {
-          const baseItems = c.type === "trending"
-            ? [...songs].reverse()
-            : c.type === "category"
-            ? songs.filter(s => Array.isArray(s.tags) ? s.tags.some(t => t.toLowerCase() === filterVal) : s.tags?.toLowerCase().includes(filterVal))
-            : c.type === "handpicked"
-            ? (() => { try { const picks = JSON.parse(c.filter_value || "[]"); return picks.flatMap(p => { const found = songs.find(s => s.id === p.id); return found ? [found] : []; }); } catch { return songs; } })()
-            : songs;
-          return baseItems.length === 0 ? [] : [{ id: String(c.id), title: c.title, songItems: baseItems, isSong: true }];
-        }
-        const baseItems = c.type === "trending"
-          ? [...musicVideos].reverse()
-          : c.type === "category"
-          ? musicVideos.filter(mv => Array.isArray(mv.tags) ? mv.tags.some(t => t.toLowerCase() === filterVal) : false)
-          : c.type === "handpicked"
-          ? (() => { try { const picks = JSON.parse(c.filter_value || "[]"); return picks.flatMap(p => { const found = musicVideos.find(mv => mv.id === p.id); return found ? [found] : []; }); } catch { return musicVideos; } })()
-          : musicVideos;
-        return baseItems.length === 0 ? [] : [{ id: String(c.id), title: c.title, musicVideoItems: baseItems, isMusicVideo: true }];
-      })
     : activeNav === "Podcasts"
     ? [{ id: "all-podcasts", title: "All Podcasts", isPodcast: true, videos: [], podcastItems: podcasts }]
     : visibleCarousels.length > 0
@@ -758,7 +710,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           id: cat, title: `${cat} Films`, videos: filteredContent.filter(v => v.category === cat),
         })),
       ],
-  [activeNav, allContent, filteredContent, visibleCarousels, podcasts, carousels, musicVideos, songs, myList]);
+  [activeNav, allContent, filteredContent, visibleCarousels, podcasts, carousels, myList]);
 
   const searchPool = useMemo(() => {
     const tagsStr = (tags) => Array.isArray(tags) ? tags.join(" ") : (tags || "");

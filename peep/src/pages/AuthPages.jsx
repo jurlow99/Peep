@@ -524,16 +524,16 @@ export function SigninPage() {
           </p>
         </div>
 
-        <button onClick={() => { window.history.replaceState({}, "", "/signin?redirect=/streamer"); document.querySelector("input[type=email]")?.focus(); }}
-          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, marginTop: 16, width: "100%", background: CARD, border: `1px solid ${BORDER}`, borderRadius: 16, padding: "20px clamp(20px, 6vw, 40px)", cursor: "pointer", textAlign: "left", transition: "border-color 0.15s" }}
+        <a href="/streamer-signin"
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, marginTop: 16, width: "100%", background: CARD, border: `1px solid ${BORDER}`, borderRadius: 16, padding: "20px clamp(20px, 6vw, 40px)", cursor: "pointer", textAlign: "left", transition: "border-color 0.15s", textDecoration: "none" }}
           onMouseEnter={e => e.currentTarget.style.borderColor = "#333"}
           onMouseLeave={e => e.currentTarget.style.borderColor = BORDER}>
           <div>
             <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 600, color: "#fff" }}>Are you a streamer?</p>
-            <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Sign in above to access your dashboard and stream key.</p>
+            <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Sign in to your streaming portal.</p>
           </div>
-          <span style={{ flexShrink: 0, color: YELLOW, fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" }}>Use form above →</span>
-        </button>
+          <span style={{ flexShrink: 0, color: YELLOW, fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" }}>Go to portal →</span>
+        </a>
       </div>
     </div>
   );
@@ -545,3 +545,96 @@ const btnStyle = {
   padding: "13px", color: "#0a0a0a", fontSize: 14,
   fontWeight: 700, cursor: "pointer",
 };
+
+// ─── STREAMER SIGN IN PAGE ────────────────────────────────────────────────────
+
+export function StreamerSignInPage() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [resetSent, setResetSent] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) { setError(error.message); setLoading(false); }
+    else { window.location.href = "/streamer"; }
+  }
+
+  async function handleReset(e) {
+    e.preventDefault();
+    if (!email.trim()) { setError("Enter your email above first."); return; }
+    setResetLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/send-reset-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setResetSent(true);
+    } catch (err) {
+      setError(err.message);
+    }
+    setResetLoading(false);
+  }
+
+  return (
+    <div style={{ background: BG, minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px 16px", fontFamily: "'Space Grotesk', sans-serif" }}>
+      <div style={{ width: "min(420px, 100%)" }}>
+        <div style={{ textAlign: "center", marginBottom: 36 }}>
+          <a href="/" style={{ textDecoration: "none" }}>
+            <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 36, color: YELLOW }}>peep.</span>
+          </a>
+        </div>
+
+        <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 16, padding: "36px clamp(20px, 6vw, 40px)" }}>
+          <div style={{ marginBottom: 28 }}>
+            <p style={{ margin: "0 0 6px", fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 1.2, fontWeight: 700 }}>Creator Access</p>
+            <h2 style={{ margin: "0 0 6px", fontSize: 24, fontWeight: 700, color: "#fff" }}>Streaming Portal</h2>
+            <p style={{ margin: 0, fontSize: 13, color: "#555" }}>Sign in to access your dashboard and stream key.</p>
+          </div>
+
+          <form onSubmit={handleSubmit}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <Input label="Email" type="email" value={email} onChange={e => { setEmail(e.target.value); setError(null); setResetSent(false); }} placeholder="you@example.com" autoComplete="email" required />
+              <div>
+                <Input label="Password" type={showPw ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="Your password" autoComplete="current-password" required
+                  rightSlot={<button type="button" onClick={() => setShowPw(v => !v)} style={{ background: "none", border: "none", color: "#555", fontSize: 11, cursor: "pointer", fontWeight: 600, padding: 0 }}>{showPw ? "HIDE" : "SHOW"}</button>}
+                />
+                <div style={{ textAlign: "right", marginTop: 6 }}>
+                  <button type="button" onClick={handleReset} disabled={resetLoading}
+                    style={{ background: "none", border: "none", color: "#555", fontSize: 12, cursor: "pointer", padding: 0, textDecoration: "underline" }}>
+                    {resetLoading ? "Sending…" : "Forgot password?"}
+                  </button>
+                </div>
+              </div>
+            </div>
+            {resetSent && <p style={{ color: "#4ade80", fontSize: 13, margin: "12px 0 0" }}>Reset link sent — check your inbox.</p>}
+            {error && <p style={{ color: "#f87171", fontSize: 13, margin: "14px 0 0" }}>{error}</p>}
+            <button type="submit" disabled={loading} style={{ ...btnStyle, opacity: loading ? 0.7 : 1, cursor: loading ? "not-allowed" : "pointer" }}>
+              {loading ? "Signing in…" : "Sign In to Portal"}
+            </button>
+          </form>
+
+          <p style={{ margin: "20px 0 0", textAlign: "center", fontSize: 13, color: "#555" }}>
+            Not a streamer?{" "}
+            <a href="/signin" style={{ color: YELLOW, textDecoration: "none", fontWeight: 600 }}>Regular sign in</a>
+          </p>
+        </div>
+
+        <p style={{ textAlign: "center", marginTop: 20, fontSize: 12, color: "#333" }}>
+          Want to stream on Peep?{" "}
+          <a href="/apply-to-stream" style={{ color: "#555", textDecoration: "underline" }}>Apply here</a>
+        </p>
+      </div>
+    </div>
+  );
+}

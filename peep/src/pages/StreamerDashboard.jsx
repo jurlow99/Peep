@@ -28,9 +28,11 @@ function Toast({ msg }) {
 
 function SectionCard({ title, children, style = {} }) {
   return (
-    <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "24px", marginBottom: 20, ...style }}>
-      {title && <p style={{ margin: "0 0 18px", fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700 }}>{title}</p>}
-      {children}
+    <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, marginBottom: 16, overflow: "hidden", ...style }}>
+      {title && <div style={{ padding: "20px 24px 0" }}><p style={{ margin: "0 0 20px", fontSize: 18, fontWeight: 700, color: "#fff" }}>{title}</p></div>}
+      <div style={{ padding: title ? "0 24px 24px" : "24px" }}>
+        {children}
+      </div>
     </div>
   );
 }
@@ -358,33 +360,8 @@ export function StreamerDashboard() {
           )}
         </SectionCard>
 
-        {/* Stream Info */}
-        <SectionCard title="Stream Info">
-          <div style={{ marginBottom: 16 }}>
-            <p style={{ margin: "0 0 8px", fontSize: 12, color: "#666", fontWeight: 600 }}>What are you streaming?</p>
-            <input
-              value={streamTitle}
-              onChange={e => setStreamTitle(e.target.value)}
-              placeholder="e.g. Late night gaming session, New album listening party…"
-              maxLength={120}
-              style={inp}
-            />
-          </div>
-          <div style={{ marginBottom: 20 }}>
-            <p style={{ margin: "0 0 8px", fontSize: 12, color: "#666", fontWeight: 600 }}>Category</p>
-            <select value={category} onChange={e => setCategory(e.target.value)}
-              style={{ ...inp, appearance: "none", cursor: "pointer" }}>
-              {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-            </select>
-          </div>
-          <button onClick={saveStreamInfo} disabled={savingInfo}
-            style={{ background: YELLOW, border: "none", borderRadius: 10, padding: "11px 22px", color: "#0a0a0a", fontSize: 14, fontWeight: 700, cursor: savingInfo ? "wait" : "pointer", opacity: savingInfo ? 0.6 : 1 }}>
-            {savingInfo ? "Saving…" : "Save Info"}
-          </button>
-        </SectionCard>
-
-        {/* Stream Credentials */}
-        <SectionCard title="Stream Credentials">
+        {/* Go Live */}
+        <SectionCard title="Go Live">
           {/* RTMP Server */}
           <div style={{ marginBottom: 20 }}>
             <p style={{ margin: "0 0 8px", fontSize: 12, color: "#666", fontWeight: 600 }}>RTMP Server</p>
@@ -397,7 +374,7 @@ export function StreamerDashboard() {
           </div>
 
           {/* Stream Key */}
-          <div>
+          <div style={{ marginBottom: 24 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
               <p style={{ margin: 0, fontSize: 12, color: "#666", fontWeight: 600 }}>Stream Key <span style={{ color: "#333", fontWeight: 400 }}>— keep this private</span></p>
               {!confirmRotate ? (
@@ -438,24 +415,70 @@ export function StreamerDashboard() {
               </p>
             )}
           </div>
+
+          {/* OBS Setup */}
+          <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 20 }}>
+            <p style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 700, color: "#fff" }}>OBS Setup</p>
+            <div style={{ background: "rgba(234,179,8,0.07)", border: "1px solid rgba(234,179,8,0.2)", borderRadius: 8, padding: "10px 14px", marginBottom: 16, display: "flex", gap: 10, alignItems: "flex-start" }}>
+              <span style={{ fontSize: 15, flexShrink: 0, marginTop: 1 }}>⚠️</span>
+              <p style={{ margin: 0, fontSize: 13, color: "#a16207", lineHeight: 1.5 }}>
+                <strong>Skip the Auto-Configuration Wizard.</strong> It only works with Twitch/YouTube and will always fail for Peep. Use the manual steps below.
+              </p>
+            </div>
+            <ol style={{ margin: 0, paddingLeft: 18, color: "#888", fontSize: 14, lineHeight: 2.2 }}>
+              <li>Open OBS → <strong style={{ color: "#ccc" }}>Settings → Stream</strong></li>
+              <li>Service: <strong style={{ color: "#ccc" }}>Custom...</strong></li>
+              <li>Server: paste your <strong style={{ color: YELLOW }}>RTMP Server</strong> above</li>
+              <li>Stream Key: paste your <strong style={{ color: YELLOW }}>Stream Key</strong> above</li>
+              <li>Recommended: <strong style={{ color: "#ccc" }}>1080p, 6000 kbps, H.264</strong></li>
+              <li>Click <strong style={{ color: "#ccc" }}>Start Streaming</strong> — you'll go live on Peep automatically</li>
+            </ol>
+          </div>
         </SectionCard>
 
-        {/* OBS Setup */}
-        <SectionCard title="OBS Setup">
-          <div style={{ background: "rgba(234,179,8,0.07)", border: "1px solid rgba(234,179,8,0.2)", borderRadius: 8, padding: "10px 14px", marginBottom: 16, display: "flex", gap: 10, alignItems: "flex-start" }}>
-            <span style={{ fontSize: 15, flexShrink: 0, marginTop: 1 }}>⚠️</span>
-            <p style={{ margin: 0, fontSize: 13, color: "#a16207", lineHeight: 1.5 }}>
-              <strong>Skip the Auto-Configuration Wizard.</strong> It only works with Twitch/YouTube and will always fail for Peep. Use the manual steps below.
-            </p>
+        {/* Channel Settings */}
+        <SectionCard title="Channel Settings">
+          {/* Channel Name */}
+          <div style={{ marginBottom: 20 }}>
+            <p style={{ margin: "0 0 8px", fontSize: 12, color: "#666", fontWeight: 600 }}>Channel Name</p>
+            <p style={{ margin: "0 0 10px", fontSize: 13, color: "#444" }}>This is how your channel appears on Peep.</p>
+            <div style={{ display: "flex", gap: 10 }}>
+              <input value={displayName} onChange={e => setDisplayName(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && saveName()}
+                placeholder="Your channel name" maxLength={60} style={{ ...inp, flex: 1 }} />
+              <button onClick={saveName}
+                disabled={savingName || !displayName.trim() || displayName.trim() === (stream.channel_name || stream.title)}
+                style={{ flexShrink: 0, background: YELLOW, border: "none", borderRadius: 10, padding: "12px 20px", color: "#0a0a0a", fontSize: 14, fontWeight: 700, cursor: "pointer", opacity: savingName || displayName.trim() === (stream.channel_name || stream.title) ? 0.5 : 1 }}>
+                {savingName ? "Saving…" : "Save"}
+              </button>
+            </div>
           </div>
-          <ol style={{ margin: 0, paddingLeft: 18, color: "#888", fontSize: 14, lineHeight: 2.2 }}>
-            <li>Open OBS → <strong style={{ color: "#ccc" }}>Settings → Stream</strong></li>
-            <li>Service: <strong style={{ color: "#ccc" }}>Custom...</strong></li>
-            <li>Server: paste your <strong style={{ color: YELLOW }}>RTMP Server</strong> above</li>
-            <li>Stream Key: paste your <strong style={{ color: YELLOW }}>Stream Key</strong> above</li>
-            <li>Recommended: <strong style={{ color: "#ccc" }}>1080p, 6000 kbps, H.264</strong></li>
-            <li>Click <strong style={{ color: "#ccc" }}>Start Streaming</strong> — you'll go live on Peep automatically</li>
-          </ol>
+
+          {/* Divider */}
+          <div style={{ borderTop: `1px solid ${BORDER}`, marginBottom: 20 }} />
+
+          {/* Stream Title + Category */}
+          <div style={{ marginBottom: 16 }}>
+            <p style={{ margin: "0 0 8px", fontSize: 12, color: "#666", fontWeight: 600 }}>Stream Title</p>
+            <input
+              value={streamTitle}
+              onChange={e => setStreamTitle(e.target.value)}
+              placeholder="e.g. Late night gaming session, New album listening party…"
+              maxLength={120}
+              style={inp}
+            />
+          </div>
+          <div style={{ marginBottom: 20 }}>
+            <p style={{ margin: "0 0 8px", fontSize: 12, color: "#666", fontWeight: 600 }}>Category</p>
+            <select value={category} onChange={e => setCategory(e.target.value)}
+              style={{ ...inp, appearance: "none", cursor: "pointer" }}>
+              {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+            </select>
+          </div>
+          <button onClick={saveStreamInfo} disabled={savingInfo}
+            style={{ background: YELLOW, border: "none", borderRadius: 10, padding: "11px 22px", color: "#0a0a0a", fontSize: 14, fontWeight: 700, cursor: savingInfo ? "wait" : "pointer", opacity: savingInfo ? 0.6 : 1 }}>
+            {savingInfo ? "Saving…" : "Save Info"}
+          </button>
         </SectionCard>
 
         {/* Stream Schedule */}
@@ -523,21 +546,6 @@ export function StreamerDashboard() {
             style={{ background: YELLOW, border: "none", borderRadius: 10, padding: "11px 22px", color: "#0a0a0a", fontSize: 14, fontWeight: 700, cursor: savingWords ? "wait" : "pointer", opacity: savingWords ? 0.6 : 1 }}>
             {savingWords ? "Saving…" : "Save Banned Words"}
           </button>
-        </SectionCard>
-
-        {/* Channel Name */}
-        <SectionCard title="Channel Name">
-          <p style={{ margin: "0 0 16px", fontSize: 13, color: "#444" }}>This is how your channel appears on Peep.</p>
-          <div style={{ display: "flex", gap: 10 }}>
-            <input value={displayName} onChange={e => setDisplayName(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && saveName()}
-              placeholder="Your channel name" maxLength={60} style={{ ...inp, flex: 1 }} />
-            <button onClick={saveName}
-              disabled={savingName || !displayName.trim() || displayName.trim() === (stream.channel_name || stream.title)}
-              style={{ flexShrink: 0, background: YELLOW, border: "none", borderRadius: 10, padding: "12px 20px", color: "#0a0a0a", fontSize: 14, fontWeight: 700, cursor: "pointer", opacity: savingName || displayName.trim() === (stream.channel_name || stream.title) ? 0.5 : 1 }}>
-              {savingName ? "Saving…" : "Save"}
-            </button>
-          </div>
         </SectionCard>
 
         {/* View on Peep */}
