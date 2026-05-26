@@ -5,7 +5,7 @@ const BG = "#0a0a0a";
 const YELLOW = "#facc15";
 const BORDER = "#1e1e1e";
 const CARD = "#111";
-const RTMP_BASE = "rtmps://live.watchpeep.tv:443/live/";
+const RTMP_BASE = "rtmps://live.cloudflare.com/live/";
 
 const CATEGORIES = [
   { value: "general",   label: "General" },
