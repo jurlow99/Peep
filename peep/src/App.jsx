@@ -722,18 +722,15 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       ...videos.map(v => ({ ...v, _type: "movie", _tagsStr: tagsStr(v.tags) })),
       ...shows.map(s => ({ ...s, _type: "show", _tagsStr: tagsStr(s.tags) })),
       ...podcasts.map(p => ({ ...p, _type: "podcast", _tagsStr: tagsStr(p.tags) })),
-      ...musicVideos.map(mv => ({ ...mv, _type: "music_video", _tagsStr: tagsStr(mv.tags) })),
-      ...songs.map(s => ({ ...s, _type: "song", _tagsStr: tagsStr(s.tags) })),
     ];
-  }, [videos, shows, podcasts, musicVideos, songs]);
+  }, [videos, shows, podcasts]);
 
   const searchResults = useMemo(() => {
     if (!debouncedQuery || !debouncedQuery.trim()) return [];
     const q = debouncedQuery.toLowerCase().trim();
     return searchPool.filter(v => {
       if (searchTypeFilter !== "all") {
-        if (searchTypeFilter === "music" && v._type !== "music_video" && v._type !== "song") return false;
-        if (searchTypeFilter !== "music" && v._type !== searchTypeFilter) return false;
+        if (searchTypeFilter !== "all" && v._type !== searchTypeFilter) return false;
       }
       const titleWords = v.title?.toLowerCase().split(/\s+/) || [];
       const titleMatch = titleWords.some(w => w.startsWith(q));
@@ -770,10 +767,6 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     else onPlay(item);
   }
 
-  function handleMusicVideoPlay(mv) {
-    onPlay({ ...mv, _type: "music_video" });
-  }
-
   function handleClick(item) {
     item._type === "show" ? onShowSelect(item) : onPlay(item);
   }
@@ -798,7 +791,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           </span>
           {!isMobile && (
             <div style={{ display: "flex", gap: 4 }}>
-              {["Home", "Movies", "Series", "Music", "Streams", "Podcasts"].map(label => {
+              {["Home", "Movies", "Series", "Streams", "Podcasts"].map(label => {
                 const active = activeNav === label;
                 return (
                   <span key={label} onClick={() => setActiveNav(label)} style={{ fontSize: 17, padding: "6px 16px", borderRadius: 6, color: active ? "#fff" : "rgba(255,255,255,0.55)", fontWeight: active ? 600 : 400, cursor: "pointer", background: active ? "rgba(250,204,21,0.12)" : "transparent", transition: "color 0.2s, background 0.2s" }}
@@ -855,7 +848,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           <div style={{ padding: `20px ${PAD} 32px` }}>
             {/* Type filter chips */}
             <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-              {[{ id: "all", label: "All" }, { id: "movie", label: "Movies" }, { id: "show", label: "Series" }, { id: "music", label: "Music" }, { id: "podcast", label: "Podcasts" }].map(f => (
+              {[{ id: "all", label: "All" }, { id: "movie", label: "Movies" }, { id: "show", label: "Series" }, { id: "podcast", label: "Podcasts" }].map(f => (
                 <button key={f.id}
                   onMouseDown={e => e.preventDefault()}
                   onClick={() => setSearchTypeFilter(f.id)}
@@ -962,10 +955,6 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         <LiveTVPage streams={liveStreams.filter(s => s.is_live)} />
       )}
 
-      {activeNav === "Music" && !loading && (
-        <MusicPage musicVideos={musicVideos} songs={songs} albums={albums} sections={sections} onPlay={handleMusicVideoPlay} playingSong={playingSong} songPaused={songPaused} onPlaySong={s => { if (playingSong?.id === s.id) { setSongPaused(p => !p); } else { setPlayingSong(s); setSongPaused(false); } }} />
-      )}
-
       {/* My List — full grid */}
       {activeNav === "My List" && !loading && (
         <div style={{ position: "relative", zIndex: 1, paddingTop: 100, paddingBottom: 80 }}>
@@ -998,7 +987,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       )}
 
       {/* Content rows (Home / Podcasts / catalog pages) */}
-      {activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "My List" && activeNav !== "Music" && !loading && (allContent.length > 0 || podcasts.length > 0 || continueWatching.length > 0) && (
+      {activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "My List" && !loading && (allContent.length > 0 || podcasts.length > 0 || continueWatching.length > 0) && (
         <div style={{ position: "relative", zIndex: 1, marginTop: activeNav === "Podcasts" ? 0 : -40, paddingBottom: 80 }}>
           {activeNav === "Podcasts" && (
             <div style={{ padding: `48px ${PAD} 0` }}>
@@ -1026,9 +1015,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         </div>
       )}
 
-      {playingSong && <MiniPlayer song={playingSong} onClose={() => { setPlayingSong(null); setSongPaused(false); }} isMobile={isMobile} paused={songPaused} onPausedChange={setSongPaused} />}
-      {isMobile && <div style={{ height: playingSong ? 152 : 72 }} />}
-      {!isMobile && playingSong && <div style={{ height: 80 }} />}
+      {isMobile && <div style={{ height: 72 }} />}
       <Footer onNavChange={setActiveNav} onProfileOpen={onProfileOpen} onOpenModal={setFooterModal} />
 
       {/* Mobile bottom tab bar */}
@@ -1038,7 +1025,6 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
             { id: "Home", label: "Home", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
             { id: "Movies", label: "Movies", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="2"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg> },
             { id: "Series", label: "Series", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></svg> },
-            { id: "Music", label: "Music", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg> },
             { id: "Streams", label: "Streams", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="15" rx="2"/><path d="M17 2l-5 5-5-5"/><circle cx="12" cy="14.5" r="2"/><path d="M9 14.5H7M15 14.5h2"/></svg> },
             { id: "My List", label: "My List", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg> },
           ].map(tab => {
@@ -1162,511 +1148,6 @@ function CatalogPage({ type, content, carousels = [], podcasts = [], onPlay, onS
           </div>
         )
       )}
-    </div>
-  );
-}
-
-// ─── Music Page (Videos + Songs + Albums) ────────────────────────────────────
-
-function MusicPage({ musicVideos, songs, albums, sections = [], onPlay, onPlaySong, playingSong, songPaused }) {
-  const [subTab, setSubTab] = useState("videos"); // "videos" | "songs" | "albums"
-  const [selectedAlbum, setSelectedAlbum] = useState(null);
-  const [mvSort, setMvSort] = useState("artist");
-  const [songSort, setSongSort] = useState("artist");
-  const isMobile = useIsMobile();
-
-  const mvSections = sections.filter(s => s.isMusicVideo);
-  const songSections = sections.filter(s => s.isSong);
-
-  const sortedMv = useMemo(() => {
-    if (mvSort === "newest") return [...musicVideos].sort((a, b) => b.id - a.id);
-    return [...musicVideos].sort((a, b) => (a.artist || "").localeCompare(b.artist || ""));
-  }, [musicVideos, mvSort]);
-
-  const sortedSongs = useMemo(() => {
-    if (songSort === "newest") return [...songs].sort((a, b) => b.id - a.id);
-    return [...songs].sort((a, b) => (a.artist || "").localeCompare(b.artist || ""));
-  }, [songs, songSort]);
-
-  if (selectedAlbum) {
-    const albumSongs = songs.filter(s => s.album_id === selectedAlbum.id);
-    return <AlbumDetail album={selectedAlbum} songs={albumSongs} onBack={() => setSelectedAlbum(null)} onPlay={onPlaySong} />;
-  }
-
-  const tabs = [
-    { id: "videos", label: "Music Videos" },
-    { id: "songs", label: "Songs" },
-    { id: "albums", label: "Albums" },
-  ];
-
-  return (
-    <div style={{ paddingTop: 88, minHeight: "100vh" }}>
-      <div style={{ padding: `0 ${PAD} 0` }}>
-        <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(32px, 4vw, 56px)", fontWeight: 400, margin: "0 0 24px", color: "#fff" }}>Music</h1>
-        <div style={{ display: "flex", gap: 4, borderBottom: "1px solid rgba(255,255,255,0.08)", marginBottom: 32 }}>
-          {tabs.map(t => (
-            <button key={t.id} onClick={() => setSubTab(t.id)}
-              style={{ background: "none", border: "none", borderBottom: `2px solid ${subTab === t.id ? "#facc15" : "transparent"}`, padding: "10px 18px", color: subTab === t.id ? "#fff" : "rgba(255,255,255,0.45)", fontSize: 14, fontWeight: subTab === t.id ? 600 : 400, cursor: "pointer", transition: "color 0.15s", marginBottom: -1, fontFamily: "'Space Grotesk', sans-serif" }}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Music Videos tab */}
-      {subTab === "videos" && (
-        musicVideos.length === 0 && mvSections.length === 0 ? (
-          <div style={{ padding: "80px 0", textAlign: "center", color: "#444", fontSize: 15 }}>No music videos yet.</div>
-        ) : (
-          <div>
-            {mvSections.length === 0 && (
-              <div style={{ padding: `0 ${PAD}`, marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
-                <p style={{ margin: 0, fontSize: 12, color: "#444" }}>{musicVideos.length} video{musicVideos.length !== 1 ? "s" : ""}</p>
-                <select value={mvSort} onChange={e => setMvSort(e.target.value)}
-                  style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "6px 12px", color: "rgba(255,255,255,0.6)", fontSize: 12, cursor: "pointer", outline: "none" }}>
-                  <option value="artist">By Artist</option>
-                  <option value="newest">Newest First</option>
-                </select>
-              </div>
-            )}
-            {mvSections.map(s => <MusicVideoRow key={s.id} section={s} onPlay={onPlay} />)}
-            {mvSections.length === 0 && (
-              <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? "150px" : "200px"}, 1fr))`, gap: isMobile ? 10 : 16, padding: `0 ${PAD} 80px` }}>
-                {sortedMv.map(mv => <MusicVideoCard key={mv.id} item={mv} onClick={() => onPlay(mv)} />)}
-              </div>
-            )}
-          </div>
-        )
-      )}
-
-      {/* Songs tab */}
-      {subTab === "songs" && (
-        songs.length === 0 && songSections.length === 0 ? (
-          <div style={{ padding: "80px 0", textAlign: "center", color: "#444", fontSize: 15 }}>No songs yet.</div>
-        ) : (
-          <div>
-            {songSections.length === 0 && (
-              <div style={{ padding: `0 ${PAD}`, marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
-                <p style={{ margin: 0, fontSize: 12, color: "#444" }}>{songs.length} song{songs.length !== 1 ? "s" : ""}</p>
-                <select value={songSort} onChange={e => setSongSort(e.target.value)}
-                  style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "6px 12px", color: "rgba(255,255,255,0.6)", fontSize: 12, cursor: "pointer", outline: "none" }}>
-                  <option value="artist">By Artist</option>
-                  <option value="newest">Newest First</option>
-                </select>
-              </div>
-            )}
-            {songSections.map(s => <SongRow key={s.id} section={s} onPlay={onPlaySong} />)}
-            {songSections.length === 0 && (
-              <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? "130px" : "160px"}, 1fr))`, gap: isMobile ? 10 : 14, padding: `0 ${PAD} 80px` }}>
-                {sortedSongs.map(s => <SongCard key={s.id} item={s} onClick={() => onPlaySong(s)} isPlaying={playingSong?.id === s.id && !songPaused} isActive={playingSong?.id === s.id} />)}
-              </div>
-            )}
-          </div>
-        )
-      )}
-
-      {/* Albums tab */}
-      {subTab === "albums" && (
-        albums.length === 0 ? (
-          <div style={{ padding: "80px 0", textAlign: "center", color: "#444", fontSize: 15 }}>No albums yet.</div>
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? "140px" : "180px"}, 1fr))`, gap: isMobile ? 12 : 18, padding: `0 ${PAD} 80px` }}>
-            {albums.map(a => <AlbumCard key={a.id} album={a} onClick={() => setSelectedAlbum(a)} />)}
-          </div>
-        )
-      )}
-    </div>
-  );
-}
-
-function AlbumCard({ album, onClick }) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <div onClick={onClick} style={{ cursor: "pointer", borderRadius: 10, overflow: "hidden", background: "#141414", transform: hovered ? "scale(1.04) translateY(-4px)" : "scale(1)", transition: "transform 0.22s ease, box-shadow 0.22s ease", boxShadow: hovered ? "0 20px 48px rgba(0,0,0,0.8)" : "0 2px 8px rgba(0,0,0,0.3)" }}>
-      <div onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
-        style={{ position: "relative", aspectRatio: "1", overflow: "hidden", background: "#0a0a0a" }}>
-        {album.artwork_url
-          ? <img src={album.artwork_url} alt={album.title} style={{ width: "100%", height: "100%", objectFit: "cover", transition: "filter 0.22s", filter: hovered ? "brightness(0.45)" : "brightness(0.9)" }} />
-          : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #1a1a2e, #16213e)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-            </div>
-        }
-        {hovered && (
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div style={{ width: 52, height: 52, borderRadius: "50%", background: "rgba(250,204,21,0.92)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 16px rgba(0,0,0,0.5)" }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="#0a0a0a"><polygon points="6,3 20,12 6,21" /></svg>
-            </div>
-          </div>
-        )}
-      </div>
-      <div style={{ padding: "10px 12px 12px", background: hovered ? "#1c1c1c" : "#141414", transition: "background 0.22s" }}>
-        <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{album.title}</p>
-        {album.artist && <p style={{ margin: "0 0 2px", fontSize: 12, fontWeight: 600, color: "#facc15", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{album.artist}</p>}
-        {album.year && <p style={{ margin: 0, fontSize: 11, color: "#555" }}>{album.year}</p>}
-      </div>
-    </div>
-  );
-}
-
-function AlbumDetail({ album, songs, onBack, onPlay }) {
-  const isMobile = useIsMobile();
-
-  function fmtDur(dur) {
-    if (!dur) return null;
-    return dur;
-  }
-
-  return (
-    <div style={{ paddingTop: 88, minHeight: "100vh", paddingBottom: 80 }}>
-      {/* Back */}
-      <div style={{ padding: `0 ${PAD} 24px` }}>
-        <button onClick={onBack} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.5)", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 13, padding: 0, fontFamily: "'Space Grotesk', sans-serif" }}
-          onMouseEnter={e => e.currentTarget.style.color = "#fff"}
-          onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.5)"}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
-          Albums
-        </button>
-      </div>
-
-      {/* Album header */}
-      <div style={{ padding: `0 ${PAD} 40px`, display: "flex", gap: isMobile ? 20 : 36, alignItems: "flex-end", flexWrap: isMobile ? "wrap" : "nowrap" }}>
-        <div style={{ width: isMobile ? 140 : 200, height: isMobile ? 140 : 200, flexShrink: 0, borderRadius: 12, overflow: "hidden", background: "#141414", boxShadow: "0 16px 48px rgba(0,0,0,0.6)" }}>
-          {album.artwork_url
-            ? <img src={album.artwork_url} alt={album.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #1a1a2e, #16213e)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-              </div>
-          }
-        </div>
-        <div style={{ minWidth: 0 }}>
-          <p style={{ margin: "0 0 8px", fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 600 }}>Album</p>
-          <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(28px, 4vw, 52px)", fontWeight: 400, margin: "0 0 8px", color: "#fff", lineHeight: 1.1 }}>{album.title}</h1>
-          {album.artist && <p style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 600, color: "#facc15" }}>{album.artist}</p>}
-          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-            {album.year && <span style={{ fontSize: 13, color: "#555" }}>{album.year}</span>}
-            <span style={{ fontSize: 13, color: "#555" }}>{songs.length} track{songs.length !== 1 ? "s" : ""}</span>
-          </div>
-          {album.description && <p style={{ margin: "12px 0 0", fontSize: 13, color: "#555", lineHeight: 1.6, maxWidth: 500 }}>{album.description}</p>}
-        </div>
-      </div>
-
-      {/* Tracklist */}
-      {songs.length === 0 ? (
-        <div style={{ padding: `0 ${PAD}`, color: "#444", fontSize: 14 }}>No tracks assigned to this album yet.</div>
-      ) : (
-        <div style={{ padding: `0 ${PAD}` }}>
-          <div style={{ height: 1, background: "rgba(255,255,255,0.06)", marginBottom: 8 }} />
-          {songs.map((song, i) => (
-            <AlbumTrackRow key={song.id} song={song} index={i + 1} onPlay={() => onPlay(song)} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function AlbumTrackRow({ song, index, onPlay }) {
-  const [hovered, setHovered] = useState(false);
-
-  return (
-    <div onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
-      onClick={onPlay}
-      style={{ display: "flex", alignItems: "center", gap: 16, padding: "10px 12px", borderRadius: 8, cursor: "pointer", background: hovered ? "rgba(255,255,255,0.04)" : "transparent", transition: "background 0.15s" }}>
-      <div style={{ width: 24, textAlign: "right", flexShrink: 0 }}>
-        {hovered
-          ? <svg width="14" height="14" viewBox="0 0 24 24" fill="#facc15"><polygon points="5,3 19,12 5,21"/></svg>
-          : <span style={{ fontSize: 13, color: "#555" }}>{index}</span>
-        }
-      </div>
-      {song.thumbnail && <img src={song.thumbnail} alt="" style={{ width: 36, height: 36, borderRadius: 4, objectFit: "cover", flexShrink: 0 }} />}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ margin: 0, fontSize: 14, fontWeight: 500, color: hovered ? "#fff" : "#e5e5e5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", transition: "color 0.15s" }}>{song.title}</p>
-        {song.artist && <p style={{ margin: 0, fontSize: 12, color: "#555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{song.artist}</p>}
-      </div>
-      {song.duration && <span style={{ fontSize: 12, color: "#444", flexShrink: 0 }}>{song.duration}</span>}
-    </div>
-  );
-}
-
-function SongRow({ section, onPlay }) {
-  const scrollRef = useRef(null);
-  const isMobile = useIsMobile();
-  const scroll = dir => scrollRef.current?.scrollBy({ left: dir * scrollRef.current.clientWidth * 0.85, behavior: "smooth" });
-
-  return (
-    <div style={{ marginBottom: 32 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: `0 ${PAD}`, marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: "clamp(20px, 1.8vw, 26px)", fontWeight: 700, color: "#e5e7eb", letterSpacing: "0.05em", textTransform: "uppercase" }}>{section.title}</h2>
-        {!isMobile && (
-          <div style={{ display: "flex", gap: 6 }}>
-            {[
-              <svg key="l" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>,
-              <svg key="r" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>,
-            ].map((icon, i) => (
-              <button key={i} onClick={() => scroll(i === 0 ? -1 : 1)}
-                style={{ background: "none", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, width: 30, height: 30, color: "rgba(255,255,255,0.4)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "border-color 0.15s, color 0.15s" }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.3)"; e.currentTarget.style.color = "#fff"; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"; e.currentTarget.style.color = "rgba(255,255,255,0.4)"; }}>
-                {icon}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-      <div style={{ position: "relative" }}>
-        {!isMobile && <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 48, background: "linear-gradient(to right, #0a0a0a, transparent)", zIndex: 5, pointerEvents: "none" }} />}
-        {!isMobile && <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 48, background: "linear-gradient(to left, #0a0a0a, transparent)", zIndex: 5, pointerEvents: "none" }} />}
-        <div ref={scrollRef} className="scroll-row" style={{ display: "flex", gap: 12, overflowX: "auto", scrollbarWidth: "none", padding: `8px ${PAD} 24px` }}>
-          {section.songItems.map(s => (
-            <div key={s.id} style={{ flexShrink: 0, width: "clamp(130px, 16vw, 180px)" }}>
-              <SongCard item={s} onClick={() => onPlay(s)} />
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SongCard({ item, onClick, isPlaying, isActive }) {
-  const [hovered, setHovered] = useState(false);
-  const showOverlay = hovered || isActive;
-
-  return (
-    <div onClick={onClick} style={{ cursor: "pointer", borderRadius: 10, overflow: "hidden", background: "#141414", transform: hovered ? "scale(1.04) translateY(-4px)" : "scale(1)", transition: "transform 0.22s ease, box-shadow 0.22s ease", boxShadow: hovered ? "0 20px 48px rgba(0,0,0,0.8)" : isActive ? "0 0 0 2px #facc15" : "0 2px 8px rgba(0,0,0,0.3)" }}>
-      <div onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
-        style={{ position: "relative", aspectRatio: "1", overflow: "hidden", background: "#0a0a0a" }}>
-        {item.thumbnail
-          ? <img src={item.thumbnail} alt={item.title} style={{ width: "100%", height: "100%", objectFit: "cover", transition: "filter 0.22s", filter: showOverlay ? "brightness(0.45)" : "brightness(0.82)" }} />
-          : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #1a1a2e, #16213e)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-            </div>
-        }
-        {showOverlay && (
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div style={{ width: 48, height: 48, borderRadius: "50%", background: "rgba(250,204,21,0.92)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 16px rgba(0,0,0,0.5)" }}>
-              {isPlaying
-                ? <svg width="16" height="16" viewBox="0 0 24 24" fill="#0a0a0a"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-                : <svg width="16" height="16" viewBox="0 0 24 24" fill="#0a0a0a"><polygon points="5,3 19,12 5,21" /></svg>
-              }
-            </div>
-          </div>
-        )}
-      </div>
-      <div style={{ padding: "10px 12px 12px", background: hovered ? "#1c1c1c" : "#141414", transition: "background 0.22s" }}>
-        <p style={{ margin: "0 0 2px", fontSize: 12, fontWeight: 700, color: "#facc15", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.artist}</p>
-        <p style={{ margin: "0 0 4px", fontSize: 12, color: "#aaa", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
-        {item.album && <p style={{ margin: 0, fontSize: 11, color: "#555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.album}</p>}
-      </div>
-    </div>
-  );
-}
-
-function MiniPlayer({ song, onClose, isMobile, paused, onPausedChange }) {
-  const audioRef = useRef(null);
-  const scrubBarRef = useRef(null);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [scrubbing, setScrubbing] = useState(false);
-  const [scrubPct, setScrubPct] = useState(null);
-  const [barHovered, setBarHovered] = useState(false);
-
-  useEffect(() => {
-    if (!song?.url || !audioRef.current) return;
-    audioRef.current.src = song.url;
-    audioRef.current.play().catch(() => {});
-    onPausedChange(false);
-    setCurrentTime(0);
-    setDuration(0);
-  }, [song?.id]);
-
-  useEffect(() => {
-    if (!audioRef.current) return;
-    if (paused) audioRef.current.pause();
-    else audioRef.current.play().catch(() => {});
-  }, [paused]);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    const onTime = () => setCurrentTime(audio.currentTime);
-    const onDur = () => setDuration(audio.duration || 0);
-    const onEnd = () => onPausedChange(true);
-    audio.addEventListener("timeupdate", onTime);
-    audio.addEventListener("durationchange", onDur);
-    audio.addEventListener("ended", onEnd);
-    return () => { audio.removeEventListener("timeupdate", onTime); audio.removeEventListener("durationchange", onDur); audio.removeEventListener("ended", onEnd); };
-  }, []);
-
-  useEffect(() => {
-    if (!scrubbing) return;
-    function onMove(e) {
-      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-      const rect = scrubBarRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      setScrubPct(Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)));
-    }
-    function onUp(e) {
-      const clientX = (e.changedTouches ? e.changedTouches[0].clientX : e.clientX);
-      const rect = scrubBarRef.current?.getBoundingClientRect();
-      if (rect && audioRef.current && duration) {
-        audioRef.current.currentTime = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)) * duration;
-      }
-      setScrubbing(false);
-      setScrubPct(null);
-    }
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    window.addEventListener("touchmove", onMove, { passive: true });
-    window.addEventListener("touchend", onUp);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      window.removeEventListener("touchmove", onMove);
-      window.removeEventListener("touchend", onUp);
-    };
-  }, [scrubbing, duration]);
-
-  function togglePlay() {
-    if (!audioRef.current) return;
-    if (paused) { audioRef.current.play().catch(() => {}); onPausedChange(false); }
-    else { audioRef.current.pause(); onPausedChange(true); }
-  }
-
-  function fmt(s) {
-    if (!s || !isFinite(s)) return "–:––";
-    const m = Math.floor(s / 60), sec = Math.floor(s % 60);
-    return `${m}:${String(sec).padStart(2, "0")}`;
-  }
-
-  const displayPct = scrubPct !== null ? scrubPct : (duration > 0 ? currentTime / duration : 0);
-  const active = barHovered || scrubbing;
-
-  return (
-    <div style={{ position: "fixed", bottom: isMobile ? 60 : 0, left: 0, right: 0, zIndex: 200, background: "rgba(12,12,12,0.97)", backdropFilter: "blur(20px)", borderTop: "1px solid rgba(255,255,255,0.08)", fontFamily: "'Space Grotesk', sans-serif" }}>
-      <audio ref={audioRef} />
-      {/* Scrub bar */}
-      <div
-        ref={scrubBarRef}
-        onMouseEnter={() => setBarHovered(true)}
-        onMouseLeave={() => setBarHovered(false)}
-        onMouseDown={e => { e.preventDefault(); setScrubbing(true); const rect = e.currentTarget.getBoundingClientRect(); setScrubPct(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))); }}
-        onTouchStart={e => { setScrubbing(true); const rect = e.currentTarget.getBoundingClientRect(); setScrubPct(Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width))); }}
-        style={{ height: active ? 20 : 12, cursor: "pointer", position: "relative", display: "flex", alignItems: "center", transition: "height 0.15s ease" }}
-      >
-        <div style={{ position: "absolute", left: 0, right: 0, height: active ? 5 : 3, background: "rgba(255,255,255,0.08)", borderRadius: 99, transition: "height 0.15s ease", overflow: "visible" }}>
-          <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${displayPct * 100}%`, background: "#facc15", borderRadius: 99, transition: scrubbing ? "none" : "width 0.5s linear" }} />
-          {/* Thumb */}
-          <div style={{ position: "absolute", top: "50%", left: `${displayPct * 100}%`, transform: "translate(-50%, -50%)", width: active ? 14 : 0, height: active ? 14 : 0, borderRadius: "50%", background: "#facc15", boxShadow: "0 0 6px rgba(250,204,21,0.6)", transition: "width 0.15s ease, height 0.15s ease", pointerEvents: "none" }} />
-        </div>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "10px 20px", height: 68 }}>
-        {/* Album art */}
-        <div style={{ width: 44, height: 44, borderRadius: 6, overflow: "hidden", flexShrink: 0, background: "#1a1a1a" }}>
-          {song.thumbnail
-            ? <img src={song.thumbnail} alt={song.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#1a1a2e,#16213e)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-              </div>
-          }
-        </div>
-        {/* Info */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ margin: "0 0 1px", fontSize: 13, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{song.title}</p>
-          <p style={{ margin: 0, fontSize: 11, color: "#facc15", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{song.artist}</p>
-        </div>
-        {/* Time */}
-        {!isMobile && (
-          <span style={{ fontSize: 11, color: "#555", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
-            {fmt(currentTime)} / {fmt(duration)}
-          </span>
-        )}
-        {/* Play/Pause */}
-        <button onClick={togglePlay} style={{ width: 40, height: 40, borderRadius: "50%", background: "#facc15", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "transform 0.15s" }}
-          onMouseEnter={e => e.currentTarget.style.transform = "scale(1.08)"}
-          onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}>
-          {paused
-            ? <svg width="14" height="14" viewBox="0 0 24 24" fill="#0a0a0a"><polygon points="5,3 19,12 5,21" /></svg>
-            : <svg width="14" height="14" viewBox="0 0 24 24" fill="#0a0a0a"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-          }
-        </button>
-        {/* Close */}
-        <button onClick={onClose} style={{ background: "none", border: "none", color: "#555", fontSize: 20, cursor: "pointer", padding: "0 4px", lineHeight: 1, flexShrink: 0 }}
-          onMouseEnter={e => e.currentTarget.style.color = "#aaa"}
-          onMouseLeave={e => e.currentTarget.style.color = "#555"}>×</button>
-      </div>
-    </div>
-  );
-}
-
-function MusicVideoRow({ section, onPlay }) {
-  const scrollRef = useRef(null);
-  const isMobile = useIsMobile();
-  const scroll = dir => scrollRef.current?.scrollBy({ left: dir * scrollRef.current.clientWidth * 0.85, behavior: "smooth" });
-
-  return (
-    <div style={{ marginBottom: 32 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: `0 ${PAD}`, marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: "clamp(20px, 1.8vw, 26px)", fontWeight: 700, color: "#e5e7eb", letterSpacing: "0.05em", textTransform: "uppercase" }}>{section.title}</h2>
-        {!isMobile && (
-          <div style={{ display: "flex", gap: 6 }}>
-            {[
-              <svg key="l" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>,
-              <svg key="r" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>,
-            ].map((icon, i) => (
-              <button key={i} onClick={() => scroll(i === 0 ? -1 : 1)}
-                style={{ background: "none", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, width: 30, height: 30, color: "rgba(255,255,255,0.4)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "border-color 0.15s, color 0.15s" }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.3)"; e.currentTarget.style.color = "#fff"; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"; e.currentTarget.style.color = "rgba(255,255,255,0.4)"; }}>
-                {icon}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-      <div style={{ position: "relative" }}>
-        {!isMobile && <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 48, background: "linear-gradient(to right, #0a0a0a, transparent)", zIndex: 5, pointerEvents: "none" }} />}
-        {!isMobile && <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 48, background: "linear-gradient(to left, #0a0a0a, transparent)", zIndex: 5, pointerEvents: "none" }} />}
-        <div ref={scrollRef} className="scroll-row" style={{ display: "flex", gap: 14, overflowX: "auto", scrollbarWidth: "none", padding: `16px ${PAD} 24px` }}>
-          {section.musicVideoItems.map(mv => (
-            <div key={mv.id} style={{ flexShrink: 0, width: "clamp(180px, 22vw, 260px)" }}>
-              <MusicVideoCard item={mv} onClick={() => onPlay(mv)} />
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MusicVideoCard({ item, onClick }) {
-  const [hovered, setHovered] = useState(false);
-
-  return (
-    <div onClick={onClick}
-      style={{ cursor: "pointer", borderRadius: 10, overflow: "hidden", background: "#141414", transform: hovered ? "scale(1.04) translateY(-4px)" : "scale(1)", transition: "transform 0.22s ease, box-shadow 0.22s ease", boxShadow: hovered ? "0 20px 48px rgba(0,0,0,0.8)" : "0 2px 8px rgba(0,0,0,0.3)" }}>
-      <div onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
-        style={{ position: "relative", aspectRatio: "16/9", overflow: "hidden", background: "#0a0a0a" }}>
-        {(item.thumbnail || item.poster)
-          ? <img src={item.thumbnail || item.poster} alt={item.title} style={{ width: "100%", height: "100%", objectFit: "cover", transition: "filter 0.22s", filter: hovered ? "brightness(0.45)" : "brightness(0.75)" }} />
-          : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#1a1a2e,#16213e)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-            </div>
-        }
-        {hovered && (
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div style={{ width: 48, height: 48, borderRadius: "50%", background: "rgba(255,255,255,0.92)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 16px rgba(0,0,0,0.5)" }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="#0a0a0a"><polygon points="5,3 19,12 5,21" /></svg>
-            </div>
-          </div>
-        )}
-        {item.duration && <div style={{ position: "absolute", bottom: 8, right: 8, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(4px)", color: "#bbb", fontSize: 10.5, padding: "3px 7px", borderRadius: 4 }}>{item.duration}</div>}
-      </div>
-      <div style={{ padding: "10px 12px 12px", background: hovered ? "#1c1c1c" : "#141414", transition: "background 0.22s" }}>
-        <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 700, color: "#facc15", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.artist}</p>
-        <p style={{ margin: "0 0 4px", fontSize: 12, color: "#aaa", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
-        {item.year && <span style={{ fontSize: 11, color: "#555" }}>{item.year}</span>}
-      </div>
     </div>
   );
 }
