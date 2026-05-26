@@ -106,7 +106,7 @@ function StreamCard({ stream, viewers, isLive, isFollowing, onToggleFollow, user
   );
 }
 
-export function LiveTVPage({ streams, user }) {
+export function LiveTVPage({ streams, user, streamsLoading }) {
   const [viewerCounts, setViewerCounts]   = useState({});
   const [activeCategory, setActiveCategory] = useState("all");
   const [activeTab, setActiveTab]         = useState("all"); // "all" | "following"
@@ -183,6 +183,10 @@ export function LiveTVPage({ streams, user }) {
     onToggleFollow: toggleFollow,
     user,
   });
+
+  if (streamsLoading) {
+    return <div style={{ paddingTop: 90, minHeight: "100vh" }} />;
+  }
 
   if (streams.length === 0) {
     return (

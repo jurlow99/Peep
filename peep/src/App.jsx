@@ -968,7 +968,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       )}
 
       {activeNav === "Streams" && (
-        <LiveTVPage streams={liveStreams} user={user} />
+        <LiveTVPage streams={liveStreams} user={user} streamsLoading={loading} />
       )}
 
       {/* My List — full grid */}
