@@ -138,7 +138,7 @@ export function StreamerDashboard() {
     setSchedule(data || []);
   }
 
-  // Realtime is_live
+  // Realtime is_live + polling fallback
   useEffect(() => {
     if (!stream?.id) return;
     const ch = supabase
@@ -147,7 +147,19 @@ export function StreamerDashboard() {
         ({ new: row }) => setStream(s => ({ ...s, is_live: row.is_live }))
       )
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+
+    // Poll every 8s as backup in case realtime misses the webhook update
+    async function pollLive() {
+      const { data } = await supabase
+        .from("live_streams")
+        .select("is_live")
+        .eq("id", stream.id)
+        .maybeSingle();
+      if (data) setStream(s => s.is_live !== data.is_live ? { ...s, is_live: data.is_live } : s);
+    }
+    const t = setInterval(pollLive, 8000);
+
+    return () => { supabase.removeChannel(ch); clearInterval(t); };
   }, [stream?.id]);
 
   // Viewer count
