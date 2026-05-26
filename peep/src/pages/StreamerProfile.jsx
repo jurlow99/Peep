@@ -19,11 +19,19 @@ function VideoPlayer({ url, style = {} }) {
     if (!el || !url) return;
     if (url.includes(".m3u8")) {
       if (Hls.isSupported()) {
-        const h = new Hls({ startLevel: -1, abrEwmaDefaultEstimate: 8000000, capLevelToPlayerSize: false });
+        const h = new Hls({
+          startLevel: -1,
+          abrEwmaDefaultEstimate: 500000,
+          capLevelToPlayerSize: false,
+          maxBufferLength: 8,
+          backBufferLength: 0,
+        });
         h.loadSource(url); h.attachMedia(el);
         h.on(Hls.Events.MANIFEST_PARSED, () => {
-          h.currentLevel = h.levels.length - 1;
           el.play().catch(() => {});
+        });
+        h.on(Hls.Events.FRAG_LOADED, () => {
+          if (h.currentLevel < h.levels.length - 1) h.currentLevel = h.levels.length - 1;
         });
         hlsRef.current = h;
       } else if (el.canPlayType("application/vnd.apple.mpegurl")) {
