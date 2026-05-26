@@ -47,13 +47,16 @@ function VideoPlayer({ url, live = false, style = {} }) {
   function attachHls(el, src, attempt = 0) {
     if (!alive.current) return;
     hlsRef.current?.destroy();
-    const h = new Hls({ capLevelToPlayerSize: false });
+    const h = new Hls({
+      startLevel: 999,           // clamps to highest available before first segment loads
+      capLevelToPlayerSize: false,
+      autoLevelCapping: -1,      // no cap on auto level selection
+    });
     h.loadSource(src); h.attachMedia(el);
     h.on(Hls.Events.MANIFEST_PARSED, () => {
       if (!alive.current) return;
       setStarting(false);
-      // Lock to highest quality once — prevents ABR switches during playback causing audio desync
-      h.currentLevel = h.levels.length - 1;
+      h.currentLevel = h.levels.length - 1; // lock — disables ABR for the session
       el.play().catch(() => setShowPlay(true));
     });
     h.on(Hls.Events.ERROR, (_, d) => {
