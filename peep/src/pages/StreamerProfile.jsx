@@ -661,7 +661,7 @@ export function StreamerProfile() {
                   </div>
                   <div style={{ padding: "10px 12px 12px" }}>
                     <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 600, color: "#e0e0e0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {stream.stream_title || channelName}
+                      {v.meta?.name || channelName}
                     </p>
                     <p style={{ margin: 0, fontSize: 11, color: "#444" }}>
                       {new Date(v.created).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
