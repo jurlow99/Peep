@@ -14,38 +14,51 @@ const CATEGORY_LABELS = {
 function VideoPlayer({ url, style = {} }) {
   const ref = useRef(null);
   const hlsRef = useRef(null);
+  const [showPlay, setShowPlay] = useState(false);
+  const [fatalError, setFatalError] = useState(false);
+
+  function attachHls(el, src) {
+    hlsRef.current?.destroy();
+    const h = new Hls({ startLevel: -1, abrEwmaDefaultEstimate: 4000000, capLevelToPlayerSize: false });
+    h.loadSource(src); h.attachMedia(el);
+    h.on(Hls.Events.MANIFEST_PARSED, () => { el.play().catch(() => setShowPlay(true)); });
+    h.on(Hls.Events.ERROR, (_, d) => { if (d.fatal) setFatalError(true); });
+    hlsRef.current = h;
+  }
+
   useEffect(() => {
     const el = ref.current;
     if (!el || !url) return;
+    setShowPlay(false); setFatalError(false);
     if (url.includes(".m3u8")) {
-      if (Hls.isSupported()) {
-        const h = new Hls({
-          startLevel: -1,
-          abrEwmaDefaultEstimate: 500000,
-          capLevelToPlayerSize: false,
-        });
-        h.loadSource(url); h.attachMedia(el);
-        h.on(Hls.Events.MANIFEST_PARSED, () => {
-          el.play().catch(() => {});
-        });
-        const onFirstFrag = () => {
-          h.currentLevel = h.levels.length - 1;
-          h.off(Hls.Events.FRAG_LOADED, onFirstFrag);
-        };
-        h.on(Hls.Events.FRAG_LOADED, onFirstFrag);
-        hlsRef.current = h;
-      } else if (el.canPlayType("application/vnd.apple.mpegurl")) {
-        el.src = url; el.play().catch(() => {});
-      }
+      if (Hls.isSupported()) attachHls(el, url);
+      else if (el.canPlayType("application/vnd.apple.mpegurl")) { el.src = url; el.play().catch(() => setShowPlay(true)); }
     } else {
-      el.src = url; el.play().catch(() => {});
+      el.src = url; el.play().catch(() => setShowPlay(true));
     }
-    return () => {
-      el.pause(); el.src = "";
-      hlsRef.current?.destroy(); hlsRef.current = null;
-    };
+    return () => { el.pause(); el.src = ""; hlsRef.current?.destroy(); hlsRef.current = null; };
   }, [url]);
-  return <video ref={ref} controls style={{ display: "block", background: "#000", ...style }} />;
+
+  return (
+    <div style={{ position: "relative", background: "#000", ...style }}>
+      <video ref={ref} controls style={{ display: "block", width: "100%", height: "100%", background: "#000" }} />
+      {showPlay && !fatalError && (
+        <div onClick={() => ref.current?.play().then(() => setShowPlay(false)).catch(() => {})}
+          style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 2 }}>
+          <div style={{ width: 72, height: 72, borderRadius: "50%", background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg>
+          </div>
+        </div>
+      )}
+      {fatalError && (
+        <div onClick={() => { setFatalError(false); setShowPlay(false); attachHls(ref.current, url); }}
+          style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, cursor: "pointer", zIndex: 2, background: "rgba(0,0,0,0.6)" }}>
+          <p style={{ margin: 0, color: "#fff", fontSize: 14, fontWeight: 600 }}>Stream unavailable</p>
+          <p style={{ margin: 0, color: "#666", fontSize: 12 }}>Click to retry</p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function StreamerProfile() {
