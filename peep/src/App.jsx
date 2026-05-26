@@ -256,7 +256,11 @@ export default function App() {
     </div>
   );
 
-  if (!authChecked) return null;
+  if (!authChecked) return (
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 42, color: "#facc15", opacity: 0.8 }}>peep.</span>
+    </div>
+  );
   if (passwordRecovery) return <PasswordResetPage isInvite={passwordRecovery === "invite"} onDone={() => { setPasswordRecovery(false); window.location.href = "/"; }} />;
   if (!user) return <LandingPage />;
   if (!user.email_confirmed_at) return <EmailVerificationGate user={user} />;
