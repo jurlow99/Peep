@@ -298,7 +298,7 @@ export function StreamerDashboard() {
     const { error } = await supabase.storage.from("peep-media").upload(path, file, { upsert: true, contentType: file.type });
     if (error) throw error;
     const { data: { publicUrl } } = supabase.storage.from("peep-media").getPublicUrl(path);
-    return publicUrl;
+    return `${publicUrl}?t=${Date.now()}`;
   }
 
   async function handleThumbnailUpload(e) {
