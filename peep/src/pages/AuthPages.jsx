@@ -524,15 +524,16 @@ export function SigninPage() {
           </p>
         </div>
 
-        <div style={{ marginTop: 16, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 16, padding: "20px clamp(20px, 6vw, 40px)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+        <button onClick={() => { window.history.replaceState({}, "", "/signin?redirect=/streamer"); document.querySelector("input[type=email]")?.focus(); }}
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, marginTop: 16, width: "100%", background: CARD, border: `1px solid ${BORDER}`, borderRadius: 16, padding: "20px clamp(20px, 6vw, 40px)", cursor: "pointer", textAlign: "left", transition: "border-color 0.15s" }}
+          onMouseEnter={e => e.currentTarget.style.borderColor = "#333"}
+          onMouseLeave={e => e.currentTarget.style.borderColor = BORDER}>
           <div>
             <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 600, color: "#fff" }}>Are you a streamer?</p>
-            <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Access your dashboard, stream key, and analytics.</p>
+            <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Sign in above to access your dashboard and stream key.</p>
           </div>
-          <a href="/streamer" style={{ flexShrink: 0, background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "9px 18px", color: YELLOW, fontSize: 13, fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap" }}>
-            Streamer Dashboard →
-          </a>
-        </div>
+          <span style={{ flexShrink: 0, color: YELLOW, fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" }}>Use form above →</span>
+        </button>
       </div>
     </div>
   );
