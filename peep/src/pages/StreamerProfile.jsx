@@ -47,11 +47,13 @@ function VideoPlayer({ url, live = false, style = {} }) {
   function attachHls(el, src, attempt = 0) {
     if (!alive.current) return;
     hlsRef.current?.destroy();
-    const h = new Hls({ startLevel: -1, abrEwmaDefaultEstimate: 4000000, capLevelToPlayerSize: false });
+    const h = new Hls({ capLevelToPlayerSize: false });
     h.loadSource(src); h.attachMedia(el);
     h.on(Hls.Events.MANIFEST_PARSED, () => {
       if (!alive.current) return;
       setStarting(false);
+      // Lock to highest quality once — prevents ABR switches during playback causing audio desync
+      h.currentLevel = h.levels.length - 1;
       el.play().catch(() => setShowPlay(true));
     });
     h.on(Hls.Events.ERROR, (_, d) => {
