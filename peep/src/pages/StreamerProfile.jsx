@@ -23,16 +23,16 @@ function VideoPlayer({ url, style = {} }) {
           startLevel: -1,
           abrEwmaDefaultEstimate: 500000,
           capLevelToPlayerSize: false,
-          maxBufferLength: 8,
-          backBufferLength: 0,
         });
         h.loadSource(url); h.attachMedia(el);
         h.on(Hls.Events.MANIFEST_PARSED, () => {
           el.play().catch(() => {});
         });
-        h.on(Hls.Events.FRAG_LOADED, () => {
-          if (h.currentLevel < h.levels.length - 1) h.currentLevel = h.levels.length - 1;
-        });
+        const onFirstFrag = () => {
+          h.currentLevel = h.levels.length - 1;
+          h.off(Hls.Events.FRAG_LOADED, onFirstFrag);
+        };
+        h.on(Hls.Events.FRAG_LOADED, onFirstFrag);
         hlsRef.current = h;
       } else if (el.canPlayType("application/vnd.apple.mpegurl")) {
         el.src = url; el.play().catch(() => {});
