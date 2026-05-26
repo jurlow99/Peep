@@ -837,7 +837,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         transition: "background 0.4s ease",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 36 }}>
-          <span onClick={() => setActiveNav("Home")} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 26, letterSpacing: "-0.5px", userSelect: "none", cursor: "pointer" }}>
+          <span onClick={() => setActiveNav("Home")} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 30, letterSpacing: "-0.5px", userSelect: "none", cursor: "pointer" }}>
             <span style={{ color: "#facc15" }}>peep.</span>
           </span>
           {!isMobile && (
@@ -845,14 +845,14 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
               {["Home", "Movies", "Series", "Music", "Streams", "Podcasts"].map(label => {
                 const active = activeNav === label;
                 return (
-                  <span key={label} onClick={() => setActiveNav(label)} style={{ fontSize: 15, padding: "6px 14px", borderRadius: 6, color: active ? "#fff" : "rgba(255,255,255,0.55)", fontWeight: active ? 600 : 400, cursor: "pointer", background: active ? "rgba(250,204,21,0.12)" : "transparent", transition: "color 0.2s, background 0.2s" }}
+                  <span key={label} onClick={() => setActiveNav(label)} style={{ fontSize: 17, padding: "6px 16px", borderRadius: 6, color: active ? "#fff" : "rgba(255,255,255,0.55)", fontWeight: active ? 600 : 400, cursor: "pointer", background: active ? "rgba(250,204,21,0.12)" : "transparent", transition: "color 0.2s, background 0.2s" }}
                     onMouseEnter={e => { if (!active) { e.currentTarget.style.color = "#fff"; e.currentTarget.style.background = "rgba(255,255,255,0.06)"; } }}
                     onMouseLeave={e => { if (!active) { e.currentTarget.style.color = "rgba(255,255,255,0.55)"; e.currentTarget.style.background = "transparent"; } }}
                   >{label}</span>
                 );
               })}
               <span onClick={() => { if (!user) { onAuthOpen(); return; } setActiveNav("My List"); }}
-                style={{ fontSize: 15, padding: "6px 14px", borderRadius: 6, cursor: "pointer", color: activeNav === "My List" ? "#fff" : "rgba(255,255,255,0.55)", fontWeight: activeNav === "My List" ? 600 : 400, background: activeNav === "My List" ? "rgba(250,204,21,0.12)" : "transparent", transition: "color 0.2s, background 0.2s" }}
+                style={{ fontSize: 17, padding: "6px 16px", borderRadius: 6, cursor: "pointer", color: activeNav === "My List" ? "#fff" : "rgba(255,255,255,0.55)", fontWeight: activeNav === "My List" ? 600 : 400, background: activeNav === "My List" ? "rgba(250,204,21,0.12)" : "transparent", transition: "color 0.2s, background 0.2s" }}
                 onMouseEnter={e => { e.currentTarget.style.color = "#fff"; e.currentTarget.style.background = "rgba(255,255,255,0.06)"; }}
                 onMouseLeave={e => { e.currentTarget.style.color = activeNav === "My List" ? "#fff" : "rgba(255,255,255,0.55)"; e.currentTarget.style.background = activeNav === "My List" ? "rgba(250,204,21,0.12)" : "transparent"; }}
               >My List</span>
@@ -1440,7 +1440,7 @@ function SongRow({ section, onPlay }) {
   return (
     <div style={{ marginBottom: 32 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: `0 ${PAD}`, marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: "clamp(14px, 1.2vw, 17px)", fontWeight: 500, color: "#9ca3af", letterSpacing: "0.04em", textTransform: "uppercase" }}>{section.title}</h2>
+        <h2 style={{ margin: 0, fontSize: "clamp(20px, 1.8vw, 26px)", fontWeight: 700, color: "#e5e7eb", letterSpacing: "0.05em", textTransform: "uppercase" }}>{section.title}</h2>
         {!isMobile && (
           <div style={{ display: "flex", gap: 6 }}>
             {[
@@ -1651,7 +1651,7 @@ function MusicVideoRow({ section, onPlay }) {
   return (
     <div style={{ marginBottom: 32 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: `0 ${PAD}`, marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: "clamp(14px, 1.2vw, 17px)", fontWeight: 500, color: "#9ca3af", letterSpacing: "0.04em", textTransform: "uppercase" }}>{section.title}</h2>
+        <h2 style={{ margin: 0, fontSize: "clamp(20px, 1.8vw, 26px)", fontWeight: 700, color: "#e5e7eb", letterSpacing: "0.05em", textTransform: "uppercase" }}>{section.title}</h2>
         {!isMobile && (
           <div style={{ display: "flex", gap: 6 }}>
             {[
@@ -1728,10 +1728,10 @@ function CatalogCard({ item, onClick, myList, onToggleList }) {
 
         {/* Badges */}
         {item._type === "show"
-          ? <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(59,130,246,0.9)", backdropFilter: "blur(4px)", color: "#fff", fontSize: 9.5, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: 0.5, textTransform: "uppercase" }}>Series</div>
-          : item.category && <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(250,204,21,0.85)", backdropFilter: "blur(4px)", color: "#0a0a0a", fontSize: 9.5, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: 0.5, textTransform: "uppercase" }}>{item.category}</div>
+          ? <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(59,130,246,0.9)", backdropFilter: "blur(4px)", color: "#fff", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 4, letterSpacing: 0.5, textTransform: "uppercase" }}>Series</div>
+          : item.category && <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(250,204,21,0.85)", backdropFilter: "blur(4px)", color: "#0a0a0a", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 4, letterSpacing: 0.5, textTransform: "uppercase" }}>{item.category}</div>
         }
-        {item.duration && <div style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(4px)", color: "#bbb", fontSize: 10.5, padding: "3px 7px", borderRadius: 4 }}>{item.duration}</div>}
+        {item.duration && <div style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(4px)", color: "#bbb", fontSize: 12, padding: "4px 8px", borderRadius: 4 }}>{item.duration}</div>}
 
         {/* Hover overlay — play button only */}
         {hovered && (
@@ -1745,17 +1745,17 @@ function CatalogCard({ item, onClick, myList, onToggleList }) {
 
       <div style={{ padding: "10px 12px 12px", background: hovered ? "#1c1c1c" : "#141414", transition: "background 0.22s" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4, gap: 6 }}>
-          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>{item.title}</p>
+          <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>{item.title}</p>
           {hovered && (
             <button onClick={e => { e.stopPropagation(); onToggleList?.(item.id, item._type); }}
-              style={{ flexShrink: 0, background: inList ? "rgba(250,204,21,0.15)" : "rgba(255,255,255,0.08)", border: `1px solid ${inList ? "rgba(250,204,21,0.5)" : "rgba(255,255,255,0.15)"}`, borderRadius: 20, padding: "3px 10px", color: inList ? "#facc15" : "#aaa", fontSize: 10, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+              style={{ flexShrink: 0, background: inList ? "rgba(250,204,21,0.15)" : "rgba(255,255,255,0.08)", border: `1px solid ${inList ? "rgba(250,204,21,0.5)" : "rgba(255,255,255,0.15)"}`, borderRadius: 20, padding: "4px 12px", color: inList ? "#facc15" : "#aaa", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
               {inList ? "✓ Saved" : "+ List"}
             </button>
           )}
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          {item.score ? <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 600 }}>{item.score}%</span> : <span />}
-          {item.year && <span style={{ fontSize: 11, color: "#555" }}>{item.year}</span>}
+          {item.score ? <span style={{ fontSize: 13, color: "#4ade80", fontWeight: 600 }}>{item.score}%</span> : <span />}
+          {item.year && <span style={{ fontSize: 13, color: "#555" }}>{item.year}</span>}
         </div>
       </div>
     </div>
@@ -1831,30 +1831,30 @@ function HeroBanner({ video, onPlay, isShow, myList, onToggleList, categoryRank 
       <div style={{ position: "absolute", bottom: isMobile ? "10%" : "14%", left: PAD, right: PAD, maxWidth: isMobile ? "100%" : "clamp(460px, 40vw, 680px)" }}>
         <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap", alignItems: "center" }}>
           {isShow
-            ? <span style={{ background: "rgba(147,197,253,0.12)", border: "1px solid rgba(147,197,253,0.25)", color: "#93c5fd", fontSize: 9.5, fontWeight: 700, padding: "4px 11px", borderRadius: 4, letterSpacing: 1.5, textTransform: "uppercase" }}>Series</span>
-            : video.category && <span style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.6)", fontSize: 9.5, fontWeight: 700, padding: "4px 11px", borderRadius: 4, letterSpacing: 1.5, textTransform: "uppercase" }}>{video.category}</span>
+            ? <span style={{ background: "rgba(147,197,253,0.12)", border: "1px solid rgba(147,197,253,0.25)", color: "#93c5fd", fontSize: 12, fontWeight: 700, padding: "5px 13px", borderRadius: 4, letterSpacing: 1.5, textTransform: "uppercase" }}>Series</span>
+            : video.category && <span style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.6)", fontSize: 12, fontWeight: 700, padding: "5px 13px", borderRadius: 4, letterSpacing: 1.5, textTransform: "uppercase" }}>{video.category}</span>
           }
-          {video.category && categoryRank && <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 12 }}>#{categoryRank} in {video.category}</span>}
+          {video.category && categoryRank && <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 15 }}>#{categoryRank} in {video.category}</span>}
         </div>
 
-        <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(36px, 4.5vw, 72px)", lineHeight: 1.05, margin: "0 0 16px", fontWeight: 400, letterSpacing: "-0.02em" }}>{video.title}</h1>
+        <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(42px, 5.5vw, 84px)", lineHeight: 1.05, margin: "0 0 18px", fontWeight: 400, letterSpacing: "-0.02em" }}>{video.title}</h1>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18, flexWrap: "wrap" }}>
-          {video.score && <span style={{ color: "#6ee7b7", fontSize: 13, fontWeight: 600 }}>{video.score}% Match</span>}
-          {video.year && <span style={{ color: "rgba(255,255,255,0.38)", fontSize: 13 }}>{video.year}</span>}
-          {video.rating && <span style={{ border: "1px solid rgba(255,255,255,0.18)", color: "rgba(255,255,255,0.38)", fontSize: 10.5, padding: "2px 7px", borderRadius: 3, letterSpacing: 0.3 }}>{video.rating}</span>}
-          {video.duration && <span style={{ color: "rgba(255,255,255,0.38)", fontSize: 13 }}>{video.duration}</span>}
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20, flexWrap: "wrap" }}>
+          {video.score && <span style={{ color: "#6ee7b7", fontSize: 15, fontWeight: 600 }}>{video.score}% Match</span>}
+          {video.year && <span style={{ color: "rgba(255,255,255,0.38)", fontSize: 15 }}>{video.year}</span>}
+          {video.rating && <span style={{ border: "1px solid rgba(255,255,255,0.18)", color: "rgba(255,255,255,0.38)", fontSize: 13, padding: "3px 9px", borderRadius: 3, letterSpacing: 0.3 }}>{video.rating}</span>}
+          {video.duration && <span style={{ color: "rgba(255,255,255,0.38)", fontSize: 15 }}>{video.duration}</span>}
         </div>
 
         {video.description && (
-          <p style={{ fontSize: 14.5, color: "rgba(255,255,255,0.58)", lineHeight: 1.7, margin: "0 0 32px", display: "-webkit-box", WebkitLineClamp: isMobile ? 2 : 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+          <p style={{ fontSize: 17, color: "rgba(255,255,255,0.58)", lineHeight: 1.7, margin: "0 0 36px", display: "-webkit-box", WebkitLineClamp: isMobile ? 2 : 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
             {video.description}
           </p>
         )}
 
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
           <button onClick={() => onPlay(video)}
-            style={{ background: "#fff", color: "#0a0a0a", border: "none", borderRadius: 8, padding: isMobile ? "11px 22px" : "13px 30px", fontSize: isMobile ? 13.5 : 14.5, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 9, letterSpacing: "0.01em", transition: "background 0.15s, transform 0.15s" }}
+            style={{ background: "#fff", color: "#0a0a0a", border: "none", borderRadius: 8, padding: isMobile ? "13px 26px" : "15px 34px", fontSize: isMobile ? 15 : 16, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 9, letterSpacing: "0.01em", transition: "background 0.15s, transform 0.15s" }}
             onMouseEnter={e => { e.currentTarget.style.background = "#e8e8e8"; e.currentTarget.style.transform = "translateY(-1px)"; }}
             onMouseLeave={e => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.transform = "none"; }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="6,3 20,12 6,21" /></svg>
@@ -1862,7 +1862,7 @@ function HeroBanner({ video, onPlay, isShow, myList, onToggleList, categoryRank 
           </button>
           {video.trailer_url && (
             <button onClick={() => setTrailerOpen(true)}
-              style={{ background: "rgba(255,255,255,0.08)", backdropFilter: "blur(8px)", color: "rgba(255,255,255,0.85)", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 8, padding: "13px 26px", fontSize: 14.5, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 9, transition: "background 0.15s" }}
+              style={{ background: "rgba(255,255,255,0.08)", backdropFilter: "blur(8px)", color: "rgba(255,255,255,0.85)", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 8, padding: "15px 28px", fontSize: 16, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 9, transition: "background 0.15s" }}
               onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.14)"}
               onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.08)"}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="10,8 16,12 10,16" fill="currentColor" stroke="none" /></svg>
@@ -1874,7 +1874,7 @@ function HeroBanner({ video, onPlay, isShow, myList, onToggleList, categoryRank 
             const inList = myList?.[`${type}_${video.id}`];
             return (
               <button onClick={() => onToggleList?.(video.id, type)}
-                style={{ background: "rgba(255,255,255,0.08)", backdropFilter: "blur(8px)", color: inList ? "#facc15" : "rgba(255,255,255,0.85)", border: `1px solid ${inList ? "rgba(250,204,21,0.35)" : "rgba(255,255,255,0.14)"}`, borderRadius: 8, padding: "13px 26px", fontSize: 14.5, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 9, transition: "background 0.15s" }}
+                style={{ background: "rgba(255,255,255,0.08)", backdropFilter: "blur(8px)", color: inList ? "#facc15" : "rgba(255,255,255,0.85)", border: `1px solid ${inList ? "rgba(250,204,21,0.35)" : "rgba(255,255,255,0.14)"}`, borderRadius: 8, padding: "15px 28px", fontSize: 16, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 9, transition: "background 0.15s" }}
                 onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.14)"}
                 onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.08)"}>
                 {inList
@@ -1911,7 +1911,7 @@ function ContentRow({ section, onPlay, onShowSelect, myList, onToggleList }) {
   return (
     <div style={{ marginBottom: 32 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: `0 ${PAD}`, marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: "clamp(14px, 1.2vw, 17px)", fontWeight: 500, color: "#9ca3af", letterSpacing: "0.04em", textTransform: "uppercase" }}>{section.title}</h2>
+        <h2 style={{ margin: 0, fontSize: "clamp(20px, 1.8vw, 26px)", fontWeight: 700, color: "#e5e7eb", letterSpacing: "0.05em", textTransform: "uppercase" }}>{section.title}</h2>
         {!isMobile && (
           <div style={{ display: "flex", gap: 6 }}>
             {[
@@ -2277,12 +2277,12 @@ function VideoCard({ video, onClick, rank, myList, onToggleList }) {
 
           {/* Type badge */}
           {video._type === "show"
-            ? <div style={{ position: "absolute", top: 10, left: 10, background: "rgba(15,15,15,0.75)", backdropFilter: "blur(8px)", color: "#93c5fd", fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: 1.2, textTransform: "uppercase" }}>Series</div>
-            : video.category && <div style={{ position: "absolute", top: 10, left: 10, background: "rgba(15,15,15,0.75)", backdropFilter: "blur(8px)", color: "#d1d5db", fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: 1.2, textTransform: "uppercase" }}>{video.category}</div>
+            ? <div style={{ position: "absolute", top: 10, left: 10, background: "rgba(15,15,15,0.75)", backdropFilter: "blur(8px)", color: "#93c5fd", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 4, letterSpacing: 1.2, textTransform: "uppercase" }}>Series</div>
+            : video.category && <div style={{ position: "absolute", top: 10, left: 10, background: "rgba(15,15,15,0.75)", backdropFilter: "blur(8px)", color: "#d1d5db", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 4, letterSpacing: 1.2, textTransform: "uppercase" }}>{video.category}</div>
           }
 
           {/* Duration */}
-          {video.duration && <div style={{ position: "absolute", top: 10, right: 10, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(6px)", color: "rgba(255,255,255,0.6)", fontSize: 10, padding: "3px 7px", borderRadius: 4, fontWeight: 500 }}>{video.duration}</div>}
+          {video.duration && <div style={{ position: "absolute", top: 10, right: 10, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(6px)", color: "rgba(255,255,255,0.6)", fontSize: 12, padding: "4px 8px", borderRadius: 4, fontWeight: 500 }}>{video.duration}</div>}
 
           {/* Progress bar */}
           {video._progress && video._progress.duration_seconds > 0 && (
@@ -2293,18 +2293,18 @@ function VideoCard({ video, onClick, rank, myList, onToggleList }) {
         </div>
 
         <div style={{ padding: "12px 13px 14px", background: "#0f0f0f" }}>
-          <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 500, color: "#f3f4f6", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "0.01em" }}>{video.title}</p>
+          <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#f3f4f6", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "0.01em" }}>{video.title}</p>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: hovered ? 11 : 0 }}>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              {video.score && <span style={{ fontSize: 11, color: "#6ee7b7", fontWeight: 600 }}>{video.score}%</span>}
-              {video.year && <span style={{ fontSize: 11, color: "#6b7280" }}>{video.year}</span>}
+              {video.score && <span style={{ fontSize: 13, color: "#6ee7b7", fontWeight: 600 }}>{video.score}%</span>}
+              {video.year && <span style={{ fontSize: 13, color: "#6b7280" }}>{video.year}</span>}
             </div>
-            {video.view_count > 0 && <span style={{ fontSize: 10, color: "#374151" }}>{fmtViews(video.view_count)}</span>}
+            {video.view_count > 0 && <span style={{ fontSize: 12, color: "#374151" }}>{fmtViews(video.view_count)}</span>}
           </div>
           {(hovered || isMobile) && (
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={e => { e.stopPropagation(); onToggleList?.(video.id, video._type); }}
-                style={{ flex: 1, background: "transparent", border: `1px solid ${inList ? "rgba(250,204,21,0.35)" : "rgba(255,255,255,0.1)"}`, borderRadius: 6, color: inList ? "#facc15" : "rgba(255,255,255,0.5)", fontSize: 11, padding: "6px 0", cursor: "pointer", fontWeight: 500, letterSpacing: "0.02em", transition: "border-color 0.15s, color 0.15s" }}>
+                style={{ flex: 1, background: "transparent", border: `1px solid ${inList ? "rgba(250,204,21,0.35)" : "rgba(255,255,255,0.1)"}`, borderRadius: 6, color: inList ? "#facc15" : "rgba(255,255,255,0.5)", fontSize: 13, padding: "7px 0", cursor: "pointer", fontWeight: 500, letterSpacing: "0.02em", transition: "border-color 0.15s, color 0.15s" }}>
                 {inList ? "✓ Saved" : "+ My List"}
               </button>
             </div>
@@ -2335,26 +2335,26 @@ function VideoCard({ video, onClick, rank, myList, onToggleList }) {
 
           {/* Info panel — fades in after expansion */}
           <div style={{ padding: "14px 18px 18px", opacity: trailerExpanded ? 1 : 0, transition: "opacity 0.15s ease 0.15s" }}>
-            <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{video.title}</p>
+            <p style={{ margin: "0 0 8px", fontSize: 17, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{video.title}</p>
 
             {/* Metadata row */}
             <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
-              {video.score && <span style={{ fontSize: 12, color: "#4ade80", fontWeight: 700 }}>{video.score}% Match</span>}
-              {video.category && <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: 0.5 }}>{video.category}</span>}
-              {video.year && <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>{video.year}</span>}
-              {video.rating && <span style={{ fontSize: 10, border: "1px solid rgba(255,255,255,0.3)", color: "rgba(255,255,255,0.5)", padding: "1px 5px", borderRadius: 3 }}>{video.rating}</span>}
-              {video.duration && <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>{video.duration}</span>}
+              {video.score && <span style={{ fontSize: 14, color: "#4ade80", fontWeight: 700 }}>{video.score}% Match</span>}
+              {video.category && <span style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: 0.5 }}>{video.category}</span>}
+              {video.year && <span style={{ fontSize: 13, color: "rgba(255,255,255,0.5)" }}>{video.year}</span>}
+              {video.rating && <span style={{ fontSize: 12, border: "1px solid rgba(255,255,255,0.3)", color: "rgba(255,255,255,0.5)", padding: "2px 6px", borderRadius: 3 }}>{video.rating}</span>}
+              {video.duration && <span style={{ fontSize: 13, color: "rgba(255,255,255,0.5)" }}>{video.duration}</span>}
             </div>
 
             {/* Description */}
             {video.description && (
-              <p style={{ margin: "0 0 12px", fontSize: 12, color: "rgba(255,255,255,0.65)", lineHeight: 1.55, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{video.description}</p>
+              <p style={{ margin: "0 0 12px", fontSize: 14, color: "rgba(255,255,255,0.65)", lineHeight: 1.55, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{video.description}</p>
             )}
 
             {/* Action buttons */}
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <button onClick={e => { e.stopPropagation(); onClick(); }}
-                style={{ flex: 1, background: "#fff", border: "none", borderRadius: 6, padding: "9px 0", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
+                style={{ flex: 1, background: "#fff", border: "none", borderRadius: 6, padding: "10px 0", color: "#0a0a0a", fontSize: 15, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
                 Play
               </button>
