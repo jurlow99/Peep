@@ -59,11 +59,21 @@ export function StreamerProfile() {
   const [chatSending, setChatSending] = useState(false);
   const [streamEnded, setStreamEnded] = useState(false);
   const chatBottomRef = useRef(null);
+  const prevIsLiveRef = useRef(null);
 
   useEffect(() => {
     loadStream();
     supabase.auth.getSession().then(({ data: { session } }) => setCurrentUser(session?.user ?? null));
   }, []);
+
+  // Detect live → offline transition via ref (avoids calling setState inside updater)
+  useEffect(() => {
+    if (stream === null) return;
+    if (prevIsLiveRef.current === true && stream.is_live === false) {
+      setStreamEnded(true);
+    }
+    prevIsLiveRef.current = stream.is_live;
+  }, [stream?.is_live]);
 
   // Realtime: update stream record when is_live or other fields change
   useEffect(() => {
@@ -73,14 +83,23 @@ export function StreamerProfile() {
         event: "UPDATE", schema: "public", table: "live_streams",
         filter: `id=eq.${stream.id}`,
       }, ({ new: updated }) => {
-        setStream(prev => {
-          if (prev?.is_live && updated.is_live === false) setStreamEnded(true);
-          return { ...prev, ...updated };
-        });
+        setStream(prev => ({ ...prev, ...updated }));
       })
       .subscribe();
     return () => supabase.removeChannel(ch);
   }, [stream?.id]);
+
+  // Polling fallback — if Realtime misses the update, catch it here
+  useEffect(() => {
+    if (!stream?.id || !stream?.is_live) return;
+    const t = setInterval(async () => {
+      const { data } = await supabase.from("live_streams").select("is_live").eq("id", stream.id).single();
+      if (data && data.is_live === false) {
+        setStream(prev => ({ ...prev, is_live: false }));
+      }
+    }, 10000);
+    return () => clearInterval(t);
+  }, [stream?.id, stream?.is_live]);
 
   async function loadStream() {
     const { data: streams } = await supabase.from("live_streams").select("*").order("id");
