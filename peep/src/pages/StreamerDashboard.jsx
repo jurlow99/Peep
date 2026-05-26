@@ -42,9 +42,11 @@ export function StreamerDashboard() {
   const [stream, setStream]           = useState(null);
   const [loading, setLoading]         = useState(true);
 
-  // Channel name
+  // Channel name + handle
   const [displayName, setDisplayName] = useState("");
   const [savingName, setSavingName]   = useState(false);
+  const [handle, setHandle]           = useState("");
+  const [savingHandle, setSavingHandle] = useState(false);
 
   // Stream title + category + bio + donation
   const [streamTitle, setStreamTitle]     = useState("");
@@ -117,6 +119,7 @@ export function StreamerDashboard() {
     setStream(data ?? null);
     if (data) {
       setDisplayName(data.channel_name || data.title || "");
+      setHandle(data.username || "");
       setStreamTitle(data.stream_title || "");
       setCategory(data.category || "general");
       setBio(data.bio || "");
@@ -199,6 +202,22 @@ export function StreamerDashboard() {
     setStream(s => ({ ...s, channel_name: name }));
     setSavingName(false);
     showToast("Channel name updated!");
+  }
+
+  async function saveHandle() {
+    if (!handle.trim() || !stream || stream.username) return;
+    const cleaned = handle.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
+    if (!cleaned) return;
+    setSavingHandle(true);
+    const { error } = await supabase.from("live_streams").update({ username: cleaned }).eq("id", stream.id);
+    if (error) {
+      showToast(error.code === "23505" ? "That handle is already taken." : "Failed to save handle.");
+    } else {
+      setStream(s => ({ ...s, username: cleaned }));
+      setHandle(cleaned);
+      showToast("Handle set! Your channel URL is now /stream/" + cleaned);
+    }
+    setSavingHandle(false);
   }
 
   async function saveStreamInfo() {
@@ -364,7 +383,7 @@ export function StreamerDashboard() {
     );
   }
 
-  const username = stream.channel_name?.toLowerCase().replace(/[^a-z0-9]/g, "") || stream.id;
+  const username = stream.username || stream.channel_name?.toLowerCase().replace(/[^a-z0-9]/g, "") || stream.id;
   const PAD = "clamp(16px,4vw,48px)";
 
   // Reusable field label
@@ -433,6 +452,36 @@ export function StreamerDashboard() {
                   {savingName ? "…" : "Save"}
                 </button>
               </div>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <Label>Handle <span style={{ color: "#2a2a2a", fontWeight: 400 }}>— your channel URL, set once</span></Label>
+              {stream.username ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ ...inp, flex: 1, color: "#555", display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ color: "#333" }}>@</span>
+                    <span>{stream.username}</span>
+                  </div>
+                  <div style={{ flexShrink: 0, background: "#111", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "0 14px", height: 44, display: "flex", alignItems: "center", color: "#333", fontSize: 12 }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: "flex", gap: 8 }}>
+                  <div style={{ flex: 1, display: "flex", alignItems: "center", background: "#0d0d0d", border: `1px solid ${BORDER}`, borderRadius: 10, overflow: "hidden" }}>
+                    <span style={{ padding: "0 10px", color: "#444", fontSize: 14, flexShrink: 0 }}>@</span>
+                    <input value={handle} onChange={e => setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                      onKeyDown={e => e.key === "Enter" && saveHandle()}
+                      placeholder="yourchannel" maxLength={30}
+                      style={{ ...inp, border: "none", borderRadius: 0, paddingLeft: 0, flex: 1 }} />
+                  </div>
+                  <button onClick={saveHandle} disabled={savingHandle || !handle.trim()}
+                    style={{ flexShrink: 0, background: YELLOW, border: "none", borderRadius: 10, padding: "0 18px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: !handle.trim() ? 0.45 : 1 }}>
+                    {savingHandle ? "…" : "Set"}
+                  </button>
+                </div>
+              )}
+              {!stream.username && <p style={{ margin: "4px 0 0", fontSize: 11, color: "#333" }}>Can't be changed after — choose carefully.</p>}
             </div>
 
             <div style={{ borderTop: `1px solid ${BORDER}`, margin: "16px 0" }} />

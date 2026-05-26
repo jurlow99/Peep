@@ -104,7 +104,7 @@ export function StreamerProfile() {
   async function loadStream() {
     const { data: streams } = await supabase.from("live_streams").select("*").order("id");
     const match = streams?.find(s => {
-      const slug = (s.channel_name || s.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const slug = s.username || (s.channel_name || s.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
       return slug === username;
     });
     setStream(match ?? null);

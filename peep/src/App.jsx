@@ -776,7 +776,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     saveRecentSearch(searchQuery);
     closeSearch();
     if (item._type === "stream") {
-      const slug = (item.channel_name || item.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const slug = item.username || (item.channel_name || item.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
       window.location.href = `/stream/${slug}`;
     } else if (item._type === "show") onShowSelect(item);
     else if (item._type === "podcast") { setSelectedPodcast(item); setPage("podcast"); }

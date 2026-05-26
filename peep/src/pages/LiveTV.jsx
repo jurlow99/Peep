@@ -21,7 +21,7 @@ const CATEGORY_LABELS = {
 };
 
 function StreamCard({ stream, viewers, isLive, isFollowing, onToggleFollow, user }) {
-  const slug = (stream.channel_name || stream.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const slug = stream.username || (stream.channel_name || stream.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
   const count = viewers || 0;
   const viewerLabel = count >= 1000 ? `${(count / 1000).toFixed(1)}k` : String(count);
 
