@@ -97,17 +97,25 @@ export function StreamerProfile() {
     return () => supabase.removeChannel(ch);
   }, [stream?.id]);
 
-  // Polling fallback — if Realtime misses the update, catch it here
+  // Polling fallback — query Cloudflare directly every 20s via check-live-status edge fn
+  // (more reliable than reading DB which depends on the webhook having fired)
   useEffect(() => {
-    if (!stream?.id || !stream?.is_live) return;
-    const t = setInterval(async () => {
-      const { data } = await supabase.from("live_streams").select("is_live").eq("id", stream.id).single();
-      if (data && data.is_live === false) {
-        setStream(prev => ({ ...prev, is_live: false }));
+    if (!stream?.id || !stream?.is_live || !stream?.stream_uid) return;
+    const check = async () => {
+      try {
+        const res = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/check-live-status?stream_uid=${stream.stream_uid}&stream_id=${stream.id}`
+        );
+        const json = await res.json();
+        if (json.is_live === false) setStream(prev => ({ ...prev, is_live: false }));
+      } catch (_) {
+        const { data } = await supabase.from("live_streams").select("is_live").eq("id", stream.id).single();
+        if (data?.is_live === false) setStream(prev => ({ ...prev, is_live: false }));
       }
-    }, 10000);
+    };
+    const t = setInterval(check, 20000);
     return () => clearInterval(t);
-  }, [stream?.id, stream?.is_live]);
+  }, [stream?.id, stream?.is_live, stream?.stream_uid]);
 
   async function loadStream() {
     const { data: streams } = await supabase.from("live_streams").select("*").order("id");
