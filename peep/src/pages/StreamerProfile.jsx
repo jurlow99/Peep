@@ -54,6 +54,7 @@ export function StreamerProfile() {
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput]     = useState("");
   const [chatSending, setChatSending] = useState(false);
+  const [streamEnded, setStreamEnded] = useState(false);
   const chatBottomRef = useRef(null);
 
   useEffect(() => {
@@ -69,7 +70,10 @@ export function StreamerProfile() {
         event: "UPDATE", schema: "public", table: "live_streams",
         filter: `id=eq.${stream.id}`,
       }, ({ new: updated }) => {
-        setStream(prev => ({ ...prev, ...updated }));
+        setStream(prev => {
+          if (prev?.is_live && updated.is_live === false) setStreamEnded(true);
+          return { ...prev, ...updated };
+        });
       })
       .subscribe();
     return () => supabase.removeChannel(ch);
@@ -235,6 +239,16 @@ export function StreamerProfile() {
     </button>
   );
 
+  const DonateBtn = () => stream.donation_link ? (
+    <a href={stream.donation_link} target="_blank" rel="noopener noreferrer"
+      style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.05)", border: "1px solid #282828", borderRadius: 8, padding: "9px 18px", color: "#aaa", fontSize: 14, fontWeight: 600, textDecoration: "none", flexShrink: 0, transition: "all 0.15s" }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = "#3a3a3a"; e.currentTarget.style.color = "#fff"; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = "#282828"; e.currentTarget.style.color = "#aaa"; }}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+      Support
+    </a>
+  ) : null;
+
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
       <style>{`@keyframes livepulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.3)}}`}</style>
@@ -247,25 +261,46 @@ export function StreamerProfile() {
         <a href="/?nav=Streams" style={{ color: "#555", fontSize: 13, textDecoration: "none" }}>← Streams</a>
       </nav>
 
-      {stream.is_live ? (
-        /* ── LIVE LAYOUT ── */
+      {(stream.is_live || streamEnded) ? (
+        /* ── LIVE / ENDED LAYOUT ── */
         <>
           {/* Player + Chat side by side */}
           <div style={{ display: "flex", background: "#000", borderBottom: "1px solid #1a1a1a" }}>
-            {/* Video fills remaining width */}
+            {/* Video or "stream ended" */}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <VideoPlayer
-                key={stream.stream_url}
-                url={stream.stream_url}
-                style={{ width: "100%", aspectRatio: "16/9" }}
-              />
+              {streamEnded ? (
+                <div style={{ width: "100%", aspectRatio: "16/9", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#050505", gap: 12, padding: "0 24px", textAlign: "center", position: "relative", overflow: "hidden" }}>
+                  {(stream.hero_image || stream.thumbnail) && (
+                    <img src={stream.hero_image || stream.thumbnail} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.12) blur(8px)", transform: "scale(1.05)" }} />
+                  )}
+                  <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+                    <div style={{ width: 56, height: 56, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 700, color: "#fff" }}>
+                      {channelName[0]?.toUpperCase()}
+                    </div>
+                    <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#fff" }}>{channelName}</p>
+                    <p style={{ margin: 0, fontSize: 13, color: "#666" }}>Thanks for watching — the stream has ended.</p>
+                    {vods.length > 0 && (
+                      <button onClick={() => { setStreamEnded(false); document.getElementById("past-streams")?.scrollIntoView({ behavior: "smooth" }); }}
+                        style={{ marginTop: 4, background: "rgba(255,255,255,0.07)", border: "1px solid #2a2a2a", borderRadius: 8, padding: "8px 20px", color: "#ccc", fontSize: 13, cursor: "pointer" }}>
+                        Watch past streams
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <VideoPlayer
+                  key={stream.stream_url}
+                  url={stream.stream_url}
+                  style={{ width: "100%", aspectRatio: "16/9" }}
+                />
+              )}
             </div>
 
             {/* Chat sidebar */}
             <div style={{ width: CHAT_WIDTH, flexShrink: 0, display: "flex", flexDirection: "column", borderLeft: "1px solid #1a1a1a", background: "#0d0d0d" }}>
               <div style={{ padding: "10px 14px", borderBottom: "1px solid #1a1a1a", display: "flex", alignItems: "center", gap: 7 }}>
-                <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite", flexShrink: 0 }} />
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#fff", letterSpacing: 0.5 }}>LIVE CHAT</span>
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: streamEnded ? "#444" : "#ef4444", animation: streamEnded ? "none" : "livepulse 1.5s infinite", flexShrink: 0 }} />
+                <span style={{ fontSize: 12, fontWeight: 700, color: streamEnded ? "#444" : "#fff", letterSpacing: 0.5 }}>{streamEnded ? "STREAM ENDED" : "LIVE CHAT"}</span>
               </div>
 
               <div style={{ flex: 1, overflowY: "auto", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 5 }}>
@@ -282,7 +317,9 @@ export function StreamerProfile() {
               </div>
 
               <div style={{ padding: "10px 12px", borderTop: "1px solid #1a1a1a" }}>
-                {currentUser ? (
+                {streamEnded ? (
+                  <p style={{ margin: 0, textAlign: "center", color: "#333", fontSize: 12, padding: "4px 0" }}>Chat is closed</p>
+                ) : currentUser ? (
                   <div style={{ display: "flex", gap: 6 }}>
                     <input
                       value={chatInput}
@@ -327,14 +364,20 @@ export function StreamerProfile() {
                 <span style={{ fontSize: 13, color: "#555" }}>
                   <strong style={{ color: "#ddd" }}>{followers.toLocaleString()}</strong> followers
                 </span>
-                {viewers > 0 && (
+                {!streamEnded && viewers > 0 && (
                   <span style={{ fontSize: 13, color: "#555" }}>
                     <strong style={{ color: "#ef4444" }}>{viewers.toLocaleString()}</strong> watching
                   </span>
                 )}
+                {streamEnded && (
+                  <span style={{ fontSize: 12, color: "#444", background: "#111", border: "1px solid #1e1e1e", borderRadius: 4, padding: "2px 8px" }}>Stream ended</span>
+                )}
               </div>
             </div>
-            <FollowBtn />
+            <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+              <DonateBtn />
+              <FollowBtn />
+            </div>
           </div>
         </>
       ) : (
@@ -356,7 +399,7 @@ export function StreamerProfile() {
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <h1 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#fff" }}>{channelName}</h1>
-              <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: stream.bio ? 8 : 0 }}>
                 <span style={{ fontSize: 13, color: "#555" }}>
                   <strong style={{ color: "#ddd" }}>{followers.toLocaleString()}</strong> followers
                 </span>
@@ -365,8 +408,14 @@ export function StreamerProfile() {
                 )}
                 <span style={{ fontSize: 13, color: "#333" }}>Offline</span>
               </div>
+              {stream.bio && (
+                <p style={{ margin: 0, fontSize: 13, color: "#666", lineHeight: 1.6, maxWidth: 560 }}>{stream.bio}</p>
+              )}
             </div>
-            <FollowBtn />
+            <div style={{ display: "flex", gap: 8, flexShrink: 0, alignSelf: "flex-start" }}>
+              <DonateBtn />
+              <FollowBtn />
+            </div>
           </div>
         </>
       )}
@@ -410,7 +459,7 @@ export function StreamerProfile() {
         )}
 
         {/* Past streams */}
-        <div>
+        <div id="past-streams">
           <p style={{ margin: "0 0 14px", fontSize: 11, fontWeight: 700, color: "#333", letterSpacing: "0.12em", textTransform: "uppercase" }}>Past Streams</p>
           {vodsLoading ? (
             <p style={{ color: "#333", fontSize: 13 }}>Loading…</p>

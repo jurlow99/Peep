@@ -5,7 +5,7 @@ const BG = "#0a0a0a";
 const YELLOW = "#facc15";
 const BORDER = "#1e1e1e";
 const CARD = "#111";
-const RTMP_BASE = "rtmps://live.cloudflare.com:443/live/";
+const RTMP_BASE = "rtmps://live.watchpeep.tv:443/live/";
 
 const CATEGORIES = [
   { value: "general",   label: "General" },
@@ -46,10 +46,16 @@ export function StreamerDashboard() {
   const [displayName, setDisplayName] = useState("");
   const [savingName, setSavingName]   = useState(false);
 
-  // Stream title + category
-  const [streamTitle, setStreamTitle] = useState("");
-  const [category, setCategory]       = useState("general");
-  const [savingInfo, setSavingInfo]   = useState(false);
+  // Stream title + category + bio + donation
+  const [streamTitle, setStreamTitle]     = useState("");
+  const [category, setCategory]           = useState("general");
+  const [bio, setBio]                     = useState("");
+  const [donationLink, setDonationLink]   = useState("");
+  const [savingInfo, setSavingInfo]       = useState(false);
+
+  // Channel art
+  const [uploadingThumb, setUploadingThumb] = useState(false);
+  const [uploadingHero, setUploadingHero]   = useState(false);
 
   // Stream key
   const [revealKey, setRevealKey]     = useState(false);
@@ -113,6 +119,8 @@ export function StreamerDashboard() {
       setDisplayName(data.channel_name || data.title || "");
       setStreamTitle(data.stream_title || "");
       setCategory(data.category || "general");
+      setBio(data.bio || "");
+      setDonationLink(data.donation_link || "");
       setBannedWords(data.banned_words || []);
       loadFollows(data.id);
       loadSchedule(data.id);
@@ -196,13 +204,16 @@ export function StreamerDashboard() {
   async function saveStreamInfo() {
     if (!stream) return;
     setSavingInfo(true);
+    const cleanDonation = donationLink.trim();
     await supabase.from("live_streams").update({
       stream_title: streamTitle.trim() || null,
       category,
+      bio: bio.trim() || null,
+      donation_link: cleanDonation || null,
     }).eq("id", stream.id);
-    setStream(s => ({ ...s, stream_title: streamTitle.trim() || null, category }));
+    setStream(s => ({ ...s, stream_title: streamTitle.trim() || null, category, bio: bio.trim() || null, donation_link: cleanDonation || null }));
     setSavingInfo(false);
-    showToast("Stream info updated!");
+    showToast("Channel info updated!");
   }
 
   async function rotateKey() {
@@ -261,6 +272,53 @@ export function StreamerDashboard() {
     setNewWord("");
   }
 
+  async function uploadChannelImage(file, field) {
+    const ext = file.name.split(".").pop().toLowerCase() || "jpg";
+    const path = `stream-profiles/${stream.id}/${field}.${ext}`;
+    const { error } = await supabase.storage.from("peep-media").upload(path, file, { upsert: true, contentType: file.type });
+    if (error) throw error;
+    const { data: { publicUrl } } = supabase.storage.from("peep-media").getPublicUrl(path);
+    return publicUrl;
+  }
+
+  async function handleThumbnailUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingThumb(true);
+    try {
+      const url = await uploadChannelImage(file, "thumbnail");
+      await supabase.from("live_streams").update({ thumbnail: url }).eq("id", stream.id);
+      setStream(s => ({ ...s, thumbnail: url }));
+      showToast("Thumbnail updated!");
+    } catch (err) {
+      showToast("Upload failed: " + err.message);
+    }
+    setUploadingThumb(false);
+    e.target.value = "";
+  }
+
+  async function handleHeroUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingHero(true);
+    try {
+      const url = await uploadChannelImage(file, "hero");
+      await supabase.from("live_streams").update({ hero_image: url }).eq("id", stream.id);
+      setStream(s => ({ ...s, hero_image: url }));
+      showToast("Banner updated!");
+    } catch (err) {
+      showToast("Upload failed: " + err.message);
+    }
+    setUploadingHero(false);
+    e.target.value = "";
+  }
+
+  async function clearImage(field) {
+    await supabase.from("live_streams").update({ [field]: null }).eq("id", stream.id);
+    setStream(s => ({ ...s, [field]: null }));
+    showToast("Image removed.");
+  }
+
   async function signOut() {
     await supabase.auth.signOut();
     window.location.href = "/";
@@ -307,6 +365,12 @@ export function StreamerDashboard() {
   }
 
   const username = stream.channel_name?.toLowerCase().replace(/[^a-z0-9]/g, "") || stream.id;
+  const PAD = "clamp(16px,4vw,48px)";
+
+  // Reusable field label
+  const Label = ({ children }) => (
+    <p style={{ margin: "0 0 7px", fontSize: 12, color: "#666", fontWeight: 600, letterSpacing: 0.2 }}>{children}</p>
+  );
 
   return (
     <div style={{ background: BG, minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
@@ -316,265 +380,245 @@ export function StreamerDashboard() {
       `}</style>
 
       {/* Nav */}
-      <nav style={{ position: "sticky", top: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 clamp(16px,5vw,40px)", height: 64, background: "rgba(10,10,10,0.95)", backdropFilter: "blur(12px)", borderBottom: `1px solid ${BORDER}` }}>
-        <a href="/" style={{ textDecoration: "none" }}>
-          <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 24, color: YELLOW }}>peep.</span>
-        </a>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <a href="/" style={{ color: "#555", fontSize: 13, textDecoration: "none", fontWeight: 500 }}>← Watch Peep</a>
-          <button onClick={signOut} style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "7px 14px", color: "#888", fontSize: 13, cursor: "pointer" }}>Sign Out</button>
+      <nav style={{ position: "sticky", top: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "space-between", padding: `0 ${PAD}`, height: 58, background: "rgba(10,10,10,0.97)", backdropFilter: "blur(12px)", borderBottom: `1px solid ${BORDER}` }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+          <a href="/" style={{ textDecoration: "none" }}>
+            <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, color: YELLOW }}>peep.</span>
+          </a>
+          <span style={{ color: "#2a2a2a", fontSize: 16 }}>|</span>
+          <span style={{ fontSize: 13, color: "#555", fontWeight: 600 }}>Creator Studio</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <a href={`/stream/${username}`} target="_blank" rel="noopener noreferrer" style={{ color: "#555", fontSize: 13, textDecoration: "none", fontWeight: 500, display: "flex", alignItems: "center", gap: 5 }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            My Channel
+          </a>
+          <a href="/?watch=1" style={{ color: "#555", fontSize: 13, textDecoration: "none", fontWeight: 500 }}>← Watch Peep</a>
+          <button onClick={signOut} style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "6px 14px", color: "#666", fontSize: 12, cursor: "pointer" }}>Sign Out</button>
         </div>
       </nav>
 
-      <div style={{ maxWidth: 720, margin: "0 auto", padding: "40px clamp(16px,5vw,40px) 80px" }}>
-
-        {/* Header */}
-        <div style={{ marginBottom: 28 }}>
-          <p style={{ margin: "0 0 6px", fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700 }}>Streamer Dashboard</p>
-          <h1 style={{ margin: "0 0 12px", fontSize: "clamp(24px,4vw,36px)", fontWeight: 700, color: "#fff" }}>{stream.channel_name || stream.title}</h1>
-          <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 13, color: "#444" }}>
-              <strong style={{ color: "#fff" }}>{followCount.toLocaleString()}</strong> follower{followCount !== 1 ? "s" : ""}
-            </span>
-            {stream.category && stream.category !== "general" && (
-              <span style={{ fontSize: 13, color: "#444" }}>
-                {CATEGORIES.find(c => c.value === stream.category)?.label}
-              </span>
-            )}
-          </div>
+      {/* Status bar */}
+      <div style={{ padding: `20px ${PAD}`, borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap", background: stream.is_live ? "rgba(239,68,68,0.04)" : "transparent" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {stream.is_live
+            ? <><div style={{ width: 9, height: 9, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite" }} /><span style={{ fontSize: 14, fontWeight: 700, color: "#ef4444" }}>Live</span></>
+            : <><div style={{ width: 9, height: 9, borderRadius: "50%", background: "#333" }} /><span style={{ fontSize: 14, fontWeight: 600, color: "#444" }}>Offline</span></>
+          }
         </div>
+        <div style={{ height: 20, width: 1, background: BORDER }} />
+        <span style={{ fontSize: 13, color: "#555" }}><strong style={{ color: stream.is_live ? "#fff" : "#555" }}>{viewers}</strong> watching</span>
+        <span style={{ fontSize: 13, color: "#555" }}><strong style={{ color: "#fff" }}>{followCount}</strong> followers</span>
+        <div style={{ flex: 1 }} />
+        <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#fff" }}>{stream.channel_name || stream.title}</h2>
+      </div>
 
-        {/* Live status */}
-        <SectionCard style={{ border: `1px solid ${stream.is_live ? "rgba(239,68,68,0.4)" : BORDER}` }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              {stream.is_live ? (
-                <>
-                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite", flexShrink: 0 }} />
-                  <span style={{ fontSize: 15, fontWeight: 700, color: "#ef4444" }}>You're Live</span>
-                </>
-              ) : (
-                <>
-                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#333", flexShrink: 0 }} />
-                  <span style={{ fontSize: 15, fontWeight: 600, color: "#555" }}>Offline</span>
-                </>
-              )}
-            </div>
-            <div style={{ display: "flex", gap: 20 }}>
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 20, fontWeight: 700, color: stream.is_live ? "#fff" : "#333" }}>{viewers.toLocaleString()}</div>
-                <div style={{ fontSize: 11, color: "#444", textTransform: "uppercase", letterSpacing: 0.5 }}>Watching</div>
-              </div>
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 20, fontWeight: 700, color: "#fff" }}>{followCount.toLocaleString()}</div>
-                <div style={{ fontSize: 11, color: "#444", textTransform: "uppercase", letterSpacing: 0.5 }}>Followers</div>
-              </div>
-            </div>
-          </div>
-          {!stream.is_live && (
-            <p style={{ margin: "14px 0 0", fontSize: 13, color: "#333" }}>Start streaming in OBS to go live on Peep.</p>
-          )}
-        </SectionCard>
+      {/* Main grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 16, padding: `24px ${PAD} 80px`, alignItems: "start" }}>
 
-        {/* Go Live */}
-        <SectionCard title="Go Live">
-          {/* RTMP Server */}
-          <div style={{ marginBottom: 20 }}>
-            <p style={{ margin: "0 0 8px", fontSize: 12, color: "#666", fontWeight: 600 }}>RTMP Server</p>
-            <div style={{ display: "flex", gap: 8 }}>
-              <code style={{ flex: 1, background: "#0d0d0d", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "11px 14px", fontSize: 12, color: YELLOW, wordBreak: "break-all", lineHeight: 1.5 }}>{RTMP_BASE}</code>
-              <button onClick={() => copy(RTMP_BASE, "rtmp")} style={{ flexShrink: 0, background: copied === "rtmp" ? "rgba(250,204,21,0.15)" : "rgba(255,255,255,0.05)", border: `1px solid ${copied === "rtmp" ? "rgba(250,204,21,0.4)" : BORDER}`, borderRadius: 8, padding: "0 16px", color: copied === "rtmp" ? YELLOW : "#888", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>
-                {copied === "rtmp" ? "Copied!" : "Copy"}
-              </button>
-            </div>
-          </div>
+        {/* ── LEFT COLUMN ── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-          {/* Stream Key */}
-          <div style={{ marginBottom: 24 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
-              <p style={{ margin: 0, fontSize: 12, color: "#666", fontWeight: 600 }}>Stream Key <span style={{ color: "#333", fontWeight: 400 }}>— keep this private</span></p>
-              {!confirmRotate ? (
-                <button onClick={() => setConfirmRotate(true)}
-                  style={{ background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: 7, padding: "5px 12px", color: "#dc2626", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
-                  Rotate Key
-                </button>
-              ) : (
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <span style={{ fontSize: 11, color: "#dc2626" }}>Are you sure?</span>
-                  <button onClick={rotateKey} disabled={rotatingKey}
-                    style={{ background: "#dc2626", border: "none", borderRadius: 6, padding: "5px 12px", color: "#fff", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
-                    {rotatingKey ? "Rotating…" : "Yes, rotate"}
-                  </button>
-                  <button onClick={() => setConfirmRotate(false)}
-                    style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 6, padding: "5px 10px", color: "#666", fontSize: 11, cursor: "pointer" }}>
-                    Cancel
-                  </button>
-                </div>
-              )}
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <code style={{ flex: 1, background: "#0d0d0d", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "11px 14px", fontSize: 12, color: YELLOW, wordBreak: "break-all", lineHeight: 1.5, userSelect: revealKey ? "all" : "none" }}>
-                {revealKey ? stream.stream_key : "••••••••••••••••••••••••"}
-              </code>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
-                <button onClick={() => setRevealKey(r => !r)} style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 14px", color: "#888", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-                  {revealKey ? "Hide" : "Reveal"}
-                </button>
-                <button onClick={() => copy(stream.stream_key, "key")} style={{ background: copied === "key" ? "rgba(250,204,21,0.15)" : "rgba(255,255,255,0.05)", border: `1px solid ${copied === "key" ? "rgba(250,204,21,0.4)" : BORDER}`, borderRadius: 8, padding: "8px 14px", color: copied === "key" ? YELLOW : "#888", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>
-                  {copied === "key" ? "Copied!" : "Copy"}
+          {/* Channel Info */}
+          <SectionCard title="Channel Info">
+            <div style={{ marginBottom: 16 }}>
+              <Label>Channel Name</Label>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input value={displayName} onChange={e => setDisplayName(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && saveName()}
+                  placeholder="Your channel name" maxLength={60} style={{ ...inp, flex: 1 }} />
+                <button onClick={saveName}
+                  disabled={savingName || !displayName.trim() || displayName.trim() === (stream.channel_name || stream.title)}
+                  style={{ flexShrink: 0, background: YELLOW, border: "none", borderRadius: 10, padding: "0 18px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: savingName || displayName.trim() === (stream.channel_name || stream.title) ? 0.45 : 1 }}>
+                  {savingName ? "…" : "Save"}
                 </button>
               </div>
             </div>
-            {confirmRotate && (
-              <p style={{ margin: "10px 0 0", fontSize: 12, color: "#6b7280", lineHeight: 1.5 }}>
-                Rotating creates a new stream key and deletes the old one. You'll need to update OBS with the new key before you can go live again.
-              </p>
-            )}
-          </div>
 
-          {/* OBS Setup */}
-          <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 20 }}>
-            <p style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 700, color: "#fff" }}>OBS Setup</p>
-            <div style={{ background: "rgba(234,179,8,0.07)", border: "1px solid rgba(234,179,8,0.2)", borderRadius: 8, padding: "10px 14px", marginBottom: 16, display: "flex", gap: 10, alignItems: "flex-start" }}>
-              <span style={{ fontSize: 15, flexShrink: 0, marginTop: 1 }}>⚠️</span>
-              <p style={{ margin: 0, fontSize: 13, color: "#a16207", lineHeight: 1.5 }}>
-                <strong>Skip the Auto-Configuration Wizard.</strong> It only works with Twitch/YouTube and will always fail for Peep. Use the manual steps below.
-              </p>
+            <div style={{ borderTop: `1px solid ${BORDER}`, margin: "16px 0" }} />
+
+            <div style={{ marginBottom: 14 }}>
+              <Label>Stream Title</Label>
+              <input value={streamTitle} onChange={e => setStreamTitle(e.target.value)}
+                placeholder="e.g. Late night gaming, album listening party…"
+                maxLength={120} style={inp} />
             </div>
-            <ol style={{ margin: 0, paddingLeft: 18, color: "#888", fontSize: 14, lineHeight: 2.2 }}>
-              <li>Open OBS → <strong style={{ color: "#ccc" }}>Settings → Stream</strong></li>
-              <li>Service: <strong style={{ color: "#ccc" }}>Custom...</strong></li>
-              <li>Server: paste your <strong style={{ color: YELLOW }}>RTMP Server</strong> above</li>
-              <li>Stream Key: paste your <strong style={{ color: YELLOW }}>Stream Key</strong> above</li>
-              <li>Recommended: <strong style={{ color: "#ccc" }}>1080p, 6000 kbps, H.264</strong></li>
-              <li>Click <strong style={{ color: "#ccc" }}>Start Streaming</strong> — you'll go live on Peep automatically</li>
-            </ol>
-          </div>
-        </SectionCard>
-
-        {/* Channel Settings */}
-        <SectionCard title="Channel Settings">
-          {/* Channel Name */}
-          <div style={{ marginBottom: 20 }}>
-            <p style={{ margin: "0 0 8px", fontSize: 12, color: "#666", fontWeight: 600 }}>Channel Name</p>
-            <p style={{ margin: "0 0 10px", fontSize: 13, color: "#444" }}>This is how your channel appears on Peep.</p>
-            <div style={{ display: "flex", gap: 10 }}>
-              <input value={displayName} onChange={e => setDisplayName(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && saveName()}
-                placeholder="Your channel name" maxLength={60} style={{ ...inp, flex: 1 }} />
-              <button onClick={saveName}
-                disabled={savingName || !displayName.trim() || displayName.trim() === (stream.channel_name || stream.title)}
-                style={{ flexShrink: 0, background: YELLOW, border: "none", borderRadius: 10, padding: "12px 20px", color: "#0a0a0a", fontSize: 14, fontWeight: 700, cursor: "pointer", opacity: savingName || displayName.trim() === (stream.channel_name || stream.title) ? 0.5 : 1 }}>
-                {savingName ? "Saving…" : "Save"}
-              </button>
+            <div style={{ marginBottom: 14 }}>
+              <Label>Category</Label>
+              <select value={category} onChange={e => setCategory(e.target.value)}
+                style={{ ...inp, appearance: "none", cursor: "pointer" }}>
+                {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+              </select>
             </div>
-          </div>
+            <div style={{ marginBottom: 14 }}>
+              <Label>Bio</Label>
+              <textarea value={bio} onChange={e => setBio(e.target.value)}
+                placeholder="Tell viewers about your channel…"
+                maxLength={300} rows={3}
+                style={{ ...inp, resize: "vertical", lineHeight: 1.6 }} />
+              <p style={{ margin: "3px 0 0", fontSize: 11, color: "#333", textAlign: "right" }}>{bio.length}/300</p>
+            </div>
+            <div style={{ marginBottom: 18 }}>
+              <Label>Donation Link <span style={{ color: "#2a2a2a", fontWeight: 400 }}>— Ko-fi, PayPal, Streamlabs…</span></Label>
+              <input value={donationLink} onChange={e => setDonationLink(e.target.value)}
+                placeholder="https://ko-fi.com/yourchannel" type="url" style={inp} />
+            </div>
+            <button onClick={saveStreamInfo} disabled={savingInfo}
+              style={{ background: YELLOW, border: "none", borderRadius: 10, padding: "11px 22px", color: "#0a0a0a", fontSize: 14, fontWeight: 700, cursor: savingInfo ? "wait" : "pointer", opacity: savingInfo ? 0.6 : 1 }}>
+              {savingInfo ? "Saving…" : "Save"}
+            </button>
+          </SectionCard>
 
-          {/* Divider */}
-          <div style={{ borderTop: `1px solid ${BORDER}`, marginBottom: 20 }} />
-
-          {/* Stream Title + Category */}
-          <div style={{ marginBottom: 16 }}>
-            <p style={{ margin: "0 0 8px", fontSize: 12, color: "#666", fontWeight: 600 }}>Stream Title</p>
-            <input
-              value={streamTitle}
-              onChange={e => setStreamTitle(e.target.value)}
-              placeholder="e.g. Late night gaming session, New album listening party…"
-              maxLength={120}
-              style={inp}
-            />
-          </div>
-          <div style={{ marginBottom: 20 }}>
-            <p style={{ margin: "0 0 8px", fontSize: 12, color: "#666", fontWeight: 600 }}>Category</p>
-            <select value={category} onChange={e => setCategory(e.target.value)}
-              style={{ ...inp, appearance: "none", cursor: "pointer" }}>
-              {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-            </select>
-          </div>
-          <button onClick={saveStreamInfo} disabled={savingInfo}
-            style={{ background: YELLOW, border: "none", borderRadius: 10, padding: "11px 22px", color: "#0a0a0a", fontSize: 14, fontWeight: 700, cursor: savingInfo ? "wait" : "pointer", opacity: savingInfo ? 0.6 : 1 }}>
-            {savingInfo ? "Saving…" : "Save Info"}
-          </button>
-        </SectionCard>
-
-        {/* Stream Schedule */}
-        <SectionCard title="Upcoming Streams">
-          {schedule.length > 0 && (
-            <div style={{ marginBottom: 20 }}>
-              {schedule.map(s => (
-                <div key={s.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 0", borderBottom: `1px solid ${BORDER}` }}>
-                  <div>
-                    <p style={{ margin: "0 0 3px", fontSize: 14, fontWeight: 600, color: "#fff" }}>{s.title}</p>
-                    <p style={{ margin: 0, fontSize: 12, color: "#555" }}>
-                      {new Date(s.scheduled_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
-                      {" at "}
-                      {new Date(s.scheduled_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
-                    </p>
+          {/* Channel Art */}
+          <SectionCard title="Channel Art">
+            <p style={{ margin: "0 0 18px", fontSize: 13, color: "#444" }}>Shown on your profile page and stream cards.</p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              {[
+                { label: "Stream Thumbnail", hint: "16:9", field: "thumbnail", uploading: uploadingThumb, handler: handleThumbnailUpload, current: stream.thumbnail },
+                { label: "Profile Banner", hint: "wide", field: "hero_image", uploading: uploadingHero, handler: handleHeroUpload, current: stream.hero_image },
+              ].map(({ label, hint, field, uploading, handler, current }) => (
+                <div key={field}>
+                  <Label>{label} <span style={{ color: "#2a2a2a", fontWeight: 400 }}>{hint}</span></Label>
+                  <div style={{ aspectRatio: "16/9", background: "#0d0d0d", border: `1px solid ${BORDER}`, borderRadius: 10, overflow: "hidden", marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {current
+                      ? <img src={current} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      : <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2a2a2a" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                    }
                   </div>
-                  <button onClick={() => deleteSchedule(s.id)}
-                    style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "5px 10px", color: "#555", fontSize: 12, cursor: "pointer" }}>
-                    Remove
-                  </button>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <label style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "7px 0", color: uploading ? "#444" : "#bbb", fontSize: 12, fontWeight: 600, cursor: uploading ? "wait" : "pointer", textAlign: "center" }}>
+                      <input type="file" accept="image/*" onChange={handler} style={{ display: "none" }} disabled={uploading} />
+                      {uploading ? "Uploading…" : "Upload"}
+                    </label>
+                    {current && (
+                      <button onClick={() => clearImage(field)} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "7px 10px", color: "#444", fontSize: 11, cursor: "pointer" }}>Remove</button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
-          )}
-          <p style={{ margin: "0 0 12px", fontSize: 12, color: "#444", fontWeight: 600 }}>Add upcoming stream</p>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <input value={schedTitle} onChange={e => setSchedTitle(e.target.value)}
-              placeholder="Stream title…" style={{ ...inp, flex: "2 1 160px" }} />
-            <input type="datetime-local" value={schedDate} onChange={e => setSchedDate(e.target.value)}
-              style={{ ...inp, flex: "1 1 160px", colorScheme: "dark" }} />
-            <button onClick={addSchedule} disabled={addingSched || !schedTitle.trim() || !schedDate}
-              style={{ flexShrink: 0, background: YELLOW, border: "none", borderRadius: 10, padding: "12px 18px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: !schedTitle.trim() || !schedDate ? 0.4 : 1 }}>
-              {addingSched ? "Adding…" : "+ Add"}
-            </button>
-          </div>
-        </SectionCard>
+          </SectionCard>
 
-        {/* Chat Moderation */}
-        <SectionCard title="Chat Moderation">
-          <p style={{ margin: "0 0 16px", fontSize: 13, color: "#444", lineHeight: 1.6 }}>
-            Messages containing these words will be automatically blocked.
-          </p>
-          {bannedWords.length > 0 && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
-              {bannedWords.map(w => (
-                <span key={w} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: 6, padding: "4px 10px", fontSize: 12, color: "#f87171" }}>
-                  {w}
-                  <button onClick={() => setBannedWords(ws => ws.filter(x => x !== w))}
-                    style={{ background: "none", border: "none", color: "#ef4444", fontSize: 14, cursor: "pointer", padding: 0, lineHeight: 1, display: "flex", alignItems: "center" }}>×</button>
-                </span>
-              ))}
+          {/* Schedule */}
+          <SectionCard title="Upcoming Streams">
+            {schedule.length > 0 && (
+              <div style={{ marginBottom: 18 }}>
+                {schedule.map(s => (
+                  <div key={s.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "11px 0", borderBottom: `1px solid ${BORDER}` }}>
+                    <div>
+                      <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: "#fff" }}>{s.title}</p>
+                      <p style={{ margin: 0, fontSize: 11, color: "#555" }}>
+                        {new Date(s.scheduled_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} at {new Date(s.scheduled_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                      </p>
+                    </div>
+                    <button onClick={() => deleteSchedule(s.id)}
+                      style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "4px 10px", color: "#444", fontSize: 11, cursor: "pointer" }}>
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {schedule.length === 0 && <p style={{ margin: "0 0 14px", fontSize: 13, color: "#333" }}>No upcoming streams scheduled.</p>}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <input value={schedTitle} onChange={e => setSchedTitle(e.target.value)}
+                placeholder="Stream title…" style={{ ...inp, flex: "2 1 120px" }} />
+              <input type="datetime-local" value={schedDate} onChange={e => setSchedDate(e.target.value)}
+                style={{ ...inp, flex: "1 1 140px", colorScheme: "dark" }} />
+              <button onClick={addSchedule} disabled={addingSched || !schedTitle.trim() || !schedDate}
+                style={{ flexShrink: 0, background: YELLOW, border: "none", borderRadius: 10, padding: "12px 16px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: !schedTitle.trim() || !schedDate ? 0.4 : 1 }}>
+                {addingSched ? "…" : "+ Add"}
+              </button>
             </div>
-          )}
-          <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
-            <input value={newWord} onChange={e => setNewWord(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && addBannedWord()}
-              placeholder="Add a word or phrase…"
-              style={{ ...inp, flex: 1 }} />
-            <button onClick={addBannedWord} disabled={!newWord.trim()}
-              style={{ flexShrink: 0, background: "rgba(255,255,255,0.05)", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "12px 16px", color: "#888", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: !newWord.trim() ? 0.4 : 1 }}>
-              Add
-            </button>
-          </div>
-          <button onClick={saveBannedWords} disabled={savingWords}
-            style={{ background: YELLOW, border: "none", borderRadius: 10, padding: "11px 22px", color: "#0a0a0a", fontSize: 14, fontWeight: 700, cursor: savingWords ? "wait" : "pointer", opacity: savingWords ? 0.6 : 1 }}>
-            {savingWords ? "Saving…" : "Save Banned Words"}
-          </button>
-        </SectionCard>
-
-        {/* View on Peep */}
-        <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "20px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-          <div>
-            <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 600, color: "#fff" }}>Your channel on Peep</p>
-            <p style={{ margin: 0, fontSize: 13, color: "#444" }}>watchpeep.tv/stream/{username}</p>
-          </div>
-          <a href={`/stream/${username}`} style={{ flexShrink: 0, background: "rgba(250,204,21,0.1)", border: "1px solid rgba(250,204,21,0.3)", borderRadius: 9, padding: "10px 18px", color: YELLOW, fontSize: 13, fontWeight: 700, textDecoration: "none" }}>
-            View Channel →
-          </a>
+          </SectionCard>
         </div>
 
+        {/* ── RIGHT COLUMN ── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+          {/* Go Live */}
+          <SectionCard title="Go Live">
+            <div style={{ marginBottom: 18 }}>
+              <Label>RTMP Server</Label>
+              <div style={{ display: "flex", gap: 8 }}>
+                <code style={{ flex: 1, background: "#0d0d0d", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "10px 12px", fontSize: 11, color: YELLOW, wordBreak: "break-all", lineHeight: 1.5 }}>{RTMP_BASE}</code>
+                <button onClick={() => copy(RTMP_BASE, "rtmp")} style={{ flexShrink: 0, background: copied === "rtmp" ? "rgba(250,204,21,0.12)" : "rgba(255,255,255,0.05)", border: `1px solid ${copied === "rtmp" ? "rgba(250,204,21,0.4)" : BORDER}`, borderRadius: 8, padding: "0 14px", color: copied === "rtmp" ? YELLOW : "#888", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>
+                  {copied === "rtmp" ? "✓" : "Copy"}
+                </button>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 7, gap: 8, flexWrap: "wrap" }}>
+                <Label>Stream Key <span style={{ color: "#2a2a2a", fontWeight: 400 }}>— keep private</span></Label>
+                {!confirmRotate
+                  ? <button onClick={() => setConfirmRotate(true)} style={{ background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: 6, padding: "3px 10px", color: "#dc2626", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Rotate</button>
+                  : <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <span style={{ fontSize: 11, color: "#dc2626" }}>Sure?</span>
+                      <button onClick={rotateKey} disabled={rotatingKey} style={{ background: "#dc2626", border: "none", borderRadius: 6, padding: "3px 10px", color: "#fff", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{rotatingKey ? "…" : "Yes"}</button>
+                      <button onClick={() => setConfirmRotate(false)} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 6, padding: "3px 8px", color: "#666", fontSize: 11, cursor: "pointer" }}>No</button>
+                    </div>
+                }
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <code style={{ flex: 1, background: "#0d0d0d", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "10px 12px", fontSize: 11, color: YELLOW, wordBreak: "break-all", lineHeight: 1.5, userSelect: revealKey ? "all" : "none" }}>
+                  {revealKey ? stream.stream_key : "••••••••••••••••••••••••"}
+                </code>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
+                  <button onClick={() => setRevealKey(r => !r)} style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "7px 12px", color: "#888", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>{revealKey ? "Hide" : "Show"}</button>
+                  <button onClick={() => copy(stream.stream_key, "key")} style={{ background: copied === "key" ? "rgba(250,204,21,0.12)" : "rgba(255,255,255,0.05)", border: `1px solid ${copied === "key" ? "rgba(250,204,21,0.4)" : BORDER}`, borderRadius: 8, padding: "7px 12px", color: copied === "key" ? YELLOW : "#888", fontSize: 11, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>{copied === "key" ? "✓" : "Copy"}</button>
+                </div>
+              </div>
+              {confirmRotate && <p style={{ margin: "8px 0 0", fontSize: 11, color: "#555", lineHeight: 1.5 }}>This creates a new key and invalidates the old one. Update OBS before going live again.</p>}
+            </div>
+
+            <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 18 }}>
+              <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, color: "#fff" }}>OBS Setup</p>
+              <div style={{ background: "rgba(234,179,8,0.06)", border: "1px solid rgba(234,179,8,0.18)", borderRadius: 8, padding: "10px 12px", marginBottom: 14, display: "flex", gap: 8, alignItems: "flex-start" }}>
+                <span style={{ fontSize: 13, flexShrink: 0 }}>⚠️</span>
+                <p style={{ margin: 0, fontSize: 12, color: "#a16207", lineHeight: 1.5 }}><strong>Skip Auto-Config Wizard</strong> — it only works with Twitch/YouTube. Use manual setup below.</p>
+              </div>
+              <ol style={{ margin: 0, paddingLeft: 16, color: "#555", fontSize: 13, lineHeight: 2.1 }}>
+                <li>OBS → <strong style={{ color: "#ccc" }}>Settings → Stream</strong></li>
+                <li>Service: <strong style={{ color: "#ccc" }}>Custom…</strong></li>
+                <li>Server: <strong style={{ color: YELLOW }}>RTMP Server</strong> above</li>
+                <li>Stream Key: <strong style={{ color: YELLOW }}>Stream Key</strong> above</li>
+                <li>Recommended: <strong style={{ color: "#ccc" }}>1080p · 6000 kbps · H.264</strong></li>
+                <li>Click <strong style={{ color: "#ccc" }}>Start Streaming</strong></li>
+              </ol>
+            </div>
+          </SectionCard>
+
+          {/* Chat Moderation */}
+          <SectionCard title="Chat Moderation">
+            <p style={{ margin: "0 0 14px", fontSize: 13, color: "#444", lineHeight: 1.6 }}>Messages containing these words are automatically blocked.</p>
+            {bannedWords.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginBottom: 14 }}>
+                {bannedWords.map(w => (
+                  <span key={w} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: 6, padding: "3px 8px", fontSize: 12, color: "#f87171" }}>
+                    {w}
+                    <button onClick={() => setBannedWords(ws => ws.filter(x => x !== w))} style={{ background: "none", border: "none", color: "#ef4444", fontSize: 14, cursor: "pointer", padding: 0, lineHeight: 1 }}>×</button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <input value={newWord} onChange={e => setNewWord(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && addBannedWord()}
+                placeholder="Add a word or phrase…"
+                style={{ ...inp, flex: 1 }} />
+              <button onClick={addBannedWord} disabled={!newWord.trim()}
+                style={{ flexShrink: 0, background: "rgba(255,255,255,0.05)", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "0 14px", color: "#888", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: !newWord.trim() ? 0.4 : 1 }}>
+                Add
+              </button>
+            </div>
+            <button onClick={saveBannedWords} disabled={savingWords}
+              style={{ background: YELLOW, border: "none", borderRadius: 10, padding: "10px 20px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: savingWords ? "wait" : "pointer", opacity: savingWords ? 0.6 : 1 }}>
+              {savingWords ? "Saving…" : "Save"}
+            </button>
+          </SectionCard>
+
+        </div>
       </div>
 
       {toast && <Toast msg={toast} />}

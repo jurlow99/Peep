@@ -149,8 +149,11 @@ export default function App() {
   }, [user?.id, activeProfile?.id]);
 
   // Check if user is a streamer — redirect them to /streamer instead of showing main app
+  // Skip redirect if ?watch=1 is present (streamer chose to browse as viewer)
   useEffect(() => {
     if (!user) { setIsStreamer(false); return; }
+    const bypassRedirect = new URLSearchParams(window.location.search).get("watch") === "1";
+    if (bypassRedirect) return;
     supabase.from("live_streams").select("id").eq("user_id", user.id).maybeSingle()
       .then(({ data }) => { if (data) window.location.href = "/streamer"; });
   }, [user?.id]);
@@ -389,6 +392,7 @@ export default function App() {
           }}
           onOpenSettings={() => setPage("settings")}
           onAvatarChange={id => setUserAvatarId(id)}
+          onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }}
         />
       </>
     );
@@ -730,8 +734,9 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       ...videos.map(v => ({ ...v, _type: "movie", _tagsStr: tagsStr(v.tags) })),
       ...shows.map(s => ({ ...s, _type: "show", _tagsStr: tagsStr(s.tags) })),
       ...podcasts.map(p => ({ ...p, _type: "podcast", _tagsStr: tagsStr(p.tags) })),
+      ...liveStreams.map(s => ({ ...s, _type: "stream", title: s.channel_name || s.title || "", _tagsStr: tagsStr(s.tags) })),
     ];
-  }, [videos, shows, podcasts]);
+  }, [videos, shows, podcasts, liveStreams]);
 
   const searchResults = useMemo(() => {
     if (!debouncedQuery || !debouncedQuery.trim()) return [];
@@ -770,7 +775,10 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
   function handleSearchResultClick(item) {
     saveRecentSearch(searchQuery);
     closeSearch();
-    if (item._type === "show") onShowSelect(item);
+    if (item._type === "stream") {
+      const slug = (item.channel_name || item.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      window.location.href = `/stream/${slug}`;
+    } else if (item._type === "show") onShowSelect(item);
     else if (item._type === "podcast") { setSelectedPodcast(item); setPage("podcast"); }
     else onPlay(item);
   }
@@ -823,7 +831,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
               <input autoFocus value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                 onKeyDown={e => { if (e.key === "Escape") closeSearch(); if (e.key === "Enter" && searchResults[0]) handleSearchResultClick(searchResults[0]); }}
                 onBlur={() => { if (!searchQuery) closeSearch(); }}
-                placeholder="Search titles, genres, podcasts..."
+                placeholder="Search titles, channels, podcasts..."
                 style={{ background: "rgba(15,15,15,0.92)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 6, padding: "8px 14px 8px 38px", color: "#fff", fontSize: 13, width: isMobile ? "calc(100vw - 110px)" : 260, outline: "none" }}
               />
             )}
@@ -856,7 +864,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           <div style={{ padding: `20px ${PAD} 32px` }}>
             {/* Type filter chips */}
             <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-              {[{ id: "all", label: "All" }, { id: "movie", label: "Movies" }, { id: "show", label: "Series" }, { id: "podcast", label: "Podcasts" }].map(f => (
+              {[{ id: "all", label: "All" }, { id: "movie", label: "Movies" }, { id: "show", label: "Series" }, { id: "podcast", label: "Podcasts" }, { id: "stream", label: "Streams" }].map(f => (
                 <button key={f.id}
                   onMouseDown={e => e.preventDefault()}
                   onClick={() => setSearchTypeFilter(f.id)}
@@ -892,10 +900,10 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                     {searchResults.map(v => {
-                      const typeColor = v._type === "movie" ? "#facc15" : v._type === "show" ? "#60a5fa" : v._type === "music_video" || v._type === "song" ? "#4ade80" : "#a78bfa";
-                      const typeLabel = v._type === "movie" ? "Movie" : v._type === "show" ? "Series" : v._type === "music_video" ? "Music Video" : v._type === "song" ? "Song" : "Podcast";
-                      const thumb = v.poster || v.thumbnail || v.artwork_url;
-                      const meta = v._type === "podcast" ? v._tagsStr : v._type === "music_video" || v._type === "song" ? v.artist : v.category;
+                      const typeColor = v._type === "movie" ? "#facc15" : v._type === "show" ? "#60a5fa" : v._type === "stream" ? "#ef4444" : "#a78bfa";
+                      const typeLabel = v._type === "movie" ? "Movie" : v._type === "show" ? "Series" : v._type === "stream" ? (v.is_live ? "🔴 Live" : "Channel") : "Podcast";
+                      const thumb = v.poster || v.thumbnail || v.artwork_url || v.hero_image;
+                      const meta = v._type === "podcast" ? v._tagsStr : v._type === "stream" ? (v.category || null) : v.category;
                       return (
                         <div key={v.id + v._type}
                           onMouseDown={e => e.preventDefault()}
@@ -926,7 +934,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
             )}
 
             {!debouncedQuery && recentSearches.length === 0 && (
-              <p style={{ color: "#333", fontSize: 14, padding: "20px 0" }}>Start typing to search movies, series, and podcasts.</p>
+              <p style={{ color: "#333", fontSize: 14, padding: "20px 0" }}>Start typing to search movies, series, channels, and podcasts.</p>
             )}
           </div>
         </div>
@@ -960,7 +968,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       )}
 
       {activeNav === "Streams" && (
-        <LiveTVPage streams={liveStreams.filter(s => s.is_live)} />
+        <LiveTVPage streams={liveStreams} user={user} />
       )}
 
       {/* My List — full grid */}
@@ -3688,7 +3696,7 @@ function timeAgo(dateStr) {
   return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, onOpenSettings, onAvatarChange }) {
+function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, onOpenSettings, onAvatarChange, onSignOut }) {
   const [history, setHistory] = useState([]);
   const [contentMap, setContentMap] = useState({});
   const [showsMap, setShowsMap] = useState({});
@@ -3778,16 +3786,23 @@ function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, o
             {!editing && activeProfile?.bio && <p style={{ margin: "0 0 6px", fontSize: 13, color: "#666", lineHeight: 1.6 }}>{activeProfile.bio}</p>}
             <p style={{ margin: 0, fontSize: 12, color: "#333" }}>{memberSince ? `Member since ${memberSince}` : user?.email}</p>
           </div>
-          <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+          <div style={{ display: "flex", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
             {onOpenSettings && !editing && (
               <button onClick={onOpenSettings} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid #2a2a2a", borderRadius: 8, padding: "8px 14px", color: "#aaa", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                Manage Your Account
+                Settings
               </button>
             )}
             <button onClick={() => { setEditing(e => !e); setName(activeProfile?.name || ""); setBio(activeProfile?.bio || ""); setAvatarId(activeProfile?.avatar_id || null); }}
               style={{ background: editing ? "rgba(250,204,21,0.12)" : "rgba(255,255,255,0.06)", border: `1px solid ${editing ? "rgba(250,204,21,0.3)" : "#2a2a2a"}`, borderRadius: 8, padding: "8px 18px", color: editing ? "#facc15" : "#aaa", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
               {editing ? "Cancel" : "Edit Profile"}
             </button>
+            {onSignOut && !editing && (
+              <button onClick={onSignOut} style={{ background: "transparent", border: "1px solid #2a2a2a", borderRadius: 8, padding: "8px 14px", color: "#f87171", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                onMouseEnter={e => e.currentTarget.style.background = "rgba(248,113,113,0.08)"}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                Sign Out
+              </button>
+            )}
           </div>
         </div>
 
