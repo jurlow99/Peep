@@ -647,8 +647,8 @@ export function StreamerDashboard() {
               <div style={{ borderTop: `1px solid ${BORDER}`, margin: "0 0 18px" }} />
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                 {[
-                  { label: "Stream Thumbnail", hint: "16:9", pendingKey: "thumbnail", dbField: "thumbnail", uploading: uploadingThumb, setUploading: setUploadingThumb, toastMsg: "Thumbnail updated!", current: stream.thumbnail },
-                  { label: "Profile Banner", hint: "wide", pendingKey: "hero", dbField: "hero_image", uploading: uploadingHero, setUploading: setUploadingHero, toastMsg: "Banner updated!", current: stream.hero_image },
+                  { label: "Stream Card Thumbnail", hint: "Shows on Streams page — live & offline", pendingKey: "thumbnail", dbField: "thumbnail", uploading: uploadingThumb, setUploading: setUploadingThumb, toastMsg: "Thumbnail updated!", current: stream.thumbnail },
+                  { label: "Profile Banner", hint: "Shows on your channel page", pendingKey: "hero", dbField: "hero_image", uploading: uploadingHero, setUploading: setUploadingHero, toastMsg: "Banner updated!", current: stream.hero_image },
                 ].map(({ label, hint, pendingKey, dbField, uploading, setUploading, toastMsg, current }) => {
                   const pending = pendingFiles[pendingKey];
                   const preview = pending?.previewUrl || current;
