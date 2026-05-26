@@ -405,39 +405,45 @@ export function StreamerProfile() {
       ) : (
         /* ── OFFLINE LAYOUT ── */
         <>
-          {/* Hero — only render if there's an actual image */}
-          {(stream.hero_image || stream.thumbnail) && (
-            <div style={{ position: "relative", height: "clamp(140px, 18vw, 220px)", background: "#0e0e0e", overflow: "hidden", borderBottom: "1px solid #1a1a1a" }}>
+          {/* Banner */}
+          <div style={{ position: "relative", height: "clamp(160px, 22vw, 280px)", background: "#0e0e0e", overflow: "hidden" }}>
+            {(stream.hero_image || stream.thumbnail) && (
               <img src={stream.hero_image || stream.thumbnail} alt=""
-                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.3)" }} />
-              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, #0a0a0a 0%, transparent 70%)" }} />
-            </div>
-          )}
+                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+            )}
+            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, #0a0a0a 0%, rgba(0,0,0,0.2) 60%, transparent 100%)" }} />
+          </div>
 
-          {/* Channel info */}
-          <div style={{ padding: "18px 22px", borderBottom: "1px solid #1a1a1a", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", position: "relative", zIndex: 2 }}>
-            <div style={{ width: 56, height: 56, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 700, color: "#fff", flexShrink: 0, border: "3px solid #0a0a0a" }}>
-              {avatarLetter}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <h1 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#fff" }}>{channelName}</h1>
-              <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: stream.bio ? 8 : 0 }}>
-                <span style={{ fontSize: 13, color: "#555" }}>
-                  <strong style={{ color: "#ddd" }}>{followers.toLocaleString()}</strong> followers
-                </span>
-                {stream.category && stream.category !== "general" && (
-                  <span style={{ fontSize: 13, color: "#555" }}>{CATEGORY_LABELS[stream.category] || stream.category}</span>
-                )}
-                <span style={{ fontSize: 13, color: "#333" }}>Offline</span>
+          {/* Profile row — avatar overlaps banner */}
+          <div style={{ padding: "0 24px 20px", borderBottom: "1px solid #1a1a1a", marginTop: -36 }}>
+            <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 14 }}>
+              <div style={{ width: 72, height: 72, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 700, color: "#fff", flexShrink: 0, border: "4px solid #0a0a0a" }}>
+                {avatarLetter}
               </div>
-              {stream.bio && (
-                <p style={{ margin: 0, fontSize: 13, color: "#666", lineHeight: 1.6, maxWidth: 560 }}>{stream.bio}</p>
+              <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                <DonateBtn />
+                <FollowBtn />
+              </div>
+            </div>
+
+            <h1 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 700, color: "#fff" }}>{channelName}</h1>
+            {stream.username && (
+              <p style={{ margin: "0 0 8px", fontSize: 13, color: "#444" }}>@{stream.username}</p>
+            )}
+            <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center", marginBottom: stream.bio ? 12 : 0 }}>
+              <span style={{ fontSize: 13, color: "#555" }}>
+                <strong style={{ color: "#ddd" }}>{followers.toLocaleString()}</strong> followers
+              </span>
+              {stream.category && stream.category !== "general" && (
+                <span style={{ fontSize: 12, color: "#555", background: "#111", border: "1px solid #1e1e1e", borderRadius: 4, padding: "2px 8px" }}>
+                  {CATEGORY_LABELS[stream.category] || stream.category}
+                </span>
               )}
+              <span style={{ fontSize: 12, color: "#333", background: "#111", border: "1px solid #1a1a1a", borderRadius: 4, padding: "2px 8px" }}>Offline</span>
             </div>
-            <div style={{ display: "flex", gap: 8, flexShrink: 0, alignSelf: "flex-start" }}>
-              <DonateBtn />
-              <FollowBtn />
-            </div>
+            {stream.bio && (
+              <p style={{ margin: 0, fontSize: 14, color: "#888", lineHeight: 1.7, maxWidth: 640 }}>{stream.bio}</p>
+            )}
           </div>
         </>
       )}
