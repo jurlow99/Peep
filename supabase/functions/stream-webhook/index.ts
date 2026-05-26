@@ -43,12 +43,11 @@ Deno.serve(async (req) => {
       event === "stream.live_input.disconnected" ||
       event === "stream.ready"
     ) {
-      const vodUrl = body?.playback?.hls ?? null;
-      const update: Record<string, unknown> = { is_live: false };
-      if (vodUrl) update.stream_url = vodUrl;
+      // Only flip is_live — stream_url stays as the permanent live-input HLS URL
+      // so future streams play correctly. VODs are fetched separately via get-vods.
       await supabase
         .from("live_streams")
-        .update(update)
+        .update({ is_live: false })
         .eq("stream_uid", uid);
     }
 
