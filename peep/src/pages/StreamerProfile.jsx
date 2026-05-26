@@ -296,8 +296,8 @@ export function StreamerProfile() {
                     <img src={stream.hero_image || stream.thumbnail} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.12) blur(8px)", transform: "scale(1.05)" }} />
                   )}
                   <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-                    <div style={{ width: 56, height: 56, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 700, color: "#fff" }}>
-                      {channelName[0]?.toUpperCase()}
+                    <div style={{ width: 56, height: 56, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 700, color: "#fff", overflow: "hidden" }}>
+                      {stream.avatar_url ? <img src={stream.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : channelName[0]?.toUpperCase()}
                     </div>
                     <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#fff" }}>{channelName}</p>
                     <p style={{ margin: 0, fontSize: 13, color: "#666" }}>Thanks for watching — the stream has ended.</p>
@@ -415,10 +415,12 @@ export function StreamerProfile() {
           </div>
 
           {/* Profile row — avatar overlaps banner */}
-          <div style={{ padding: "0 24px 20px", borderBottom: "1px solid #1a1a1a", marginTop: -36 }}>
+          <div style={{ padding: "0 24px 20px", borderBottom: "1px solid #1a1a1a", marginTop: -36, position: "relative", zIndex: 1 }}>
             <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 14 }}>
-              <div style={{ width: 72, height: 72, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 700, color: "#fff", flexShrink: 0, border: "4px solid #0a0a0a" }}>
-                {avatarLetter}
+              <div style={{ width: 72, height: 72, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 700, color: "#fff", flexShrink: 0, border: "4px solid #0a0a0a", overflow: "hidden" }}>
+                {stream.avatar_url
+                  ? <img src={stream.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  : avatarLetter}
               </div>
               <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
                 <DonateBtn />

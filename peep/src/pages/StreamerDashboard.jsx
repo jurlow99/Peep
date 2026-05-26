@@ -56,8 +56,9 @@ export function StreamerDashboard() {
   const [savingInfo, setSavingInfo]       = useState(false);
 
   // Channel art
-  const [uploadingThumb, setUploadingThumb] = useState(false);
-  const [uploadingHero, setUploadingHero]   = useState(false);
+  const [uploadingThumb, setUploadingThumb]   = useState(false);
+  const [uploadingHero, setUploadingHero]     = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   // Stream key
   const [revealKey, setRevealKey]     = useState(false);
@@ -332,6 +333,22 @@ export function StreamerDashboard() {
     e.target.value = "";
   }
 
+  async function handleAvatarUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingAvatar(true);
+    try {
+      const url = await uploadChannelImage(file, "avatar");
+      await supabase.from("live_streams").update({ avatar_url: url }).eq("id", stream.id);
+      setStream(s => ({ ...s, avatar_url: url }));
+      showToast("Profile picture updated!");
+    } catch (err) {
+      showToast("Upload failed: " + err.message);
+    }
+    setUploadingAvatar(false);
+    e.target.value = "";
+  }
+
   async function clearImage(field) {
     await supabase.from("live_streams").update({ [field]: null }).eq("id", stream.id);
     setStream(s => ({ ...s, [field]: null }));
@@ -521,6 +538,30 @@ export function StreamerDashboard() {
           {/* Channel Art */}
           <SectionCard title="Channel Art">
             <p style={{ margin: "0 0 18px", fontSize: 13, color: "#444" }}>Shown on your profile page and stream cards.</p>
+
+            {/* Avatar */}
+            <div style={{ marginBottom: 20 }}>
+              <Label>Profile Picture <span style={{ color: "#2a2a2a", fontWeight: 400 }}>— circle</span></Label>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <div style={{ width: 72, height: 72, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 700, color: "#fff", flexShrink: 0, overflow: "hidden", border: `2px solid ${BORDER}` }}>
+                  {stream.avatar_url
+                    ? <img src={stream.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    : <span style={{ color: "#fff" }}>{(stream.channel_name || stream.title || "?")[0].toUpperCase()}</span>}
+                </div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <label style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 16px", color: uploadingAvatar ? "#444" : "#bbb", fontSize: 12, fontWeight: 600, cursor: uploadingAvatar ? "wait" : "pointer" }}>
+                    <input type="file" accept="image/*" onChange={handleAvatarUpload} style={{ display: "none" }} disabled={uploadingAvatar} />
+                    {uploadingAvatar ? "Uploading…" : "Upload"}
+                  </label>
+                  {stream.avatar_url && (
+                    <button onClick={() => clearImage("avatar_url")} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 12px", color: "#444", fontSize: 11, cursor: "pointer" }}>Remove</button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ borderTop: `1px solid ${BORDER}`, margin: "0 0 18px" }} />
+
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
               {[
                 { label: "Stream Thumbnail", hint: "16:9", field: "thumbnail", uploading: uploadingThumb, handler: handleThumbnailUpload, current: stream.thumbnail },
