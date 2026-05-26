@@ -227,6 +227,8 @@ export function StreamerProfile() {
     } else {
       await supabase.from("streamer_follows").insert({ stream_id: stream.id, follower_id: session.user.id });
       setIsFollowing(true); setFollowers(f => f + 1);
+      const actorName = session.user.user_metadata?.full_name || session.user.email?.split("@")[0] || "Someone";
+      supabase.from("streamer_notifications").insert({ stream_id: stream.id, type: "follow", actor_name: actorName });
     }
     setFollowLoading(false);
   }
