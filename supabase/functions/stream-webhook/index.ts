@@ -15,11 +15,11 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const event = body?.event ?? body?.action;
-    const uid = body?.uid ?? body?.stream_uid;
-
-    if (!uid) throw new Error("No stream UID in payload");
 
     if (event === "live_input.connected" || event === "stream.live_input.connected") {
+      const uid = body?.uid ?? body?.stream_uid;
+      if (!uid) throw new Error("No UID in payload");
+
       const { data: stream } = await supabase
         .from("live_streams")
         .update({ is_live: true, live_started_at: new Date().toISOString() })
@@ -27,7 +27,6 @@ Deno.serve(async (req) => {
         .select("id")
         .maybeSingle();
 
-      // Fire go-live notifications (non-blocking)
       if (stream?.id) {
         fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/notify-go-live`, {
           method: "POST",
@@ -38,17 +37,51 @@ Deno.serve(async (req) => {
           body: JSON.stringify({ stream_id: stream.id }),
         }).catch(() => {});
       }
-    } else if (
-      event === "live_input.disconnected" ||
-      event === "stream.live_input.disconnected" ||
-      event === "stream.ready"
-    ) {
-      // Only flip is_live — stream_url stays as the permanent live-input HLS URL
-      // so future streams play correctly. VODs are fetched separately via get-vods.
+
+    } else if (event === "live_input.disconnected" || event === "stream.live_input.disconnected") {
+      const uid = body?.uid ?? body?.stream_uid;
+      if (!uid) throw new Error("No UID in payload");
+
       await supabase
         .from("live_streams")
         .update({ is_live: false })
         .eq("stream_uid", uid);
+
+    } else if (event === "stream.ready") {
+      // uid = video UID of the finished VOD; liveInput = the live input UID
+      const videoUid = body?.uid;
+      const liveInputUid = body?.liveInput ?? body?.live_input;
+
+      // Flip is_live using the live input UID (not the video UID)
+      if (liveInputUid) {
+        await supabase
+          .from("live_streams")
+          .update({ is_live: false })
+          .eq("stream_uid", liveInputUid);
+      }
+
+      // Tag the VOD with the stream title from our DB so past streams show the right name
+      if (videoUid && liveInputUid) {
+        const { data: stream } = await supabase
+          .from("live_streams")
+          .select("stream_title, channel_name, title")
+          .eq("stream_uid", liveInputUid)
+          .maybeSingle();
+
+        const title = stream?.stream_title || stream?.channel_name || stream?.title;
+        if (title) {
+          const cfAccountId = Deno.env.get("CLOUDFLARE_ACCOUNT_ID")!;
+          const cfToken = Deno.env.get("CLOUDFLARE_API_TOKEN")!;
+          await fetch(
+            `https://api.cloudflare.com/client/v4/accounts/${cfAccountId}/stream/${videoUid}`,
+            {
+              method: "POST",
+              headers: { "Authorization": `Bearer ${cfToken}`, "Content-Type": "application/json" },
+              body: JSON.stringify({ meta: { name: title } }),
+            }
+          );
+        }
+      }
     }
 
     return new Response(JSON.stringify({ success: true }), {
