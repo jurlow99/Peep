@@ -11,30 +11,168 @@ const CATEGORY_LABELS = {
   education: "Education", creative: "Creative",
 };
 
-function VideoPlayer({ url, style = {} }) {
+function VideoPlayer({ url, live = false, style = {} }) {
+  const containerRef = useRef(null);
   const ref = useRef(null);
   const hlsRef = useRef(null);
+  const retryTimer = useRef(null);
+  const hideTimer = useRef(null);
+  const alive = useRef(true);
+
+  const [showPlay, setShowPlay] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [paused, setPaused] = useState(true);
+  const [muted, setMuted] = useState(false);
+  const [ctrlVisible, setCtrlVisible] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
   useEffect(() => {
     const el = ref.current;
+    if (!el) return;
+    const onPlay = () => { setPaused(false); setShowPlay(false); };
+    const onPause = () => setPaused(true);
+    const onVolume = () => setMuted(el.muted);
+    el.addEventListener("play", onPlay);
+    el.addEventListener("pause", onPause);
+    el.addEventListener("volumechange", onVolume);
+    return () => { el.removeEventListener("play", onPlay); el.removeEventListener("pause", onPause); el.removeEventListener("volumechange", onVolume); };
+  }, []);
+
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  function attachHls(el, src, attempt = 0) {
+    if (!alive.current) return;
+    hlsRef.current?.destroy();
+    const h = new Hls({
+      startLevel: 999,           // clamps to highest available before first segment loads
+      capLevelToPlayerSize: false,
+      autoLevelCapping: -1,      // no cap on auto level selection
+    });
+    h.loadSource(src); h.attachMedia(el);
+    h.on(Hls.Events.MANIFEST_PARSED, () => {
+      if (!alive.current) return;
+      setStarting(false);
+      h.currentLevel = h.levels.length - 1; // lock — disables ABR for the session
+      el.play().catch(() => setShowPlay(true));
+    });
+    h.on(Hls.Events.ERROR, (_, d) => {
+      if (!alive.current || !d.fatal) return;
+      h.destroy();
+      setStarting(true);
+      retryTimer.current = setTimeout(() => attachHls(el, src, attempt + 1), Math.min(5000 + attempt * 3000, 15000));
+    });
+    hlsRef.current = h;
+  }
+
+  useEffect(() => {
+    alive.current = true;
+    const el = ref.current;
     if (!el || !url) return;
+    setShowPlay(false); setStarting(false);
+    clearTimeout(retryTimer.current);
     if (url.includes(".m3u8")) {
-      if (Hls.isSupported()) {
-        const h = new Hls();
-        h.loadSource(url); h.attachMedia(el);
-        h.on(Hls.Events.MANIFEST_PARSED, () => el.play().catch(() => {}));
-        hlsRef.current = h;
-      } else if (el.canPlayType("application/vnd.apple.mpegurl")) {
-        el.src = url; el.play().catch(() => {});
-      }
+      if (Hls.isSupported()) attachHls(el, url);
+      else if (el.canPlayType("application/vnd.apple.mpegurl")) { el.src = url; el.play().catch(() => setShowPlay(true)); }
     } else {
-      el.src = url; el.play().catch(() => {});
+      el.src = url; el.play().catch(() => setShowPlay(true));
     }
     return () => {
+      alive.current = false;
+      clearTimeout(retryTimer.current);
+      clearTimeout(hideTimer.current);
       el.pause(); el.src = "";
       hlsRef.current?.destroy(); hlsRef.current = null;
     };
   }, [url]);
-  return <video ref={ref} controls style={{ display: "block", background: "#000", ...style }} />;
+
+  function nudgeControls() {
+    setCtrlVisible(true);
+    clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => setCtrlVisible(false), 3000);
+  }
+
+  function togglePlay() { const el = ref.current; if (!el) return; el.paused ? el.play().catch(() => {}) : el.pause(); }
+  function toggleMute() { const el = ref.current; if (el) el.muted = !el.muted; }
+  function toggleFullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else containerRef.current?.requestFullscreen().catch(() => {});
+  }
+
+  const overlays = (
+    <>
+      {starting && (
+        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 3, pointerEvents: "none" }}>
+          <p style={{ margin: 0, color: "#555", fontSize: 13, fontFamily: "'Space Grotesk', sans-serif" }}>Stream is starting up…</p>
+        </div>
+      )}
+      {showPlay && !starting && (
+        <div onClick={e => { e.stopPropagation(); ref.current?.play().then(() => setShowPlay(false)).catch(() => {}); }}
+          style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 3 }}>
+          <div style={{ width: 72, height: 72, borderRadius: "50%", background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg>
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  if (!live) {
+    return (
+      <div style={{ position: "relative", background: "#000", ...style }}>
+        <video ref={ref} controls style={{ display: "block", width: "100%", height: "100%", background: "#000" }} />
+        {overlays}
+      </div>
+    );
+  }
+
+  const btnStyle = { background: "none", border: "none", color: "#fff", cursor: "pointer", padding: "6px 8px", display: "flex", alignItems: "center", flexShrink: 0 };
+
+  return (
+    <div
+      ref={containerRef}
+      onMouseMove={nudgeControls}
+      onMouseEnter={nudgeControls}
+      onMouseLeave={() => { clearTimeout(hideTimer.current); setCtrlVisible(false); }}
+      onClick={togglePlay}
+      style={{ position: "relative", background: "#000", cursor: ctrlVisible || paused ? "default" : "none", userSelect: "none", ...style }}>
+      <video ref={ref} style={{ display: "block", width: "100%", height: "100%", background: "#000" }} />
+
+      {/* Custom controls bar */}
+      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", justifyContent: "flex-end", opacity: ctrlVisible || paused ? 1 : 0, transition: "opacity 0.25s", pointerEvents: ctrlVisible || paused ? "auto" : "none" }}>
+        <div style={{ background: "linear-gradient(transparent, rgba(0,0,0,0.82))", padding: "48px 12px 10px", display: "flex", alignItems: "center", gap: 6 }}>
+          <button onClick={e => { e.stopPropagation(); togglePlay(); }} style={btnStyle}>
+            {paused
+              ? <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg>
+              : <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+            }
+          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 5, background: "#ef4444", borderRadius: 4, padding: "3px 8px", flexShrink: 0 }}>
+            <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#fff", animation: "livepulse 1.5s infinite" }} />
+            <span style={{ fontSize: 10, fontWeight: 800, color: "#fff", letterSpacing: 0.8 }}>LIVE</span>
+          </div>
+          <div style={{ flex: 1 }} />
+          <button onClick={e => { e.stopPropagation(); toggleMute(); }} style={btnStyle}>
+            {muted
+              ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+              : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><path d="M15.54,8.46a5,5,0,0,1,0,7.07"/><path d="M19.07,4.93a10,10,0,0,1,0,14.14"/></svg>
+            }
+          </button>
+          <button onClick={e => { e.stopPropagation(); toggleFullscreen(); }} style={btnStyle}>
+            {isFullscreen
+              ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M8 3v5H3"/><path d="M21 8h-5V3"/><path d="M3 16h5v5"/><path d="M16 21v-5h5"/></svg>
+              : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+            }
+          </button>
+        </div>
+      </div>
+
+      {overlays}
+    </div>
+  );
 }
 
 export function StreamerProfile() {
@@ -54,12 +192,23 @@ export function StreamerProfile() {
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput]     = useState("");
   const [chatSending, setChatSending] = useState(false);
+  const [streamEnded, setStreamEnded] = useState(false);
   const chatBottomRef = useRef(null);
+  const prevIsLiveRef = useRef(null);
 
   useEffect(() => {
     loadStream();
     supabase.auth.getSession().then(({ data: { session } }) => setCurrentUser(session?.user ?? null));
   }, []);
+
+  // Detect live → offline transition via ref (avoids calling setState inside updater)
+  useEffect(() => {
+    if (stream === null) return;
+    if (prevIsLiveRef.current === true && stream.is_live === false) {
+      setStreamEnded(true);
+    }
+    prevIsLiveRef.current = stream.is_live;
+  }, [stream?.is_live]);
 
   // Realtime: update stream record when is_live or other fields change
   useEffect(() => {
@@ -75,10 +224,30 @@ export function StreamerProfile() {
     return () => supabase.removeChannel(ch);
   }, [stream?.id]);
 
+  // Polling fallback — query Cloudflare directly every 20s via check-live-status edge fn
+  // (more reliable than reading DB which depends on the webhook having fired)
+  useEffect(() => {
+    if (!stream?.id || !stream?.is_live || !stream?.stream_uid) return;
+    const check = async () => {
+      try {
+        const res = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/check-live-status?stream_uid=${stream.stream_uid}&stream_id=${stream.id}`
+        );
+        const json = await res.json();
+        if (json.is_live === false) setStream(prev => ({ ...prev, is_live: false }));
+      } catch (_) {
+        const { data } = await supabase.from("live_streams").select("is_live").eq("id", stream.id).single();
+        if (data?.is_live === false) setStream(prev => ({ ...prev, is_live: false }));
+      }
+    };
+    const t = setInterval(check, 20000);
+    return () => clearInterval(t);
+  }, [stream?.id, stream?.is_live, stream?.stream_uid]);
+
   async function loadStream() {
     const { data: streams } = await supabase.from("live_streams").select("*").order("id");
     const match = streams?.find(s => {
-      const slug = (s.channel_name || s.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const slug = s.username || (s.channel_name || s.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
       return slug === username;
     });
     setStream(match ?? null);
@@ -201,6 +370,8 @@ export function StreamerProfile() {
     } else {
       await supabase.from("streamer_follows").insert({ stream_id: stream.id, follower_id: session.user.id });
       setIsFollowing(true); setFollowers(f => f + 1);
+      const actorName = session.user.user_metadata?.full_name || session.user.email?.split("@")[0] || "Someone";
+      supabase.from("streamer_notifications").insert({ stream_id: stream.id, type: "follow", actor_name: actorName });
     }
     setFollowLoading(false);
   }
@@ -235,6 +406,16 @@ export function StreamerProfile() {
     </button>
   );
 
+  const DonateBtn = () => stream.donation_link ? (
+    <a href={stream.donation_link} target="_blank" rel="noopener noreferrer"
+      style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.05)", border: "1px solid #282828", borderRadius: 8, padding: "9px 18px", color: "#aaa", fontSize: 14, fontWeight: 600, textDecoration: "none", flexShrink: 0, transition: "all 0.15s" }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = "#3a3a3a"; e.currentTarget.style.color = "#fff"; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = "#282828"; e.currentTarget.style.color = "#aaa"; }}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+      Support
+    </a>
+  ) : null;
+
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
       <style>{`@keyframes livepulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.3)}}`}</style>
@@ -247,25 +428,47 @@ export function StreamerProfile() {
         <a href="/?nav=Streams" style={{ color: "#555", fontSize: 13, textDecoration: "none" }}>← Streams</a>
       </nav>
 
-      {stream.is_live ? (
-        /* ── LIVE LAYOUT ── */
+      {(stream.is_live || streamEnded) ? (
+        /* ── LIVE / ENDED LAYOUT ── */
         <>
           {/* Player + Chat side by side */}
           <div style={{ display: "flex", background: "#000", borderBottom: "1px solid #1a1a1a" }}>
-            {/* Video fills remaining width */}
+            {/* Video or "stream ended" */}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <VideoPlayer
-                key={stream.stream_url}
-                url={stream.stream_url}
-                style={{ width: "100%", aspectRatio: "16/9" }}
-              />
+              {streamEnded ? (
+                <div style={{ width: "100%", aspectRatio: "16/9", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#050505", gap: 12, padding: "0 24px", textAlign: "center", position: "relative", overflow: "hidden" }}>
+                  {(stream.hero_image || stream.thumbnail) && (
+                    <img src={stream.hero_image || stream.thumbnail} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.12) blur(8px)", transform: "scale(1.05)" }} />
+                  )}
+                  <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+                    <div style={{ width: 56, height: 56, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 700, color: "#fff", overflow: "hidden" }}>
+                      {stream.avatar_url ? <img src={stream.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : channelName[0]?.toUpperCase()}
+                    </div>
+                    <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#fff" }}>{channelName}</p>
+                    <p style={{ margin: 0, fontSize: 13, color: "#666" }}>Thanks for watching — the stream has ended.</p>
+                    {vods.length > 0 && (
+                      <button onClick={() => { setStreamEnded(false); document.getElementById("past-streams")?.scrollIntoView({ behavior: "smooth" }); }}
+                        style={{ marginTop: 4, background: "rgba(255,255,255,0.07)", border: "1px solid #2a2a2a", borderRadius: 8, padding: "8px 20px", color: "#ccc", fontSize: 13, cursor: "pointer" }}>
+                        Watch past streams
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <VideoPlayer
+                  key={stream.stream_url}
+                  url={stream.stream_url}
+                  live={true}
+                  style={{ width: "100%", aspectRatio: "16/9" }}
+                />
+              )}
             </div>
 
             {/* Chat sidebar */}
             <div style={{ width: CHAT_WIDTH, flexShrink: 0, display: "flex", flexDirection: "column", borderLeft: "1px solid #1a1a1a", background: "#0d0d0d" }}>
               <div style={{ padding: "10px 14px", borderBottom: "1px solid #1a1a1a", display: "flex", alignItems: "center", gap: 7 }}>
-                <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite", flexShrink: 0 }} />
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#fff", letterSpacing: 0.5 }}>LIVE CHAT</span>
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: streamEnded ? "#444" : "#ef4444", animation: streamEnded ? "none" : "livepulse 1.5s infinite", flexShrink: 0 }} />
+                <span style={{ fontSize: 12, fontWeight: 700, color: streamEnded ? "#444" : "#fff", letterSpacing: 0.5 }}>{streamEnded ? "STREAM ENDED" : "LIVE CHAT"}</span>
               </div>
 
               <div style={{ flex: 1, overflowY: "auto", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 5 }}>
@@ -282,7 +485,9 @@ export function StreamerProfile() {
               </div>
 
               <div style={{ padding: "10px 12px", borderTop: "1px solid #1a1a1a" }}>
-                {currentUser ? (
+                {streamEnded ? (
+                  <p style={{ margin: 0, textAlign: "center", color: "#333", fontSize: 12, padding: "4px 0" }}>Chat is closed</p>
+                ) : currentUser ? (
                   <div style={{ display: "flex", gap: 6 }}>
                     <input
                       value={chatInput}
@@ -327,46 +532,66 @@ export function StreamerProfile() {
                 <span style={{ fontSize: 13, color: "#555" }}>
                   <strong style={{ color: "#ddd" }}>{followers.toLocaleString()}</strong> followers
                 </span>
-                {viewers > 0 && (
+                {!streamEnded && viewers > 0 && (
                   <span style={{ fontSize: 13, color: "#555" }}>
                     <strong style={{ color: "#ef4444" }}>{viewers.toLocaleString()}</strong> watching
                   </span>
                 )}
+                {streamEnded && (
+                  <span style={{ fontSize: 12, color: "#444", background: "#111", border: "1px solid #1e1e1e", borderRadius: 4, padding: "2px 8px" }}>Stream ended</span>
+                )}
               </div>
             </div>
-            <FollowBtn />
+            <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+              <DonateBtn />
+              <FollowBtn />
+            </div>
           </div>
         </>
       ) : (
         /* ── OFFLINE LAYOUT ── */
         <>
-          {/* Hero */}
-          <div style={{ position: "relative", height: "clamp(140px, 18vw, 220px)", background: "#0e0e0e", overflow: "hidden", borderBottom: "1px solid #1a1a1a" }}>
-            {(stream.hero_image || stream.thumbnail) && (
-              <img src={stream.hero_image || stream.thumbnail} alt=""
-                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.3)" }} />
+          {/* Banner — only use hero_image; thumbnail is a card image not a banner */}
+          <div style={{ position: "relative", height: "clamp(200px, 28vw, 360px)", background: stream.hero_image ? "#0e0e0e" : "linear-gradient(135deg, #1e1b4b 0%, #312e81 60%, #1e1b4b 100%)", overflow: "hidden" }}>
+            {stream.hero_image && (
+              <img src={stream.hero_image} alt=""
+                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center center" }} />
             )}
-            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, #0a0a0a 0%, transparent 70%)" }} />
+            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(10,10,10,0.85) 0%, rgba(10,10,10,0.2) 35%, transparent 70%)" }} />
           </div>
 
-          {/* Channel info */}
-          <div style={{ padding: "18px 22px", borderBottom: "1px solid #1a1a1a", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginTop: -28, position: "relative", zIndex: 2 }}>
-            <div style={{ width: 56, height: 56, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 700, color: "#fff", flexShrink: 0, border: "3px solid #0a0a0a" }}>
-              {avatarLetter}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <h1 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#fff" }}>{channelName}</h1>
-              <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 13, color: "#555" }}>
-                  <strong style={{ color: "#ddd" }}>{followers.toLocaleString()}</strong> followers
-                </span>
-                {stream.category && stream.category !== "general" && (
-                  <span style={{ fontSize: 13, color: "#555" }}>{CATEGORY_LABELS[stream.category] || stream.category}</span>
-                )}
-                <span style={{ fontSize: 13, color: "#333" }}>Offline</span>
+          {/* Profile row — avatar overlaps banner */}
+          <div style={{ padding: "0 24px 20px", borderBottom: "1px solid #1a1a1a", marginTop: -36, position: "relative", zIndex: 1 }}>
+            <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 14 }}>
+              <div style={{ width: 72, height: 72, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 700, color: "#fff", flexShrink: 0, border: "4px solid #0a0a0a", overflow: "hidden" }}>
+                {stream.avatar_url
+                  ? <img src={stream.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  : avatarLetter}
+              </div>
+              <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                <DonateBtn />
+                <FollowBtn />
               </div>
             </div>
-            <FollowBtn />
+
+            <h1 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 700, color: "#fff" }}>{channelName}</h1>
+            {stream.username && (
+              <p style={{ margin: "0 0 8px", fontSize: 13, color: "#444" }}>@{stream.username}</p>
+            )}
+            <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center", marginBottom: stream.bio ? 12 : 0 }}>
+              <span style={{ fontSize: 13, color: "#555" }}>
+                <strong style={{ color: "#ddd" }}>{followers.toLocaleString()}</strong> followers
+              </span>
+              {stream.category && stream.category !== "general" && (
+                <span style={{ fontSize: 12, color: "#555", background: "#111", border: "1px solid #1e1e1e", borderRadius: 4, padding: "2px 8px" }}>
+                  {CATEGORY_LABELS[stream.category] || stream.category}
+                </span>
+              )}
+              <span style={{ fontSize: 12, color: "#333", background: "#111", border: "1px solid #1a1a1a", borderRadius: 4, padding: "2px 8px" }}>Offline</span>
+            </div>
+            {stream.bio && (
+              <p style={{ margin: 0, fontSize: 14, color: "#888", lineHeight: 1.7, maxWidth: 640 }}>{stream.bio}</p>
+            )}
           </div>
         </>
       )}
@@ -410,7 +635,7 @@ export function StreamerProfile() {
         )}
 
         {/* Past streams */}
-        <div>
+        <div id="past-streams">
           <p style={{ margin: "0 0 14px", fontSize: 11, fontWeight: 700, color: "#333", letterSpacing: "0.12em", textTransform: "uppercase" }}>Past Streams</p>
           {vodsLoading ? (
             <p style={{ color: "#333", fontSize: 13 }}>Loading…</p>
@@ -439,10 +664,10 @@ export function StreamerProfile() {
                   </div>
                   <div style={{ padding: "10px 12px 12px" }}>
                     <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 600, color: "#e0e0e0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {v.meta?.name || "Past Stream"}
+                      {v.meta?.name || channelName}
                     </p>
                     <p style={{ margin: 0, fontSize: 11, color: "#444" }}>
-                      {new Date(v.created).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                      {new Date(v.created).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
                     </p>
                   </div>
                 </div>

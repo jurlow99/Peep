@@ -121,10 +121,8 @@ export function ProfileScreen({ user, activeProfile, onClose, onAvatarChange, on
           <p style={{ margin: "6px 0 0", fontSize: 11, color: "#333", textAlign: "center" }}>More avatars coming soon</p>
         </div>
 
-        <div style={{ flex: 1 }} />
-
         {/* Actions */}
-        <div style={{ padding: "24px", borderTop: "1px solid #1a1a1a", flexShrink: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ padding: "24px", borderTop: "1px solid #1a1a1a", flexShrink: 0, display: "flex", flexDirection: "column", gap: 10, marginTop: "auto" }}>
           {onCreatorDash && (
             <button onClick={() => { onClose(); onCreatorDash(); }}
               style={{ width: "100%", background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.3)", borderRadius: 10, padding: "12px", color: "#facc15", fontSize: 14, fontWeight: 600, cursor: "pointer", transition: "background 0.15s", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}

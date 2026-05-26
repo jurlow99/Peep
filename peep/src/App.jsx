@@ -59,6 +59,7 @@ export default function App() {
   const userIdRef = useRef(null);
   const [subscription, setSubscription] = useState(null);
   const [subChecked, setSubChecked] = useState(false);
+  const [isStreamer, setIsStreamer] = useState(false);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [passwordRecovery, setPasswordRecovery] = useState(() => {
     // Catch invite links — Supabase puts type=invite in the hash; must read it before Supabase clears it
@@ -146,6 +147,16 @@ export default function App() {
     if (!user || !activeProfile) { setMyList({}); return; }
     loadMyList(user.id, activeProfile.id);
   }, [user?.id, activeProfile?.id]);
+
+  // Check if user is a streamer — redirect them to /streamer instead of showing main app
+  // Skip redirect if ?watch=1 is present (streamer chose to browse as viewer)
+  useEffect(() => {
+    if (!user) { setIsStreamer(false); return; }
+    const bypassRedirect = new URLSearchParams(window.location.search).get("watch") === "1";
+    if (bypassRedirect) return;
+    supabase.from("live_streams").select("id").eq("user_id", user.id).maybeSingle()
+      .then(({ data }) => { if (data) window.location.href = "/streamer"; });
+  }, [user?.id]);
 
   // Check subscription status
   useEffect(() => {
@@ -256,7 +267,11 @@ export default function App() {
     </div>
   );
 
-  if (!authChecked) return null;
+  if (!authChecked) return (
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 42, color: "#facc15", opacity: 0.8 }}>peep.</span>
+    </div>
+  );
   if (passwordRecovery) return <PasswordResetPage isInvite={passwordRecovery === "invite"} onDone={() => { setPasswordRecovery(false); window.location.href = "/"; }} />;
   if (!user) return <LandingPage />;
   if (!user.email_confirmed_at) return <EmailVerificationGate user={user} />;
@@ -273,7 +288,6 @@ export default function App() {
     const isLiveVideo = selectedVideo._type === "live" || selectedVideo._type === "live_epg";
     const handleBack = () => {
       if (isLiveVideo) sessionStorage.setItem("peep_goto_nav", "Streams");
-      if (selectedVideo._type === "music_video") sessionStorage.setItem("peep_goto_nav", "Music");
       setPage(selectedShow ? "show" : "home");
       setSelectedVideo(null);
     };
@@ -378,6 +392,7 @@ export default function App() {
           }}
           onOpenSettings={() => setPage("settings")}
           onAvatarChange={id => setUserAvatarId(id)}
+          onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }}
         />
       </>
     );
@@ -449,11 +464,6 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
   const [podcasts, setPodcasts] = useState([]);
   const [liveStreams, setLiveStreams] = useState([]);
   const [epgEntries, setEpgEntries] = useState([]);
-  const [musicVideos, setMusicVideos] = useState([]);
-  const [songs, setSongs] = useState([]);
-  const [albums, setAlbums] = useState([]);
-  const [playingSong, setPlayingSong] = useState(null);
-  const [songPaused, setSongPaused] = useState(false);
   const [continueWatching, setContinueWatching] = useState([]);
   const [loading, setLoading] = useState(true);
   const [scrolled, setScrolled] = useState(false);
@@ -493,16 +503,6 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     const epgChannel = supabase.channel("epg-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "epg_entries" }, fetchAll)
       .subscribe();
-    const musicChannel = supabase.channel("music-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "music_videos" }, fetchAll)
-      .subscribe();
-    const songsChannel = supabase.channel("songs-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "songs" }, fetchAll)
-      .subscribe();
-    const albumsChannel = supabase.channel("albums-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "albums" }, fetchAll)
-      .subscribe();
-
     const handler = () => setScrolled(window.scrollY > 60);
     window.addEventListener("scroll", handler);
 
@@ -513,9 +513,6 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       supabase.removeChannel(podcastChannel);
       supabase.removeChannel(liveChannel);
       supabase.removeChannel(epgChannel);
-      supabase.removeChannel(musicChannel);
-      supabase.removeChannel(songsChannel);
-      supabase.removeChannel(albumsChannel);
       window.removeEventListener("scroll", handler);
     };
   }, []);
@@ -530,16 +527,13 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
   async function fetchAll() {
     const epgWindowStart = new Date(Date.now() - 60 * 60 * 1000);
     const epgWindowEnd = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    const [videosRes, showsRes, carouselsRes, podcastsRes, liveRes, epgRes, musicRes, songsRes, albumsRes] = await Promise.all([
+    const [videosRes, showsRes, carouselsRes, podcastsRes, liveRes, epgRes] = await Promise.all([
       supabase.from("videos").select("*").order("id", { ascending: true }),
       supabase.from("shows").select("*").order("id", { ascending: true }),
       supabase.from("carousels").select("*").eq("enabled", true).order("position", { ascending: true }),
       supabase.from("podcasts").select("*").order("id", { ascending: true }),
       supabase.from("live_streams").select("*").order("id", { ascending: true }),
       supabase.from("epg_entries").select("*").gte("end_time", epgWindowStart.toISOString()).lte("start_time", epgWindowEnd.toISOString()).order("start_time", { ascending: true }),
-      supabase.from("music_videos").select("*").eq("enabled", true).order("artist", { ascending: true }),
-      supabase.from("songs").select("*").eq("enabled", true).order("artist", { ascending: true }),
-      supabase.from("albums").select("*").eq("enabled", true).order("title", { ascending: true }),
     ]);
     if (videosRes.data) setVideos(videosRes.data);
     if (showsRes.data) setShows(showsRes.data);
@@ -547,9 +541,6 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     if (podcastsRes.data) setPodcasts(podcastsRes.data.filter(p => p.enabled !== false));
     if (liveRes.data) setLiveStreams(liveRes.data);
     if (epgRes.data) setEpgEntries(epgRes.data);
-    if (musicRes.data) setMusicVideos(musicRes.data);
-    if (songsRes.data) setSongs(songsRes.data);
-    if (albumsRes.data) setAlbums(albumsRes.data);
     setLoading(false);
 
     // Resolve deep link
@@ -698,7 +689,6 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     if (activeNav === "Home") return pages.includes("home");
     if (activeNav === "Movies") return pages.includes("movies");
     if (activeNav === "Series") return pages.includes("series");
-    if (activeNav === "Music") return pages.includes("music") || pages.includes("music_videos");
     return false;
   }), [carousels, activeNav]);
 
@@ -706,28 +696,6 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     ? []
     : activeNav === "Streams"
     ? []
-    : activeNav === "Music"
-    ? visibleCarousels.flatMap(c => {
-        const filterVal = c.filter_value?.toLowerCase();
-        if (c.content_type === "songs") {
-          const baseItems = c.type === "trending"
-            ? [...songs].reverse()
-            : c.type === "category"
-            ? songs.filter(s => Array.isArray(s.tags) ? s.tags.some(t => t.toLowerCase() === filterVal) : s.tags?.toLowerCase().includes(filterVal))
-            : c.type === "handpicked"
-            ? (() => { try { const picks = JSON.parse(c.filter_value || "[]"); return picks.flatMap(p => { const found = songs.find(s => s.id === p.id); return found ? [found] : []; }); } catch { return songs; } })()
-            : songs;
-          return baseItems.length === 0 ? [] : [{ id: String(c.id), title: c.title, songItems: baseItems, isSong: true }];
-        }
-        const baseItems = c.type === "trending"
-          ? [...musicVideos].reverse()
-          : c.type === "category"
-          ? musicVideos.filter(mv => Array.isArray(mv.tags) ? mv.tags.some(t => t.toLowerCase() === filterVal) : false)
-          : c.type === "handpicked"
-          ? (() => { try { const picks = JSON.parse(c.filter_value || "[]"); return picks.flatMap(p => { const found = musicVideos.find(mv => mv.id === p.id); return found ? [found] : []; }); } catch { return musicVideos; } })()
-          : musicVideos;
-        return baseItems.length === 0 ? [] : [{ id: String(c.id), title: c.title, musicVideoItems: baseItems, isMusicVideo: true }];
-      })
     : activeNav === "Podcasts"
     ? [{ id: "all-podcasts", title: "All Podcasts", isPodcast: true, videos: [], podcastItems: podcasts }]
     : visibleCarousels.length > 0
@@ -758,7 +726,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           id: cat, title: `${cat} Films`, videos: filteredContent.filter(v => v.category === cat),
         })),
       ],
-  [activeNav, allContent, filteredContent, visibleCarousels, podcasts, carousels, musicVideos, songs, myList]);
+  [activeNav, allContent, filteredContent, visibleCarousels, podcasts, carousels, myList]);
 
   const searchPool = useMemo(() => {
     const tagsStr = (tags) => Array.isArray(tags) ? tags.join(" ") : (tags || "");
@@ -766,18 +734,16 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       ...videos.map(v => ({ ...v, _type: "movie", _tagsStr: tagsStr(v.tags) })),
       ...shows.map(s => ({ ...s, _type: "show", _tagsStr: tagsStr(s.tags) })),
       ...podcasts.map(p => ({ ...p, _type: "podcast", _tagsStr: tagsStr(p.tags) })),
-      ...musicVideos.map(mv => ({ ...mv, _type: "music_video", _tagsStr: tagsStr(mv.tags) })),
-      ...songs.map(s => ({ ...s, _type: "song", _tagsStr: tagsStr(s.tags) })),
+      ...liveStreams.map(s => ({ ...s, _type: "stream", title: s.channel_name || s.title || "", _tagsStr: tagsStr(s.tags) })),
     ];
-  }, [videos, shows, podcasts, musicVideos, songs]);
+  }, [videos, shows, podcasts, liveStreams]);
 
   const searchResults = useMemo(() => {
     if (!debouncedQuery || !debouncedQuery.trim()) return [];
     const q = debouncedQuery.toLowerCase().trim();
     return searchPool.filter(v => {
       if (searchTypeFilter !== "all") {
-        if (searchTypeFilter === "music" && v._type !== "music_video" && v._type !== "song") return false;
-        if (searchTypeFilter !== "music" && v._type !== searchTypeFilter) return false;
+        if (searchTypeFilter !== "all" && v._type !== searchTypeFilter) return false;
       }
       const titleWords = v.title?.toLowerCase().split(/\s+/) || [];
       const titleMatch = titleWords.some(w => w.startsWith(q));
@@ -809,13 +775,12 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
   function handleSearchResultClick(item) {
     saveRecentSearch(searchQuery);
     closeSearch();
-    if (item._type === "show") onShowSelect(item);
+    if (item._type === "stream") {
+      const slug = item.username || (item.channel_name || item.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      window.location.href = `/stream/${slug}`;
+    } else if (item._type === "show") onShowSelect(item);
     else if (item._type === "podcast") { setSelectedPodcast(item); setPage("podcast"); }
     else onPlay(item);
-  }
-
-  function handleMusicVideoPlay(mv) {
-    onPlay({ ...mv, _type: "music_video" });
   }
 
   function handleClick(item) {
@@ -837,22 +802,22 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         transition: "background 0.4s ease",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 36 }}>
-          <span onClick={() => setActiveNav("Home")} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 26, letterSpacing: "-0.5px", userSelect: "none", cursor: "pointer" }}>
+          <span onClick={() => setActiveNav("Home")} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 30, letterSpacing: "-0.5px", userSelect: "none", cursor: "pointer" }}>
             <span style={{ color: "#facc15" }}>peep.</span>
           </span>
           {!isMobile && (
             <div style={{ display: "flex", gap: 4 }}>
-              {["Home", "Movies", "Series", "Music", "Streams", "Podcasts"].map(label => {
+              {["Home", "Movies", "Series", "Streams", "Podcasts"].map(label => {
                 const active = activeNav === label;
                 return (
-                  <span key={label} onClick={() => setActiveNav(label)} style={{ fontSize: 13.5, padding: "6px 12px", borderRadius: 6, color: active ? "#fff" : "rgba(255,255,255,0.55)", fontWeight: active ? 600 : 400, cursor: "pointer", background: active ? "rgba(250,204,21,0.12)" : "transparent", transition: "color 0.2s, background 0.2s" }}
+                  <span key={label} onClick={() => setActiveNav(label)} style={{ fontSize: 17, padding: "6px 16px", borderRadius: 6, color: active ? "#fff" : "rgba(255,255,255,0.55)", fontWeight: active ? 600 : 400, cursor: "pointer", background: active ? "rgba(250,204,21,0.12)" : "transparent", transition: "color 0.2s, background 0.2s" }}
                     onMouseEnter={e => { if (!active) { e.currentTarget.style.color = "#fff"; e.currentTarget.style.background = "rgba(255,255,255,0.06)"; } }}
                     onMouseLeave={e => { if (!active) { e.currentTarget.style.color = "rgba(255,255,255,0.55)"; e.currentTarget.style.background = "transparent"; } }}
                   >{label}</span>
                 );
               })}
               <span onClick={() => { if (!user) { onAuthOpen(); return; } setActiveNav("My List"); }}
-                style={{ fontSize: 13.5, padding: "6px 12px", borderRadius: 6, cursor: "pointer", color: activeNav === "My List" ? "#fff" : "rgba(255,255,255,0.55)", fontWeight: activeNav === "My List" ? 600 : 400, background: activeNav === "My List" ? "rgba(250,204,21,0.12)" : "transparent", transition: "color 0.2s, background 0.2s" }}
+                style={{ fontSize: 17, padding: "6px 16px", borderRadius: 6, cursor: "pointer", color: activeNav === "My List" ? "#fff" : "rgba(255,255,255,0.55)", fontWeight: activeNav === "My List" ? 600 : 400, background: activeNav === "My List" ? "rgba(250,204,21,0.12)" : "transparent", transition: "color 0.2s, background 0.2s" }}
                 onMouseEnter={e => { e.currentTarget.style.color = "#fff"; e.currentTarget.style.background = "rgba(255,255,255,0.06)"; }}
                 onMouseLeave={e => { e.currentTarget.style.color = activeNav === "My List" ? "#fff" : "rgba(255,255,255,0.55)"; e.currentTarget.style.background = activeNav === "My List" ? "rgba(250,204,21,0.12)" : "transparent"; }}
               >My List</span>
@@ -866,7 +831,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
               <input autoFocus value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                 onKeyDown={e => { if (e.key === "Escape") closeSearch(); if (e.key === "Enter" && searchResults[0]) handleSearchResultClick(searchResults[0]); }}
                 onBlur={() => { if (!searchQuery) closeSearch(); }}
-                placeholder="Search titles, genres, podcasts..."
+                placeholder="Search titles, channels, podcasts..."
                 style={{ background: "rgba(15,15,15,0.92)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 6, padding: "8px 14px 8px 38px", color: "#fff", fontSize: 13, width: isMobile ? "calc(100vw - 110px)" : 260, outline: "none" }}
               />
             )}
@@ -899,7 +864,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           <div style={{ padding: `20px ${PAD} 32px` }}>
             {/* Type filter chips */}
             <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-              {[{ id: "all", label: "All" }, { id: "movie", label: "Movies" }, { id: "show", label: "Series" }, { id: "music", label: "Music" }, { id: "podcast", label: "Podcasts" }].map(f => (
+              {[{ id: "all", label: "All" }, { id: "movie", label: "Movies" }, { id: "show", label: "Series" }, { id: "podcast", label: "Podcasts" }, { id: "stream", label: "Streams" }].map(f => (
                 <button key={f.id}
                   onMouseDown={e => e.preventDefault()}
                   onClick={() => setSearchTypeFilter(f.id)}
@@ -935,10 +900,10 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                     {searchResults.map(v => {
-                      const typeColor = v._type === "movie" ? "#facc15" : v._type === "show" ? "#60a5fa" : v._type === "music_video" || v._type === "song" ? "#4ade80" : "#a78bfa";
-                      const typeLabel = v._type === "movie" ? "Movie" : v._type === "show" ? "Series" : v._type === "music_video" ? "Music Video" : v._type === "song" ? "Song" : "Podcast";
-                      const thumb = v.poster || v.thumbnail || v.artwork_url;
-                      const meta = v._type === "podcast" ? v._tagsStr : v._type === "music_video" || v._type === "song" ? v.artist : v.category;
+                      const typeColor = v._type === "movie" ? "#facc15" : v._type === "show" ? "#60a5fa" : v._type === "stream" ? "#ef4444" : "#a78bfa";
+                      const typeLabel = v._type === "movie" ? "Movie" : v._type === "show" ? "Series" : v._type === "stream" ? (v.is_live ? "🔴 Live" : "Channel") : "Podcast";
+                      const thumb = v.poster || v.thumbnail || v.artwork_url || v.hero_image;
+                      const meta = v._type === "podcast" ? v._tagsStr : v._type === "stream" ? (v.category || null) : v.category;
                       return (
                         <div key={v.id + v._type}
                           onMouseDown={e => e.preventDefault()}
@@ -969,7 +934,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
             )}
 
             {!debouncedQuery && recentSearches.length === 0 && (
-              <p style={{ color: "#333", fontSize: 14, padding: "20px 0" }}>Start typing to search movies, series, and podcasts.</p>
+              <p style={{ color: "#333", fontSize: 14, padding: "20px 0" }}>Start typing to search movies, series, channels, and podcasts.</p>
             )}
           </div>
         </div>
@@ -1003,11 +968,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       )}
 
       {activeNav === "Streams" && (
-        <LiveTVPage streams={liveStreams.filter(s => s.is_live)} />
-      )}
-
-      {activeNav === "Music" && !loading && (
-        <MusicPage musicVideos={musicVideos} songs={songs} albums={albums} sections={sections} onPlay={handleMusicVideoPlay} playingSong={playingSong} songPaused={songPaused} onPlaySong={s => { if (playingSong?.id === s.id) { setSongPaused(p => !p); } else { setPlayingSong(s); setSongPaused(false); } }} />
+        <LiveTVPage streams={liveStreams} user={user} />
       )}
 
       {/* My List — full grid */}
@@ -1042,7 +1003,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       )}
 
       {/* Content rows (Home / Podcasts / catalog pages) */}
-      {activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "My List" && activeNav !== "Music" && !loading && (allContent.length > 0 || podcasts.length > 0 || continueWatching.length > 0) && (
+      {activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "My List" && !loading && (allContent.length > 0 || podcasts.length > 0 || continueWatching.length > 0) && (
         <div style={{ position: "relative", zIndex: 1, marginTop: activeNav === "Podcasts" ? 0 : -40, paddingBottom: 80 }}>
           {activeNav === "Podcasts" && (
             <div style={{ padding: `48px ${PAD} 0` }}>
@@ -1070,9 +1031,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         </div>
       )}
 
-      {playingSong && <MiniPlayer song={playingSong} onClose={() => { setPlayingSong(null); setSongPaused(false); }} isMobile={isMobile} paused={songPaused} onPausedChange={setSongPaused} />}
-      {isMobile && <div style={{ height: playingSong ? 152 : 72 }} />}
-      {!isMobile && playingSong && <div style={{ height: 80 }} />}
+      {isMobile && <div style={{ height: 72 }} />}
       <Footer onNavChange={setActiveNav} onProfileOpen={onProfileOpen} onOpenModal={setFooterModal} />
 
       {/* Mobile bottom tab bar */}
@@ -1082,7 +1041,6 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
             { id: "Home", label: "Home", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
             { id: "Movies", label: "Movies", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="2"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg> },
             { id: "Series", label: "Series", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></svg> },
-            { id: "Music", label: "Music", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg> },
             { id: "Streams", label: "Streams", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="15" rx="2"/><path d="M17 2l-5 5-5-5"/><circle cx="12" cy="14.5" r="2"/><path d="M9 14.5H7M15 14.5h2"/></svg> },
             { id: "My List", label: "My List", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg> },
           ].map(tab => {
@@ -1210,511 +1168,6 @@ function CatalogPage({ type, content, carousels = [], podcasts = [], onPlay, onS
   );
 }
 
-// ─── Music Page (Videos + Songs + Albums) ────────────────────────────────────
-
-function MusicPage({ musicVideos, songs, albums, sections = [], onPlay, onPlaySong, playingSong, songPaused }) {
-  const [subTab, setSubTab] = useState("videos"); // "videos" | "songs" | "albums"
-  const [selectedAlbum, setSelectedAlbum] = useState(null);
-  const [mvSort, setMvSort] = useState("artist");
-  const [songSort, setSongSort] = useState("artist");
-  const isMobile = useIsMobile();
-
-  const mvSections = sections.filter(s => s.isMusicVideo);
-  const songSections = sections.filter(s => s.isSong);
-
-  const sortedMv = useMemo(() => {
-    if (mvSort === "newest") return [...musicVideos].sort((a, b) => b.id - a.id);
-    return [...musicVideos].sort((a, b) => (a.artist || "").localeCompare(b.artist || ""));
-  }, [musicVideos, mvSort]);
-
-  const sortedSongs = useMemo(() => {
-    if (songSort === "newest") return [...songs].sort((a, b) => b.id - a.id);
-    return [...songs].sort((a, b) => (a.artist || "").localeCompare(b.artist || ""));
-  }, [songs, songSort]);
-
-  if (selectedAlbum) {
-    const albumSongs = songs.filter(s => s.album_id === selectedAlbum.id);
-    return <AlbumDetail album={selectedAlbum} songs={albumSongs} onBack={() => setSelectedAlbum(null)} onPlay={onPlaySong} />;
-  }
-
-  const tabs = [
-    { id: "videos", label: "Music Videos" },
-    { id: "songs", label: "Songs" },
-    { id: "albums", label: "Albums" },
-  ];
-
-  return (
-    <div style={{ paddingTop: 88, minHeight: "100vh" }}>
-      <div style={{ padding: `0 ${PAD} 0` }}>
-        <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(32px, 4vw, 56px)", fontWeight: 400, margin: "0 0 24px", color: "#fff" }}>Music</h1>
-        <div style={{ display: "flex", gap: 4, borderBottom: "1px solid rgba(255,255,255,0.08)", marginBottom: 32 }}>
-          {tabs.map(t => (
-            <button key={t.id} onClick={() => setSubTab(t.id)}
-              style={{ background: "none", border: "none", borderBottom: `2px solid ${subTab === t.id ? "#facc15" : "transparent"}`, padding: "10px 18px", color: subTab === t.id ? "#fff" : "rgba(255,255,255,0.45)", fontSize: 14, fontWeight: subTab === t.id ? 600 : 400, cursor: "pointer", transition: "color 0.15s", marginBottom: -1, fontFamily: "'Space Grotesk', sans-serif" }}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Music Videos tab */}
-      {subTab === "videos" && (
-        musicVideos.length === 0 && mvSections.length === 0 ? (
-          <div style={{ padding: "80px 0", textAlign: "center", color: "#444", fontSize: 15 }}>No music videos yet.</div>
-        ) : (
-          <div>
-            {mvSections.length === 0 && (
-              <div style={{ padding: `0 ${PAD}`, marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
-                <p style={{ margin: 0, fontSize: 12, color: "#444" }}>{musicVideos.length} video{musicVideos.length !== 1 ? "s" : ""}</p>
-                <select value={mvSort} onChange={e => setMvSort(e.target.value)}
-                  style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "6px 12px", color: "rgba(255,255,255,0.6)", fontSize: 12, cursor: "pointer", outline: "none" }}>
-                  <option value="artist">By Artist</option>
-                  <option value="newest">Newest First</option>
-                </select>
-              </div>
-            )}
-            {mvSections.map(s => <MusicVideoRow key={s.id} section={s} onPlay={onPlay} />)}
-            {mvSections.length === 0 && (
-              <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? "150px" : "200px"}, 1fr))`, gap: isMobile ? 10 : 16, padding: `0 ${PAD} 80px` }}>
-                {sortedMv.map(mv => <MusicVideoCard key={mv.id} item={mv} onClick={() => onPlay(mv)} />)}
-              </div>
-            )}
-          </div>
-        )
-      )}
-
-      {/* Songs tab */}
-      {subTab === "songs" && (
-        songs.length === 0 && songSections.length === 0 ? (
-          <div style={{ padding: "80px 0", textAlign: "center", color: "#444", fontSize: 15 }}>No songs yet.</div>
-        ) : (
-          <div>
-            {songSections.length === 0 && (
-              <div style={{ padding: `0 ${PAD}`, marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
-                <p style={{ margin: 0, fontSize: 12, color: "#444" }}>{songs.length} song{songs.length !== 1 ? "s" : ""}</p>
-                <select value={songSort} onChange={e => setSongSort(e.target.value)}
-                  style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "6px 12px", color: "rgba(255,255,255,0.6)", fontSize: 12, cursor: "pointer", outline: "none" }}>
-                  <option value="artist">By Artist</option>
-                  <option value="newest">Newest First</option>
-                </select>
-              </div>
-            )}
-            {songSections.map(s => <SongRow key={s.id} section={s} onPlay={onPlaySong} />)}
-            {songSections.length === 0 && (
-              <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? "130px" : "160px"}, 1fr))`, gap: isMobile ? 10 : 14, padding: `0 ${PAD} 80px` }}>
-                {sortedSongs.map(s => <SongCard key={s.id} item={s} onClick={() => onPlaySong(s)} isPlaying={playingSong?.id === s.id && !songPaused} isActive={playingSong?.id === s.id} />)}
-              </div>
-            )}
-          </div>
-        )
-      )}
-
-      {/* Albums tab */}
-      {subTab === "albums" && (
-        albums.length === 0 ? (
-          <div style={{ padding: "80px 0", textAlign: "center", color: "#444", fontSize: 15 }}>No albums yet.</div>
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? "140px" : "180px"}, 1fr))`, gap: isMobile ? 12 : 18, padding: `0 ${PAD} 80px` }}>
-            {albums.map(a => <AlbumCard key={a.id} album={a} onClick={() => setSelectedAlbum(a)} />)}
-          </div>
-        )
-      )}
-    </div>
-  );
-}
-
-function AlbumCard({ album, onClick }) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <div onClick={onClick} style={{ cursor: "pointer", borderRadius: 10, overflow: "hidden", background: "#141414", transform: hovered ? "scale(1.04) translateY(-4px)" : "scale(1)", transition: "transform 0.22s ease, box-shadow 0.22s ease", boxShadow: hovered ? "0 20px 48px rgba(0,0,0,0.8)" : "0 2px 8px rgba(0,0,0,0.3)" }}>
-      <div onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
-        style={{ position: "relative", aspectRatio: "1", overflow: "hidden", background: "#0a0a0a" }}>
-        {album.artwork_url
-          ? <img src={album.artwork_url} alt={album.title} style={{ width: "100%", height: "100%", objectFit: "cover", transition: "filter 0.22s", filter: hovered ? "brightness(0.45)" : "brightness(0.9)" }} />
-          : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #1a1a2e, #16213e)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-            </div>
-        }
-        {hovered && (
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div style={{ width: 52, height: 52, borderRadius: "50%", background: "rgba(250,204,21,0.92)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 16px rgba(0,0,0,0.5)" }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="#0a0a0a"><polygon points="6,3 20,12 6,21" /></svg>
-            </div>
-          </div>
-        )}
-      </div>
-      <div style={{ padding: "10px 12px 12px", background: hovered ? "#1c1c1c" : "#141414", transition: "background 0.22s" }}>
-        <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{album.title}</p>
-        {album.artist && <p style={{ margin: "0 0 2px", fontSize: 12, fontWeight: 600, color: "#facc15", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{album.artist}</p>}
-        {album.year && <p style={{ margin: 0, fontSize: 11, color: "#555" }}>{album.year}</p>}
-      </div>
-    </div>
-  );
-}
-
-function AlbumDetail({ album, songs, onBack, onPlay }) {
-  const isMobile = useIsMobile();
-
-  function fmtDur(dur) {
-    if (!dur) return null;
-    return dur;
-  }
-
-  return (
-    <div style={{ paddingTop: 88, minHeight: "100vh", paddingBottom: 80 }}>
-      {/* Back */}
-      <div style={{ padding: `0 ${PAD} 24px` }}>
-        <button onClick={onBack} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.5)", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 13, padding: 0, fontFamily: "'Space Grotesk', sans-serif" }}
-          onMouseEnter={e => e.currentTarget.style.color = "#fff"}
-          onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.5)"}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
-          Albums
-        </button>
-      </div>
-
-      {/* Album header */}
-      <div style={{ padding: `0 ${PAD} 40px`, display: "flex", gap: isMobile ? 20 : 36, alignItems: "flex-end", flexWrap: isMobile ? "wrap" : "nowrap" }}>
-        <div style={{ width: isMobile ? 140 : 200, height: isMobile ? 140 : 200, flexShrink: 0, borderRadius: 12, overflow: "hidden", background: "#141414", boxShadow: "0 16px 48px rgba(0,0,0,0.6)" }}>
-          {album.artwork_url
-            ? <img src={album.artwork_url} alt={album.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #1a1a2e, #16213e)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-              </div>
-          }
-        </div>
-        <div style={{ minWidth: 0 }}>
-          <p style={{ margin: "0 0 8px", fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 600 }}>Album</p>
-          <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(28px, 4vw, 52px)", fontWeight: 400, margin: "0 0 8px", color: "#fff", lineHeight: 1.1 }}>{album.title}</h1>
-          {album.artist && <p style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 600, color: "#facc15" }}>{album.artist}</p>}
-          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-            {album.year && <span style={{ fontSize: 13, color: "#555" }}>{album.year}</span>}
-            <span style={{ fontSize: 13, color: "#555" }}>{songs.length} track{songs.length !== 1 ? "s" : ""}</span>
-          </div>
-          {album.description && <p style={{ margin: "12px 0 0", fontSize: 13, color: "#555", lineHeight: 1.6, maxWidth: 500 }}>{album.description}</p>}
-        </div>
-      </div>
-
-      {/* Tracklist */}
-      {songs.length === 0 ? (
-        <div style={{ padding: `0 ${PAD}`, color: "#444", fontSize: 14 }}>No tracks assigned to this album yet.</div>
-      ) : (
-        <div style={{ padding: `0 ${PAD}` }}>
-          <div style={{ height: 1, background: "rgba(255,255,255,0.06)", marginBottom: 8 }} />
-          {songs.map((song, i) => (
-            <AlbumTrackRow key={song.id} song={song} index={i + 1} onPlay={() => onPlay(song)} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function AlbumTrackRow({ song, index, onPlay }) {
-  const [hovered, setHovered] = useState(false);
-
-  return (
-    <div onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
-      onClick={onPlay}
-      style={{ display: "flex", alignItems: "center", gap: 16, padding: "10px 12px", borderRadius: 8, cursor: "pointer", background: hovered ? "rgba(255,255,255,0.04)" : "transparent", transition: "background 0.15s" }}>
-      <div style={{ width: 24, textAlign: "right", flexShrink: 0 }}>
-        {hovered
-          ? <svg width="14" height="14" viewBox="0 0 24 24" fill="#facc15"><polygon points="5,3 19,12 5,21"/></svg>
-          : <span style={{ fontSize: 13, color: "#555" }}>{index}</span>
-        }
-      </div>
-      {song.thumbnail && <img src={song.thumbnail} alt="" style={{ width: 36, height: 36, borderRadius: 4, objectFit: "cover", flexShrink: 0 }} />}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ margin: 0, fontSize: 14, fontWeight: 500, color: hovered ? "#fff" : "#e5e5e5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", transition: "color 0.15s" }}>{song.title}</p>
-        {song.artist && <p style={{ margin: 0, fontSize: 12, color: "#555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{song.artist}</p>}
-      </div>
-      {song.duration && <span style={{ fontSize: 12, color: "#444", flexShrink: 0 }}>{song.duration}</span>}
-    </div>
-  );
-}
-
-function SongRow({ section, onPlay }) {
-  const scrollRef = useRef(null);
-  const isMobile = useIsMobile();
-  const scroll = dir => scrollRef.current?.scrollBy({ left: dir * scrollRef.current.clientWidth * 0.85, behavior: "smooth" });
-
-  return (
-    <div style={{ marginBottom: 32 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: `0 ${PAD}`, marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: "clamp(14px, 1.2vw, 17px)", fontWeight: 500, color: "#9ca3af", letterSpacing: "0.04em", textTransform: "uppercase" }}>{section.title}</h2>
-        {!isMobile && (
-          <div style={{ display: "flex", gap: 6 }}>
-            {[
-              <svg key="l" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>,
-              <svg key="r" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>,
-            ].map((icon, i) => (
-              <button key={i} onClick={() => scroll(i === 0 ? -1 : 1)}
-                style={{ background: "none", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, width: 30, height: 30, color: "rgba(255,255,255,0.4)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "border-color 0.15s, color 0.15s" }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.3)"; e.currentTarget.style.color = "#fff"; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"; e.currentTarget.style.color = "rgba(255,255,255,0.4)"; }}>
-                {icon}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-      <div style={{ position: "relative" }}>
-        {!isMobile && <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 48, background: "linear-gradient(to right, #0a0a0a, transparent)", zIndex: 5, pointerEvents: "none" }} />}
-        {!isMobile && <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 48, background: "linear-gradient(to left, #0a0a0a, transparent)", zIndex: 5, pointerEvents: "none" }} />}
-        <div ref={scrollRef} className="scroll-row" style={{ display: "flex", gap: 12, overflowX: "auto", scrollbarWidth: "none", padding: `8px ${PAD} 24px` }}>
-          {section.songItems.map(s => (
-            <div key={s.id} style={{ flexShrink: 0, width: "clamp(130px, 16vw, 180px)" }}>
-              <SongCard item={s} onClick={() => onPlay(s)} />
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SongCard({ item, onClick, isPlaying, isActive }) {
-  const [hovered, setHovered] = useState(false);
-  const showOverlay = hovered || isActive;
-
-  return (
-    <div onClick={onClick} style={{ cursor: "pointer", borderRadius: 10, overflow: "hidden", background: "#141414", transform: hovered ? "scale(1.04) translateY(-4px)" : "scale(1)", transition: "transform 0.22s ease, box-shadow 0.22s ease", boxShadow: hovered ? "0 20px 48px rgba(0,0,0,0.8)" : isActive ? "0 0 0 2px #facc15" : "0 2px 8px rgba(0,0,0,0.3)" }}>
-      <div onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
-        style={{ position: "relative", aspectRatio: "1", overflow: "hidden", background: "#0a0a0a" }}>
-        {item.thumbnail
-          ? <img src={item.thumbnail} alt={item.title} style={{ width: "100%", height: "100%", objectFit: "cover", transition: "filter 0.22s", filter: showOverlay ? "brightness(0.45)" : "brightness(0.82)" }} />
-          : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #1a1a2e, #16213e)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-            </div>
-        }
-        {showOverlay && (
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div style={{ width: 48, height: 48, borderRadius: "50%", background: "rgba(250,204,21,0.92)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 16px rgba(0,0,0,0.5)" }}>
-              {isPlaying
-                ? <svg width="16" height="16" viewBox="0 0 24 24" fill="#0a0a0a"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-                : <svg width="16" height="16" viewBox="0 0 24 24" fill="#0a0a0a"><polygon points="5,3 19,12 5,21" /></svg>
-              }
-            </div>
-          </div>
-        )}
-      </div>
-      <div style={{ padding: "10px 12px 12px", background: hovered ? "#1c1c1c" : "#141414", transition: "background 0.22s" }}>
-        <p style={{ margin: "0 0 2px", fontSize: 12, fontWeight: 700, color: "#facc15", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.artist}</p>
-        <p style={{ margin: "0 0 4px", fontSize: 12, color: "#aaa", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
-        {item.album && <p style={{ margin: 0, fontSize: 11, color: "#555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.album}</p>}
-      </div>
-    </div>
-  );
-}
-
-function MiniPlayer({ song, onClose, isMobile, paused, onPausedChange }) {
-  const audioRef = useRef(null);
-  const scrubBarRef = useRef(null);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [scrubbing, setScrubbing] = useState(false);
-  const [scrubPct, setScrubPct] = useState(null);
-  const [barHovered, setBarHovered] = useState(false);
-
-  useEffect(() => {
-    if (!song?.url || !audioRef.current) return;
-    audioRef.current.src = song.url;
-    audioRef.current.play().catch(() => {});
-    onPausedChange(false);
-    setCurrentTime(0);
-    setDuration(0);
-  }, [song?.id]);
-
-  useEffect(() => {
-    if (!audioRef.current) return;
-    if (paused) audioRef.current.pause();
-    else audioRef.current.play().catch(() => {});
-  }, [paused]);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    const onTime = () => setCurrentTime(audio.currentTime);
-    const onDur = () => setDuration(audio.duration || 0);
-    const onEnd = () => onPausedChange(true);
-    audio.addEventListener("timeupdate", onTime);
-    audio.addEventListener("durationchange", onDur);
-    audio.addEventListener("ended", onEnd);
-    return () => { audio.removeEventListener("timeupdate", onTime); audio.removeEventListener("durationchange", onDur); audio.removeEventListener("ended", onEnd); };
-  }, []);
-
-  useEffect(() => {
-    if (!scrubbing) return;
-    function onMove(e) {
-      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-      const rect = scrubBarRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      setScrubPct(Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)));
-    }
-    function onUp(e) {
-      const clientX = (e.changedTouches ? e.changedTouches[0].clientX : e.clientX);
-      const rect = scrubBarRef.current?.getBoundingClientRect();
-      if (rect && audioRef.current && duration) {
-        audioRef.current.currentTime = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)) * duration;
-      }
-      setScrubbing(false);
-      setScrubPct(null);
-    }
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    window.addEventListener("touchmove", onMove, { passive: true });
-    window.addEventListener("touchend", onUp);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      window.removeEventListener("touchmove", onMove);
-      window.removeEventListener("touchend", onUp);
-    };
-  }, [scrubbing, duration]);
-
-  function togglePlay() {
-    if (!audioRef.current) return;
-    if (paused) { audioRef.current.play().catch(() => {}); onPausedChange(false); }
-    else { audioRef.current.pause(); onPausedChange(true); }
-  }
-
-  function fmt(s) {
-    if (!s || !isFinite(s)) return "–:––";
-    const m = Math.floor(s / 60), sec = Math.floor(s % 60);
-    return `${m}:${String(sec).padStart(2, "0")}`;
-  }
-
-  const displayPct = scrubPct !== null ? scrubPct : (duration > 0 ? currentTime / duration : 0);
-  const active = barHovered || scrubbing;
-
-  return (
-    <div style={{ position: "fixed", bottom: isMobile ? 60 : 0, left: 0, right: 0, zIndex: 200, background: "rgba(12,12,12,0.97)", backdropFilter: "blur(20px)", borderTop: "1px solid rgba(255,255,255,0.08)", fontFamily: "'Space Grotesk', sans-serif" }}>
-      <audio ref={audioRef} />
-      {/* Scrub bar */}
-      <div
-        ref={scrubBarRef}
-        onMouseEnter={() => setBarHovered(true)}
-        onMouseLeave={() => setBarHovered(false)}
-        onMouseDown={e => { e.preventDefault(); setScrubbing(true); const rect = e.currentTarget.getBoundingClientRect(); setScrubPct(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))); }}
-        onTouchStart={e => { setScrubbing(true); const rect = e.currentTarget.getBoundingClientRect(); setScrubPct(Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width))); }}
-        style={{ height: active ? 20 : 12, cursor: "pointer", position: "relative", display: "flex", alignItems: "center", transition: "height 0.15s ease" }}
-      >
-        <div style={{ position: "absolute", left: 0, right: 0, height: active ? 5 : 3, background: "rgba(255,255,255,0.08)", borderRadius: 99, transition: "height 0.15s ease", overflow: "visible" }}>
-          <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${displayPct * 100}%`, background: "#facc15", borderRadius: 99, transition: scrubbing ? "none" : "width 0.5s linear" }} />
-          {/* Thumb */}
-          <div style={{ position: "absolute", top: "50%", left: `${displayPct * 100}%`, transform: "translate(-50%, -50%)", width: active ? 14 : 0, height: active ? 14 : 0, borderRadius: "50%", background: "#facc15", boxShadow: "0 0 6px rgba(250,204,21,0.6)", transition: "width 0.15s ease, height 0.15s ease", pointerEvents: "none" }} />
-        </div>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "10px 20px", height: 68 }}>
-        {/* Album art */}
-        <div style={{ width: 44, height: 44, borderRadius: 6, overflow: "hidden", flexShrink: 0, background: "#1a1a1a" }}>
-          {song.thumbnail
-            ? <img src={song.thumbnail} alt={song.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#1a1a2e,#16213e)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-              </div>
-          }
-        </div>
-        {/* Info */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ margin: "0 0 1px", fontSize: 13, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{song.title}</p>
-          <p style={{ margin: 0, fontSize: 11, color: "#facc15", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{song.artist}</p>
-        </div>
-        {/* Time */}
-        {!isMobile && (
-          <span style={{ fontSize: 11, color: "#555", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
-            {fmt(currentTime)} / {fmt(duration)}
-          </span>
-        )}
-        {/* Play/Pause */}
-        <button onClick={togglePlay} style={{ width: 40, height: 40, borderRadius: "50%", background: "#facc15", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "transform 0.15s" }}
-          onMouseEnter={e => e.currentTarget.style.transform = "scale(1.08)"}
-          onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}>
-          {paused
-            ? <svg width="14" height="14" viewBox="0 0 24 24" fill="#0a0a0a"><polygon points="5,3 19,12 5,21" /></svg>
-            : <svg width="14" height="14" viewBox="0 0 24 24" fill="#0a0a0a"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-          }
-        </button>
-        {/* Close */}
-        <button onClick={onClose} style={{ background: "none", border: "none", color: "#555", fontSize: 20, cursor: "pointer", padding: "0 4px", lineHeight: 1, flexShrink: 0 }}
-          onMouseEnter={e => e.currentTarget.style.color = "#aaa"}
-          onMouseLeave={e => e.currentTarget.style.color = "#555"}>×</button>
-      </div>
-    </div>
-  );
-}
-
-function MusicVideoRow({ section, onPlay }) {
-  const scrollRef = useRef(null);
-  const isMobile = useIsMobile();
-  const scroll = dir => scrollRef.current?.scrollBy({ left: dir * scrollRef.current.clientWidth * 0.85, behavior: "smooth" });
-
-  return (
-    <div style={{ marginBottom: 32 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: `0 ${PAD}`, marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: "clamp(14px, 1.2vw, 17px)", fontWeight: 500, color: "#9ca3af", letterSpacing: "0.04em", textTransform: "uppercase" }}>{section.title}</h2>
-        {!isMobile && (
-          <div style={{ display: "flex", gap: 6 }}>
-            {[
-              <svg key="l" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>,
-              <svg key="r" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>,
-            ].map((icon, i) => (
-              <button key={i} onClick={() => scroll(i === 0 ? -1 : 1)}
-                style={{ background: "none", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, width: 30, height: 30, color: "rgba(255,255,255,0.4)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "border-color 0.15s, color 0.15s" }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.3)"; e.currentTarget.style.color = "#fff"; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"; e.currentTarget.style.color = "rgba(255,255,255,0.4)"; }}>
-                {icon}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-      <div style={{ position: "relative" }}>
-        {!isMobile && <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 48, background: "linear-gradient(to right, #0a0a0a, transparent)", zIndex: 5, pointerEvents: "none" }} />}
-        {!isMobile && <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 48, background: "linear-gradient(to left, #0a0a0a, transparent)", zIndex: 5, pointerEvents: "none" }} />}
-        <div ref={scrollRef} className="scroll-row" style={{ display: "flex", gap: 14, overflowX: "auto", scrollbarWidth: "none", padding: `16px ${PAD} 24px` }}>
-          {section.musicVideoItems.map(mv => (
-            <div key={mv.id} style={{ flexShrink: 0, width: "clamp(180px, 22vw, 260px)" }}>
-              <MusicVideoCard item={mv} onClick={() => onPlay(mv)} />
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MusicVideoCard({ item, onClick }) {
-  const [hovered, setHovered] = useState(false);
-
-  return (
-    <div onClick={onClick}
-      style={{ cursor: "pointer", borderRadius: 10, overflow: "hidden", background: "#141414", transform: hovered ? "scale(1.04) translateY(-4px)" : "scale(1)", transition: "transform 0.22s ease, box-shadow 0.22s ease", boxShadow: hovered ? "0 20px 48px rgba(0,0,0,0.8)" : "0 2px 8px rgba(0,0,0,0.3)" }}>
-      <div onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
-        style={{ position: "relative", aspectRatio: "16/9", overflow: "hidden", background: "#0a0a0a" }}>
-        {(item.thumbnail || item.poster)
-          ? <img src={item.thumbnail || item.poster} alt={item.title} style={{ width: "100%", height: "100%", objectFit: "cover", transition: "filter 0.22s", filter: hovered ? "brightness(0.45)" : "brightness(0.75)" }} />
-          : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#1a1a2e,#16213e)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-            </div>
-        }
-        {hovered && (
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div style={{ width: 48, height: 48, borderRadius: "50%", background: "rgba(255,255,255,0.92)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 16px rgba(0,0,0,0.5)" }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="#0a0a0a"><polygon points="5,3 19,12 5,21" /></svg>
-            </div>
-          </div>
-        )}
-        {item.duration && <div style={{ position: "absolute", bottom: 8, right: 8, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(4px)", color: "#bbb", fontSize: 10.5, padding: "3px 7px", borderRadius: 4 }}>{item.duration}</div>}
-      </div>
-      <div style={{ padding: "10px 12px 12px", background: hovered ? "#1c1c1c" : "#141414", transition: "background 0.22s" }}>
-        <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 700, color: "#facc15", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.artist}</p>
-        <p style={{ margin: "0 0 4px", fontSize: 12, color: "#aaa", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
-        {item.year && <span style={{ fontSize: 11, color: "#555" }}>{item.year}</span>}
-      </div>
-    </div>
-  );
-}
-
 function CatalogCard({ item, onClick, myList, onToggleList }) {
   const [hovered, setHovered] = useState(false);
   const inList = myList?.[`${item._type}_${item.id}`];
@@ -1728,10 +1181,10 @@ function CatalogCard({ item, onClick, myList, onToggleList }) {
 
         {/* Badges */}
         {item._type === "show"
-          ? <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(59,130,246,0.9)", backdropFilter: "blur(4px)", color: "#fff", fontSize: 9.5, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: 0.5, textTransform: "uppercase" }}>Series</div>
-          : item.category && <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(250,204,21,0.85)", backdropFilter: "blur(4px)", color: "#0a0a0a", fontSize: 9.5, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: 0.5, textTransform: "uppercase" }}>{item.category}</div>
+          ? <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(59,130,246,0.9)", backdropFilter: "blur(4px)", color: "#fff", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 4, letterSpacing: 0.5, textTransform: "uppercase" }}>Series</div>
+          : item.category && <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(250,204,21,0.85)", backdropFilter: "blur(4px)", color: "#0a0a0a", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 4, letterSpacing: 0.5, textTransform: "uppercase" }}>{item.category}</div>
         }
-        {item.duration && <div style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(4px)", color: "#bbb", fontSize: 10.5, padding: "3px 7px", borderRadius: 4 }}>{item.duration}</div>}
+        {item.duration && <div style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(4px)", color: "#bbb", fontSize: 12, padding: "4px 8px", borderRadius: 4 }}>{item.duration}</div>}
 
         {/* Hover overlay — play button only */}
         {hovered && (
@@ -1745,17 +1198,17 @@ function CatalogCard({ item, onClick, myList, onToggleList }) {
 
       <div style={{ padding: "10px 12px 12px", background: hovered ? "#1c1c1c" : "#141414", transition: "background 0.22s" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4, gap: 6 }}>
-          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>{item.title}</p>
+          <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>{item.title}</p>
           {hovered && (
             <button onClick={e => { e.stopPropagation(); onToggleList?.(item.id, item._type); }}
-              style={{ flexShrink: 0, background: inList ? "rgba(250,204,21,0.15)" : "rgba(255,255,255,0.08)", border: `1px solid ${inList ? "rgba(250,204,21,0.5)" : "rgba(255,255,255,0.15)"}`, borderRadius: 20, padding: "3px 10px", color: inList ? "#facc15" : "#aaa", fontSize: 10, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+              style={{ flexShrink: 0, background: inList ? "rgba(250,204,21,0.15)" : "rgba(255,255,255,0.08)", border: `1px solid ${inList ? "rgba(250,204,21,0.5)" : "rgba(255,255,255,0.15)"}`, borderRadius: 20, padding: "4px 12px", color: inList ? "#facc15" : "#aaa", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
               {inList ? "✓ Saved" : "+ List"}
             </button>
           )}
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          {item.score ? <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 600 }}>{item.score}%</span> : <span />}
-          {item.year && <span style={{ fontSize: 11, color: "#555" }}>{item.year}</span>}
+          {item.score ? <span style={{ fontSize: 13, color: "#4ade80", fontWeight: 600 }}>{item.score}%</span> : <span />}
+          {item.year && <span style={{ fontSize: 13, color: "#555" }}>{item.year}</span>}
         </div>
       </div>
     </div>
@@ -1831,30 +1284,30 @@ function HeroBanner({ video, onPlay, isShow, myList, onToggleList, categoryRank 
       <div style={{ position: "absolute", bottom: isMobile ? "10%" : "14%", left: PAD, right: PAD, maxWidth: isMobile ? "100%" : "clamp(460px, 40vw, 680px)" }}>
         <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap", alignItems: "center" }}>
           {isShow
-            ? <span style={{ background: "rgba(147,197,253,0.12)", border: "1px solid rgba(147,197,253,0.25)", color: "#93c5fd", fontSize: 9.5, fontWeight: 700, padding: "4px 11px", borderRadius: 4, letterSpacing: 1.5, textTransform: "uppercase" }}>Series</span>
-            : video.category && <span style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.6)", fontSize: 9.5, fontWeight: 700, padding: "4px 11px", borderRadius: 4, letterSpacing: 1.5, textTransform: "uppercase" }}>{video.category}</span>
+            ? <span style={{ background: "rgba(147,197,253,0.12)", border: "1px solid rgba(147,197,253,0.25)", color: "#93c5fd", fontSize: 12, fontWeight: 700, padding: "5px 13px", borderRadius: 4, letterSpacing: 1.5, textTransform: "uppercase" }}>Series</span>
+            : video.category && <span style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.6)", fontSize: 12, fontWeight: 700, padding: "5px 13px", borderRadius: 4, letterSpacing: 1.5, textTransform: "uppercase" }}>{video.category}</span>
           }
-          {video.category && categoryRank && <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 12 }}>#{categoryRank} in {video.category}</span>}
+          {video.category && categoryRank && <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 15 }}>#{categoryRank} in {video.category}</span>}
         </div>
 
-        <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(36px, 4.5vw, 72px)", lineHeight: 1.05, margin: "0 0 16px", fontWeight: 400, letterSpacing: "-0.02em" }}>{video.title}</h1>
+        <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(42px, 5.5vw, 84px)", lineHeight: 1.05, margin: "0 0 18px", fontWeight: 400, letterSpacing: "-0.02em" }}>{video.title}</h1>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18, flexWrap: "wrap" }}>
-          {video.score && <span style={{ color: "#6ee7b7", fontSize: 13, fontWeight: 600 }}>{video.score}% Match</span>}
-          {video.year && <span style={{ color: "rgba(255,255,255,0.38)", fontSize: 13 }}>{video.year}</span>}
-          {video.rating && <span style={{ border: "1px solid rgba(255,255,255,0.18)", color: "rgba(255,255,255,0.38)", fontSize: 10.5, padding: "2px 7px", borderRadius: 3, letterSpacing: 0.3 }}>{video.rating}</span>}
-          {video.duration && <span style={{ color: "rgba(255,255,255,0.38)", fontSize: 13 }}>{video.duration}</span>}
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20, flexWrap: "wrap" }}>
+          {video.score && <span style={{ color: "#6ee7b7", fontSize: 15, fontWeight: 600 }}>{video.score}% Match</span>}
+          {video.year && <span style={{ color: "rgba(255,255,255,0.38)", fontSize: 15 }}>{video.year}</span>}
+          {video.rating && <span style={{ border: "1px solid rgba(255,255,255,0.18)", color: "rgba(255,255,255,0.38)", fontSize: 13, padding: "3px 9px", borderRadius: 3, letterSpacing: 0.3 }}>{video.rating}</span>}
+          {video.duration && <span style={{ color: "rgba(255,255,255,0.38)", fontSize: 15 }}>{video.duration}</span>}
         </div>
 
         {video.description && (
-          <p style={{ fontSize: 14.5, color: "rgba(255,255,255,0.58)", lineHeight: 1.7, margin: "0 0 32px", display: "-webkit-box", WebkitLineClamp: isMobile ? 2 : 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+          <p style={{ fontSize: 17, color: "rgba(255,255,255,0.58)", lineHeight: 1.7, margin: "0 0 36px", display: "-webkit-box", WebkitLineClamp: isMobile ? 2 : 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
             {video.description}
           </p>
         )}
 
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
           <button onClick={() => onPlay(video)}
-            style={{ background: "#fff", color: "#0a0a0a", border: "none", borderRadius: 8, padding: isMobile ? "11px 22px" : "13px 30px", fontSize: isMobile ? 13.5 : 14.5, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 9, letterSpacing: "0.01em", transition: "background 0.15s, transform 0.15s" }}
+            style={{ background: "#fff", color: "#0a0a0a", border: "none", borderRadius: 8, padding: isMobile ? "13px 26px" : "15px 34px", fontSize: isMobile ? 15 : 16, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 9, letterSpacing: "0.01em", transition: "background 0.15s, transform 0.15s" }}
             onMouseEnter={e => { e.currentTarget.style.background = "#e8e8e8"; e.currentTarget.style.transform = "translateY(-1px)"; }}
             onMouseLeave={e => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.transform = "none"; }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="6,3 20,12 6,21" /></svg>
@@ -1862,7 +1315,7 @@ function HeroBanner({ video, onPlay, isShow, myList, onToggleList, categoryRank 
           </button>
           {video.trailer_url && (
             <button onClick={() => setTrailerOpen(true)}
-              style={{ background: "rgba(255,255,255,0.08)", backdropFilter: "blur(8px)", color: "rgba(255,255,255,0.85)", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 8, padding: "13px 26px", fontSize: 14.5, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 9, transition: "background 0.15s" }}
+              style={{ background: "rgba(255,255,255,0.08)", backdropFilter: "blur(8px)", color: "rgba(255,255,255,0.85)", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 8, padding: "15px 28px", fontSize: 16, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 9, transition: "background 0.15s" }}
               onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.14)"}
               onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.08)"}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="10,8 16,12 10,16" fill="currentColor" stroke="none" /></svg>
@@ -1874,7 +1327,7 @@ function HeroBanner({ video, onPlay, isShow, myList, onToggleList, categoryRank 
             const inList = myList?.[`${type}_${video.id}`];
             return (
               <button onClick={() => onToggleList?.(video.id, type)}
-                style={{ background: "rgba(255,255,255,0.08)", backdropFilter: "blur(8px)", color: inList ? "#facc15" : "rgba(255,255,255,0.85)", border: `1px solid ${inList ? "rgba(250,204,21,0.35)" : "rgba(255,255,255,0.14)"}`, borderRadius: 8, padding: "13px 26px", fontSize: 14.5, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 9, transition: "background 0.15s" }}
+                style={{ background: "rgba(255,255,255,0.08)", backdropFilter: "blur(8px)", color: inList ? "#facc15" : "rgba(255,255,255,0.85)", border: `1px solid ${inList ? "rgba(250,204,21,0.35)" : "rgba(255,255,255,0.14)"}`, borderRadius: 8, padding: "15px 28px", fontSize: 16, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 9, transition: "background 0.15s" }}
                 onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.14)"}
                 onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.08)"}>
                 {inList
@@ -1911,7 +1364,7 @@ function ContentRow({ section, onPlay, onShowSelect, myList, onToggleList }) {
   return (
     <div style={{ marginBottom: 32 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: `0 ${PAD}`, marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: "clamp(14px, 1.2vw, 17px)", fontWeight: 500, color: "#9ca3af", letterSpacing: "0.04em", textTransform: "uppercase" }}>{section.title}</h2>
+        <h2 style={{ margin: 0, fontSize: "clamp(20px, 1.8vw, 26px)", fontWeight: 700, color: "#e5e7eb", letterSpacing: "0.05em", textTransform: "uppercase" }}>{section.title}</h2>
         {!isMobile && (
           <div style={{ display: "flex", gap: 6 }}>
             {[
@@ -2277,12 +1730,12 @@ function VideoCard({ video, onClick, rank, myList, onToggleList }) {
 
           {/* Type badge */}
           {video._type === "show"
-            ? <div style={{ position: "absolute", top: 10, left: 10, background: "rgba(15,15,15,0.75)", backdropFilter: "blur(8px)", color: "#93c5fd", fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: 1.2, textTransform: "uppercase" }}>Series</div>
-            : video.category && <div style={{ position: "absolute", top: 10, left: 10, background: "rgba(15,15,15,0.75)", backdropFilter: "blur(8px)", color: "#d1d5db", fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: 1.2, textTransform: "uppercase" }}>{video.category}</div>
+            ? <div style={{ position: "absolute", top: 10, left: 10, background: "rgba(15,15,15,0.75)", backdropFilter: "blur(8px)", color: "#93c5fd", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 4, letterSpacing: 1.2, textTransform: "uppercase" }}>Series</div>
+            : video.category && <div style={{ position: "absolute", top: 10, left: 10, background: "rgba(15,15,15,0.75)", backdropFilter: "blur(8px)", color: "#d1d5db", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 4, letterSpacing: 1.2, textTransform: "uppercase" }}>{video.category}</div>
           }
 
           {/* Duration */}
-          {video.duration && <div style={{ position: "absolute", top: 10, right: 10, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(6px)", color: "rgba(255,255,255,0.6)", fontSize: 10, padding: "3px 7px", borderRadius: 4, fontWeight: 500 }}>{video.duration}</div>}
+          {video.duration && <div style={{ position: "absolute", top: 10, right: 10, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(6px)", color: "rgba(255,255,255,0.6)", fontSize: 12, padding: "4px 8px", borderRadius: 4, fontWeight: 500 }}>{video.duration}</div>}
 
           {/* Progress bar */}
           {video._progress && video._progress.duration_seconds > 0 && (
@@ -2293,18 +1746,18 @@ function VideoCard({ video, onClick, rank, myList, onToggleList }) {
         </div>
 
         <div style={{ padding: "12px 13px 14px", background: "#0f0f0f" }}>
-          <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 500, color: "#f3f4f6", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "0.01em" }}>{video.title}</p>
+          <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#f3f4f6", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "0.01em" }}>{video.title}</p>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: hovered ? 11 : 0 }}>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              {video.score && <span style={{ fontSize: 11, color: "#6ee7b7", fontWeight: 600 }}>{video.score}%</span>}
-              {video.year && <span style={{ fontSize: 11, color: "#6b7280" }}>{video.year}</span>}
+              {video.score && <span style={{ fontSize: 13, color: "#6ee7b7", fontWeight: 600 }}>{video.score}%</span>}
+              {video.year && <span style={{ fontSize: 13, color: "#6b7280" }}>{video.year}</span>}
             </div>
-            {video.view_count > 0 && <span style={{ fontSize: 10, color: "#374151" }}>{fmtViews(video.view_count)}</span>}
+            {video.view_count > 0 && <span style={{ fontSize: 12, color: "#374151" }}>{fmtViews(video.view_count)}</span>}
           </div>
           {(hovered || isMobile) && (
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={e => { e.stopPropagation(); onToggleList?.(video.id, video._type); }}
-                style={{ flex: 1, background: "transparent", border: `1px solid ${inList ? "rgba(250,204,21,0.35)" : "rgba(255,255,255,0.1)"}`, borderRadius: 6, color: inList ? "#facc15" : "rgba(255,255,255,0.5)", fontSize: 11, padding: "6px 0", cursor: "pointer", fontWeight: 500, letterSpacing: "0.02em", transition: "border-color 0.15s, color 0.15s" }}>
+                style={{ flex: 1, background: "transparent", border: `1px solid ${inList ? "rgba(250,204,21,0.35)" : "rgba(255,255,255,0.1)"}`, borderRadius: 6, color: inList ? "#facc15" : "rgba(255,255,255,0.5)", fontSize: 13, padding: "7px 0", cursor: "pointer", fontWeight: 500, letterSpacing: "0.02em", transition: "border-color 0.15s, color 0.15s" }}>
                 {inList ? "✓ Saved" : "+ My List"}
               </button>
             </div>
@@ -2335,26 +1788,26 @@ function VideoCard({ video, onClick, rank, myList, onToggleList }) {
 
           {/* Info panel — fades in after expansion */}
           <div style={{ padding: "14px 18px 18px", opacity: trailerExpanded ? 1 : 0, transition: "opacity 0.15s ease 0.15s" }}>
-            <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{video.title}</p>
+            <p style={{ margin: "0 0 8px", fontSize: 17, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{video.title}</p>
 
             {/* Metadata row */}
             <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
-              {video.score && <span style={{ fontSize: 12, color: "#4ade80", fontWeight: 700 }}>{video.score}% Match</span>}
-              {video.category && <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: 0.5 }}>{video.category}</span>}
-              {video.year && <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>{video.year}</span>}
-              {video.rating && <span style={{ fontSize: 10, border: "1px solid rgba(255,255,255,0.3)", color: "rgba(255,255,255,0.5)", padding: "1px 5px", borderRadius: 3 }}>{video.rating}</span>}
-              {video.duration && <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>{video.duration}</span>}
+              {video.score && <span style={{ fontSize: 14, color: "#4ade80", fontWeight: 700 }}>{video.score}% Match</span>}
+              {video.category && <span style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: 0.5 }}>{video.category}</span>}
+              {video.year && <span style={{ fontSize: 13, color: "rgba(255,255,255,0.5)" }}>{video.year}</span>}
+              {video.rating && <span style={{ fontSize: 12, border: "1px solid rgba(255,255,255,0.3)", color: "rgba(255,255,255,0.5)", padding: "2px 6px", borderRadius: 3 }}>{video.rating}</span>}
+              {video.duration && <span style={{ fontSize: 13, color: "rgba(255,255,255,0.5)" }}>{video.duration}</span>}
             </div>
 
             {/* Description */}
             {video.description && (
-              <p style={{ margin: "0 0 12px", fontSize: 12, color: "rgba(255,255,255,0.65)", lineHeight: 1.55, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{video.description}</p>
+              <p style={{ margin: "0 0 12px", fontSize: 14, color: "rgba(255,255,255,0.65)", lineHeight: 1.55, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{video.description}</p>
             )}
 
             {/* Action buttons */}
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <button onClick={e => { e.stopPropagation(); onClick(); }}
-                style={{ flex: 1, background: "#fff", border: "none", borderRadius: 6, padding: "9px 0", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
+                style={{ flex: 1, background: "#fff", border: "none", borderRadius: 6, padding: "10px 0", color: "#0a0a0a", fontSize: 15, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
                 Play
               </button>
@@ -4243,7 +3696,7 @@ function timeAgo(dateStr) {
   return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, onOpenSettings, onAvatarChange }) {
+function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, onOpenSettings, onAvatarChange, onSignOut }) {
   const [history, setHistory] = useState([]);
   const [contentMap, setContentMap] = useState({});
   const [showsMap, setShowsMap] = useState({});
@@ -4333,7 +3786,7 @@ function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, o
             {!editing && activeProfile?.bio && <p style={{ margin: "0 0 6px", fontSize: 13, color: "#666", lineHeight: 1.6 }}>{activeProfile.bio}</p>}
             <p style={{ margin: 0, fontSize: 12, color: "#333" }}>{memberSince ? `Member since ${memberSince}` : user?.email}</p>
           </div>
-          <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+          <div style={{ display: "flex", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
             {onOpenSettings && !editing && (
               <button onClick={onOpenSettings} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid #2a2a2a", borderRadius: 8, padding: "8px 14px", color: "#aaa", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                 Settings
@@ -4343,6 +3796,13 @@ function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, o
               style={{ background: editing ? "rgba(250,204,21,0.12)" : "rgba(255,255,255,0.06)", border: `1px solid ${editing ? "rgba(250,204,21,0.3)" : "#2a2a2a"}`, borderRadius: 8, padding: "8px 18px", color: editing ? "#facc15" : "#aaa", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
               {editing ? "Cancel" : "Edit Profile"}
             </button>
+            {onSignOut && !editing && (
+              <button onClick={onSignOut} style={{ background: "transparent", border: "1px solid #2a2a2a", borderRadius: 8, padding: "8px 14px", color: "#f87171", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                onMouseEnter={e => e.currentTarget.style.background = "rgba(248,113,113,0.08)"}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                Sign Out
+              </button>
+            )}
           </div>
         </div>
 
@@ -4851,206 +4311,180 @@ function SettingsPage({ user, activeProfile, isOwner, onBack, onGoHome, onProfil
     else { setPasswordMsg({ type: "ok", text: "Password updated successfully" }); setNewPassword(""); setConfirmPassword(""); }
   }
 
-  const inp = { width: "100%", background: "#0d0d0d", border: "1px solid #222", borderRadius: 10, padding: "12px 14px", color: "#fff", fontSize: 14, outline: "none", boxSizing: "border-box", fontFamily: "inherit" };
-  const card = { marginBottom: 16, background: "#111", border: "1px solid #1e1e1e", borderRadius: 16, overflow: "hidden" };
-  const cardHead = { padding: "20px 24px", borderBottom: "1px solid #1a1a1a" };
-  const cardBody = { padding: "24px" };
+  const [expandedSection, setExpandedSection] = useState(null);
+  const inp = { width: "100%", background: "#181818", border: "1px solid #2a2a2a", borderRadius: 10, padding: "14px 16px", color: "#fff", fontSize: 16, outline: "none", boxSizing: "border-box", fontFamily: "inherit" };
+  const card = { marginBottom: 16, background: "#161616", border: "1px solid #2a2a2a", borderRadius: 14, overflow: "hidden" };
+  const planLabel = subscription?.plan === "comp" ? "Complimentary" : subscription?.plan_id === "price_1TafqJRgQH3TYy3QOCovduJf" ? "Founding Member — $2.99/mo" : subscription?.plan_id === "price_1Tag3FRgQH3TYy3Ql0KuQNeA" ? "Founding Member — $19.99/yr" : "Peep Monthly — $10/mo";
+  const AcctRow = ({ label, value, note, action, onAction, danger = false, noBorder = false }) => (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "18px 28px", borderBottom: noBorder ? "none" : "1px solid #222" }}>
+      <div style={{ minWidth: 0 }}>
+        <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: danger ? "#f87171" : "#fff" }}>{label}</p>
+        {value && <p style={{ margin: "4px 0 0", fontSize: 15, color: "#666" }}>{value}</p>}
+        {note && <p style={{ margin: "5px 0 0", fontSize: 13, color: "#f87171", display: "flex", alignItems: "center", gap: 5 }}>⊘ {note}</p>}
+      </div>
+      {action && <button onClick={onAction} style={{ background: "none", border: "none", color: danger ? "#f87171" : "#facc15", fontSize: 15, fontWeight: 600, cursor: "pointer", padding: 0, flexShrink: 0, fontFamily: "inherit", whiteSpace: "nowrap" }}>{action}</button>}
+    </div>
+  );
+  const SectionTitle = ({ children }) => (
+    <div style={{ padding: "24px 28px 8px" }}>
+      <p style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#fff" }}>{children}</p>
+    </div>
+  );
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
 
       <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 50, display: "flex", alignItems: "center", padding: `0 ${PAD}`, height: 64, gap: 20, background: "rgba(10,10,10,0.92)", backdropFilter: "blur(16px)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-        <button onClick={onBack} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)", color: "#aaa", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8 }}>
+        <button onClick={onBack} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)", color: "#aaa", fontSize: 14, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 8 }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
           Back
         </button>
-        <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer", color: "#facc15" }}>peep.</span>
+        <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 24, cursor: "pointer", color: "#facc15" }}>peep.</span>
       </nav>
 
-      <div style={{ paddingTop: 64 + 48, paddingBottom: 100, paddingLeft: PAD, paddingRight: PAD, maxWidth: 740, margin: "0 auto" }}>
+      <div style={{ paddingTop: 64 + 48, paddingBottom: 100, paddingLeft: PAD, paddingRight: PAD, maxWidth: 860, margin: "0 auto" }}>
 
-        <div style={{ marginBottom: 40 }}>
-          <h1 style={{ margin: "0 0 6px", fontSize: 30, fontWeight: 700, letterSpacing: "-0.5px" }}>Settings</h1>
-          <p style={{ margin: 0, fontSize: 13, color: "#444" }}>{user?.email}{memberSince ? ` · Member since ${memberSince}` : ""}</p>
-        </div>
+        <h1 style={{ margin: "0 0 32px", fontSize: 36, fontWeight: 700, letterSpacing: "-0.5px" }}>Manage Your Account</h1>
 
-        {/* Billing */}
-        <div style={card}>
-          <div style={cardHead}>
-            <p style={{ margin: "0 0 2px", fontSize: 15, fontWeight: 600 }}>Subscription & Billing</p>
-            <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Your plan and payment details</p>
-          </div>
-          <div style={cardBody}>
-            {isOwner ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <span style={{ background: "rgba(250,204,21,0.12)", color: "#facc15", border: "1px solid rgba(250,204,21,0.25)", borderRadius: 20, padding: "3px 12px", fontSize: 11, fontWeight: 700, letterSpacing: 0.5 }}>
-                  👑 OWNER
-                </span>
-                <p style={{ margin: 0, fontSize: 14, color: "#e5e5e5", fontWeight: 500 }}>Full access — no billing required.</p>
-              </div>
-            ) : subscription ? (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                    <span style={{ background: subscription.status === "active" ? "rgba(74,222,128,0.1)" : "rgba(248,113,113,0.1)", color: subscription.status === "active" ? "#4ade80" : "#f87171", border: `1px solid ${subscription.status === "active" ? "rgba(74,222,128,0.2)" : "rgba(248,113,113,0.2)"}`, borderRadius: 20, padding: "3px 12px", fontSize: 11, fontWeight: 700, letterSpacing: 0.5 }}>
-                      {subscription.plan === "comp" ? "COMPLIMENTARY" : subscription.status?.toUpperCase()}
-                    </span>
-                    {(subscription.plan_id === "price_1TafqJRgQH3TYy3QOCovduJf" || subscription.plan_id === "price_1Tag3FRgQH3TYy3Ql0KuQNeA") && (
-                      <span style={{ background: "rgba(250,204,21,0.12)", color: "#facc15", border: "1px solid rgba(250,204,21,0.25)", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700, letterSpacing: 0.5 }}>
-                        ★ FOUNDING MEMBER
-                      </span>
-                    )}
-                  </div>
-                  <p style={{ margin: "0 0 2px", fontSize: 14, color: "#e5e5e5", fontWeight: 500 }}>
-                    {subscription.plan === "comp" ? "Free access" : subscription.plan_id === "price_1TafqJRgQH3TYy3QOCovduJf" ? "Founding Member — $2.99/mo" : subscription.plan_id === "price_1Tag3FRgQH3TYy3Ql0KuQNeA" ? "Founding Member — $19.99/yr" : "Peep Monthly — $10/mo"}
-                  </p>
-                  {subscription.current_period_end && subscription.plan !== "comp" && (
-                    <p style={{ margin: 0, fontSize: 12, color: "#555" }}>
-                      Renews {new Date(subscription.current_period_end).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
-                    </p>
-                  )}
-                  {!subscription.stripe_customer_id && (
-                    <p style={{ margin: "4px 0 0", fontSize: 12, color: "#444" }}>Complimentary access — no billing required.</p>
-                  )}
-                </div>
-                {subscription.stripe_customer_id && cancelFlow === null && (
-                  <button onClick={() => setCancelFlow("confirm")}
-                    style={{ background: "transparent", border: "1px solid #2a2a2a", borderRadius: 10, padding: "11px 22px", color: "#888", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
-                    Cancel Subscription
-                  </button>
-                )}
-              </div>
-            ) : (
-              <p style={{ margin: 0, fontSize: 14, color: "#555" }}>No active subscription.</p>
-            )}
-
-            {/* Cancel confirmation panel */}
-            {cancelFlow === "confirm" && (
-              <div style={{ marginTop: 20, background: "#0d0d0d", border: "1px solid #2a2a2a", borderRadius: 12, padding: 20 }}>
-                <p style={{ margin: "0 0 16px", fontSize: 14, fontWeight: 600, color: "#fff" }}>How would you like to cancel?</p>
-                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
-                  {[
-                    { id: "end_of_period", title: "Cancel at end of billing period", desc: `You'll keep access until ${subscription?.current_period_end ? new Date(subscription.current_period_end).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "your next renewal date"}. No refund.` },
-                    { id: "immediate", title: "Cancel immediately", desc: "Access ends now. You'll receive a prorated refund for the unused portion of your billing period." },
-                  ].map(opt => (
-                    <div key={opt.id} onClick={() => setCancelMode(opt.id)}
-                      style={{ border: `2px solid ${cancelMode === opt.id ? "#f87171" : "#222"}`, borderRadius: 10, padding: "14px 16px", cursor: "pointer", background: cancelMode === opt.id ? "rgba(248,113,113,0.04)" : "transparent", transition: "all 0.15s" }}>
-                      <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 600, color: cancelMode === opt.id ? "#f87171" : "#aaa" }}>{opt.title}</p>
-                      <p style={{ margin: 0, fontSize: 12, color: "#555" }}>{opt.desc}</p>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display: "flex", gap: 10 }}>
-                  <button onClick={() => setCancelFlow(null)}
-                    style={{ flex: 1, background: "transparent", border: "1px solid #2a2a2a", borderRadius: 10, padding: "12px", color: "#666", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                    Keep Subscription
-                  </button>
-                  <button onClick={handleCancelSubscription} disabled={cancelLoading}
-                    style={{ flex: 1, background: "#f87171", border: "none", borderRadius: 10, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: cancelLoading ? "not-allowed" : "pointer", opacity: cancelLoading ? 0.7 : 1 }}>
-                    {cancelLoading ? "Cancelling…" : "Confirm Cancellation"}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Cancel success panel */}
-            {cancelFlow === "success" && cancelResult && (
-              <div style={{ marginTop: 20, background: "#0d0d0d", border: "1px solid #2a2a2a", borderRadius: 12, padding: 20, textAlign: "center" }}>
-                {cancelResult.mode === "immediate" ? (
-                  <>
-                    <p style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 600, color: "#fff" }}>Subscription cancelled</p>
-                    <p style={{ margin: 0, fontSize: 13, color: "#555" }}>
-                      {cancelResult.refund_issued
-                        ? `A refund of $${(cancelResult.refund_amount / 100).toFixed(2)} has been issued to your card.`
-                        : "Your subscription has been cancelled immediately."}
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 600, color: "#fff" }}>Cancellation scheduled</p>
-                    <p style={{ margin: 0, fontSize: 13, color: "#555" }}>
-                      You'll keep full access until {new Date(cancelResult.access_until).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}. No charge after that.
-                    </p>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Playback */}
-        <div style={card}>
-          <div style={cardHead}>
-            <p style={{ margin: "0 0 2px", fontSize: 15, fontWeight: 600 }}>Playback</p>
-            <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Controls how content plays automatically</p>
-          </div>
-          <div style={{ padding: "0 24px" }}>
-            <SettingRow label="Autoplay Next Episode" description="Automatically play the next episode when one ends" value={autoplayNext} onChange={toggleAutoplayNext} />
-            <SettingRow label="Hover Previews" description="Play a trailer clip when hovering over a title" value={autoplayPreviews} onChange={toggleAutoplayPreviews} />
-            <SettingRow label="Hero Trailer Autoplay" description="Automatically play the featured trailer on the home screen" value={autoplayHero} onChange={toggleAutoplayHero} />
-          </div>
-        </div>
-
-        {/* Account */}
-        <div style={card}>
-          <div style={cardHead}>
-            <p style={{ margin: "0 0 2px", fontSize: 15, fontWeight: 600 }}>Account</p>
-            <p style={{ margin: 0, fontSize: 12, color: "#555" }}>{user?.email}</p>
-          </div>
-          <div style={cardBody}>
-            <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 600, color: "#aaa" }}>Change Email</p>
-            <input type="email" value={newEmail} onChange={e => { setNewEmail(e.target.value); setEmailMsg(null); }} placeholder="New email address" style={{ ...inp, marginBottom: 10 }} />
-            {emailMsg && <p style={{ margin: "0 0 10px", fontSize: 12, color: emailMsg.type === "ok" ? "#4ade80" : "#f87171" }}>{emailMsg.text}</p>}
-            <button onClick={changeEmail} disabled={emailSaving || !newEmail.trim()}
-              style={{ background: newEmail.trim() ? "#facc15" : "#1a1a1a", border: "none", borderRadius: 10, padding: "10px 22px", color: newEmail.trim() ? "#0a0a0a" : "#444", fontSize: 13, fontWeight: 600, cursor: newEmail.trim() ? "pointer" : "default" }}>
-              {emailSaving ? "Sending…" : "Update Email"}
+        {/* Email verification alert */}
+        {!user?.email_confirmed_at && (
+          <div style={{ marginBottom: 16, background: "#161616", border: "1px solid #2a2a2a", borderRadius: 14, padding: "22px 28px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
+            <div>
+              <p style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 700, color: "#f87171" }}>Action Required</p>
+              <p style={{ margin: "0 0 2px", fontSize: 15, fontWeight: 600, color: "#e5e5e5" }}>Email Verification Needed</p>
+              <p style={{ margin: 0, fontSize: 14, color: "#666" }}>Verify your email to help us confirm you're a real user and unlock future features.</p>
+            </div>
+            <button onClick={async () => { await supabase.auth.resend({ type: "signup", email: user.email }); alert("Verification email sent!"); }}
+              style={{ background: "transparent", border: "1px solid #555", borderRadius: 8, padding: "10px 20px", color: "#e5e5e5", fontSize: 14, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
+              Verify Email
             </button>
-          </div>
-          <div style={{ height: 1, background: "#1a1a1a", margin: "0 24px" }} />
-          <div style={cardBody}>
-            <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 600, color: "#aaa" }}>Change Password</p>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 10 }}>
-              <input type="password" value={newPassword} onChange={e => { setNewPassword(e.target.value); setPasswordMsg(null); }} placeholder="New password" style={inp} />
-              <input type="password" value={confirmPassword} onChange={e => { setConfirmPassword(e.target.value); setPasswordMsg(null); }} placeholder="Confirm password" style={inp} />
-            </div>
-            {passwordMsg && <p style={{ margin: "0 0 10px", fontSize: 12, color: passwordMsg.type === "ok" ? "#4ade80" : "#f87171" }}>{passwordMsg.text}</p>}
-            <button onClick={changePassword} disabled={passwordSaving || !newPassword}
-              style={{ background: newPassword ? "#facc15" : "#1a1a1a", border: "none", borderRadius: 10, padding: "10px 22px", color: newPassword ? "#0a0a0a" : "#444", fontSize: 13, fontWeight: 600, cursor: newPassword ? "pointer" : "default" }}>
-              {passwordSaving ? "Updating…" : "Update Password"}
-            </button>
-          </div>
-        </div>
-
-        {/* Owner panel — only visible to jacob.furlow@outlook.com */}
-        {isOwner && (
-          <div style={{ ...card, border: "1px solid rgba(250,204,21,0.2)", background: "rgba(250,204,21,0.03)" }}>
-            <div style={{ ...cardHead, borderBottom: "1px solid rgba(250,204,21,0.1)" }}>
-              <p style={{ margin: "0 0 2px", fontSize: 15, fontWeight: 600, color: "#facc15" }}>👑 Owner</p>
-              <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Tools only you can see</p>
-            </div>
-            <div style={{ ...cardBody, display: "flex", flexDirection: "column", gap: 12 }}>
-              <a href="/admin" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#0d0d0d", border: "1px solid #1e1e1e", borderRadius: 10, padding: "14px 18px", textDecoration: "none", color: "#fff" }}
-                onMouseEnter={e => e.currentTarget.style.borderColor = "#facc15"}
-                onMouseLeave={e => e.currentTarget.style.borderColor = "#1e1e1e"}>
-                <div>
-                  <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 600 }}>Admin Dashboard</p>
-                  <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Manage content, users, and settings</p>
-                </div>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#facc15" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
-              </a>
-            </div>
           </div>
         )}
 
-        {/* Sign out + Delete — separate from account card */}
-        <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
-          <button onClick={onSignOut}
-            style={{ flex: 1, background: "transparent", border: "1px solid #2a2a2a", borderRadius: 12, padding: "14px", color: "#aaa", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
-            onMouseEnter={e => { e.currentTarget.style.background = "#111"; e.currentTarget.style.color = "#fff"; }}
-            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#aaa"; }}>
-            Sign Out
-          </button>
-          <DeleteAccountSection user={user} onSignOut={onSignOut} inline />
+        {/* ── Personal Info ── */}
+        <div style={card}>
+          <SectionTitle>Personal Info</SectionTitle>
+          <AcctRow label="Name" value={activeProfile?.name || user?.user_metadata?.full_name || "—"} action="Change Name" onAction={onBack} />
+          <AcctRow
+            label="Email"
+            value={user?.email}
+            note={!user?.email_confirmed_at ? "Email verification needed." : null}
+            action={expandedSection === "email" ? "Cancel" : "Change Email"}
+            onAction={() => setExpandedSection(expandedSection === "email" ? null : "email")}
+          />
+          {expandedSection === "email" && (
+            <div style={{ padding: "4px 28px 24px" }}>
+              <input type="email" value={newEmail} onChange={e => { setNewEmail(e.target.value); setEmailMsg(null); }} placeholder="New email address" style={{ ...inp, marginBottom: 10 }} />
+              {emailMsg && <p style={{ margin: "0 0 10px", fontSize: 14, color: emailMsg.type === "ok" ? "#4ade80" : "#f87171" }}>{emailMsg.text}</p>}
+              <button onClick={changeEmail} disabled={emailSaving || !newEmail.trim()}
+                style={{ background: newEmail.trim() ? "#facc15" : "#222", border: "none", borderRadius: 10, padding: "13px 28px", color: newEmail.trim() ? "#0a0a0a" : "#444", fontSize: 15, fontWeight: 700, cursor: newEmail.trim() ? "pointer" : "default" }}>
+                {emailSaving ? "Sending…" : "Update Email"}
+              </button>
+            </div>
+          )}
+          <AcctRow
+            label="Password"
+            value="••••••••••"
+            action={expandedSection === "password" ? "Cancel" : "Change Password"}
+            onAction={() => setExpandedSection(expandedSection === "password" ? null : "password")}
+            noBorder={expandedSection !== "password"}
+          />
+          {expandedSection === "password" && (
+            <div style={{ padding: "4px 28px 24px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 10 }}>
+                <input type="password" value={newPassword} onChange={e => { setNewPassword(e.target.value); setPasswordMsg(null); }} placeholder="New password" style={inp} />
+                <input type="password" value={confirmPassword} onChange={e => { setConfirmPassword(e.target.value); setPasswordMsg(null); }} placeholder="Confirm password" style={inp} />
+              </div>
+              {passwordMsg && <p style={{ margin: "0 0 10px", fontSize: 14, color: passwordMsg.type === "ok" ? "#4ade80" : "#f87171" }}>{passwordMsg.text}</p>}
+              <button onClick={changePassword} disabled={passwordSaving || !newPassword}
+                style={{ background: newPassword ? "#facc15" : "#222", border: "none", borderRadius: 10, padding: "13px 28px", color: newPassword ? "#0a0a0a" : "#444", fontSize: 15, fontWeight: 700, cursor: newPassword ? "pointer" : "default" }}>
+                {passwordSaving ? "Updating…" : "Update Password"}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* ── Subscription ── */}
+        <div style={card}>
+          <SectionTitle>Subscription</SectionTitle>
+          {isOwner ? (
+            <AcctRow label="Plan" value="Owner — Full access" noBorder />
+          ) : subscription ? (
+            <>
+              <AcctRow label="Plan" value={planLabel} />
+              {subscription.current_period_end && subscription.plan !== "comp" && (
+                <AcctRow label="Next Billing Date" value={new Date(subscription.current_period_end).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })} />
+              )}
+              {subscription.stripe_customer_id && (
+                <AcctRow label="Payment Method" action="Update Payment" onAction={openBillingPortal} />
+              )}
+              {cancelFlow === null && subscription.stripe_customer_id && subscription.status === "active" && (
+                <AcctRow label="Cancel Subscription" danger action="Cancel" onAction={() => setCancelFlow("confirm")} noBorder />
+              )}
+              {cancelFlow === "confirm" && (
+                <div style={{ padding: "24px 28px", borderTop: "1px solid #222" }}>
+                  <p style={{ margin: "0 0 18px", fontSize: 18, fontWeight: 700 }}>How would you like to cancel?</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+                    {[
+                      { id: "end_of_period", title: "Cancel at end of billing period", desc: `You'll keep access until ${subscription?.current_period_end ? new Date(subscription.current_period_end).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "your next renewal date"}. No refund.` },
+                      { id: "immediate", title: "Cancel immediately", desc: "Access ends now. You'll receive a prorated refund for unused time." },
+                    ].map(opt => (
+                      <div key={opt.id} onClick={() => setCancelMode(opt.id)}
+                        style={{ border: `2px solid ${cancelMode === opt.id ? "#f87171" : "#2a2a2a"}`, borderRadius: 12, padding: "16px 20px", cursor: "pointer", background: cancelMode === opt.id ? "rgba(248,113,113,0.04)" : "transparent", transition: "all 0.15s" }}>
+                        <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: cancelMode === opt.id ? "#f87171" : "#aaa" }}>{opt.title}</p>
+                        <p style={{ margin: 0, fontSize: 13, color: "#555" }}>{opt.desc}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", gap: 12 }}>
+                    <button onClick={() => setCancelFlow(null)} style={{ flex: 1, background: "transparent", border: "1px solid #2a2a2a", borderRadius: 12, padding: "14px", color: "#666", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>Keep Subscription</button>
+                    <button onClick={handleCancelSubscription} disabled={cancelLoading} style={{ flex: 1, background: "#f87171", border: "none", borderRadius: 12, padding: "14px", color: "#fff", fontSize: 15, fontWeight: 700, cursor: cancelLoading ? "not-allowed" : "pointer", opacity: cancelLoading ? 0.7 : 1 }}>
+                      {cancelLoading ? "Cancelling…" : "Confirm Cancellation"}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {cancelFlow === "success" && (
+                <div style={{ padding: "28px" }}>
+                  <p style={{ margin: "0 0 24px", fontSize: 17, color: "#e5e5e5", lineHeight: 1.7 }}>
+                    {cancelResult?.mode === "immediate"
+                      ? `We're sorry to see you go!${cancelResult?.refund_issued ? ` A refund of $${(cancelResult.refund_amount / 100).toFixed(2)} has been issued to your card.` : " Your subscription has been cancelled immediately."}`
+                      : "We're sorry to see you go! You can still stream Peep through the end of your current billing cycle. If you change your mind, you can resubscribe at any time."
+                    }
+                  </p>
+                  <button onClick={() => setCancelFlow(null)} style={{ width: "100%", background: "#1e1e1e", border: "none", borderRadius: 12, padding: "16px", color: "#fff", fontSize: 16, fontWeight: 600, cursor: "pointer" }}>Close</button>
+                </div>
+              )}
+            </>
+          ) : (
+            <AcctRow label="Plan" value="No active subscription" noBorder />
+          )}
+        </div>
+
+        {/* ── Settings (Playback) ── */}
+        <div style={card}>
+          <SectionTitle>Settings</SectionTitle>
+          <SettingRow label="Autoplay Next Episode" description="Automatically play the next episode when one ends" value={autoplayNext} onChange={toggleAutoplayNext} />
+          <SettingRow label="Hover Previews" description="Play a trailer clip when hovering over a title" value={autoplayPreviews} onChange={toggleAutoplayPreviews} />
+          <SettingRow label="Hero Trailer Autoplay" description="Automatically play the featured trailer on the home screen" value={autoplayHero} onChange={toggleAutoplayHero} />
+        </div>
+
+        {/* ── Admin (owner only) ── */}
+        {isOwner && (
+          <div style={{ ...card, border: "1px solid rgba(250,204,21,0.15)" }}>
+            <SectionTitle>Admin</SectionTitle>
+            <AcctRow label="Admin Dashboard" value="Manage content, users, and settings" action="Open →" onAction={() => { window.location.href = "/admin"; }} noBorder />
+          </div>
+        )}
+
+        {/* ── Log Out ── */}
+        <div style={card}>
+          <div style={{ padding: "22px 28px", borderBottom: "1px solid #222" }}>
+            <button onClick={onSignOut} style={{ background: "none", border: "none", color: "#facc15", fontSize: 17, fontWeight: 700, cursor: "pointer", padding: 0, fontFamily: "inherit" }}>Log Out</button>
+          </div>
+          <div style={{ padding: "22px 28px" }}>
+            <DeleteAccountSection user={user} onSignOut={onSignOut} inline />
+          </div>
         </div>
 
       </div>
