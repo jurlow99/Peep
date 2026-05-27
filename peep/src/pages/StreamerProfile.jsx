@@ -139,7 +139,7 @@ function VideoPlayer({ url, live = false, style = {} }) {
       onMouseLeave={() => { clearTimeout(hideTimer.current); setCtrlVisible(false); }}
       onClick={togglePlay}
       style={{ position: "relative", background: "#000", cursor: ctrlVisible || paused ? "default" : "none", userSelect: "none", ...style }}>
-      <video ref={ref} style={{ display: "block", width: "100%", height: "100%", background: "#000" }} />
+      <video ref={ref} style={{ display: "block", width: "100%", height: "100%", background: "#000", objectFit: "contain" }} />
 
       {/* Custom controls bar */}
       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", justifyContent: "flex-end", opacity: ctrlVisible || paused ? 1 : 0, transition: "opacity 0.25s", pointerEvents: ctrlVisible || paused ? "auto" : "none" }}>
@@ -452,11 +452,11 @@ export function StreamerProfile() {
         /* ── LIVE / ENDED LAYOUT ── */
         <>
           {/* Player + Chat side by side */}
-          <div style={{ display: "flex", background: "#000", borderBottom: "1px solid #1a1a1a" }}>
+          <div style={{ display: "flex", background: "#000", borderBottom: "1px solid #1a1a1a", height: `min(65vh, calc((100vw - ${CHAT_WIDTH}px) * 9 / 16))` }}>
             {/* Video or "stream ended" */}
             <div style={{ flex: 1, minWidth: 0 }}>
               {streamEnded ? (
-                <div style={{ width: "100%", aspectRatio: "16/9", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#050505", gap: 12, padding: "0 24px", textAlign: "center", position: "relative", overflow: "hidden" }}>
+                <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#050505", gap: 12, padding: "0 24px", textAlign: "center", position: "relative", overflow: "hidden" }}>
                   {(stream.hero_image || stream.thumbnail) && (
                     <img src={stream.hero_image || stream.thumbnail} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.12) blur(8px)", transform: "scale(1.05)" }} />
                   )}
@@ -479,7 +479,7 @@ export function StreamerProfile() {
                   key={stream.stream_url}
                   url={stream.stream_url}
                   live={true}
-                  style={{ width: "100%", aspectRatio: "16/9" }}
+                  style={{ width: "100%", height: "100%" }}
                 />
               )}
             </div>
