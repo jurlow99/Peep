@@ -4100,11 +4100,11 @@ function Toggle({ value, onChange }) {
   );
 }
 
-function SettingRow({ label, description, value, onChange }) {
+function SettingRow({ label, description, value, onChange, noBorder = false }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 24, padding: "16px 0", borderBottom: "1px solid #111" }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 24, padding: "14px 18px", borderBottom: noBorder ? "none" : "1px solid #1a1a1a" }}>
       <div>
-        <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 500, color: "#e5e5e5" }}>{label}</p>
+        <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 600, color: "#e0e0e0" }}>{label}</p>
         {description && <p style={{ margin: 0, fontSize: 12, color: "#444" }}>{description}</p>}
       </div>
       <Toggle value={value} onChange={onChange} />
@@ -4312,23 +4312,21 @@ function SettingsPage({ user, activeProfile, isOwner, onBack, onGoHome, onProfil
   }
 
   const [expandedSection, setExpandedSection] = useState(null);
-  const inp = { width: "100%", background: "#181818", border: "1px solid #2a2a2a", borderRadius: 10, padding: "14px 16px", color: "#fff", fontSize: 16, outline: "none", boxSizing: "border-box", fontFamily: "inherit" };
-  const card = { marginBottom: 16, background: "#161616", border: "1px solid #2a2a2a", borderRadius: 14, overflow: "hidden" };
+  const inp = { width: "100%", background: "#181818", border: "1px solid #222", borderRadius: 10, padding: "12px 14px", color: "#fff", fontSize: 14, outline: "none", boxSizing: "border-box", fontFamily: "inherit" };
+  const card = { marginBottom: 24, background: "#111", border: "1px solid #1a1a1a", borderRadius: 12, overflow: "hidden" };
   const planLabel = subscription?.plan === "comp" ? "Complimentary" : subscription?.plan_id === "price_1TafqJRgQH3TYy3QOCovduJf" ? "Founding Member — $2.99/mo" : subscription?.plan_id === "price_1Tag3FRgQH3TYy3Ql0KuQNeA" ? "Founding Member — $19.99/yr" : "Peep Monthly — $10/mo";
   const AcctRow = ({ label, value, note, action, onAction, danger = false, noBorder = false }) => (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "18px 28px", borderBottom: noBorder ? "none" : "1px solid #222" }}>
-      <div style={{ minWidth: 0 }}>
-        <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: danger ? "#f87171" : "#fff" }}>{label}</p>
-        {value && <p style={{ margin: "4px 0 0", fontSize: 15, color: "#666" }}>{value}</p>}
-        {note && <p style={{ margin: "5px 0 0", fontSize: 13, color: "#f87171", display: "flex", alignItems: "center", gap: 5 }}>⊘ {note}</p>}
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 18px", borderBottom: noBorder ? "none" : "1px solid #1a1a1a" }}>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: danger ? "#f87171" : "#e0e0e0" }}>{label}</p>
+        {value && <p style={{ margin: "2px 0 0", fontSize: 13, color: "#555", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value}</p>}
+        {note && <p style={{ margin: "4px 0 0", fontSize: 12, color: "#f87171" }}>{note}</p>}
       </div>
-      {action && <button onClick={onAction} style={{ background: "none", border: "none", color: danger ? "#f87171" : "#facc15", fontSize: 15, fontWeight: 600, cursor: "pointer", padding: 0, flexShrink: 0, fontFamily: "inherit", whiteSpace: "nowrap" }}>{action}</button>}
+      {action && <button onClick={onAction} style={{ background: "none", border: "none", color: danger ? "#f87171" : "#facc15", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0, flexShrink: 0, fontFamily: "inherit", whiteSpace: "nowrap" }}>{action}</button>}
     </div>
   );
-  const SectionTitle = ({ children }) => (
-    <div style={{ padding: "24px 28px 8px" }}>
-      <p style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#fff" }}>{children}</p>
-    </div>
+  const SectionLabel = ({ children }) => (
+    <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 700, color: "#3a3a3a", letterSpacing: "0.1em", textTransform: "uppercase", paddingLeft: 2 }}>{children}</p>
   );
 
   return (
@@ -4342,42 +4340,51 @@ function SettingsPage({ user, activeProfile, isOwner, onBack, onGoHome, onProfil
         <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 24, cursor: "pointer", color: "#facc15" }}>peep.</span>
       </nav>
 
-      <div style={{ paddingTop: 64 + 48, paddingBottom: 100, paddingLeft: PAD, paddingRight: PAD, maxWidth: 860, margin: "0 auto" }}>
+      <div style={{ paddingTop: 64 + 40, paddingBottom: 100, paddingLeft: PAD, paddingRight: PAD, maxWidth: 600, margin: "0 auto" }}>
 
-        <h1 style={{ margin: "0 0 32px", fontSize: 36, fontWeight: 700, letterSpacing: "-0.5px" }}>Manage Your Account</h1>
+        {/* Profile header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 32 }}>
+          <div style={{ width: 54, height: 54, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
+            {(activeProfile?.name || user?.user_metadata?.full_name || user?.email || "?")[0].toUpperCase()}
+          </div>
+          <div>
+            <p style={{ margin: "0 0 2px", fontSize: 18, fontWeight: 700, color: "#fff" }}>{activeProfile?.name || user?.user_metadata?.full_name || "Your Account"}</p>
+            <p style={{ margin: 0, fontSize: 13, color: "#555" }}>{user?.email}</p>
+          </div>
+          {isOwner && <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: "#facc15", background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.2)", borderRadius: 6, padding: "3px 10px", flexShrink: 0 }}>Owner</span>}
+        </div>
 
         {/* Email verification alert */}
         {!user?.email_confirmed_at && (
-          <div style={{ marginBottom: 16, background: "#161616", border: "1px solid #2a2a2a", borderRadius: 14, padding: "22px 28px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
+          <div style={{ marginBottom: 24, background: "#160a0a", border: "1px solid rgba(248,113,113,0.2)", borderRadius: 12, padding: "16px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
             <div>
-              <p style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 700, color: "#f87171" }}>Action Required</p>
-              <p style={{ margin: "0 0 2px", fontSize: 15, fontWeight: 600, color: "#e5e5e5" }}>Email Verification Needed</p>
-              <p style={{ margin: 0, fontSize: 14, color: "#666" }}>Verify your email to help us confirm you're a real user and unlock future features.</p>
+              <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 700, color: "#f87171" }}>Email verification needed</p>
+              <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Verify your email to confirm your account.</p>
             </div>
             <button onClick={async () => { await supabase.auth.resend({ type: "signup", email: user.email }); alert("Verification email sent!"); }}
-              style={{ background: "transparent", border: "1px solid #555", borderRadius: 8, padding: "10px 20px", color: "#e5e5e5", fontSize: 14, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
-              Verify Email
+              style={{ background: "transparent", border: "1px solid rgba(248,113,113,0.3)", borderRadius: 8, padding: "8px 16px", color: "#f87171", fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
+              Resend
             </button>
           </div>
         )}
 
-        {/* ── Personal Info ── */}
+        {/* ── Account ── */}
+        <SectionLabel>Account</SectionLabel>
         <div style={card}>
-          <SectionTitle>Personal Info</SectionTitle>
-          <AcctRow label="Name" value={activeProfile?.name || user?.user_metadata?.full_name || "—"} action="Change Name" onAction={onBack} />
+          <AcctRow label="Name" value={activeProfile?.name || user?.user_metadata?.full_name || "—"} action="Change" onAction={onBack} />
           <AcctRow
             label="Email"
             value={user?.email}
-            note={!user?.email_confirmed_at ? "Email verification needed." : null}
-            action={expandedSection === "email" ? "Cancel" : "Change Email"}
+            note={!user?.email_confirmed_at ? "Verification needed" : null}
+            action={expandedSection === "email" ? "Cancel" : "Change"}
             onAction={() => setExpandedSection(expandedSection === "email" ? null : "email")}
           />
           {expandedSection === "email" && (
-            <div style={{ padding: "4px 28px 24px" }}>
+            <div style={{ padding: "4px 18px 18px" }}>
               <input type="email" value={newEmail} onChange={e => { setNewEmail(e.target.value); setEmailMsg(null); }} placeholder="New email address" style={{ ...inp, marginBottom: 10 }} />
-              {emailMsg && <p style={{ margin: "0 0 10px", fontSize: 14, color: emailMsg.type === "ok" ? "#4ade80" : "#f87171" }}>{emailMsg.text}</p>}
+              {emailMsg && <p style={{ margin: "0 0 10px", fontSize: 13, color: emailMsg.type === "ok" ? "#4ade80" : "#f87171" }}>{emailMsg.text}</p>}
               <button onClick={changeEmail} disabled={emailSaving || !newEmail.trim()}
-                style={{ background: newEmail.trim() ? "#facc15" : "#222", border: "none", borderRadius: 10, padding: "13px 28px", color: newEmail.trim() ? "#0a0a0a" : "#444", fontSize: 15, fontWeight: 700, cursor: newEmail.trim() ? "pointer" : "default" }}>
+                style={{ background: newEmail.trim() ? "#facc15" : "#1e1e1e", border: "none", borderRadius: 8, padding: "11px 22px", color: newEmail.trim() ? "#0a0a0a" : "#444", fontSize: 13, fontWeight: 700, cursor: newEmail.trim() ? "pointer" : "default" }}>
                 {emailSaving ? "Sending…" : "Update Email"}
               </button>
             </div>
@@ -4385,19 +4392,19 @@ function SettingsPage({ user, activeProfile, isOwner, onBack, onGoHome, onProfil
           <AcctRow
             label="Password"
             value="••••••••••"
-            action={expandedSection === "password" ? "Cancel" : "Change Password"}
+            action={expandedSection === "password" ? "Cancel" : "Change"}
             onAction={() => setExpandedSection(expandedSection === "password" ? null : "password")}
             noBorder={expandedSection !== "password"}
           />
           {expandedSection === "password" && (
-            <div style={{ padding: "4px 28px 24px" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 10 }}>
+            <div style={{ padding: "4px 18px 18px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
                 <input type="password" value={newPassword} onChange={e => { setNewPassword(e.target.value); setPasswordMsg(null); }} placeholder="New password" style={inp} />
                 <input type="password" value={confirmPassword} onChange={e => { setConfirmPassword(e.target.value); setPasswordMsg(null); }} placeholder="Confirm password" style={inp} />
               </div>
-              {passwordMsg && <p style={{ margin: "0 0 10px", fontSize: 14, color: passwordMsg.type === "ok" ? "#4ade80" : "#f87171" }}>{passwordMsg.text}</p>}
+              {passwordMsg && <p style={{ margin: "0 0 10px", fontSize: 13, color: passwordMsg.type === "ok" ? "#4ade80" : "#f87171" }}>{passwordMsg.text}</p>}
               <button onClick={changePassword} disabled={passwordSaving || !newPassword}
-                style={{ background: newPassword ? "#facc15" : "#222", border: "none", borderRadius: 10, padding: "13px 28px", color: newPassword ? "#0a0a0a" : "#444", fontSize: 15, fontWeight: 700, cursor: newPassword ? "pointer" : "default" }}>
+                style={{ background: newPassword ? "#facc15" : "#1e1e1e", border: "none", borderRadius: 8, padding: "11px 22px", color: newPassword ? "#0a0a0a" : "#444", fontSize: 13, fontWeight: 700, cursor: newPassword ? "pointer" : "default" }}>
                 {passwordSaving ? "Updating…" : "Update Password"}
               </button>
             </div>
@@ -4405,8 +4412,8 @@ function SettingsPage({ user, activeProfile, isOwner, onBack, onGoHome, onProfil
         </div>
 
         {/* ── Subscription ── */}
+        <SectionLabel>Subscription</SectionLabel>
         <div style={card}>
-          <SectionTitle>Subscription</SectionTitle>
           {isOwner ? (
             <AcctRow label="Plan" value="Owner — Full access" noBorder />
           ) : subscription ? (
@@ -4416,43 +4423,42 @@ function SettingsPage({ user, activeProfile, isOwner, onBack, onGoHome, onProfil
                 <AcctRow label="Next Billing Date" value={new Date(subscription.current_period_end).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })} />
               )}
               {subscription.stripe_customer_id && (
-                <AcctRow label="Payment Method" action="Update Payment" onAction={openBillingPortal} />
+                <AcctRow label="Payment Method" action="Update" onAction={openBillingPortal} />
               )}
               {cancelFlow === null && subscription.stripe_customer_id && subscription.status === "active" && (
                 <AcctRow label="Cancel Subscription" danger action="Cancel" onAction={() => setCancelFlow("confirm")} noBorder />
               )}
               {cancelFlow === "confirm" && (
-                <div style={{ padding: "24px 28px", borderTop: "1px solid #222" }}>
-                  <p style={{ margin: "0 0 18px", fontSize: 18, fontWeight: 700 }}>How would you like to cancel?</p>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+                <div style={{ padding: "16px 18px", borderTop: "1px solid #1a1a1a" }}>
+                  <p style={{ margin: "0 0 14px", fontSize: 15, fontWeight: 700 }}>How would you like to cancel?</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
                     {[
-                      { id: "end_of_period", title: "Cancel at end of billing period", desc: `You'll keep access until ${subscription?.current_period_end ? new Date(subscription.current_period_end).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "your next renewal date"}. No refund.` },
-                      { id: "immediate", title: "Cancel immediately", desc: "Access ends now. You'll receive a prorated refund for unused time." },
+                      { id: "end_of_period", title: "Cancel at end of billing period", desc: `Keep access until ${subscription?.current_period_end ? new Date(subscription.current_period_end).toLocaleDateString("en-US", { month: "long", day: "numeric" }) : "renewal"}. No refund.` },
+                      { id: "immediate", title: "Cancel immediately", desc: "Access ends now. Prorated refund issued." },
                     ].map(opt => (
                       <div key={opt.id} onClick={() => setCancelMode(opt.id)}
-                        style={{ border: `2px solid ${cancelMode === opt.id ? "#f87171" : "#2a2a2a"}`, borderRadius: 12, padding: "16px 20px", cursor: "pointer", background: cancelMode === opt.id ? "rgba(248,113,113,0.04)" : "transparent", transition: "all 0.15s" }}>
-                        <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: cancelMode === opt.id ? "#f87171" : "#aaa" }}>{opt.title}</p>
-                        <p style={{ margin: 0, fontSize: 13, color: "#555" }}>{opt.desc}</p>
+                        style={{ border: `1px solid ${cancelMode === opt.id ? "#f87171" : "#222"}`, borderRadius: 10, padding: "14px 16px", cursor: "pointer", background: cancelMode === opt.id ? "rgba(248,113,113,0.04)" : "transparent", transition: "all 0.15s" }}>
+                        <p style={{ margin: "0 0 3px", fontSize: 13, fontWeight: 600, color: cancelMode === opt.id ? "#f87171" : "#aaa" }}>{opt.title}</p>
+                        <p style={{ margin: 0, fontSize: 12, color: "#555" }}>{opt.desc}</p>
                       </div>
                     ))}
                   </div>
-                  <div style={{ display: "flex", gap: 12 }}>
-                    <button onClick={() => setCancelFlow(null)} style={{ flex: 1, background: "transparent", border: "1px solid #2a2a2a", borderRadius: 12, padding: "14px", color: "#666", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>Keep Subscription</button>
-                    <button onClick={handleCancelSubscription} disabled={cancelLoading} style={{ flex: 1, background: "#f87171", border: "none", borderRadius: 12, padding: "14px", color: "#fff", fontSize: 15, fontWeight: 700, cursor: cancelLoading ? "not-allowed" : "pointer", opacity: cancelLoading ? 0.7 : 1 }}>
-                      {cancelLoading ? "Cancelling…" : "Confirm Cancellation"}
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button onClick={() => setCancelFlow(null)} style={{ flex: 1, background: "transparent", border: "1px solid #222", borderRadius: 8, padding: "12px", color: "#666", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Keep Subscription</button>
+                    <button onClick={handleCancelSubscription} disabled={cancelLoading} style={{ flex: 1, background: "#f87171", border: "none", borderRadius: 8, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: cancelLoading ? "not-allowed" : "pointer", opacity: cancelLoading ? 0.7 : 1 }}>
+                      {cancelLoading ? "Cancelling…" : "Confirm"}
                     </button>
                   </div>
                 </div>
               )}
               {cancelFlow === "success" && (
-                <div style={{ padding: "28px" }}>
-                  <p style={{ margin: "0 0 24px", fontSize: 17, color: "#e5e5e5", lineHeight: 1.7 }}>
+                <div style={{ padding: "18px" }}>
+                  <p style={{ margin: "0 0 16px", fontSize: 14, color: "#aaa", lineHeight: 1.7 }}>
                     {cancelResult?.mode === "immediate"
-                      ? `We're sorry to see you go!${cancelResult?.refund_issued ? ` A refund of $${(cancelResult.refund_amount / 100).toFixed(2)} has been issued to your card.` : " Your subscription has been cancelled immediately."}`
-                      : "We're sorry to see you go! You can still stream Peep through the end of your current billing cycle. If you change your mind, you can resubscribe at any time."
-                    }
+                      ? `Your subscription has been cancelled.${cancelResult?.refund_issued ? ` A refund of $${(cancelResult.refund_amount / 100).toFixed(2)} has been issued.` : ""}`
+                      : "You can still stream Peep until the end of your billing cycle."}
                   </p>
-                  <button onClick={() => setCancelFlow(null)} style={{ width: "100%", background: "#1e1e1e", border: "none", borderRadius: 12, padding: "16px", color: "#fff", fontSize: 16, fontWeight: 600, cursor: "pointer" }}>Close</button>
+                  <button onClick={() => setCancelFlow(null)} style={{ background: "#1e1e1e", border: "none", borderRadius: 8, padding: "12px 24px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Done</button>
                 </div>
               )}
             </>
@@ -4461,30 +4467,31 @@ function SettingsPage({ user, activeProfile, isOwner, onBack, onGoHome, onProfil
           )}
         </div>
 
-        {/* ── Settings (Playback) ── */}
+        {/* ── Playback ── */}
+        <SectionLabel>Playback</SectionLabel>
         <div style={card}>
-          <SectionTitle>Settings</SectionTitle>
           <SettingRow label="Autoplay Next Episode" description="Automatically play the next episode when one ends" value={autoplayNext} onChange={toggleAutoplayNext} />
           <SettingRow label="Hover Previews" description="Play a trailer clip when hovering over a title" value={autoplayPreviews} onChange={toggleAutoplayPreviews} />
-          <SettingRow label="Hero Trailer Autoplay" description="Automatically play the featured trailer on the home screen" value={autoplayHero} onChange={toggleAutoplayHero} />
+          <SettingRow label="Hero Trailer Autoplay" description="Automatically play the featured trailer on the home screen" value={autoplayHero} onChange={toggleAutoplayHero} noBorder />
         </div>
 
         {/* ── Admin (owner only) ── */}
         {isOwner && (
-          <div style={{ ...card, border: "1px solid rgba(250,204,21,0.15)" }}>
-            <SectionTitle>Admin</SectionTitle>
-            <AcctRow label="Admin Dashboard" value="Manage content, users, and settings" action="Open →" onAction={() => { window.location.href = "/admin"; }} noBorder />
-          </div>
+          <>
+            <SectionLabel>Admin</SectionLabel>
+            <div style={{ ...card, border: "1px solid rgba(250,204,21,0.12)", marginBottom: 24 }}>
+              <AcctRow label="Admin Dashboard" value="Manage content, users, and settings" action="Open →" onAction={() => { window.location.href = "/admin"; }} noBorder />
+            </div>
+          </>
         )}
 
-        {/* ── Log Out ── */}
+        {/* ── Sign out + Delete ── */}
+        <SectionLabel>Session</SectionLabel>
         <div style={card}>
-          <div style={{ padding: "22px 28px", borderBottom: "1px solid #222" }}>
-            <button onClick={onSignOut} style={{ background: "none", border: "none", color: "#facc15", fontSize: 17, fontWeight: 700, cursor: "pointer", padding: 0, fontFamily: "inherit" }}>Log Out</button>
-          </div>
-          <div style={{ padding: "22px 28px" }}>
-            <DeleteAccountSection user={user} onSignOut={onSignOut} inline />
-          </div>
+          <AcctRow label="Sign Out" action="Sign Out" onAction={onSignOut} noBorder />
+        </div>
+        <div style={{ marginTop: 8 }}>
+          <DeleteAccountSection user={user} onSignOut={onSignOut} inline />
         </div>
 
       </div>
