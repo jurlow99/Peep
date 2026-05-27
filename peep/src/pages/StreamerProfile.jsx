@@ -18,6 +18,7 @@ function VideoPlayer({ url, live = false, style = {} }) {
   const retryTimer = useRef(null);
   const hideTimer = useRef(null);
   const alive = useRef(true);
+  const fsRef = useRef(false);
 
   const [showPlay, setShowPlay] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -39,7 +40,17 @@ function VideoPlayer({ url, live = false, style = {} }) {
   }, []);
 
   useEffect(() => {
-    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    const onChange = () => {
+      const fs = !!document.fullscreenElement;
+      fsRef.current = fs;
+      setIsFullscreen(fs);
+      // always show controls when entering/exiting fullscreen
+      setCtrlVisible(true);
+      clearTimeout(hideTimer.current);
+      if (!fs) {
+        hideTimer.current = setTimeout(() => setCtrlVisible(false), 3000);
+      }
+    };
     document.addEventListener("fullscreenchange", onChange);
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
@@ -92,7 +103,9 @@ function VideoPlayer({ url, live = false, style = {} }) {
   function nudgeControls() {
     setCtrlVisible(true);
     clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => setCtrlVisible(false), 3000);
+    if (!fsRef.current) {
+      hideTimer.current = setTimeout(() => setCtrlVisible(false), 3000);
+    }
   }
 
   function togglePlay() { const el = ref.current; if (!el) return; el.paused ? el.play().catch(() => {}) : el.pause(); }
@@ -136,7 +149,7 @@ function VideoPlayer({ url, live = false, style = {} }) {
       ref={containerRef}
       onMouseMove={nudgeControls}
       onMouseEnter={nudgeControls}
-      onMouseLeave={() => { clearTimeout(hideTimer.current); setCtrlVisible(false); }}
+      onMouseLeave={() => { if (!fsRef.current) { clearTimeout(hideTimer.current); setCtrlVisible(false); } }}
       onClick={togglePlay}
       style={{ position: "relative", background: "#000", cursor: ctrlVisible || paused ? "default" : "none", userSelect: "none", ...style }}>
       <video ref={ref} style={{ display: "block", width: "100%", height: "100%", background: "#000", objectFit: "contain" }} />
