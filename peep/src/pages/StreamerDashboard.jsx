@@ -892,10 +892,18 @@ export function StreamerDashboard() {
                   const isEditing  = editingVod?.uid === v.uid;
                   return (
                     <div key={v.uid} style={{ background: CARD, border: `1px solid ${isDeleting ? "rgba(239,68,68,0.3)" : BORDER}`, borderRadius: 12, overflow: "hidden" }}>
-                      <div style={{ position: "relative", aspectRatio: "16/9", background: "#090910" }}>
+                      <div onClick={() => setWatchingVod({ url: v.playback?.hls, title })}
+                        style={{ position: "relative", aspectRatio: "16/9", background: "#090910", cursor: "pointer", overflow: "hidden" }}
+                        onMouseEnter={e => e.currentTarget.querySelector(".vod-play")?.style && (e.currentTarget.querySelector(".vod-play").style.opacity = "1")}
+                        onMouseLeave={e => e.currentTarget.querySelector(".vod-play")?.style && (e.currentTarget.querySelector(".vod-play").style.opacity = "0")}>
                         {v.thumbnail?.thumbnailUrl
                           ? <img src={v.thumbnail.thumbnailUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                           : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}><svg width="28" height="28" viewBox="0 0 24 24" fill="rgba(255,255,255,0.08)"><polygon points="5,3 19,12 5,21" /></svg></div>}
+                        <div className="vod-play" style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", opacity: 0, transition: "opacity 0.15s" }}>
+                          <div style={{ width: 44, height: 44, borderRadius: "50%", background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg>
+                          </div>
+                        </div>
                         {v.duration && <span style={{ position: "absolute", bottom: 6, right: 8, background: "rgba(0,0,0,0.8)", borderRadius: 4, padding: "2px 6px", fontSize: 11, color: "#fff", fontWeight: 600 }}>{fmtDuration(v.duration)}</span>}
                       </div>
                       <div style={{ padding: "12px 14px" }}>
