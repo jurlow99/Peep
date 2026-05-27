@@ -416,6 +416,26 @@ export function StreamerProfile() {
     </a>
   ) : null;
 
+  const [copied, setCopied] = useState(false);
+  const ShareBtn = () => (
+    <button
+      onClick={() => {
+        navigator.clipboard.writeText(window.location.href).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        });
+      }}
+      title="Copy stream link"
+      style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.05)", border: "1px solid #282828", borderRadius: 8, padding: "9px 16px", color: copied ? "#facc15" : "#aaa", fontSize: 14, fontWeight: 600, cursor: "pointer", flexShrink: 0, transition: "all 0.15s" }}
+      onMouseEnter={e => { if (!copied) { e.currentTarget.style.borderColor = "#3a3a3a"; e.currentTarget.style.color = "#fff"; } }}
+      onMouseLeave={e => { if (!copied) { e.currentTarget.style.borderColor = "#282828"; e.currentTarget.style.color = "#aaa"; } }}>
+      {copied
+        ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg> Copied!</>
+        : <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg> Share</>
+      }
+    </button>
+  );
+
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
       <style>{`@keyframes livepulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.3)}}`}</style>
@@ -543,6 +563,7 @@ export function StreamerProfile() {
               </div>
             </div>
             <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+              <ShareBtn />
               <DonateBtn />
               <FollowBtn />
             </div>
