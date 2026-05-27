@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
         uid: v.uid,
         created: v.created,
         duration: v.duration,
-        thumbnail: v.thumbnail,
+        thumbnail: `https://customer-x9w8t8qxjaf49jqb.cloudflarestream.com/${v.uid}/thumbnails/thumbnail.jpg`,
         meta: v.meta,
         playback: {
           hls: `https://customer-x9w8t8qxjaf49jqb.cloudflarestream.com/${v.uid}/manifest/video.m3u8`,
