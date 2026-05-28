@@ -32,7 +32,7 @@ function StreamCard({ stream, viewers, isLive, isFollowing, onToggleFollow, user
         onMouseLeave={e => e.currentTarget.querySelector(".card-thumb").style.transform = "scale(1)"}>
 
         {/* Thumbnail */}
-        <div style={{ position: "relative", aspectRatio: "16/9", borderRadius: 10, overflow: "hidden", background: "#111", marginBottom: 10, opacity: isLive ? 1 : 0.6 }}>
+        <div style={{ position: "relative", aspectRatio: "16/9", borderRadius: 10, overflow: "hidden", background: "#111", marginBottom: 10 }}>
           <div className="card-thumb" style={{ width: "100%", height: "100%", transition: "transform 0.2s ease" }}>
             {stream.thumbnail || stream.hero_image
               ? <img src={stream.thumbnail || stream.hero_image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -43,14 +43,17 @@ function StreamCard({ stream, viewers, isLive, isFollowing, onToggleFollow, user
           </div>
 
           {/* Live / Offline badge */}
+          {!isLive && (
+            <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)" }} />
+          )}
           {isLive ? (
             <div style={{ position: "absolute", top: 8, left: 8, display: "flex", alignItems: "center", gap: 5, background: "#ef4444", borderRadius: 5, padding: "3px 8px" }}>
               <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#fff", animation: "livepulse 1.5s infinite" }} />
               <span style={{ fontSize: 10, fontWeight: 800, color: "#fff", letterSpacing: 0.8 }}>LIVE</span>
             </div>
           ) : (
-            <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(0,0,0,0.7)", borderRadius: 5, padding: "3px 8px" }}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: "#666", letterSpacing: 0.8 }}>OFFLINE</span>
+            <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(0,0,0,0.6)", borderRadius: 5, padding: "3px 8px", border: "1px solid rgba(255,255,255,0.08)" }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: "#888", letterSpacing: 0.8 }}>OFFLINE</span>
             </div>
           )}
 
@@ -106,7 +109,7 @@ function StreamCard({ stream, viewers, isLive, isFollowing, onToggleFollow, user
   );
 }
 
-export function LiveTVPage({ streams, user }) {
+export function LiveTVPage({ streams, user, streamsLoading }) {
   const [viewerCounts, setViewerCounts]   = useState({});
   const [activeCategory, setActiveCategory] = useState("all");
   const [activeTab, setActiveTab]         = useState("all"); // "all" | "following"
@@ -183,6 +186,10 @@ export function LiveTVPage({ streams, user }) {
     onToggleFollow: toggleFollow,
     user,
   });
+
+  if (streamsLoading) {
+    return <div style={{ paddingTop: 90, minHeight: "100vh" }} />;
+  }
 
   if (streams.length === 0) {
     return (

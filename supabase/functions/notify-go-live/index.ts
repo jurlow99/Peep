@@ -51,6 +51,20 @@ Deno.serve(async (req) => {
     const streamTitle = stream.stream_title ? ` — ${stream.stream_title}` : "";
     const slug = channelName.toLowerCase().replace(/[^a-z0-9]/g, "");
 
+    // Write in-app notifications for each follower
+    if (followerIds.length > 0) {
+      await supabase.from("viewer_notifications").insert(
+        followerIds.map(uid => ({
+          user_id: uid,
+          stream_id: stream.id,
+          type: "go_live",
+          channel_name: channelName,
+          stream_title: stream.stream_title || null,
+          stream_slug: slug,
+        }))
+      );
+    }
+
     // Send batch emails via Resend
     await fetch("https://api.resend.com/emails/batch", {
       method: "POST",

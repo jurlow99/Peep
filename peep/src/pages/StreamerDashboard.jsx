@@ -123,6 +123,7 @@ export function StreamerDashboard() {
   const [editingVod, setEditingVod] = useState(null); // { uid, title }
   const [deletingVod, setDeletingVod] = useState(null);
   const [savingVod, setSavingVod]   = useState(false);
+  const [watchingVod, setWatchingVod] = useState(null); // { url, title }
 
   const [copied, setCopied] = useState(null);
   const [toast, setToast]   = useState(null);
@@ -647,8 +648,8 @@ export function StreamerDashboard() {
               <div style={{ borderTop: `1px solid ${BORDER}`, margin: "0 0 18px" }} />
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                 {[
-                  { label: "Stream Thumbnail", hint: "16:9", pendingKey: "thumbnail", dbField: "thumbnail", uploading: uploadingThumb, setUploading: setUploadingThumb, toastMsg: "Thumbnail updated!", current: stream.thumbnail },
-                  { label: "Profile Banner", hint: "wide", pendingKey: "hero", dbField: "hero_image", uploading: uploadingHero, setUploading: setUploadingHero, toastMsg: "Banner updated!", current: stream.hero_image },
+                  { label: "Stream Card Thumbnail", hint: "Shows on Streams page — live & offline", pendingKey: "thumbnail", dbField: "thumbnail", uploading: uploadingThumb, setUploading: setUploadingThumb, toastMsg: "Thumbnail updated!", current: stream.thumbnail },
+                  { label: "Profile Banner", hint: "Shows on your channel page", pendingKey: "hero", dbField: "hero_image", uploading: uploadingHero, setUploading: setUploadingHero, toastMsg: "Banner updated!", current: stream.hero_image },
                 ].map(({ label, hint, pendingKey, dbField, uploading, setUploading, toastMsg, current }) => {
                   const pending = pendingFiles[pendingKey];
                   const preview = pending?.previewUrl || current;
@@ -891,10 +892,18 @@ export function StreamerDashboard() {
                   const isEditing  = editingVod?.uid === v.uid;
                   return (
                     <div key={v.uid} style={{ background: CARD, border: `1px solid ${isDeleting ? "rgba(239,68,68,0.3)" : BORDER}`, borderRadius: 12, overflow: "hidden" }}>
-                      <div style={{ position: "relative", aspectRatio: "16/9", background: "#090910" }}>
-                        {v.thumbnail?.thumbnailUrl
-                          ? <img src={v.thumbnail.thumbnailUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      <div onClick={() => setWatchingVod({ url: v.playback?.hls, title })}
+                        style={{ position: "relative", aspectRatio: "16/9", background: "#090910", cursor: "pointer", overflow: "hidden" }}
+                        onMouseEnter={e => e.currentTarget.querySelector(".vod-play")?.style && (e.currentTarget.querySelector(".vod-play").style.opacity = "1")}
+                        onMouseLeave={e => e.currentTarget.querySelector(".vod-play")?.style && (e.currentTarget.querySelector(".vod-play").style.opacity = "0")}>
+                        {v.thumbnail
+                          ? <img src={v.thumbnail} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                           : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}><svg width="28" height="28" viewBox="0 0 24 24" fill="rgba(255,255,255,0.08)"><polygon points="5,3 19,12 5,21" /></svg></div>}
+                        <div className="vod-play" style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", opacity: 0, transition: "opacity 0.15s" }}>
+                          <div style={{ width: 44, height: 44, borderRadius: "50%", background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg>
+                          </div>
+                        </div>
                         {v.duration && <span style={{ position: "absolute", bottom: 6, right: 8, background: "rgba(0,0,0,0.8)", borderRadius: 4, padding: "2px 6px", fontSize: 11, color: "#fff", fontWeight: 600 }}>{fmtDuration(v.duration)}</span>}
                       </div>
                       <div style={{ padding: "12px 14px" }}>
@@ -918,7 +927,7 @@ export function StreamerDashboard() {
                           </div>
                         ) : (
                           <div style={{ display: "flex", gap: 6 }}>
-                            <a href={v.playback?.hls} target="_blank" rel="noopener noreferrer" style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "6px 0", color: "#bbb", fontSize: 12, fontWeight: 600, textDecoration: "none", textAlign: "center" }}>Watch</a>
+                            <button onClick={() => setWatchingVod({ url: v.playback?.hls, title: title })} style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "6px 0", color: "#bbb", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Watch</button>
                             <button onClick={() => setEditingVod({ uid: v.uid, title })} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "6px 10px", color: "#888", fontSize: 12, cursor: "pointer" }}>Rename</button>
                             <button onClick={() => setDeletingVod(v.uid)} style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 7, padding: "6px 10px", color: "#dc2626", fontSize: 12, cursor: "pointer" }}>Delete</button>
                           </div>
@@ -933,6 +942,24 @@ export function StreamerDashboard() {
       )}
 
       {toast && <Toast msg={toast} />}
+
+      {/* VOD player modal */}
+      {watchingVod && (
+        <div onClick={() => setWatchingVod(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.92)", zIndex: 200, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 900 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#e0e0e0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, marginRight: 12 }}>{watchingVod.title}</p>
+              <button onClick={() => setWatchingVod(null)} style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 6, width: 32, height: 32, color: "#aaa", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>×</button>
+            </div>
+            <video
+              src={watchingVod.url}
+              controls
+              autoPlay
+              style={{ display: "block", width: "100%", aspectRatio: "16/9", background: "#000", borderRadius: 10 }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

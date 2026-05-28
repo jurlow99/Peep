@@ -18,6 +18,7 @@ function VideoPlayer({ url, live = false, style = {} }) {
   const retryTimer = useRef(null);
   const hideTimer = useRef(null);
   const alive = useRef(true);
+  const fsRef = useRef(false);
 
   const [showPlay, setShowPlay] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -39,7 +40,17 @@ function VideoPlayer({ url, live = false, style = {} }) {
   }, []);
 
   useEffect(() => {
-    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    const onChange = () => {
+      const fs = !!document.fullscreenElement;
+      fsRef.current = fs;
+      setIsFullscreen(fs);
+      // always show controls when entering/exiting fullscreen
+      setCtrlVisible(true);
+      clearTimeout(hideTimer.current);
+      if (!fs) {
+        hideTimer.current = setTimeout(() => setCtrlVisible(false), 3000);
+      }
+    };
     document.addEventListener("fullscreenchange", onChange);
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
@@ -92,7 +103,9 @@ function VideoPlayer({ url, live = false, style = {} }) {
   function nudgeControls() {
     setCtrlVisible(true);
     clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => setCtrlVisible(false), 3000);
+    if (!fsRef.current) {
+      hideTimer.current = setTimeout(() => setCtrlVisible(false), 3000);
+    }
   }
 
   function togglePlay() { const el = ref.current; if (!el) return; el.paused ? el.play().catch(() => {}) : el.pause(); }
@@ -136,10 +149,10 @@ function VideoPlayer({ url, live = false, style = {} }) {
       ref={containerRef}
       onMouseMove={nudgeControls}
       onMouseEnter={nudgeControls}
-      onMouseLeave={() => { clearTimeout(hideTimer.current); setCtrlVisible(false); }}
+      onMouseLeave={() => { if (!fsRef.current) { clearTimeout(hideTimer.current); setCtrlVisible(false); } }}
       onClick={togglePlay}
       style={{ position: "relative", background: "#000", cursor: ctrlVisible || paused ? "default" : "none", userSelect: "none", ...style }}>
-      <video ref={ref} style={{ display: "block", width: "100%", height: "100%", background: "#000" }} />
+      <video ref={ref} style={{ display: "block", width: "100%", height: "100%", background: "#000", objectFit: "contain" }} />
 
       {/* Custom controls bar */}
       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", justifyContent: "flex-end", opacity: ctrlVisible || paused ? 1 : 0, transition: "opacity 0.25s", pointerEvents: ctrlVisible || paused ? "auto" : "none" }}>
@@ -416,6 +429,26 @@ export function StreamerProfile() {
     </a>
   ) : null;
 
+  const [copied, setCopied] = useState(false);
+  const ShareBtn = () => (
+    <button
+      onClick={() => {
+        navigator.clipboard.writeText(window.location.href).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        });
+      }}
+      title="Copy stream link"
+      style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.05)", border: "1px solid #282828", borderRadius: 8, padding: "9px 16px", color: copied ? "#facc15" : "#aaa", fontSize: 14, fontWeight: 600, cursor: "pointer", flexShrink: 0, transition: "all 0.15s" }}
+      onMouseEnter={e => { if (!copied) { e.currentTarget.style.borderColor = "#3a3a3a"; e.currentTarget.style.color = "#fff"; } }}
+      onMouseLeave={e => { if (!copied) { e.currentTarget.style.borderColor = "#282828"; e.currentTarget.style.color = "#aaa"; } }}>
+      {copied
+        ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg> Copied!</>
+        : <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg> Share</>
+      }
+    </button>
+  );
+
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
       <style>{`@keyframes livepulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.3)}}`}</style>
@@ -432,11 +465,11 @@ export function StreamerProfile() {
         /* ── LIVE / ENDED LAYOUT ── */
         <>
           {/* Player + Chat side by side */}
-          <div style={{ display: "flex", background: "#000", borderBottom: "1px solid #1a1a1a" }}>
+          <div style={{ display: "flex", background: "#000", borderBottom: "1px solid #1a1a1a", height: `min(65vh, calc((100vw - ${CHAT_WIDTH}px) * 9 / 16))` }}>
             {/* Video or "stream ended" */}
             <div style={{ flex: 1, minWidth: 0 }}>
               {streamEnded ? (
-                <div style={{ width: "100%", aspectRatio: "16/9", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#050505", gap: 12, padding: "0 24px", textAlign: "center", position: "relative", overflow: "hidden" }}>
+                <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#050505", gap: 12, padding: "0 24px", textAlign: "center", position: "relative", overflow: "hidden" }}>
                   {(stream.hero_image || stream.thumbnail) && (
                     <img src={stream.hero_image || stream.thumbnail} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.12) blur(8px)", transform: "scale(1.05)" }} />
                   )}
@@ -459,7 +492,7 @@ export function StreamerProfile() {
                   key={stream.stream_url}
                   url={stream.stream_url}
                   live={true}
-                  style={{ width: "100%", aspectRatio: "16/9" }}
+                  style={{ width: "100%", height: "100%" }}
                 />
               )}
             </div>
@@ -543,6 +576,7 @@ export function StreamerProfile() {
               </div>
             </div>
             <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+              <ShareBtn />
               <DonateBtn />
               <FollowBtn />
             </div>
