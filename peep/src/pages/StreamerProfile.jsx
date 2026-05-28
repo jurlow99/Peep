@@ -206,6 +206,7 @@ export function StreamerProfile() {
   const [chatInput, setChatInput]     = useState("");
   const [chatSending, setChatSending] = useState(false);
   const [streamEnded, setStreamEnded] = useState(false);
+  const [copied, setCopied] = useState(false);
   const chatBottomRef = useRef(null);
   const prevIsLiveRef = useRef(null);
 
@@ -429,7 +430,6 @@ export function StreamerProfile() {
     </a>
   ) : null;
 
-  const [copied, setCopied] = useState(false);
   const ShareBtn = () => (
     <button
       onClick={() => {

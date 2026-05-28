@@ -4,7 +4,6 @@ import { supabase } from "./supabase";
 import { AuthModal } from "./components/AuthModal";
 import { LandingPage } from "./pages/LandingPage";
 import { PaywallPage } from "./pages/PaywallPage";
-import { LiveTVPage } from "./pages/LiveTV";
 import { ProfileScreen, avatarForId, PRESET_AVATARS } from "./components/ProfileScreen";
 import { ProfileSelect } from "./components/ProfileSelect";
 import { CreatorDashboard } from "./pages/CreatorDashboard";
@@ -149,15 +148,6 @@ export default function App() {
     loadMyList(user.id, activeProfile.id);
   }, [user?.id, activeProfile?.id]);
 
-  // Check if user is a streamer — redirect them to /streamer instead of showing main app
-  // Skip redirect if ?watch=1 is present (streamer chose to browse as viewer)
-  useEffect(() => {
-    if (!user) { setIsStreamer(false); return; }
-    const bypassRedirect = new URLSearchParams(window.location.search).get("watch") === "1";
-    if (bypassRedirect) return;
-    supabase.from("live_streams").select("id").eq("user_id", user.id).maybeSingle()
-      .then(({ data }) => { if (data) window.location.href = "/streamer"; });
-  }, [user?.id]);
 
   // Check subscription status
   useEffect(() => {
@@ -910,7 +900,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           </span>
           {!isMobile && (
             <div style={{ display: "flex", gap: 4 }}>
-              {["Home", "Shorts", "Series", "Streams", "Podcasts"].map(label => {
+              {["Home", "Shorts", "Series", "Podcasts"].map(label => {
                 const active = activeNav === label;
                 return (
                   <span key={label} onClick={() => setActiveNav(label)} style={{ fontSize: 17, padding: "6px 16px", borderRadius: 6, color: active ? "#0a0a0a" : "rgba(255,255,255,0.55)", fontWeight: active ? 700 : 400, cursor: "pointer", background: active ? "#facc15" : "transparent", transition: "color 0.2s, background 0.2s" }}
@@ -942,7 +932,6 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
             </div>
           </div>
-          <NotifBell user={user} />
           {user ? (() => {
             const av = avatarForId(userAvatarId || activeProfile?.avatar_id);
             return (
@@ -965,7 +954,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           <div style={{ padding: `20px ${PAD} 32px` }}>
             {/* Type filter chips */}
             <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-              {[{ id: "all", label: "All" }, { id: "movie", label: "Shorts" }, { id: "show", label: "Series" }, { id: "podcast", label: "Podcasts" }, { id: "stream", label: "Streams" }].map(f => (
+              {[{ id: "all", label: "All" }, { id: "movie", label: "Shorts" }, { id: "show", label: "Series" }, { id: "podcast", label: "Podcasts" }].map(f => (
                 <button key={f.id}
                   onMouseDown={e => e.preventDefault()}
                   onClick={() => setSearchTypeFilter(f.id)}
@@ -1068,9 +1057,6 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         />
       )}
 
-      {activeNav === "Streams" && (
-        <LiveTVPage streams={liveStreams} user={user} streamsLoading={loading} />
-      )}
 
       {/* My List — full grid */}
       {activeNav === "My List" && !loading && (
@@ -1142,7 +1128,6 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
             { id: "Home", label: "Home", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
             { id: "Shorts", label: "Shorts", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="2"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg> },
             { id: "Series", label: "Series", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></svg> },
-            { id: "Streams", label: "Streams", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="15" rx="2"/><path d="M17 2l-5 5-5-5"/><circle cx="12" cy="14.5" r="2"/><path d="M9 14.5H7M15 14.5h2"/></svg> },
             { id: "My List", label: "My List", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg> },
           ].map(tab => {
             const active = activeNav === tab.id;

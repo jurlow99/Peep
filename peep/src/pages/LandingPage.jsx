@@ -276,49 +276,6 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* Streamer section */}
-      <section style={{ padding: `96px ${PAD}`, borderTop: "1px solid #111", background: "#0d0d0d", position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", top: "50%", right: "-10%", transform: "translateY(-50%)", width: 500, height: 500, background: "radial-gradient(circle, rgba(239,68,68,0.06) 0%, transparent 65%)", pointerEvents: "none" }} />
-        <div style={{ maxWidth: 980, margin: "0 auto", position: "relative" }}>
-          <div className="reveal" style={{ marginBottom: 52 }}>
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 100, padding: "5px 16px", marginBottom: 20 }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", display: "inline-block" }} />
-              <span style={{ fontSize: 11, color: "#ef4444", fontWeight: 600, letterSpacing: 1.5, textTransform: "uppercase" }}>For Streamers</span>
-            </div>
-            <h2 style={{ fontFamily: "'Righteous', sans-serif", fontWeight: 400, margin: "0 0 14px", fontSize: "clamp(28px, 4vw, 44px)", lineHeight: 1.15 }}>
-              Go live on Peep.<br /><span style={{ color: YELLOW }}>Your audience is here.</span>
-            </h2>
-            <p style={{ fontSize: 15, color: "#555", lineHeight: 1.85, maxWidth: 480, margin: 0 }}>
-              Stream your show, build your following, and keep your replays — all in one place built for adult animation and indie creators.
-            </p>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, marginBottom: 44 }}>
-            {[
-              { icon: "📡", title: "Live Streaming", desc: "Go live straight from OBS with a dedicated RTMP stream key." },
-              { icon: "📼", title: "VOD Replays", desc: "Every stream is saved automatically. Your audience can catch up anytime." },
-              { icon: "🔔", title: "Follower Alerts", desc: "Followers get an email the moment you go live." },
-              { icon: "💬", title: "Live Chat", desc: "Real-time chat with your audience, with full moderation controls." },
-            ].map((f, i) => (
-              <div key={f.title} className={`reveal reveal-delay-${i + 1} lp-feat-card`} style={{ background: "#0a0a0a", border: "1px solid #1c1c1c", borderRadius: 16, padding: "26px 22px", transition: "border-color 0.22s, transform 0.22s, box-shadow 0.22s" }}>
-                <div style={{ fontSize: 22, marginBottom: 14 }}>{f.icon}</div>
-                <h3 style={{ margin: "0 0 8px", fontFamily: "'Righteous', sans-serif", fontWeight: 400, fontSize: 16 }}>{f.title}</h3>
-                <p style={{ margin: 0, fontSize: 13, color: "#555", lineHeight: 1.75 }}>{f.desc}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="reveal" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <a href="/apply-to-stream" className="lp-cta-btn" style={{ background: "#ef4444", color: "#fff", fontSize: 14, fontWeight: 700, textDecoration: "none", padding: "13px 32px", borderRadius: 10, display: "inline-block", transition: "transform 0.2s, box-shadow 0.2s" }}>
-              Apply to Stream →
-            </a>
-            <a href="/streamer" className="lp-ghost" style={{ background: "rgba(255,255,255,0.04)", color: "#888", fontSize: 14, fontWeight: 500, textDecoration: "none", padding: "13px 32px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", display: "inline-block", transition: "border-color 0.2s, color 0.2s" }}>
-              Streamer Dashboard
-            </a>
-          </div>
-        </div>
-      </section>
-
       {/* FAQ */}
       <section style={{ padding: `96px ${PAD}`, borderTop: "1px solid #111" }}>
         <div style={{ maxWidth: 680, margin: "0 auto" }}>
