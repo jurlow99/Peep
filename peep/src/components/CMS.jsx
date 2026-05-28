@@ -134,7 +134,7 @@ const SUPABASE_URL = "https://iuozujwtuzuwubhsnhix.supabase.co";
 
 export function CMS({ onExit, currentUser }) {
   const [tab, setTab] = useState("content");
-  const [videoSubTab, setVideoSubTab] = useState("movies"); // "movies" | "series" | "episodes" | "carousels" | "podcasts" | "music"
+  const [videoSubTab, setVideoSubTab] = useState("shorts"); // "shorts" | "series" | "episodes" | "carousels" | "podcasts" | "music"
   const [analyticsTab, setAnalyticsTab] = useState("reports"); // "reports" | "ads"
   const [membersTab, setMembersTab] = useState("users"); // "users" | "subscriptions" | "support"
   const [creatorsTab, setCreatorsTab] = useState("list"); // "list" | "review" | "payouts"
@@ -861,8 +861,8 @@ export function CMS({ onExit, currentUser }) {
     const BUCKET = "peep-media";
     const VIDEO_EXTS = [".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"];
     const AUDIO_EXTS = [".mp3", ".wav", ".aac", ".m4a", ".ogg"];
-    const FOLDER_TYPE = { movies: "movie", trailers: "trailer", episodes: "episode", "music-videos": "music_video", podcasts: "podcast_episode" };
-    const folders = ["movies", "trailers", "episodes", "music-videos", "podcasts", ""];
+    const FOLDER_TYPE = { shorts: "short", trailers: "trailer", episodes: "episode", "music-videos": "music_video", podcasts: "podcast_episode" };
+    const folders = ["shorts", "trailers", "episodes", "music-videos", "podcasts", ""];
     const allFiles = [];
     for (const folder of folders) {
       const { data } = await supabase.storage.from(BUCKET).list(folder || undefined, { limit: 200, sortBy: { column: "created_at", order: "desc" } });
@@ -1594,7 +1594,7 @@ export function CMS({ onExit, currentUser }) {
       if (w.completed) typeMap[t].completed++;
       if (w.progress_seconds) typeMap[t].seconds += w.progress_seconds;
     });
-    const TYPE_LABELS = { movie: "Movies", episode: "TV Episodes", podcast_episode: "Podcasts", show: "Shows" };
+    const TYPE_LABELS = { movie: "Shorts", episode: "TV Episodes", podcast_episode: "Podcasts", show: "Shows" };
     const contentTypeStats = Object.entries(typeMap)
       .map(([type, d]) => ({
         type,
@@ -3193,7 +3193,7 @@ export function CMS({ onExit, currentUser }) {
         {tab === "content" && (
           <div style={{ display: "flex", gap: 6, marginBottom: 8, paddingBottom: 20, borderBottom: "1px solid #e2e8f0" }}>
             {[
-              { key: "movies",    label: "Movies",    count: rows.length },
+              { key: "shorts",    label: "Shorts",    count: rows.length },
               { key: "series",    label: "Series",    count: showsList.length },
               { key: "episodes",  label: "Episodes",  count: null },
               { key: "podcasts",  label: "Podcasts",  count: podcastsList.length },
@@ -3208,17 +3208,17 @@ export function CMS({ onExit, currentUser }) {
         )}
 
         {/* ────── VIDEOS TAB — MOVIES ────── */}
-        {tab === "content" && videoSubTab === "movies" && (
+        {tab === "content" && videoSubTab === "shorts" && (
           <>
             <div>
               {/* Header row with Add button */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Movies ({rows.length})</h2>
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Shorts ({rows.length})</h2>
                 <button
                   onClick={() => { setForm(EMPTY_ROW); setEditingId(null); setDrawerOpen(true); }}
                   style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
                 >
-                  + Add Movie
+                  + Add Short
                 </button>
               </div>
 
@@ -3547,11 +3547,12 @@ export function CMS({ onExit, currentUser }) {
                   const t = carousel.type;
                   const ct = carousel.content_type;
                   const rowPages = (carousel.pages || "home").split(",").map(p => p.trim()).filter(Boolean);
-                  const contentLabel = t === "podcast" ? "Podcasts" : ct === "movies" ? "Movies only" : ct === "shows" ? "Series only" : ct === "music_videos" ? "Music Videos" : ct === "songs" ? "Songs" : "All content";
+                  const contentLabel = t === "podcast" ? "Podcasts" : ct === "shorts" ? "Shorts only" : ct === "shows" ? "Series only" : ct === "music_videos" ? "Music Videos" : ct === "songs" ? "Songs" : "All content";
                   const handpickedCount = t === "handpicked" ? (() => { try { return JSON.parse(carousel.filter_value || "[]").length; } catch { return 0; } })() : 0;
                   const orderLabel = t === "trending" ? "Trending" : t === "handpicked" ? `${handpickedCount} hand-picked` : t === "category" ? `Genre: ${carousel.filter_value || "?"}` : t === "podcast" ? (carousel.filter_value ? `Tag: ${carousel.filter_value}` : "All podcasts") : "Default order";
-                  const contentColor = t === "podcast" ? "#a78bfa" : ct === "movies" ? "#60a5fa" : ct === "shows" ? "#34d399" : ct === "music_videos" || ct === "songs" ? "#4ade80" : "#f59e0b";
-                  const pageLabels = { home: "Home", movies: "Movies", series: "Series", music: "Music", music_videos: "Music" };
+                  const contentColor = t === "podcast" ? "#a78bfa" : ct === "shorts" ? "#facc15" : ct === "shows" ? "#34d399" : ct === "music_videos" || ct === "songs" ? "#4ade80" : "#f59e0b";
+                  const pageLabels = { home: "Home", shorts: "Shorts", series: "Series", music: "Music", music_videos: "Music" };
+
                   return (
                     <div key={carousel.id} style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
                       <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
@@ -4624,7 +4625,7 @@ export function CMS({ onExit, currentUser }) {
 
             {!adLoading && !adTableMissing && adList.length > 0 && (() => {
               const AD_TYPE_LABELS = { pre_roll: "Pre-roll", mid_roll: "Mid-roll", post_roll: "Post-roll" };
-              const SCOPE_LABELS = { global: "All content", movie: "Movies", show: "TV Shows", episode: "Episodes", podcast_episode: "Podcasts" };
+              const SCOPE_LABELS = { global: "All content", movie: "Shorts", show: "TV Shows", episode: "Episodes", podcast_episode: "Podcasts" };
               const AD_TYPE_COLORS = { pre_roll: "#6366f1", mid_roll: "#f59e0b", post_roll: "#ec4899" };
               return (
                 <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
@@ -4862,7 +4863,7 @@ export function CMS({ onExit, currentUser }) {
             {(() => {
               const viewers = onlineUsers.filter(u => u.current_page !== "admin");
               const admins = onlineUsers.filter(u => u.current_page === "admin");
-              const pageLabels = { home: "Home", movies: "Movies", series: "Series", podcasts: "Podcasts", live: "Live TV", "new-popular": "New & Popular", mylist: "My List", profile: "Profile", settings: "Settings" };
+              const pageLabels = { home: "Home", shorts: "Shorts", series: "Series", podcasts: "Podcasts", live: "Live TV", "new-popular": "New & Popular", mylist: "My List", profile: "Profile", settings: "Settings" };
               const renderRow = (u, i, arr) => {
                 const email = u.profile?.email || u.user_id;
                 const username = u.profile?.username;
@@ -4953,7 +4954,7 @@ export function CMS({ onExit, currentUser }) {
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 24 }}>
                       {[
                         { label: "Total Users", value: reportData.userCount, color: "#34d399", desc: "Registered accounts across all profiles" },
-                        { label: "Videos", value: reportData.videoCount, color: "#4f46e5", desc: "Movies uploaded to the library" },
+                        { label: "Videos", value: reportData.videoCount, color: "#4f46e5", desc: "Shorts uploaded to the library" },
                         { label: "Shows", value: reportData.showCount, color: "#4f46e5", desc: "Series with one or more episodes" },
                         { label: "Episodes", value: reportData.episodeCount, color: "#4f46e5", desc: "Individual episode entries across all shows" },
                         { label: "Watch Sessions", value: reportData.watchSessions, color: "#60a5fa", desc: "Total times any content was played" },
@@ -5181,7 +5182,7 @@ export function CMS({ onExit, currentUser }) {
                         <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>Sessions by Content Type</p>
                         {(() => {
                           const maxSessions = Math.max(...reportData.contentTypeStats.map(t => t.sessions), 1);
-                          const TYPE_COLORS = { Movies: "#60a5fa", "TV Episodes": "#34d399", Podcasts: "#f472b6", Shows: "#a78bfa" };
+                          const TYPE_COLORS = { Shorts: "#60a5fa", "TV Episodes": "#34d399", Podcasts: "#f472b6", Shows: "#a78bfa" };
                           return reportData.contentTypeStats.map(t => {
                             const barColor = TYPE_COLORS[t.label] || "#94a3b8";
                             const barW = Math.max(Math.round((t.sessions / maxSessions) * 100), 2);
@@ -6241,7 +6242,7 @@ export function CMS({ onExit, currentUser }) {
               {/* Drawer header */}
               <div style={{ padding: "20px 24px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
                 <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "#0f172a" }}>
-                  {tab === "content" && videoSubTab === "movies" && (editingId ? "Edit Movie" : "Add Movie")}
+                  {tab === "content" && videoSubTab === "shorts" && (editingId ? "Edit Short" : "Add Short")}
                   {tab === "content" && videoSubTab === "series" && (editingShowId ? "Edit Series" : "Add Series")}
                   {tab === "content" && videoSubTab === "episodes" && (editingEpisodeId ? "Edit Episode" : "Add Episode")}
                   {tab === "content" && videoSubTab === "podcasts" && (editingPodcastId ? "Edit Podcast" : "Add Podcast")}
@@ -6266,7 +6267,7 @@ export function CMS({ onExit, currentUser }) {
               <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
 
                 {/* ── MOVIES FORM ── */}
-                {tab === "content" && videoSubTab === "movies" && (
+                {tab === "content" && videoSubTab === "shorts" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <FieldInput label="Title *" value={form.title} onChange={v => setForm(f => ({ ...f, title: v }))} placeholder="e.g. Metropolis" />
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -6319,7 +6320,7 @@ export function CMS({ onExit, currentUser }) {
                     </div>
                     <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
                       <button onClick={saveRow} disabled={saving} style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
-                        {saving ? "Saving…" : editingId ? "Save Changes" : "Add Movie"}
+                        {saving ? "Saving…" : editingId ? "Save Changes" : "Add Short"}
                       </button>
                       <button onClick={cancelEdit} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
                     </div>
@@ -6645,7 +6646,15 @@ export function CMS({ onExit, currentUser }) {
 
                     <div>
                       <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>1 · Row Title</label>
-                      <FieldInput value={carouselForm.title} onChange={v => setCarouselForm(f => ({ ...f, title: v }))} placeholder="e.g. Top Horror Picks, New This Week…" />
+                      <FieldInput value={carouselForm.title} onChange={v => setCarouselForm(f => ({ ...f, title: v }))} placeholder="e.g. Too Weird For TV, Watch At 2AM, New Drops…" />
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                        {["Too Weird For TV", "Certified Unhinged", "Watch At 2AM", "Your Parents Won't Get It", "Underground Classics", "New Drops", "Currently Obsessed With", "Just Added", "Live Now"].map(name => (
+                          <button key={name} type="button" onClick={() => setCarouselForm(f => ({ ...f, title: name }))}
+                            style={{ background: carouselForm.title === name ? "#4f46e5" : "#f1f5f9", border: "none", borderRadius: 20, padding: "4px 12px", fontSize: 11, fontWeight: 600, color: carouselForm.title === name ? "#fff" : "#475569", cursor: "pointer", transition: "all 0.15s" }}>
+                            {name}
+                          </button>
+                        ))}
+                      </div>
                     </div>
 
                     <div style={{ height: 1, background: "#e2e8f0" }} />
@@ -6656,7 +6665,7 @@ export function CMS({ onExit, currentUser }) {
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                         {[
                           { val: "home",         icon: "🏠", label: "Home",             desc: "The main landing page" },
-                          { val: "movies",       icon: "🎬", label: "Movies tab",       desc: "The dedicated Movies browse page" },
+                          { val: "shorts",       icon: "🎬", label: "Shorts tab",       desc: "The dedicated Shorts browse page" },
                           { val: "series",       icon: "📺", label: "Series tab",       desc: "The dedicated Series browse page" },
                           { val: "music", icon: "🎵", label: "Music tab", desc: "The Music page (videos + songs)" },
                         ].map(({ val, icon, label, desc }) => {
@@ -6688,9 +6697,9 @@ export function CMS({ onExit, currentUser }) {
                       <p style={{ margin: "0 0 10px", fontSize: 11, color: "#6b7280" }}>What kind of content fills this row.</p>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                         {[
-                          { ct: "movies",       t: null,      icon: "🎬", label: "Movies only",    desc: "Only movies" },
+                          { ct: "shorts",       t: null,      icon: "🎬", label: "Shorts only",    desc: "Only shorts" },
                           { ct: "shows",        t: null,      icon: "📺", label: "Series only",   desc: "Only TV shows & series" },
-                          { ct: "all",          t: null,      icon: "⭐", label: "Everything",    desc: "Movies + series mixed" },
+                          { ct: "all",          t: null,      icon: "⭐", label: "Everything",    desc: "Shorts + series mixed" },
                           { ct: "all",          t: "podcast", icon: "🎙️", label: "Podcasts",      desc: "Podcast episodes" },
                           { ct: "music_videos", t: null,      icon: "🎬", label: "Music Videos",  desc: "Music videos only" },
                           { ct: "songs",        t: null,      icon: "🎵", label: "Songs",         desc: "Audio tracks only" },
@@ -6769,7 +6778,7 @@ export function CMS({ onExit, currentUser }) {
                           ).slice(0, 12) : [];
                           const selectedKey = item => `${item.type}_${item.id}`;
                           const selectedKeys = new Set(handpickedSelected.map(selectedKey));
-                          const typeLabel = t => t === "movie" ? "Movie" : t === "show" ? "Series" : t === "song" ? "Song" : "Music Video";
+                          const typeLabel = t => t === "movie" ? "Short" : t === "show" ? "Series" : t === "song" ? "Song" : "Music Video";
                           const typeColor = t => t === "movie" ? "#facc15" : t === "show" ? "#60a5fa" : "#4ade80";
 
                           return (
@@ -6952,7 +6961,7 @@ export function CMS({ onExit, currentUser }) {
                         {["movie", "episode"].map(t => (
                           <button key={t} onClick={() => setEpgForm(f => ({ ...f, content_type: t, content_id: "", title: "" }))}
                             style={{ flex: 1, background: epgForm.content_type === t ? "#4f46e5" : "#f1f5f9", border: `1px solid ${epgForm.content_type === t ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 7, padding: "9px", color: epgForm.content_type === t ? "#fff" : "#374151", fontSize: 13, fontWeight: 500, cursor: "pointer", textTransform: "capitalize" }}>
-                            {t === "movie" ? "Movie" : "Episode"}
+                            {t === "movie" ? "Short" : "Episode"}
                           </button>
                         ))}
                       </div>
@@ -7049,7 +7058,7 @@ export function CMS({ onExit, currentUser }) {
                           {["episode", "movie"].map(t => (
                             <button key={t} onClick={() => { setBulkContentType(t); setBulkSelectedEps(new Set()); setBulkSelectedMovies(new Set()); }}
                               style={{ flex: 1, background: bulkContentType === t ? "#4f46e5" : "#f1f5f9", border: `1px solid ${bulkContentType === t ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 7, padding: "9px", color: bulkContentType === t ? "#fff" : "#374151", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>
-                              {t === "episode" ? "TV Episodes" : "Movies"}
+                              {t === "episode" ? "TV Episodes" : "Shorts"}
                             </button>
                           ))}
                         </div>
@@ -7112,7 +7121,7 @@ export function CMS({ onExit, currentUser }) {
                         <div>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                             <label style={{ fontSize: 12, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.7 }}>
-                              Movies <span style={{ color: "#4f46e5", fontWeight: 700 }}>{bulkSelectedMovies.size > 0 ? `(${bulkSelectedMovies.size} selected)` : ""}</span>
+                              Shorts <span style={{ color: "#4f46e5", fontWeight: 700 }}>{bulkSelectedMovies.size > 0 ? `(${bulkSelectedMovies.size} selected)` : ""}</span>
                             </label>
                             <button onClick={() => setBulkSelectedMovies(bulkSelectedMovies.size > 0 ? new Set() : new Set(allVideosForEpg.map(v => v.id)))}
                               style={{ background: "none", border: "none", color: "#4f46e5", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}>
@@ -7251,7 +7260,7 @@ export function CMS({ onExit, currentUser }) {
                         style={{ width: "100%", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", cursor: "pointer" }}
                         onFocus={e => (e.target.style.borderColor = "#f59e0b")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")}>
                         <option value="global">All Content</option>
-                        <option value="movie">Movies</option>
+                        <option value="movie">Shorts</option>
                         <option value="show">TV Shows</option>
                         <option value="episode">Episodes</option>
                         <option value="podcast_episode">Podcasts</option>
@@ -8126,7 +8135,7 @@ export function CMS({ onExit, currentUser }) {
 
             {!storageLoading && storageFiles.length > 0 && (() => {
               const FOLDER_META = {
-                movies:        { label: "Movies",       color: "#6366f1", icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 7h5M17 17h5"/></svg> },
+                shorts:        { label: "Shorts",       color: "#6366f1", icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 7h5M17 17h5"/></svg> },
                 trailers:      { label: "Trailers",     color: "#f59e0b", icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg> },
                 episodes:      { label: "Episodes",     color: "#8b5cf6", icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></svg> },
                 "music-videos":{ label: "Music Videos", color: "#ec4899", icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg> },
@@ -8136,7 +8145,7 @@ export function CMS({ onExit, currentUser }) {
               const pending = storageFiles.filter(f => !f.ingested);
               const ingested = storageFiles.filter(f => f.ingested);
               const visible = storageFilter === "pending" ? pending : storageFilter === "ingested" ? ingested : storageFiles;
-              const folderOrder = ["movies", "trailers", "episodes", "music-videos", "podcasts", "root"];
+              const folderOrder = ["shorts", "trailers", "episodes", "music-videos", "podcasts", "root"];
               const byFolder = folderOrder.reduce((acc, k) => { acc[k] = visible.filter(f => f.folder === k); return acc; }, {});
               return (
                 <>
@@ -8218,7 +8227,7 @@ export function CMS({ onExit, currentUser }) {
                   <div style={{ marginBottom: 16 }}>
                     <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Content Type</label>
                     <select value={storageAddForm.type} onChange={e => setStorageAddForm(p => ({ ...p, type: e.target.value }))} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14, background: "#fff", color: "#0f172a" }}>
-                      <option value="movie">Movie</option>
+                      <option value="movie">Short</option>
                       <option value="trailer">Trailer (attach to existing title)</option>
                       <option value="episode">TV Episode</option>
                       <option value="music_video">Music Video</option>

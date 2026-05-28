@@ -157,7 +157,7 @@ export function PaywallPage({ user, onSubscribed, onSignOut }) {
             </div>
             <h1 style={{ margin: "0 0 10px", fontSize: 24, fontWeight: 700, color: "#fff" }}>Start Watching</h1>
             <p style={{ margin: 0, fontSize: 14, color: "#555", lineHeight: 1.6 }}>
-              Unlimited access to all movies, series, live TV, and podcasts.
+              Unlimited access to all shorts, series, live TV, and podcasts.
             </p>
           </div>
 
@@ -194,7 +194,7 @@ export function PaywallPage({ user, onSubscribed, onSignOut }) {
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
-            {["All movies & series", "Live TV channels", "Podcasts", "New content weekly", "Watch on any device"].map(f => (
+            {["All shorts & series", "Live TV channels", "Podcasts", "New content weekly", "Watch on any device"].map(f => (
               <div key={f} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ width: 18, height: 18, borderRadius: "50%", background: "rgba(250,204,21,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#facc15" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>

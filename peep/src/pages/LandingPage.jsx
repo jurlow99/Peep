@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 
 const YELLOW = "#facc15";
 const PAD = "clamp(20px, 6vw, 80px)";
+const SAFE_TOP = window.location.protocol === "capacitor:" ? 50 : 0;
 
 const POSTER_GRADS = [
   "linear-gradient(145deg, #3b0764, #7c3aed)",
@@ -87,11 +88,11 @@ export function LandingPage() {
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
 
       {/* Nav */}
-      <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "space-between", padding: `16px ${PAD}`, background: "rgba(10,10,10,0.88)", backdropFilter: "blur(18px)", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+      <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: "max(env(safe-area-inset-top), 44px)", paddingBottom: 14, paddingLeft: PAD, paddingRight: PAD, background: "rgba(10,10,10,0.88)", backdropFilter: "blur(18px)", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
         <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 26, color: YELLOW, animation: "flicker 12s ease-in-out infinite" }}>peep.</span>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <a href="/signin" className="lp-nav-link" style={{ color: "#555", fontSize: 14, fontWeight: 500, textDecoration: "none", padding: "8px 14px", transition: "color 0.15s" }}>Sign In</a>
-          <a href="/signup" className="lp-cta-btn" style={{ background: YELLOW, color: "#0a0a0a", fontSize: 14, fontWeight: 700, textDecoration: "none", padding: "9px 22px", borderRadius: 8, transition: "transform 0.2s, box-shadow 0.2s", display: "inline-block" }}>Get Started</a>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <a href="/signin" className="lp-nav-link" style={{ color: "#555", fontSize: 14, fontWeight: 500, textDecoration: "none", padding: "8px 12px", transition: "color 0.15s", whiteSpace: "nowrap" }}>Sign In</a>
+          <a href="/signup" className="lp-cta-btn" style={{ background: YELLOW, color: "#0a0a0a", fontSize: 13, fontWeight: 700, textDecoration: "none", padding: "9px 16px", borderRadius: 8, transition: "transform 0.2s, box-shadow 0.2s", display: "inline-block", whiteSpace: "nowrap" }}>Get Started</a>
         </div>
       </nav>
 
@@ -144,6 +145,11 @@ export function LandingPage() {
               Sign In
             </a>
           </div>
+          <div style={{ animation: "fadeUp 0.7s 0.75s ease both", marginTop: 18 }}>
+            <a href="#pricing" style={{ color: "#555", fontSize: 13, fontWeight: 500, textDecoration: "none", borderBottom: "1px solid #2a2a2a", paddingBottom: 2, transition: "color 0.15s" }}>
+              View Plans
+            </a>
+          </div>
         </div>
       </section>
 
@@ -192,7 +198,7 @@ export function LandingPage() {
       </section>
 
       {/* Pricing */}
-      <section style={{ padding: `96px ${PAD}`, borderTop: "1px solid #111" }}>
+      <section id="pricing" style={{ padding: `96px ${PAD}`, borderTop: "1px solid #111" }}>
         <div style={{ maxWidth: 900, margin: "0 auto" }}>
           <div className="reveal" style={{ textAlign: "center", marginBottom: 56 }}>
             <h2 style={{ fontFamily: "'Righteous', sans-serif", fontWeight: 400, margin: "0 0 10px", fontSize: "clamp(28px, 4vw, 44px)" }}>Pick your plan</h2>
@@ -324,7 +330,7 @@ export function LandingPage() {
       </section>
 
       {/* CTA */}
-      <section style={{ padding: `96px ${PAD}`, textAlign: "center", borderTop: "1px solid #111", position: "relative", overflow: "hidden" }}>
+      <section style={{ padding: `clamp(48px, 10vw, 96px) ${PAD}`, textAlign: "center", borderTop: "1px solid #111", position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 560, height: 280, background: "radial-gradient(ellipse, rgba(250,204,21,0.06) 0%, transparent 70%)", pointerEvents: "none" }} />
         <div className="reveal" style={{ position: "relative" }}>
           <h2 style={{ fontFamily: "'Righteous', sans-serif", fontWeight: 400, margin: "0 0 14px", fontSize: "clamp(28px, 5vw, 52px)" }}>Ready to watch something weird?</h2>
