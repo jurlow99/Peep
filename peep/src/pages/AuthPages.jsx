@@ -524,16 +524,6 @@ export function SigninPage() {
           </p>
         </div>
 
-        <a href="/streamer-signin"
-          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, marginTop: 16, width: "100%", background: CARD, border: `1px solid ${BORDER}`, borderRadius: 16, padding: "20px clamp(20px, 6vw, 40px)", cursor: "pointer", textAlign: "left", transition: "border-color 0.15s", textDecoration: "none" }}
-          onMouseEnter={e => e.currentTarget.style.borderColor = "#333"}
-          onMouseLeave={e => e.currentTarget.style.borderColor = BORDER}>
-          <div>
-            <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 600, color: "#fff" }}>Are you a streamer?</p>
-            <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Sign in to your streaming portal.</p>
-          </div>
-          <span style={{ flexShrink: 0, color: YELLOW, fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" }}>Go to portal →</span>
-        </a>
       </div>
     </div>
   );
