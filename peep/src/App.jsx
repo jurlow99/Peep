@@ -1106,32 +1106,36 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         </div>
       )}
 
-      {/* Content rows (Home / Podcasts / catalog pages) */}
-      {activeNav !== "Shorts" && activeNav !== "Series" && activeNav !== "My List" && !loading && (allContent.length > 0 || podcasts.length > 0 || continueWatching.length > 0) && (
-        <div style={{ position: "relative", zIndex: 1, marginTop: 0, paddingBottom: 80 }}>
-          {activeNav === "Podcasts" && (
-            <div style={{ padding: `48px ${PAD} 0` }}>
-              <h1 style={{ margin: 0, fontFamily: "'DM Serif Display', serif", fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 400, color: "#fff" }}>Podcasts</h1>
-              <p style={{ margin: "8px 0 0", fontSize: 14, color: "#555" }}>{podcasts.length} show{podcasts.length !== 1 ? "s" : ""}</p>
-            </div>
-          )}
-          {continueWatching.length > 0 && activeNav === "Home" && (
-            <ContinueWatchingRow items={continueWatching} onPlay={onPlay} onRemove={handleRemoveCW} />
-          )}
-          {filteredContent.length === 0 && activeNav !== "Podcasts" ? (
-            <div style={{ padding: "100px 0", textAlign: "center", color: "#444", fontSize: 15 }}>
-              No {activeNav.toLowerCase()} yet.
+      {/* Podcasts page — always renders when on Podcasts tab */}
+      {activeNav === "Podcasts" && !loading && (
+        <div style={{ paddingTop: isMobile ? "calc(max(env(safe-area-inset-top), 44px) + 48px)" : 108, paddingBottom: 80 }}>
+          <div style={{ padding: `0 ${PAD} 32px` }}>
+            <h1 style={{ margin: 0, fontFamily: "'DM Serif Display', serif", fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 400, color: "#fff" }}>Podcasts</h1>
+            <p style={{ margin: "8px 0 0", fontSize: 14, color: "#555" }}>{podcasts.length} show{podcasts.length !== 1 ? "s" : ""}</p>
+          </div>
+          {podcasts.length === 0 ? (
+            <div style={{ padding: "60px 0", textAlign: "center", color: "#444", fontSize: 15 }}>
+              No podcasts yet — check back soon.
             </div>
           ) : sections.map(section => section.isPodcast ? (
             <PodcastRow key={section.id} section={section} onPodcastSelect={onPodcastSelect} />
-          ) : section.videos.length > 0 ? (
+          ) : null)}
+        </div>
+      )}
+
+      {/* Content rows (Home) */}
+      {activeNav !== "Shorts" && activeNav !== "Series" && activeNav !== "My List" && activeNav !== "Podcasts" && !loading && (allContent.length > 0 || continueWatching.length > 0) && (
+        <div style={{ position: "relative", zIndex: 1, marginTop: 0, paddingBottom: 80 }}>
+          {continueWatching.length > 0 && activeNav === "Home" && (
+            <ContinueWatchingRow items={continueWatching} onPlay={onPlay} onRemove={handleRemoveCW} />
+          )}
+          {filteredContent.length === 0 ? (
+            <div style={{ padding: "100px 0", textAlign: "center", color: "#444", fontSize: 15 }}>
+              No {activeNav.toLowerCase()} yet.
+            </div>
+          ) : sections.map(section => section.videos.length > 0 ? (
             <ContentRow key={section.id} section={section} onPlay={onPlay} onShowSelect={onShowSelect} myList={myList} onToggleList={onToggleList} />
           ) : null)}
-          {activeNav === "Podcasts" && podcasts.length === 0 && (
-            <div style={{ padding: "100px 0", textAlign: "center", color: "#444", fontSize: 15 }}>
-              No podcasts yet — add one from the admin panel.
-            </div>
-          )}
         </div>
       )}
 
