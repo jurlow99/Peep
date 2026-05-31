@@ -7,7 +7,6 @@ import { PaywallPage } from "./pages/PaywallPage";
 import { ProfileScreen, avatarForId, PRESET_AVATARS } from "./components/ProfileScreen";
 import { ProfileSelect } from "./components/ProfileSelect";
 import { CreatorDashboard } from "./pages/CreatorDashboard";
-import { DmPanel } from "./components/DmPanel";
 
 class PlayerErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null }; }
@@ -70,7 +69,6 @@ export default function App() {
   const [userRole, setUserRole] = useState(null);
   const [creatorRecord, setCreatorRecord] = useState(null);
   const [betaAck, setBetaAck] = useState(() => localStorage.getItem("peep_beta_ack") === "true");
-  const [pendingDmFriendId, setPendingDmFriendId] = useState(null);
   // Capture deep-link params before any effect clears the URL
   const [deepLink] = useState(() => {
     const p = new URLSearchParams(window.location.search);
@@ -386,7 +384,6 @@ export default function App() {
           onOpenSettings={() => setPage("settings")}
           onAvatarChange={id => setUserAvatarId(id)}
           onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }}
-          onOpenDm={friendId => { setPendingDmFriendId({ id: friendId, ts: Date.now() }); setPage("home"); }}
         />
       </>
     );
@@ -443,8 +440,7 @@ export default function App() {
       <Homepage
         onPlay={v => { setSelectedVideo(v); setPage("player"); }}
         onShowSelect={s => { setSelectedShow(s); setPage("show"); }}
-        initialDmFriendId={pendingDmFriendId}
-        {...listProps}
+{...listProps}
       />
     </>
   );
@@ -565,49 +561,9 @@ function NotifBell({ user }) {
   );
 }
 
-// ─── DM Bell ──────────────────────────────────────────────────────────────────
-
-function DmBell({ user, onOpen, refreshKey }) {
-  const [unread, setUnread] = useState(0);
-
-  useEffect(() => {
-    if (!user) return;
-    supabase.from("messages").select("id", { count: "exact", head: true })
-      .eq("recipient_id", user.id).eq("read", false)
-      .then(({ count }) => setUnread(count || 0));
-  }, [user, refreshKey]);
-
-  useEffect(() => {
-    if (!user) return;
-    const ch = supabase.channel(`dm-bell-${user.id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `recipient_id=eq.${user.id}` },
-        () => setUnread(c => c + 1))
-      .subscribe();
-    return () => supabase.removeChannel(ch);
-  }, [user]);
-
-  return (
-    <div style={{ position: "relative" }}>
-      <button onClick={onOpen}
-        style={{ background: "none", border: "none", color: unread > 0 ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.45)", cursor: "pointer", display: "flex", alignItems: "center", padding: 4, transition: "color 0.15s" }}
-        onMouseEnter={e => e.currentTarget.style.color = "#fff"}
-        onMouseLeave={e => e.currentTarget.style.color = unread > 0 ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.45)"}>
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-        </svg>
-      </button>
-      {unread > 0 && (
-        <div style={{ position: "absolute", top: 0, right: 0, background: "#ef4444", color: "#fff", fontSize: 9, fontWeight: 700, minWidth: 14, height: 14, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px", border: "2px solid #0a0a0a", pointerEvents: "none" }}>
-          {unread > 9 ? "9+" : unread}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── Homepage ─────────────────────────────────────────────────────────────────
 
-function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, activeProfile, onSwitchProfile, initialDmFriendId }) {
+function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, activeProfile, onSwitchProfile }) {
   const [videos, setVideos] = useState([]);
   const [shows, setShows] = useState([]);
   const [carousels, setCarousels] = useState([]);
@@ -628,16 +584,10 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     return sessionStorage.getItem("peep_nav") || "Home";
   });
   const [footerModal, setFooterModal] = useState(null);
-  const [dmOpen, setDmOpen] = useState(false);
-  const [dmFriendId, setDmFriendId] = useState(null);
-  const [dmRefreshKey, setDmRefreshKey] = useState(0);
   const isMobile = useIsMobile();
 
   useEffect(() => { sessionStorage.setItem("peep_nav", activeNav); }, [activeNav]);
 
-  useEffect(() => {
-    if (initialDmFriendId?.id) { setDmFriendId(initialDmFriendId.id); setDmOpen(true); }
-  }, [initialDmFriendId]);
 
 
   useEffect(() => {
@@ -999,7 +949,6 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
             </div>
           </div>
           <NotifBell user={user} />
-          {user && <DmBell user={user} onOpen={() => { setDmFriendId(null); setDmOpen(true); }} refreshKey={dmRefreshKey} />}
           {user ? (() => {
             const av = avatarForId(userAvatarId || activeProfile?.avatar_id);
             return (
@@ -1015,7 +964,6 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         </div>
       </nav>
 
-      <DmPanel user={user} open={dmOpen} onClose={() => { setDmOpen(false); setDmRefreshKey(k => k + 1); }} initialFriendId={dmFriendId} />
 
       {/* Search overlay */}
       {searchOpen && (
@@ -3774,7 +3722,7 @@ function PodcastPlayerView({ episode, podcast, onBack, onGoHome, onSelect, onPro
 
 // ─── Profile Page ─────────────────────────────────────────────────────────────
 
-function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, onOpenSettings, onAvatarChange, onSignOut, onOpenDm }) {
+function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, onOpenSettings, onAvatarChange, onSignOut }) {
   const [history, setHistory] = useState([]);
   const [contentMap, setContentMap] = useState({});
   const [showsMap, setShowsMap] = useState({});
@@ -3784,23 +3732,11 @@ function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, o
   const [bio, setBio] = useState(activeProfile?.bio || "");
   const [avatarId, setAvatarId] = useState(activeProfile?.avatar_id || null);
   const [saving, setSaving] = useState(false);
-  // Social
-  const [socialName, setSocialName] = useState("");
-  const [socialNameInput, setSocialNameInput] = useState("");
-  const [friends, setFriends] = useState([]);
-  const [incomingRequests, setIncomingRequests] = useState([]);
-  const [sentRequests, setSentRequests] = useState([]);
-  const [socialTab, setSocialTab] = useState("friends");
-  const [friendQuery, setFriendQuery] = useState("");
-  const [friendResults, setFriendResults] = useState([]);
-  const [searchingFriends, setSearchingFriends] = useState(false);
-  const [socialLoading, setSocialLoading] = useState(false);
-  const [friendProfiles, setFriendProfiles] = useState({});
   const isMobile = useIsMobile();
   const memberSince = user?.created_at ? new Date(user.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : null;
   const av = avatarForId(editing ? avatarId : activeProfile?.avatar_id);
 
-  useEffect(() => { fetchData(); loadSocialData(); }, [activeProfile?.id]);
+  useEffect(() => { fetchData(); }, [activeProfile?.id]);
 
   async function fetchData() {
     setLoading(true);
@@ -3836,84 +3772,6 @@ function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, o
     setEditing(false);
     onAvatarChange?.(avatarId);
     onProfileUpdate?.({ ...activeProfile, name: name.trim(), bio: bio.trim(), avatar_id: avatarId });
-  }
-
-  async function loadSocialData() {
-    setSocialLoading(true);
-    const [profRes, friendshipsRes, incomingRes, outgoingRes] = await Promise.all([
-      supabase.from("profiles").select("display_name").eq("id", user.id).single(),
-      supabase.from("friendships").select("*").or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`).eq("status", "accepted"),
-      supabase.from("friendships").select("*").eq("addressee_id", user.id).eq("status", "pending"),
-      supabase.from("friendships").select("*").eq("requester_id", user.id).eq("status", "pending"),
-    ]);
-    if (profRes.data?.display_name) setSocialName(profRes.data.display_name);
-    const accepted = friendshipsRes.data || [];
-    const incoming = incomingRes.data || [];
-    const outgoing = outgoingRes.data || [];
-    const allIds = [
-      ...accepted.map(f => f.requester_id === user.id ? f.addressee_id : f.requester_id),
-      ...incoming.map(r => r.requester_id),
-      ...outgoing.map(r => r.addressee_id),
-    ];
-    const uniqueIds = [...new Set(allIds)];
-    if (uniqueIds.length > 0) {
-      const { data: profs } = await supabase.from("profiles").select("id, display_name, avatar_id").in("id", uniqueIds);
-      const pMap = {};
-      (profs || []).forEach(p => { pMap[p.id] = p; });
-      setFriendProfiles(pMap);
-    }
-    setFriends(accepted.map(f => ({ ...f, friendId: f.requester_id === user.id ? f.addressee_id : f.requester_id })));
-    setIncomingRequests(incoming);
-    setSentRequests(outgoing);
-    setSocialLoading(false);
-  }
-
-  async function saveSocialName() {
-    const trimmed = socialNameInput.trim();
-    if (!trimmed) return;
-    await supabase.from("profiles").upsert({ id: user.id, display_name: trimmed }, { onConflict: "id" });
-    setSocialName(trimmed);
-    setSocialNameInput("");
-  }
-
-  async function searchFriends() {
-    if (!friendQuery.trim()) return;
-    setSearchingFriends(true);
-    const { data } = await supabase.from("profiles").select("id, display_name, avatar_id")
-      .ilike("display_name", `%${friendQuery.trim()}%`).neq("id", user.id).limit(10);
-    setFriendResults(data || []);
-    setSearchingFriends(false);
-  }
-
-  async function sendRequest(targetId) {
-    const { error } = await supabase.from("friendships").insert({ requester_id: user.id, addressee_id: targetId });
-    if (!error) setSentRequests(prev => [...prev, { requester_id: user.id, addressee_id: targetId, status: "pending" }]);
-  }
-
-  async function acceptRequest(requesterId) {
-    await supabase.from("friendships").update({ status: "accepted" }).eq("requester_id", requesterId).eq("addressee_id", user.id);
-    const req = incomingRequests.find(r => r.requester_id === requesterId);
-    setIncomingRequests(prev => prev.filter(r => r.requester_id !== requesterId));
-    if (req) {
-      setFriends(prev => [...prev, { ...req, status: "accepted", friendId: requesterId }]);
-      setFriendProfiles(prev => {
-        if (prev[requesterId]) return prev;
-        supabase.from("profiles").select("id, display_name, avatar_id").eq("id", requesterId).single()
-          .then(({ data }) => { if (data) setFriendProfiles(p => ({ ...p, [requesterId]: data })); });
-        return prev;
-      });
-    }
-  }
-
-  async function declineRequest(requesterId) {
-    await supabase.from("friendships").delete().eq("requester_id", requesterId).eq("addressee_id", user.id);
-    setIncomingRequests(prev => prev.filter(r => r.requester_id !== requesterId));
-  }
-
-  async function removeFriend(friendId) {
-    await supabase.from("friendships").delete()
-      .or(`and(requester_id.eq.${user.id},addressee_id.eq.${friendId}),and(requester_id.eq.${friendId},addressee_id.eq.${user.id})`);
-    setFriends(prev => prev.filter(f => f.friendId !== friendId));
   }
 
   const enriched = history.map(h => ({ ...h, content: contentMap[h.content_id] || null })).filter(h => h.content);
@@ -4061,168 +3919,6 @@ function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, o
             </div>
           );
         })}
-      </div>
-
-      {/* Friends */}
-      <div style={{ padding: `0 ${PAD} 80px`, maxWidth: 860, margin: "0 auto" }}>
-        <h2 style={{ margin: "0 0 20px", fontSize: 18, fontWeight: 600, color: "#e5e5e5" }}>Friends</h2>
-
-        {!socialName ? (
-          <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, padding: 24 }}>
-            <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#fff" }}>Set your social name</p>
-            <p style={{ margin: "0 0 18px", fontSize: 13, color: "#444" }}>Choose a unique name so friends can search and find you</p>
-            <div style={{ display: "flex", gap: 10 }}>
-              <input value={socialNameInput} onChange={e => setSocialNameInput(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && saveSocialName()}
-                placeholder="e.g. jake_watches" maxLength={30}
-                style={{ flex: 1, background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 8, padding: "10px 14px", color: "#fff", fontSize: 13, outline: "none", fontFamily: "inherit" }} />
-              <button onClick={saveSocialName} disabled={!socialNameInput.trim()}
-                style={{ background: socialNameInput.trim() ? "#facc15" : "#1a1a1a", border: "none", borderRadius: 8, padding: "10px 22px", color: socialNameInput.trim() ? "#0a0a0a" : "#333", fontSize: 13, fontWeight: 700, cursor: socialNameInput.trim() ? "pointer" : "not-allowed", transition: "background 0.15s" }}>
-                Save
-              </button>
-            </div>
-          </div>
-        ) : (
-          <>
-            {/* Tabs */}
-            <div style={{ display: "flex", gap: 2, marginBottom: 24, background: "#111", borderRadius: 10, padding: 4, border: "1px solid #1a1a1a", width: "fit-content" }}>
-              {[
-                ["friends", `Friends${friends.length > 0 ? ` (${friends.length})` : ""}`],
-                ["requests", `Requests${incomingRequests.length > 0 ? ` (${incomingRequests.length})` : ""}`],
-                ["add", "Add Friend"],
-              ].map(([id, label]) => (
-                <button key={id} onClick={() => setSocialTab(id)}
-                  style={{ background: socialTab === id ? "#fff" : "none", border: "none", borderRadius: 7, padding: "7px 18px", color: socialTab === id ? "#0a0a0a" : "#555", fontSize: 13, fontWeight: socialTab === id ? 700 : 500, cursor: "pointer", transition: "background 0.15s, color 0.15s", whiteSpace: "nowrap" }}>
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            {/* Friends tab */}
-            {socialTab === "friends" && (
-              socialLoading ? <div style={{ display: "flex", justifyContent: "center", padding: 40 }}><Spinner /></div> :
-              friends.length === 0 ? (
-                <p style={{ color: "#333", fontSize: 14 }}>No friends yet. Use the "Add Friend" tab to find people.</p>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {friends.map(f => {
-                    const prof = friendProfiles[f.friendId];
-                    const fav = avatarForId(prof?.avatar_id);
-                    return (
-                      <div key={f.friendId} style={{ display: "flex", alignItems: "center", gap: 14, background: "#111", border: "1px solid #1a1a1a", borderRadius: 12, padding: "14px 18px" }}>
-                        <div style={{ width: 44, height: 44, borderRadius: "50%", background: fav?.svg ? "none" : (fav?.gradient ?? "#1a1a1a"), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0, overflow: "hidden" }}>
-                          {fav?.svg ? <div style={{ width: "100%", height: "100%" }} dangerouslySetInnerHTML={{ __html: fav.svg }} /> : (fav?.emoji ?? (prof?.display_name?.[0] ?? "?").toUpperCase())}
-                        </div>
-                        <p style={{ flex: 1, margin: 0, fontSize: 15, fontWeight: 600, color: "#fff" }}>{prof?.display_name || "User"}</p>
-                        <div style={{ display: "flex", gap: 8 }}>
-                          {onOpenDm && (
-                            <button onClick={() => { onBack(); onOpenDm(f.friendId); }}
-                              style={{ background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.2)", borderRadius: 8, padding: "7px 14px", color: "#facc15", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-                              Message
-                            </button>
-                          )}
-                          <button onClick={() => removeFriend(f.friendId)}
-                            style={{ background: "transparent", border: "1px solid #222", borderRadius: 8, padding: "7px 14px", color: "#666", fontSize: 12, fontWeight: 500, cursor: "pointer" }}
-                            onMouseEnter={e => { e.currentTarget.style.color = "#f87171"; e.currentTarget.style.borderColor = "#f87171"; }}
-                            onMouseLeave={e => { e.currentTarget.style.color = "#666"; e.currentTarget.style.borderColor = "#222"; }}>
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )
-            )}
-
-            {/* Requests tab */}
-            {socialTab === "requests" && (
-              incomingRequests.length === 0 ? (
-                <p style={{ color: "#333", fontSize: 14 }}>No pending friend requests.</p>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {incomingRequests.map(req => {
-                    const prof = friendProfiles[req.requester_id];
-                    const fav = avatarForId(prof?.avatar_id);
-                    return (
-                      <div key={req.requester_id} style={{ display: "flex", alignItems: "center", gap: 14, background: "#111", border: "1px solid #1a1a1a", borderRadius: 12, padding: "14px 18px" }}>
-                        <div style={{ width: 44, height: 44, borderRadius: "50%", background: fav?.svg ? "none" : (fav?.gradient ?? "#1a1a1a"), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0, overflow: "hidden" }}>
-                          {fav?.svg ? <div style={{ width: "100%", height: "100%" }} dangerouslySetInnerHTML={{ __html: fav.svg }} /> : (fav?.emoji ?? (prof?.display_name?.[0] ?? "?").toUpperCase())}
-                        </div>
-                        <p style={{ flex: 1, margin: 0, fontSize: 15, fontWeight: 600, color: "#fff" }}>{prof?.display_name || "User"}</p>
-                        <div style={{ display: "flex", gap: 8 }}>
-                          <button onClick={() => acceptRequest(req.requester_id)}
-                            style={{ background: "#4ade80", border: "none", borderRadius: 8, padding: "7px 14px", color: "#0a0a0a", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                            Accept
-                          </button>
-                          <button onClick={() => declineRequest(req.requester_id)}
-                            style={{ background: "transparent", border: "1px solid #222", borderRadius: 8, padding: "7px 14px", color: "#555", fontSize: 12, cursor: "pointer" }}>
-                            Decline
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )
-            )}
-
-            {/* Add Friend tab */}
-            {socialTab === "add" && (
-              <div>
-                <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
-                  <input value={friendQuery} onChange={e => setFriendQuery(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && searchFriends()}
-                    placeholder="Search by social name..." maxLength={40}
-                    style={{ flex: 1, background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 8, padding: "10px 14px", color: "#fff", fontSize: 13, outline: "none", fontFamily: "inherit" }} />
-                  <button onClick={searchFriends} disabled={!friendQuery.trim() || searchingFriends}
-                    style={{ background: friendQuery.trim() ? "#facc15" : "#1a1a1a", border: "none", borderRadius: 8, padding: "10px 22px", color: friendQuery.trim() ? "#0a0a0a" : "#333", fontSize: 13, fontWeight: 700, cursor: friendQuery.trim() ? "pointer" : "not-allowed", transition: "background 0.15s" }}>
-                    Search
-                  </button>
-                </div>
-                {searchingFriends && <div style={{ display: "flex", justifyContent: "center", padding: 20 }}><Spinner /></div>}
-                {!searchingFriends && friendResults.length === 0 && friendQuery && (
-                  <p style={{ color: "#333", fontSize: 13 }}>No users found for "{friendQuery}"</p>
-                )}
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {friendResults.map(r => {
-                    const fav = avatarForId(r.avatar_id);
-                    const alreadyFriend = friends.some(f => f.friendId === r.id);
-                    const alreadySent = sentRequests.some(s => s.addressee_id === r.id);
-                    const alreadyIncoming = incomingRequests.some(i => i.requester_id === r.id);
-                    return (
-                      <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 14, background: "#111", border: "1px solid #1a1a1a", borderRadius: 12, padding: "14px 18px" }}>
-                        <div style={{ width: 44, height: 44, borderRadius: "50%", background: fav?.svg ? "none" : (fav?.gradient ?? "#1a1a1a"), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0, overflow: "hidden" }}>
-                          {fav?.svg ? <div style={{ width: "100%", height: "100%" }} dangerouslySetInnerHTML={{ __html: fav.svg }} /> : (fav?.emoji ?? (r.display_name?.[0] ?? "?").toUpperCase())}
-                        </div>
-                        <p style={{ flex: 1, margin: 0, fontSize: 15, fontWeight: 600, color: "#fff" }}>{r.display_name}</p>
-                        {alreadyFriend ? (
-                          <span style={{ fontSize: 12, color: "#4ade80", fontWeight: 600 }}>Friends ✓</span>
-                        ) : alreadySent ? (
-                          <span style={{ fontSize: 12, color: "#555", fontWeight: 500 }}>Request sent</span>
-                        ) : alreadyIncoming ? (
-                          <button onClick={() => acceptRequest(r.id)}
-                            style={{ background: "#4ade80", border: "none", borderRadius: 8, padding: "7px 14px", color: "#0a0a0a", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                            Accept Request
-                          </button>
-                        ) : (
-                          <button onClick={() => sendRequest(r.id)}
-                            style={{ background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.2)", borderRadius: 8, padding: "7px 14px", color: "#facc15", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-                            Add Friend
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                <div style={{ marginTop: 24, padding: "14px 18px", background: "#0d0d0d", border: "1px solid #1a1a1a", borderRadius: 12 }}>
-                  <p style={{ margin: "0 0 4px", fontSize: 11, color: "#444", textTransform: "uppercase", letterSpacing: 0.7 }}>Your social name</p>
-                  <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "#facc15" }}>{socialName}</p>
-                </div>
-              </div>
-            )}
-          </>
-        )}
       </div>
     </div>
   );
