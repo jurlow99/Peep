@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "../supabase";
+import { useTheme } from "../ThemeContext";
 import { ImageUploader } from "./ImageUploader";
 import { SongImporter } from "./SongImporter";
 
@@ -133,6 +134,7 @@ const EMPTY_AD = {
 const SUPABASE_URL = "https://iuozujwtuzuwubhsnhix.supabase.co";
 
 export function CMS({ onExit, currentUser }) {
+  const { isDark, toggle: toggleTheme } = useTheme();
   const [tab, setTab] = useState("content");
   const [videoSubTab, setVideoSubTab] = useState("shorts"); // "shorts" | "series" | "episodes" | "carousels" | "podcasts" | "music"
   const [analyticsTab, setAnalyticsTab] = useState("reports"); // "reports" | "ads"
@@ -3110,7 +3112,7 @@ export function CMS({ onExit, currentUser }) {
   const PAD = "clamp(24px, 4vw, 64px)";
 
   return (
-    <div style={{ background: "#f8fafc", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#0f172a" }}>
+    <div style={{ background: isDark ? "var(--bg)" : "#f8fafc", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: isDark ? "var(--text)" : "#0f172a" }}>
 
       {/* Toast */}
       {toast && (
@@ -3179,7 +3181,7 @@ export function CMS({ onExit, currentUser }) {
       )}
 
       {/* Header */}
-      <div style={{ borderBottom: "1px solid #e2e8f0", padding: `0 ${PAD}`, display: "flex", alignItems: "center", justifyContent: "space-between", height: "auto", minHeight: 68, flexWrap: "wrap", gap: 16 }}>
+      <div style={{ borderBottom: `1px solid ${isDark ? "var(--border)" : "#e2e8f0"}`, background: isDark ? "var(--bg-surface)" : "#fff", padding: `0 ${PAD}`, display: "flex", alignItems: "center", justifyContent: "space-between", height: "auto", minHeight: 68, flexWrap: "wrap", gap: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
           <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22 }}>
             <span style={{ color: "#facc15" }}>peep.</span><span style={{ color: "#4f46e5", fontSize: 13, fontFamily: "sans-serif", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginLeft: 6 }}>admin</span>
@@ -3196,6 +3198,13 @@ export function CMS({ onExit, currentUser }) {
               <path d="M3 3v5h5"/>
             </svg>
             Refresh
+          </button>
+          <button onClick={toggleTheme} title={isDark ? "Light mode" : "Dark mode"}
+            style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "7px 12px", color: "#374151", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center" }}>
+            {isDark
+              ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+              : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            }
           </button>
           <button
             onClick={() => onExit()}
@@ -3219,7 +3228,7 @@ export function CMS({ onExit, currentUser }) {
       </div>
 
       {/* Tabs */}
-      <div style={{ borderBottom: "1px solid #e2e8f0", padding: `0 ${PAD}`, display: "flex", gap: 24, background: "#ffffff", overflowX: "auto" }}>
+      <div style={{ borderBottom: `1px solid ${isDark ? "var(--border)" : "#e2e8f0"}`, padding: `0 ${PAD}`, display: "flex", gap: 24, background: isDark ? "var(--bg-surface)" : "#ffffff", overflowX: "auto" }}>
         {[
           { key: "content",   label: `Content (${rows.length + showsList.length + podcastsList.length})`, color: "#4f46e5" },
           { key: "live",      label: `Live (${liveList.length})`,   color: "#ef4444" },
