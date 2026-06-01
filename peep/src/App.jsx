@@ -1352,21 +1352,11 @@ function HeroBanner({ video, onPlay, isShow, myList, onToggleList, categoryRank 
   function handleTrailerEnded() { doRestartCycle(); }
 
   return (
-    <div style={{ position: "relative", height: isMobile ? "75vh" : "85vh", minHeight: 520, overflow: "hidden" }}>
+    <div style={{ position: "relative", height: "85vh", minHeight: 580, overflow: "hidden" }}>
       {trailerOpen && <TrailerModal url={video.trailer_url} title={video.title} onClose={() => setTrailerOpen(false)} />}
 
-      {/* Film grain overlay */}
-      <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 2, pointerEvents: "none", opacity: 0.04 }} xmlns="http://www.w3.org/2000/svg">
-        <filter id="grain">
-          <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch" />
-          <feColorMatrix type="saturate" values="0" />
-        </filter>
-        <rect width="100%" height="100%" filter="url(#grain)" />
-        <style>{`@keyframes grain-shift { 0%,100%{transform:translate(0,0)} 10%{transform:translate(-2%,-3%)} 30%{transform:translate(3%,2%)} 50%{transform:translate(-1%,4%)} 70%{transform:translate(2%,-2%)} 90%{transform:translate(-3%,1%)} } rect{animation:grain-shift 0.5s steps(1) infinite;}`}</style>
-      </svg>
-
       {/* Thumbnail — fades out when trailer takes over */}
-      <img src={video.thumbnail} alt={video.title} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 20%", filter: "brightness(0.5) saturate(1.15)", transition: "opacity 1.4s ease", opacity: bgPlaying ? 0 : 1 }} />
+      <img src={video.thumbnail} alt={video.title} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 20%", filter: "brightness(0.45) saturate(1.15)", transition: "opacity 1.4s ease", opacity: bgPlaying ? 0 : 1 }} />
 
       {/* Background autoplay trailer */}
       {hasBgTrailer && (
@@ -1374,25 +1364,47 @@ function HeroBanner({ video, onPlay, isShow, myList, onToggleList, categoryRank 
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 20%", filter: "brightness(0.5)", transition: "opacity 1.4s ease", opacity: bgPlaying ? 1 : 0, pointerEvents: "none" }} />
       )}
 
-      {/* Overlays — let the image breathe on the right */}
-      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, #0a0a0a 0%, rgba(10,10,10,0.4) 35%, transparent 60%)", zIndex: 1 }} />
-      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, rgba(10,10,10,0.88) 0%, rgba(10,10,10,0.5) 40%, rgba(10,10,10,0.1) 70%, transparent 100%)", zIndex: 1 }} />
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, #0a0a0a 0%, rgba(10,10,10,0.25) 45%, transparent 70%)" }} />
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, rgba(10,10,10,0.92) 0%, rgba(10,10,10,0.45) 50%, transparent 80%)" }} />
 
-      {/* Buttons only — image carries the title/branding */}
-      <div style={{ position: "absolute", bottom: isMobile ? 24 : "14%", left: 0, right: 0, zIndex: 3, padding: `0 ${isMobile ? "20px" : PAD}` }}>
-        <div style={{ display: "flex", gap: isMobile ? 10 : 14, alignItems: "center" }}>
+      <div style={{ position: "absolute", bottom: isMobile ? "10%" : "14%", left: PAD, right: PAD, maxWidth: isMobile ? "100%" : "clamp(460px, 40vw, 680px)", zIndex: 3 }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap", alignItems: "center" }}>
+          {isShow
+            ? <span style={{ background: "rgba(147,197,253,0.12)", border: "1px solid rgba(147,197,253,0.25)", color: "#93c5fd", fontSize: 12, fontWeight: 700, padding: "5px 13px", borderRadius: 4, letterSpacing: 1.5, textTransform: "uppercase" }}>Series</span>
+            : video.category && <span style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.6)", fontSize: 12, fontWeight: 700, padding: "5px 13px", borderRadius: 4, letterSpacing: 1.5, textTransform: "uppercase" }}>{video.category}</span>
+          }
+          {video.category && categoryRank && <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 15 }}>#{categoryRank} in {video.category}</span>}
+        </div>
+
+        <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(42px, 5.5vw, 84px)", lineHeight: 1.05, margin: "0 0 18px", fontWeight: 400, letterSpacing: "-0.02em" }}>{video.title}</h1>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20, flexWrap: "wrap" }}>
+          {video.score && <span style={{ color: "#6ee7b7", fontSize: 15, fontWeight: 600 }}>{video.score}% Match</span>}
+          {video.year && <span style={{ color: "rgba(255,255,255,0.38)", fontSize: 15 }}>{video.year}</span>}
+          {video.rating && <span style={{ border: "1px solid rgba(255,255,255,0.18)", color: "rgba(255,255,255,0.38)", fontSize: 13, padding: "3px 9px", borderRadius: 3, letterSpacing: 0.3 }}>{video.rating}</span>}
+          {video.duration && <span style={{ color: "rgba(255,255,255,0.38)", fontSize: 15 }}>{video.duration}</span>}
+        </div>
+
+        {video.description && (
+          <p style={{ fontSize: 17, color: "rgba(255,255,255,0.58)", lineHeight: 1.7, margin: "0 0 36px", display: "-webkit-box", WebkitLineClamp: isMobile ? 2 : 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+            {video.description}
+          </p>
+        )}
+
+        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
           <button onClick={() => onPlay(video)}
-            style={{ background: "#facc15", color: "#0a0a0a", border: "none", borderRadius: 3, padding: isMobile ? "11px 24px" : "13px 32px", fontSize: isMobile ? 13 : 14, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", gap: 9, letterSpacing: "0.06em", textTransform: "uppercase", transition: "opacity 0.15s" }}
-            onMouseEnter={e => e.currentTarget.style.opacity = "0.85"}
-            onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="6,3 20,12 6,21" /></svg>
-            {isShow ? "Watch" : "Play"}
+            style={{ background: "#fff", color: "#0a0a0a", border: "none", borderRadius: 8, padding: isMobile ? "13px 26px" : "15px 34px", fontSize: isMobile ? 15 : 16, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 9, letterSpacing: "0.01em", transition: "background 0.15s, transform 0.15s" }}
+            onMouseEnter={e => { e.currentTarget.style.background = "#e8e8e8"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.transform = "none"; }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="6,3 20,12 6,21" /></svg>
+            {isShow ? "Watch Now" : "Play"}
           </button>
           {video.trailer_url && (
             <button onClick={() => setTrailerOpen(true)}
-              style={{ background: "transparent", color: "rgba(255,255,255,0.65)", border: "none", padding: isMobile ? "11px 0" : "13px 0", fontSize: isMobile ? 13 : 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, letterSpacing: "0.06em", textTransform: "uppercase", borderBottom: "1px solid rgba(255,255,255,0.2)", transition: "color 0.15s, border-color 0.15s" }}
-              onMouseEnter={e => { e.currentTarget.style.color = "#fff"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.5)"; }}
-              onMouseLeave={e => { e.currentTarget.style.color = "rgba(255,255,255,0.65)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.2)"; }}>
+              style={{ background: "rgba(255,255,255,0.08)", backdropFilter: "blur(8px)", color: "rgba(255,255,255,0.85)", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 8, padding: "15px 28px", fontSize: 16, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 9, transition: "background 0.15s" }}
+              onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.14)"}
+              onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.08)"}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="10,8 16,12 10,16" fill="currentColor" stroke="none" /></svg>
               Trailer
             </button>
           )}
@@ -1401,10 +1413,13 @@ function HeroBanner({ video, onPlay, isShow, myList, onToggleList, categoryRank 
             const inList = myList?.[`${type}_${video.id}`];
             return (
               <button onClick={() => onToggleList?.(video.id, type)}
-                style={{ background: "transparent", color: inList ? "#facc15" : "rgba(255,255,255,0.5)", border: "none", padding: isMobile ? "11px 0" : "13px 0", fontSize: isMobile ? 13 : 14, fontWeight: 600, cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase", borderBottom: `1px solid ${inList ? "rgba(250,204,21,0.4)" : "rgba(255,255,255,0.18)"}`, transition: "color 0.15s" }}
-                onMouseEnter={e => e.currentTarget.style.color = inList ? "#facc15" : "#fff"}
-                onMouseLeave={e => e.currentTarget.style.color = inList ? "#facc15" : "rgba(255,255,255,0.5)"}>
-                {inList ? "✓ Saved" : "+ List"}
+                style={{ background: "rgba(255,255,255,0.08)", backdropFilter: "blur(8px)", color: inList ? "#facc15" : "rgba(255,255,255,0.85)", border: `1px solid ${inList ? "rgba(250,204,21,0.35)" : "rgba(255,255,255,0.14)"}`, borderRadius: 8, padding: "15px 28px", fontSize: 16, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 9, transition: "background 0.15s" }}
+                onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.14)"}
+                onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.08)"}>
+                {inList
+                  ? <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>My List</>
+                  : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>My List</>
+                }
               </button>
             );
           })()}
