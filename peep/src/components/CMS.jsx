@@ -1241,7 +1241,7 @@ export function CMS({ onExit, currentUser }) {
       { data: existingPayouts },
     ] = await Promise.all([
       supabase.from("content_creators").select("*"),
-      supabase.from("watch_progress").select("content_id, content_type, progress_seconds, duration_seconds, user_id").gte("last_watched_at", monthStart).lt("last_watched_at", monthEnd),
+      supabase.from("watch_progress").select("content_id, content_type, progress_seconds, duration_seconds, user_id").gte("first_watched_at", monthStart).lt("first_watched_at", monthEnd),
       supabase.from("episodes").select("id, show_id"),
       supabase.from("podcast_episodes").select("id, podcast_id"),
       supabase.from("creator_payouts").select("*").eq("month", payoutMonth),
@@ -1300,13 +1300,33 @@ export function CMS({ onExit, currentUser }) {
 
     const creatorPool = +(totalRevenue * 0.5).toFixed(2);
 
+    // Load rollover: previous below-min unpaid months not yet rolled into another payout
+    const { data: allPriorPayouts } = await supabase
+      .from("creator_payouts")
+      .select("id, creator_id, payout_amount, month")
+      .lt("month", payoutMonth)
+      .is("rolled_into_month", null)
+      .neq("status", "paid");
+
     const rows = creators.map(c => {
       const secs = creatorSeconds[c.id] || 0;
       const watchMins = Math.round(secs / 60);
       const share = totalSeconds > 0 ? secs / totalSeconds : 0;
-      const payout = +(creatorPool * share).toFixed(2);
+      const basePayout = +(creatorPool * share).toFixed(2);
+
+      // Accumulate rolled-over below-min amounts
+      const rolloverSources = (allPriorPayouts || []).filter(p => p.creator_id === c.id && p.payout_amount < 10);
+      const rolloverAmount = +(rolloverSources.reduce((s, p) => s + (p.payout_amount || 0), 0)).toFixed(2);
+      const rolloverIds = rolloverSources.map(p => p.id);
+      const payout = +(basePayout + rolloverAmount).toFixed(2);
+
       const saved = (existingPayouts || []).find(p => p.creator_id === c.id);
-      return { creator: c, watchMins, share: +(share * 100).toFixed(1), payout, status: saved?.status || "unpaid", paid_at: saved?.paid_at || null, payout_id: saved?.id || null, fraudFlag: fraudFlags[c.id] || null };
+      return {
+        creator: c, watchMins, share: +(share * 100).toFixed(1),
+        basePayout, rolloverAmount, rolloverIds, payout,
+        status: saved?.status || "unpaid", paid_at: saved?.paid_at || null,
+        payout_id: saved?.id || null, fraudFlag: fraudFlags[c.id] || null,
+      };
     });
 
     setPayoutData(rows);
@@ -1322,18 +1342,46 @@ export function CMS({ onExit, currentUser }) {
 
   async function togglePayoutStatus(row) {
     const newStatus = row.status === "paid" ? "unpaid" : "paid";
+
+    // Require confirmation before marking unpaid (prevents accidental reversal)
+    if (newStatus === "unpaid") {
+      if (!window.confirm(`Mark ${row.creator.name}'s ${payoutMonth} payout as UNPAID?\n\nThis reverses a payment already recorded as sent.`)) return;
+    }
+
+    const now = new Date().toISOString();
     const payload = {
       creator_id: row.creator.id, creator_name: row.creator.name,
-      month: payoutMonth, attributed_subscribers: row.watchMins, lifetime_subscribers: 0,
+      month: payoutMonth, watch_minutes: row.watchMins, lifetime_subscribers: 0,
       revenue: totalRevenue, platform_cut: +(totalRevenue * 0.5).toFixed(2),
       payout_amount: row.payout,
-      status: newStatus, paid_at: newStatus === "paid" ? new Date().toISOString() : null,
+      rollover_amount: row.rolloverAmount || 0,
+      status: newStatus, paid_at: newStatus === "paid" ? now : null,
     };
-    if (row.payout_id) {
-      await supabase.from("creator_payouts").update({ status: newStatus, paid_at: payload.paid_at }).eq("id", row.payout_id);
+
+    let payoutId = row.payout_id;
+    if (payoutId) {
+      await supabase.from("creator_payouts").update({ status: newStatus, paid_at: payload.paid_at }).eq("id", payoutId);
     } else {
-      await supabase.from("creator_payouts").insert(payload);
+      const { data: inserted } = await supabase.from("creator_payouts").insert(payload).select("id").single();
+      payoutId = inserted?.id;
     }
+
+    // Write audit log
+    if (payoutId) {
+      await supabase.from("payout_audit_log").insert({
+        payout_id: payoutId,
+        creator_name: row.creator.name,
+        month: payoutMonth,
+        old_status: row.status,
+        new_status: newStatus,
+      });
+    }
+
+    // When marking paid: mark any rolled-over source months as consumed
+    if (newStatus === "paid" && row.rolloverIds?.length) {
+      await supabase.from("creator_payouts").update({ rolled_into_month: payoutMonth }).in("id", row.rolloverIds);
+    }
+
     loadPayouts();
     if (newStatus === "paid") loadPayoutHistory();
   }
@@ -7987,13 +8035,15 @@ export function CMS({ onExit, currentUser }) {
                     style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: "7px 12px", fontSize: 13, color: "#0f172a", outline: "none" }} />
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto", flexWrap: "wrap", justifyContent: "flex-end" }}>
                     <span style={{ fontSize: 12, color: "#6b7280" }}>Total Revenue: $</span>
-                    <input type="number" value={totalRevenue} onChange={e => setTotalRevenue(parseFloat(e.target.value) || 0)} step="0.01" min="0" placeholder="0.00"
-                      style={{ width: 90, border: "1px solid #e2e8f0", borderRadius: 8, padding: "7px 10px", fontSize: 13, color: "#0f172a", outline: "none" }} />
+                    <input type="number" value={totalRevenue}
+                      onChange={e => { const v = parseFloat(e.target.value) || 0; if (v > 100000) { alert("Revenue over $100,000 — double-check this number before calculating."); return; } setTotalRevenue(v); }}
+                      step="0.01" min="0" max="100000" placeholder="0.00"
+                      style={{ width: 90, border: `1px solid ${totalRevenue > 50000 ? "#ef4444" : "#e2e8f0"}`, borderRadius: 8, padding: "7px 10px", fontSize: 13, color: "#0f172a", outline: "none" }} />
                     <button onClick={fetchStripeRevenue} disabled={fetchingRevenue} style={{ background: "rgba(74,222,128,0.08)", border: "1px solid rgba(74,222,128,0.25)", borderRadius: 8, padding: "7px 14px", color: "#16a34a", fontSize: 12, fontWeight: 600, cursor: fetchingRevenue ? "not-allowed" : "pointer", opacity: fetchingRevenue ? 0.7 : 1, whiteSpace: "nowrap" }}>
                       {fetchingRevenue ? "Fetching…" : "↓ From Stripe"}
                     </button>
                     <span style={{ fontSize: 11, color: "#9ca3af" }}>50% pool = ${(totalRevenue * 0.5).toFixed(2)}</span>
-                    <button onClick={loadPayouts} style={{ background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.3)", borderRadius: 8, padding: "7px 14px", color: "#7c3aed", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Calculate</button>
+                    <button onClick={() => { if (totalRevenue <= 0) { alert("Enter a total revenue amount before calculating."); return; } if (!window.confirm(`Calculate payouts for ${payoutMonth} with $${totalRevenue.toFixed(2)} total revenue?\n\nCreator pool: $${(totalRevenue * 0.5).toFixed(2)}`)) return; loadPayouts(); }} style={{ background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.3)", borderRadius: 8, padding: "7px 14px", color: "#7c3aed", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Calculate</button>
                     <button onClick={exportPayoutsCSV} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "7px 14px", color: "#475569", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Export CSV</button>
                   </div>
                 </div>
@@ -8030,8 +8080,11 @@ export function CMS({ onExit, currentUser }) {
                             <td style={{ padding: "14px 16px", color: "#475569", fontWeight: 600 }}>{row.share}%</td>
                             <td style={{ padding: "14px 16px" }}>
                               <span style={{ fontWeight: 700, color: row.payout < 10 ? "#9ca3af" : "#7c3aed" }}>${row.payout.toFixed(2)}</span>
+                              {row.rolloverAmount > 0 && (
+                                <span title={`Includes $${row.rolloverAmount.toFixed(2)} rolled over from previous months`} style={{ display: "block", fontSize: 10, color: "#7c3aed", marginTop: 2 }}>+${row.rolloverAmount.toFixed(2)} rollover</span>
+                              )}
                               {row.payout < 10 && row.status !== "paid" && (
-                                <span title="Below $10 minimum — rolls over to next month" style={{ display: "block", fontSize: 10, color: "#9ca3af", marginTop: 2 }}>Below min.</span>
+                                <span title="Below $10 minimum — rolls over to next month" style={{ display: "block", fontSize: 10, color: "#9ca3af", marginTop: 2 }}>Below min — carries forward</span>
                               )}
                             </td>
                             <td style={{ padding: "14px 16px" }}>
@@ -8096,7 +8149,7 @@ export function CMS({ onExit, currentUser }) {
                           <tr key={p.id} style={{ borderBottom: i < payoutHistory.length - 1 ? "1px solid #f1f5f9" : "none" }}>
                             <td style={{ padding: "14px 16px", fontWeight: 600, color: "#0f172a" }}>{p.month}</td>
                             <td style={{ padding: "14px 16px", color: "#0f172a" }}>{p.creator_name}</td>
-                            <td style={{ padding: "14px 16px", color: "#475569" }}>{p.attributed_subscribers}</td>
+                            <td style={{ padding: "14px 16px", color: "#475569" }}>{p.watch_minutes} mins</td>
                             <td style={{ padding: "14px 16px", color: "#475569" }}>${(+p.revenue).toFixed(2)}</td>
                             <td style={{ padding: "14px 16px", fontWeight: 700, color: "#7c3aed" }}>${(+p.payout_amount).toFixed(2)}</td>
                             <td style={{ padding: "14px 16px", color: "#475569" }}>{p.paid_at ? new Date(p.paid_at).toLocaleDateString() : "—"}</td>

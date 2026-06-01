@@ -86,8 +86,8 @@ Deno.serve(async (req) => {
     const { data: allWatch } = await supabase
       .from("watch_progress")
       .select("content_id, content_type, progress_seconds, duration_seconds, user_id")
-      .gte("last_watched_at", monthStart)
-      .lt("last_watched_at", monthEnd);
+      .gte("first_watched_at", monthStart)
+      .lt("first_watched_at", monthEnd);
 
     // Deduplicate: best session per user per content
     const best: Record<string, any> = {};
