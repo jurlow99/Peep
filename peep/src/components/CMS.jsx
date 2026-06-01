@@ -416,7 +416,7 @@ export function CMS({ onExit, currentUser }) {
   const showSubRef = useRef(null);
   const xmltvFileRef = useRef(null);
 
-  const categories = ["Horror", "Sci-Fi", "Comedy", "Drama", "Action", "Documentary"];
+  const categories = ["Strange", "Conspiracy", "Space", "Paranormal", "Animation", "Comedy", "Documentary", "Found Footage", "Cult", "Experimental", "Public Access", "Horror"];
   const carouselTypes = [
     { value: "category", label: "Category" },
     { value: "trending", label: "Trending" },
@@ -6388,7 +6388,7 @@ export function CMS({ onExit, currentUser }) {
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <FieldInput label="Title *" value={showForm.title} onChange={v => setShowForm(f => ({ ...f, title: v }))} placeholder="e.g. The Twilight Zone" />
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                      <FieldSelect label="Category" value={showForm.category} onChange={v => setShowForm(f => ({ ...f, category: v }))} options={["Horror", "Sci-Fi", "Comedy", "Drama", "Action", "Documentary"]} />
+                      <FieldSelect label="Category" value={showForm.category} onChange={v => setShowForm(f => ({ ...f, category: v }))} options={["Strange", "Conspiracy", "Space", "Paranormal", "Animation", "Comedy", "Documentary", "Found Footage", "Cult", "Experimental", "Public Access", "Horror"]} />
                       <FieldSelect label="Rating" value={showForm.rating} onChange={v => setShowForm(f => ({ ...f, rating: v }))} options={["NR", "G", "PG", "PG-13", "R"]} />
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>

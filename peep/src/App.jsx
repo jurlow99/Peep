@@ -1373,7 +1373,7 @@ function HeroBanner({ video, onPlay, isShow, myList, onToggleList, categoryRank 
         <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "rgba(250,204,21,0.12)", border: "1px solid rgba(250,204,21,0.3)", borderRadius: 20, padding: "5px 14px", marginBottom: 16 }}>
           <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#facc15", flexShrink: 0 }} />
           <span style={{ fontSize: 11, fontWeight: 700, color: "#facc15", letterSpacing: 1.2, textTransform: "uppercase" }}>
-            {isShow ? "Featured Series" : video.category === "podcast" ? "Featured Podcast" : "Featured"}
+            {isShow ? "Featured Series" : video.category === "podcast" ? "Featured Podcast" : video.category ? video.category : "Featured"}
           </span>
         </div>
 

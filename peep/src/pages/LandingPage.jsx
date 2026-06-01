@@ -28,21 +28,21 @@ const ROWS = Array.from({ length: 5 }, (_, r) =>
 );
 
 const TICKER_ITEMS = [
-  "ADULT ANIMATION", "WEIRD TV", "INDIE", "NOT FOR KIDS",
-  "TOO WEIRD FOR TV", "UNFILTERED", "ADULT ANIMATION", "WEIRD TV",
-  "INDIE", "NOT FOR KIDS", "TOO WEIRD FOR TV", "UNFILTERED",
+  "CONSPIRACY", "STRANGE FILMS", "SPACE", "PARANORMAL", "WEIRD ANIMATION",
+  "CULT CONTENT", "UNEXPLAINED", "UNDERGROUND", "CONSPIRACY", "STRANGE FILMS",
+  "SPACE", "PARANORMAL", "WEIRD ANIMATION", "CULT CONTENT", "UNEXPLAINED",
 ];
 
 const features = [
-  { icon: "🎬", title: "Animated Films", desc: "Indie animated features and shorts from creators who refused to water it down." },
-  { icon: "📺", title: "Adult Series", desc: "Serialized adult animation — full runs of shows that never got a network deal." },
-  { icon: "🎞️", title: "Shorts & Pilots", desc: "The stuff that got passed on. The weird pitches. The experiments that worked." },
-  { icon: "🎙️", title: "Creator Spotlights", desc: "Go deeper with the animators, writers, and weirdos behind the work." },
+  { icon: "🛸", title: "Space & Cosmos", desc: "Documentaries, theories, and content about what's out there. The stuff NASA won't talk about." },
+  { icon: "🕵️", title: "Conspiracy & Truth", desc: "Down the rabbit hole content. Question everything. Connect the dots." },
+  { icon: "👁️", title: "Strange & Paranormal", desc: "Weird films, unexplained phenomena, cult classics, and content that defies categorization." },
+  { icon: "🎭", title: "Underground Comedy", desc: "The comics and shows too edgy, too weird, or too real for mainstream platforms." },
 ];
 
 const FAQ_ITEMS = [
-  { q: "What kind of content is on Peep?", a: "Indie adult animation — animated films, series, shorts, and pilots that exist outside the traditional network system. If it's adult, animated, and independent, it belongs here." },
-  { q: "Is this like Adult Swim?", a: "Think of it as the stuff Adult Swim wouldn't air. Unfiltered, independent, and made by creators who didn't want a network telling them what to cut." },
+  { q: "What kind of content is on Peep?", a: "Weird stuff. Strange films, conspiracy documentaries, space content, paranormal, underground comedy, cult animation — if it's strange and it's real, it belongs here. No algorithm-bait, no mainstream filler." },
+  { q: "Is this like Netflix or Hulu?", a: "No. Peep is for the content those platforms won't touch. Think late-night rabbit holes, not primetime schedules." },
   { q: "Do I need to download anything?", a: "No. Runs entirely in your browser on any device. Nothing to install." },
   { q: "Can multiple people use one account?", a: "Yes — multiple viewer profiles under one account. Everyone gets their own watch history and saved list." },
   { q: "How do I cancel?", a: "Account settings, two clicks, done. No questions. No guilt email." },
@@ -123,16 +123,16 @@ export function LandingPage() {
         <div style={{ position: "relative", zIndex: 1, maxWidth: 760, padding: `0 ${PAD}` }}>
           <div style={{ animation: "fadeUp 0.7s 0.1s ease both", display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.22)", borderRadius: 100, padding: "6px 18px", marginBottom: 28 }}>
             <span style={{ width: 6, height: 6, borderRadius: "50%", background: YELLOW, display: "inline-block", boxShadow: `0 0 8px ${YELLOW}` }} />
-            <span style={{ fontSize: 11, color: YELLOW, fontWeight: 600, letterSpacing: 1.5, textTransform: "uppercase" }}>Indie Adult Animation</span>
+            <span style={{ fontSize: 11, color: YELLOW, fontWeight: 600, letterSpacing: 1.5, textTransform: "uppercase" }}>It's Weird on Here</span>
           </div>
 
           <h1 style={{ animation: "fadeUp 0.7s 0.25s ease both", margin: "0 0 22px", fontFamily: "'Righteous', sans-serif", fontSize: "clamp(46px, 8.5vw, 92px)", fontWeight: 400, lineHeight: 1.04, letterSpacing: "0.01em" }}>
-            Too weird for TV.<br />
-            <span style={{ color: YELLOW, animation: "glow 4s 1s ease-in-out infinite" }}>Perfect for Peep.</span>
+            Watch things<br />
+            <span style={{ color: YELLOW, animation: "glow 4s 1s ease-in-out infinite" }}>you can't explain.</span>
           </h1>
 
-          <p style={{ animation: "fadeUp 0.7s 0.4s ease both", margin: "0 auto 14px", fontSize: "clamp(15px, 1.8vw, 18px)", color: "#777", lineHeight: 1.75, maxWidth: 480 }}>
-            Weird TV. Adult animation. All of it.
+          <p style={{ animation: "fadeUp 0.7s 0.4s ease both", margin: "0 auto 14px", fontSize: "clamp(15px, 1.8vw, 18px)", color: "#777", lineHeight: 1.75, maxWidth: 520 }}>
+            Not what you'd expect. Not what the algorithm recommends. Just weird.
           </p>
 
           <p style={{ animation: "fadeUp 0.7s 0.5s ease both", margin: "0 auto 44px", fontSize: 14, color: "#555" }}>Founding membership from <span style={{ color: YELLOW, fontWeight: 700 }}>$2.99/mo</span> — limited spots.</p>
@@ -170,7 +170,7 @@ export function LandingPage() {
         <div style={{ maxWidth: 980, margin: "0 auto" }}>
           <div className="reveal" style={{ textAlign: "center", marginBottom: 56 }}>
             <h2 style={{ fontFamily: "'Righteous', sans-serif", fontWeight: 400, margin: "0 0 10px", fontSize: "clamp(28px, 4vw, 44px)" }}>What's on Peep</h2>
-            <p style={{ color: "#444", fontSize: 15, margin: 0 }}>Animated. Adult. Weird.</p>
+            <p style={{ color: "#444", fontSize: 15, margin: 0 }}>Nothing ordinary.</p>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
             {features.map((f, i) => (
@@ -189,10 +189,10 @@ export function LandingPage() {
         <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 600, height: 300, background: "radial-gradient(ellipse, rgba(250,204,21,0.04) 0%, transparent 65%)", pointerEvents: "none" }} />
         <div className="reveal" style={{ position: "relative", maxWidth: 640, margin: "0 auto" }}>
           <h2 style={{ fontFamily: "'Righteous', sans-serif", fontWeight: 400, fontSize: "clamp(28px, 4vw, 44px)", margin: "0 0 20px", lineHeight: 1.15 }}>
-            Built for the stuff<br /><span style={{ color: YELLOW }}>they said no to.</span>
+            Built for the stuff<br /><span style={{ color: YELLOW }}>the algorithm hides.</span>
           </h2>
           <p style={{ fontSize: 15, color: "#555", lineHeight: 1.9, margin: 0 }}>
-            Weird cartoons for adults. That's it. That's the pitch.
+            Weird and not the ordinary. That's it.
           </p>
         </div>
       </section>
@@ -290,7 +290,7 @@ export function LandingPage() {
       <section style={{ padding: `clamp(48px, 10vw, 96px) ${PAD}`, textAlign: "center", borderTop: "1px solid #111", position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 560, height: 280, background: "radial-gradient(ellipse, rgba(250,204,21,0.06) 0%, transparent 70%)", pointerEvents: "none" }} />
         <div className="reveal" style={{ position: "relative" }}>
-          <h2 style={{ fontFamily: "'Righteous', sans-serif", fontWeight: 400, margin: "0 0 14px", fontSize: "clamp(28px, 5vw, 52px)" }}>Ready to watch something weird?</h2>
+          <h2 style={{ fontFamily: "'Righteous', sans-serif", fontWeight: 400, margin: "0 0 14px", fontSize: "clamp(28px, 5vw, 52px)" }}>Go down the rabbit hole.</h2>
           <p style={{ margin: "0 0 38px", fontSize: 15, color: "#444" }}>Founding membership from $2.99/mo — limited spots.</p>
           <a href="/signup" className="lp-cta-btn" style={{ background: YELLOW, color: "#0a0a0a", fontSize: 15, fontWeight: 700, textDecoration: "none", padding: "15px 48px", borderRadius: 10, display: "inline-block", transition: "transform 0.2s, box-shadow 0.2s" }}>
             Create Your Account →
@@ -302,7 +302,7 @@ export function LandingPage() {
       <footer style={{ borderTop: "1px solid #111", padding: `36px ${PAD}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <div>
           <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 20, color: YELLOW, display: "block", marginBottom: 4 }}>peep.</span>
-          <p style={{ margin: 0, fontSize: 12, color: "#2a2a2a" }}>The home for adult animation that didn't make the cut.</p>
+          <p style={{ margin: 0, fontSize: 12, color: "#2a2a2a" }}>The home for content that can't live anywhere else.</p>
         </div>
         <p style={{ margin: 0, fontSize: 12, color: "#2a2a2a" }}>© {new Date().getFullYear()} Peep. All rights reserved.</p>
       </footer>
