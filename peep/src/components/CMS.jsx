@@ -3215,7 +3215,7 @@ export function CMS({ onExit, currentUser }) {
         {[
           { key: "content",   label: `Content (${rows.length + showsList.length + podcastsList.length})`, color: "#4f46e5" },
           { key: "live",      label: `Live (${liveList.length})`,   color: "#ef4444" },
-          { key: "creators",  label: `Creators`,                    color: "#f97316" },
+          { key: "creators",  label: `Partners`,                    color: "#f97316" },
           { key: "members",   label: `Members`,                     color: "#818cf8" },
           { key: "analytics", label: `Analytics`,                   color: "#34d399" },
           { key: "storage",   label: `Storage`,                     color: "#22d3ee" },
@@ -6098,7 +6098,7 @@ export function CMS({ onExit, currentUser }) {
                 </div>
                 <div>
                   <p style={{ margin: "0 0 3px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Content Partners</p>
-                  <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Manage creator partnerships and referral codes</p>
+                  <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Manage content partner agreements and revenue share</p>
                 </div>
               </div>
               <span style={{ fontSize: 18, color: "#d1d5db" }}>→</span>
@@ -6135,7 +6135,7 @@ export function CMS({ onExit, currentUser }) {
                 </div>
                 <div>
                   <p style={{ margin: "0 0 3px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Payouts</p>
-                  <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Calculate and track monthly creator revenue share</p>
+                  <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Calculate and track monthly partner revenue share</p>
                 </div>
               </div>
               <span style={{ fontSize: 18, color: "#d1d5db" }}>→</span>
@@ -7629,9 +7629,9 @@ export function CMS({ onExit, currentUser }) {
         </div>
       </div>
     )}
-        {/* ────── CREATORS SUB-TAB BAR ────── */}
+        {/* ────── PARTNERS SUB-TAB BAR ────── */}
         {tab === "creators" && (
-          <div style={{ display: "flex", gap: 6, marginBottom: 28, paddingBottom: 20, borderBottom: "1px solid #e2e8f0" }}>
+          <div style={{ display: "flex", gap: 6, padding: `20px ${PAD} 20px`, borderBottom: "1px solid #e2e8f0", background: "#fafafa" }}>
             {[{ key: "list", label: "Content Partners" }, { key: "review", label: `Review Queue${pendingCount > 0 ? ` (${pendingCount})` : ""}` }, { key: "payouts", label: "Payouts" }].map(({ key, label }) => (
               <button key={key} onClick={() => setCreatorsTab(key)} style={{ background: creatorsTab === key ? "rgba(249,115,22,0.08)" : "transparent", border: `1px solid ${creatorsTab === key ? "rgba(249,115,22,0.3)" : "#e2e8f0"}`, borderRadius: 8, padding: "7px 16px", color: creatorsTab === key ? "#ea580c" : "#6b7280", fontSize: 13, fontWeight: creatorsTab === key ? 600 : 400, cursor: "pointer" }}>
                 {label}
@@ -7644,16 +7644,17 @@ export function CMS({ onExit, currentUser }) {
         {tab === "creators" && creatorsTab === "list" && (
           <div style={{ maxWidth: 1600, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28, flexWrap: "wrap" }}>
-              <button onClick={() => setCreatorsTab("list")} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 14px", fontSize: 13, color: "#374151", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>← Back</button>
-              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Content Partners</h2>
-              <span style={{ fontSize: 13, color: "#9ca3af" }}>{creatorsList.length} creator{creatorsList.length !== 1 ? "s" : ""}</span>
+              <div>
+                <h2 style={{ margin: "0 0 2px", fontSize: 22, fontWeight: 700, color: "#0f172a" }}>Content Partners</h2>
+                <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>{creatorsList.length} partner{creatorsList.length !== 1 ? "s" : ""}</p>
+              </div>
               <button onClick={() => openCreatorModal()} style={{ marginLeft: "auto", background: "#fb923c", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>+ Add Partner</button>
             </div>
 
             {creatorsLoading ? (
               <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Spinner /></div>
             ) : creatorsList.length === 0 ? (
-              <div style={{ textAlign: "center", padding: 80, color: "#9ca3af" }}>No creators yet. Add one to get started.</div>
+              <div style={{ textAlign: "center", padding: 80, color: "#9ca3af" }}>No content partners yet. Add one to get started.</div>
             ) : (
               <div style={{ overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: 14 }}>
                 <table style={{ width: "100%", minWidth: 700, borderCollapse: "collapse", fontSize: 13, background: "#fff" }}>
@@ -8051,7 +8052,7 @@ export function CMS({ onExit, currentUser }) {
                 {payoutLoading ? (
                   <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Spinner /></div>
                 ) : payoutData.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: 80, color: "#9ca3af" }}>No creators to pay out. Add creators first.</div>
+                  <div style={{ textAlign: "center", padding: 80, color: "#9ca3af" }}>No content partners yet. Add partners first.</div>
                 ) : (
                   <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, overflow: "hidden" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
