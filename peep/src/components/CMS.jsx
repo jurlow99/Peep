@@ -3274,7 +3274,7 @@ export function CMS({ onExit, currentUser }) {
                   onClick={() => { setForm(EMPTY_ROW); setEditingId(null); setDrawerOpen(true); }}
                   style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
                 >
-                  + Add Short
+                  + Add Movie
                 </button>
               </div>
 
@@ -6298,7 +6298,7 @@ export function CMS({ onExit, currentUser }) {
               {/* Drawer header */}
               <div style={{ padding: "20px 24px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
                 <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "#0f172a" }}>
-                  {tab === "content" && videoSubTab === "shorts" && (editingId ? "Edit Short" : "Add Short")}
+                  {tab === "content" && videoSubTab === "shorts" && (editingId ? "Edit Movie" : "Add Movie")}
                   {tab === "content" && videoSubTab === "series" && (editingShowId ? "Edit Series" : "Add Series")}
                   {tab === "content" && videoSubTab === "episodes" && (editingEpisodeId ? "Edit Episode" : "Add Episode")}
                   {tab === "content" && videoSubTab === "podcasts" && (editingPodcastId ? "Edit Podcast" : "Add Podcast")}
@@ -6376,7 +6376,7 @@ export function CMS({ onExit, currentUser }) {
                     </div>
                     <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
                       <button onClick={saveRow} disabled={saving} style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
-                        {saving ? "Saving…" : editingId ? "Save Changes" : "Add Short"}
+                        {saving ? "Saving…" : editingId ? "Save Changes" : "Add Movie"}
                       </button>
                       <button onClick={cancelEdit} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
                     </div>
