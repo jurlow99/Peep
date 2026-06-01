@@ -861,8 +861,8 @@ export function CMS({ onExit, currentUser }) {
     const BUCKET = "peep-media";
     const VIDEO_EXTS = [".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"];
     const AUDIO_EXTS = [".mp3", ".wav", ".aac", ".m4a", ".ogg"];
-    const FOLDER_TYPE = { shorts: "short", trailers: "trailer", episodes: "episode", "music-videos": "music_video", podcasts: "podcast_episode", songs: "podcast_episode" };
-    const folders = ["shorts", "trailers", "episodes", "music-videos", "podcasts", "songs", ""];
+    const FOLDER_TYPE = { shorts: "short", trailers: "trailer", episodes: "episode", "episodes ": "episode", "music-videos": "music_video", podcasts: "podcast_episode", songs: "podcast_episode" };
+    const folders = ["shorts", "trailers", "episodes", "episodes ", "music-videos", "podcasts", "songs", ""];
     const allFiles = [];
     const scanFolder = async (folder, depth = 0) => {
       const { data } = await supabase.storage.from(BUCKET).list(folder || undefined, { limit: 500, sortBy: { column: "created_at", order: "desc" } });
