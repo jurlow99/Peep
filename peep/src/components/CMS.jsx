@@ -8170,8 +8170,8 @@ export function CMS({ onExit, currentUser }) {
           <div style={{ maxWidth: 1600, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28, flexWrap: "wrap", gap: 12 }}>
               <div>
-                <p style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 700, color: "#0f172a" }}>Storage Browser</p>
-                <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Files in your peep-media bucket — click "Add to Library" to create a content record.</p>
+                <p style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 700, color: "#0f172a" }}>Uploaded Files</p>
+                <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Raw files uploaded to storage. Click "Add to Library" to make a file visible on Peep.</p>
               </div>
               <button onClick={loadStorageFiles} style={{ padding: "10px 20px", background: "#0f172a", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                 {storageLoading ? "Scanning…" : "Refresh"}
@@ -8183,7 +8183,7 @@ export function CMS({ onExit, currentUser }) {
             {!storageLoading && storageFiles.length === 0 && (
               <div style={{ textAlign: "center", padding: "80px 0", color: "#9ca3af" }}>
                 <p style={{ fontSize: 15, marginBottom: 8 }}>No media files found in the bucket.</p>
-                <p style={{ fontSize: 13 }}>Upload video or audio files to the <strong>peep-media</strong> bucket in Supabase Storage, then click Refresh.</p>
+                <p style={{ fontSize: 13 }}>Upload video or audio files to Supabase Storage, then click Refresh.</p>
               </div>
             )}
 
@@ -8205,8 +8205,8 @@ export function CMS({ onExit, currentUser }) {
                 <>
                   <div style={{ display: "flex", gap: 8, marginBottom: 28 }}>
                     {[
-                      { key: "pending", label: "Ready to Ingest", count: pending.length, color: "#f59e0b" },
-                      { key: "ingested", label: "Ingested", count: ingested.length, color: "#22c55e" },
+                      { key: "pending", label: "Not in Library", count: pending.length, color: "#f59e0b" },
+                      { key: "ingested", label: "In Library", count: ingested.length, color: "#22c55e" },
                       { key: "all", label: "All", count: storageFiles.length, color: "#6366f1" },
                     ].map(({ key, label, count, color }) => (
                       <button key={key} onClick={() => setStorageFilter(key)} style={{ padding: "8px 18px", borderRadius: 8, border: `1.5px solid ${storageFilter === key ? color : "#e2e8f0"}`, background: storageFilter === key ? color : "#fff", color: storageFilter === key ? "#fff" : "#64748b", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
@@ -8245,7 +8245,7 @@ export function CMS({ onExit, currentUser }) {
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
                                     <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{file.name}</p>
-                                    {file.ingested && <span style={{ fontSize: 10, fontWeight: 700, color: "#16a34a", background: "#dcfce7", borderRadius: 4, padding: "2px 7px", flexShrink: 0 }}>Ingested</span>}
+                                    {file.ingested && <span style={{ fontSize: 10, fontWeight: 700, color: "#16a34a", background: "#dcfce7", borderRadius: 4, padding: "2px 7px", flexShrink: 0 }}>In Library</span>}
                                   </div>
                                   <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>{file.metadata?.size ? `${(file.metadata.size / 1024 / 1024).toFixed(1)} MB` : ""}</p>
                                 </div>
@@ -8258,7 +8258,7 @@ export function CMS({ onExit, currentUser }) {
                                       setStorageAddModal(file);
                                     }}
                                     style={{ padding: "7px 14px", background: "#0f172a", color: "#fff", border: "none", borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
-                                  >Ingest</button>
+                                  >Add to Library</button>
                                 )}
                               </div>
                             ))}
