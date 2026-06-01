@@ -1650,7 +1650,7 @@ export function CMS({ onExit, currentUser }) {
       if (w.completed) typeMap[t].completed++;
       if (w.progress_seconds) typeMap[t].seconds += w.progress_seconds;
     });
-    const TYPE_LABELS = { movie: "Shorts", episode: "TV Episodes", podcast_episode: "Podcasts", show: "Shows" };
+    const TYPE_LABELS = { movie: "Movies", episode: "TV Episodes", podcast_episode: "Podcasts", show: "Shows" };
     const contentTypeStats = Object.entries(typeMap)
       .map(([type, d]) => ({
         type,
@@ -3249,7 +3249,7 @@ export function CMS({ onExit, currentUser }) {
         {tab === "content" && (
           <div style={{ display: "flex", gap: 6, marginBottom: 8, paddingBottom: 20, borderBottom: "1px solid #e2e8f0" }}>
             {[
-              { key: "shorts",    label: "Shorts",    count: rows.length },
+              { key: "shorts",    label: "Movies",    count: rows.length },
               { key: "series",    label: "Series",    count: showsList.length },
               { key: "episodes",  label: "Episodes",  count: null },
               { key: "podcasts",  label: "Podcasts",  count: podcastsList.length },
@@ -3603,11 +3603,11 @@ export function CMS({ onExit, currentUser }) {
                   const t = carousel.type;
                   const ct = carousel.content_type;
                   const rowPages = (carousel.pages || "home").split(",").map(p => p.trim()).filter(Boolean);
-                  const contentLabel = t === "podcast" ? "Podcasts" : ct === "shorts" ? "Shorts only" : ct === "shows" ? "Series only" : ct === "music_videos" ? "Music Videos" : ct === "songs" ? "Songs" : "All content";
+                  const contentLabel = t === "podcast" ? "Podcasts" : ct === "shorts" ? "Movies only" : ct === "shows" ? "Series only" : ct === "music_videos" ? "Music Videos" : ct === "songs" ? "Songs" : "All content";
                   const handpickedCount = t === "handpicked" ? (() => { try { return JSON.parse(carousel.filter_value || "[]").length; } catch { return 0; } })() : 0;
                   const orderLabel = t === "trending" ? "Trending" : t === "handpicked" ? `${handpickedCount} hand-picked` : t === "category" ? `Genre: ${carousel.filter_value || "?"}` : t === "podcast" ? (carousel.filter_value ? `Tag: ${carousel.filter_value}` : "All podcasts") : "Default order";
                   const contentColor = t === "podcast" ? "#a78bfa" : ct === "shorts" ? "#facc15" : ct === "shows" ? "#34d399" : ct === "music_videos" || ct === "songs" ? "#4ade80" : "#f59e0b";
-                  const pageLabels = { home: "Home", shorts: "Shorts", series: "Series", music: "Music", music_videos: "Music" };
+                  const pageLabels = { home: "Home", shorts: "Movies", series: "Series", music: "Music", music_videos: "Music" };
 
                   return (
                     <div key={carousel.id} style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
@@ -4681,7 +4681,7 @@ export function CMS({ onExit, currentUser }) {
 
             {!adLoading && !adTableMissing && adList.length > 0 && (() => {
               const AD_TYPE_LABELS = { pre_roll: "Pre-roll", mid_roll: "Mid-roll", post_roll: "Post-roll" };
-              const SCOPE_LABELS = { global: "All content", movie: "Shorts", show: "TV Shows", episode: "Episodes", podcast_episode: "Podcasts" };
+              const SCOPE_LABELS = { global: "All content", movie: "Movies", show: "TV Shows", episode: "Episodes", podcast_episode: "Podcasts" };
               const AD_TYPE_COLORS = { pre_roll: "#6366f1", mid_roll: "#f59e0b", post_roll: "#ec4899" };
               return (
                 <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
@@ -4919,7 +4919,7 @@ export function CMS({ onExit, currentUser }) {
             {(() => {
               const viewers = onlineUsers.filter(u => u.current_page !== "admin");
               const admins = onlineUsers.filter(u => u.current_page === "admin");
-              const pageLabels = { home: "Home", shorts: "Shorts", series: "Series", podcasts: "Podcasts", live: "Live TV", "new-popular": "New & Popular", mylist: "My List", profile: "Profile", settings: "Settings" };
+              const pageLabels = { home: "Home", shorts: "Movies", series: "Series", podcasts: "Podcasts", live: "Live TV", "new-popular": "New & Popular", mylist: "My List", profile: "Profile", settings: "Settings" };
               const renderRow = (u, i, arr) => {
                 const email = u.profile?.email || u.user_id;
                 const username = u.profile?.username;
@@ -5010,7 +5010,7 @@ export function CMS({ onExit, currentUser }) {
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 24 }}>
                       {[
                         { label: "Total Users", value: reportData.userCount, color: "#34d399", desc: "Registered accounts across all profiles" },
-                        { label: "Videos", value: reportData.videoCount, color: "#4f46e5", desc: "Shorts uploaded to the library" },
+                        { label: "Videos", value: reportData.videoCount, color: "#4f46e5", desc: "Movies uploaded to the library" },
                         { label: "Shows", value: reportData.showCount, color: "#4f46e5", desc: "Series with one or more episodes" },
                         { label: "Episodes", value: reportData.episodeCount, color: "#4f46e5", desc: "Individual episode entries across all shows" },
                         { label: "Watch Sessions", value: reportData.watchSessions, color: "#60a5fa", desc: "Total times any content was played" },
@@ -6721,7 +6721,7 @@ export function CMS({ onExit, currentUser }) {
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                         {[
                           { val: "home",         icon: "🏠", label: "Home",             desc: "The main landing page" },
-                          { val: "shorts",       icon: "🎬", label: "Shorts tab",       desc: "The dedicated Shorts browse page" },
+                          { val: "shorts",       icon: "🎬", label: "Movies tab",       desc: "The dedicated Shorts browse page" },
                           { val: "series",       icon: "📺", label: "Series tab",       desc: "The dedicated Series browse page" },
                           { val: "music", icon: "🎵", label: "Music tab", desc: "The Music page (videos + songs)" },
                         ].map(({ val, icon, label, desc }) => {
@@ -6753,7 +6753,7 @@ export function CMS({ onExit, currentUser }) {
                       <p style={{ margin: "0 0 10px", fontSize: 11, color: "#6b7280" }}>What kind of content fills this row.</p>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                         {[
-                          { ct: "shorts",       t: null,      icon: "🎬", label: "Shorts only",    desc: "Only shorts" },
+                          { ct: "shorts",       t: null,      icon: "🎬", label: "Movies only",    desc: "Only shorts" },
                           { ct: "shows",        t: null,      icon: "📺", label: "Series only",   desc: "Only TV shows & series" },
                           { ct: "all",          t: null,      icon: "⭐", label: "Everything",    desc: "Shorts + series mixed" },
                           { ct: "all",          t: "podcast", icon: "🎙️", label: "Podcasts",      desc: "Podcast episodes" },
@@ -7114,7 +7114,7 @@ export function CMS({ onExit, currentUser }) {
                           {["episode", "movie"].map(t => (
                             <button key={t} onClick={() => { setBulkContentType(t); setBulkSelectedEps(new Set()); setBulkSelectedMovies(new Set()); }}
                               style={{ flex: 1, background: bulkContentType === t ? "#4f46e5" : "#f1f5f9", border: `1px solid ${bulkContentType === t ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 7, padding: "9px", color: bulkContentType === t ? "#fff" : "#374151", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>
-                              {t === "episode" ? "TV Episodes" : "Shorts"}
+                              {t === "episode" ? "TV Episodes" : "Movies"}
                             </button>
                           ))}
                         </div>
@@ -8197,7 +8197,7 @@ export function CMS({ onExit, currentUser }) {
 
             {!storageLoading && storageFiles.length > 0 && (() => {
               const FOLDER_META = {
-                shorts:        { label: "Shorts",       color: "#6366f1", icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 7h5M17 17h5"/></svg> },
+                shorts:        { label: "Movies",       color: "#6366f1", icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 7h5M17 17h5"/></svg> },
                 trailers:      { label: "Trailers",     color: "#f59e0b", icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg> },
                 episodes:      { label: "Episodes",     color: "#8b5cf6", icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></svg> },
                 "music-videos":{ label: "Music Videos", color: "#ec4899", icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg> },

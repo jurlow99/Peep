@@ -767,7 +767,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     ...shows.map(s => ({ ...s, _type: "show" })),
   ], [videos, shows]);
 
-  const filteredContent = useMemo(() => activeNav === "Shorts"
+  const filteredContent = useMemo(() => activeNav === "Movies"
     ? allContent.filter(v => v._type === "movie")
     : activeNav === "Series"
     ? allContent.filter(v => v._type === "show")
@@ -795,7 +795,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     if (!c.enabled) return false;
     const pages = (c.pages || "home").split(",").map(p => p.trim());
     if (activeNav === "Home") return pages.includes("home");
-    if (activeNav === "Shorts") return pages.includes("shorts");
+    if (activeNav === "Movies") return pages.includes("shorts");
     if (activeNav === "Series") return pages.includes("series");
     return false;
   }), [carousels, activeNav]);
@@ -916,7 +916,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           </span>
           {!isMobile && (
             <div style={{ display: "flex", gap: 4 }}>
-              {["Home", "Shorts", "Series", "Podcasts"].map(label => {
+              {["Home", "Movies", "Series", "Podcasts"].map(label => {
                 const active = activeNav === label;
                 return (
                   <span key={label} onClick={() => setActiveNav(label)} style={{ fontSize: 17, padding: "6px 16px", borderRadius: 6, color: active ? "#0a0a0a" : "rgba(255,255,255,0.55)", fontWeight: active ? 700 : 400, cursor: "pointer", background: active ? "#facc15" : "transparent", transition: "color 0.2s, background 0.2s" }}
@@ -971,7 +971,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
           <div style={{ padding: `20px ${PAD} 32px` }}>
             {/* Type filter chips */}
             <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-              {[{ id: "all", label: "All" }, { id: "movie", label: "Shorts" }, { id: "show", label: "Series" }, { id: "podcast", label: "Podcasts" }].map(f => (
+              {[{ id: "all", label: "All" }, { id: "movie", label: "Movies" }, { id: "show", label: "Series" }, { id: "podcast", label: "Podcasts" }].map(f => (
                 <button key={f.id}
                   onMouseDown={e => e.preventDefault()}
                   onClick={() => setSearchTypeFilter(f.id)}
@@ -1061,7 +1061,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       )}
 
       {/* Catalog pages for Movies / Series */}
-      {(activeNav === "Shorts" || activeNav === "Series") && !loading && (
+      {(activeNav === "Movies" || activeNav === "Series") && !loading && (
         <CatalogPage
           type={activeNav}
           content={filteredContent}
@@ -1124,7 +1124,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       )}
 
       {/* Content rows (Home) */}
-      {activeNav !== "Shorts" && activeNav !== "Series" && activeNav !== "My List" && activeNav !== "Podcasts" && !loading && (allContent.length > 0 || continueWatching.length > 0) && (
+      {activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "My List" && activeNav !== "Podcasts" && !loading && (allContent.length > 0 || continueWatching.length > 0) && (
         <div style={{ position: "relative", zIndex: 1, marginTop: 0, paddingBottom: 80 }}>
           {continueWatching.length > 0 && activeNav === "Home" && (
             <ContinueWatchingRow items={continueWatching} onPlay={onPlay} onRemove={handleRemoveCW} />
@@ -1147,7 +1147,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100, background: "rgba(10,10,10,0.97)", backdropFilter: "blur(20px)", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", height: 60, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
           {[
             { id: "Home", label: "Home", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
-            { id: "Shorts", label: "Shorts", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="2"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg> },
+            { id: "Movies", label: "Movies", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="2"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg> },
             { id: "Series", label: "Series", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></svg> },
             { id: "My List", label: "My List", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg> },
           ].map(tab => {
@@ -1217,7 +1217,7 @@ function CatalogPage({ type, content, carousels = [], podcasts = [], onPlay, onS
       {/* Page header */}
       <div style={{ padding: `0 ${PAD} 28px` }}>
         <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(32px, 4vw, 56px)", fontWeight: 400, margin: "0 0 24px", color: "#fff" }}>
-          {type === "Shorts" ? "Shorts" : "Series"}
+          {type === "Movies" ? "Movies" : "Series"}
         </h1>
 
         {/* Filters row */}
@@ -4659,9 +4659,9 @@ function Footer({ onNavChange, onProfileOpen, onOpenModal }) {
   const isMobile = useIsMobile();
 
   function handleLink(label) {
-    if (label === "Shorts") { onNavChange("Shorts"); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+    if (label === "Movies") { onNavChange("Movies"); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
     if (label === "Series") { onNavChange("Series"); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
-    if (["Horror", "Comedy", "Drama", "Action", "Sci-Fi", "Documentary"].includes(label)) { onNavChange("Shorts"); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+    if (["Horror", "Comedy", "Drama", "Action", "Sci-Fi", "Documentary"].includes(label)) { onNavChange("Movies"); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
     if (label === "Sign In") { window.location.href = "/signin"; return; }
     if (label === "Create Profile") { window.location.href = "/signup"; return; }
     if (label === "Manage Account") { onProfileOpen?.(); return; }
@@ -4683,7 +4683,7 @@ function Footer({ onNavChange, onProfileOpen, onOpenModal }) {
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 32, marginBottom: 44 }}>
         {[
           { heading: "Company", links: ["About Peep", "Press Room", "Careers", "Contact Us"] },
-          { heading: "Browse", links: ["Shorts", "Series", "Horror", "Comedy", "Drama"] },
+          { heading: "Browse", links: ["Movies", "Series", "Horror", "Comedy", "Drama"] },
           { heading: "Account", links: ["Sign In", "Create Profile", "Manage Account", "Privacy Settings"] },
           { heading: "Help Center", links: ["FAQ", "Contact Support", "Terms of Use", "Privacy Policy"] },
         ].map(col => (
