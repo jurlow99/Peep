@@ -864,18 +864,26 @@ export function CMS({ onExit, currentUser }) {
     const FOLDER_TYPE = { shorts: "short", trailers: "trailer", episodes: "episode", "music-videos": "music_video", podcasts: "podcast_episode", songs: "podcast_episode" };
     const folders = ["shorts", "trailers", "episodes", "music-videos", "podcasts", "songs", ""];
     const allFiles = [];
-    for (const folder of folders) {
-      const { data } = await supabase.storage.from(BUCKET).list(folder || undefined, { limit: 200, sortBy: { column: "created_at", order: "desc" } });
+    const scanFolder = async (folder, depth = 0) => {
+      const { data } = await supabase.storage.from(BUCKET).list(folder || undefined, { limit: 500, sortBy: { column: "created_at", order: "desc" } });
+      const subfolders = [];
       (data || []).forEach(f => {
-        if (!f.id) return;
+        if (!f.id) {
+          // It's a subfolder — recurse one more level
+          if (depth < 2) subfolders.push(folder ? `${folder}/${f.name}` : f.name);
+          return;
+        }
         const ext = f.name.substring(f.name.lastIndexOf(".")).toLowerCase();
         if (![...VIDEO_EXTS, ...AUDIO_EXTS].includes(ext)) return;
         const path = folder ? `${folder}/${f.name}` : f.name;
         const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
-        const typeHint = FOLDER_TYPE[folder] ?? (AUDIO_EXTS.includes(ext) ? "podcast_episode" : "movie");
+        const topFolder = folder ? folder.split("/")[0] : "";
+        const typeHint = FOLDER_TYPE[topFolder] ?? (AUDIO_EXTS.includes(ext) ? "podcast_episode" : "movie");
         allFiles.push({ ...f, folder: folder || "root", path, url: urlData?.publicUrl, isVideo: VIDEO_EXTS.includes(ext), isAudio: AUDIO_EXTS.includes(ext), typeHint });
       });
-    }
+      for (const sub of subfolders) await scanFolder(sub, depth + 1);
+    };
+    for (const folder of folders) await scanFolder(folder);
     const [movRes, epRes, mvRes, peRes] = await Promise.all([
       supabase.from("videos").select("url, trailer_url"),
       supabase.from("episodes").select("url"),
