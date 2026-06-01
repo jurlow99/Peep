@@ -5,7 +5,6 @@ import App from './App.jsx'
 import { AdminPage } from './pages/AdminPage.jsx'
 import { SignupPage, SigninPage } from './pages/AuthPages.jsx'
 import { SetPasswordPage } from './pages/SetPasswordPage.jsx'
-import { ThemeProvider } from './ThemeContext.jsx'
 
 // Streamer features disabled — routes redirect to home until ready to re-enable
 // To re-enable: restore StreamerSignInPage, ApplyToStreamPage, StreamerDashboard, StreamerProfile routes below
@@ -24,12 +23,10 @@ if (
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <ThemeProvider>
-      {path === '/admin'       ? <AdminPage />     :
-       path === '/signup'      ? <SignupPage />    :
-       path === '/signin'      ? <SigninPage />    :
-       path === '/set-password'? <SetPasswordPage />:
-       <App />}
-    </ThemeProvider>
+    {path === '/admin'       ? <AdminPage />     :
+     path === '/signup'      ? <SignupPage />    :
+     path === '/signin'      ? <SigninPage />    :
+     path === '/set-password'? <SetPasswordPage />:
+     <App />}
   </StrictMode>,
 )

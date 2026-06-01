@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useMemo, Component } from "react";
-import { useTheme } from "./ThemeContext";
 import Hls from "hls.js";
 import { supabase } from "./supabase";
 import { AuthModal } from "./components/AuthModal";
@@ -15,7 +14,7 @@ class PlayerErrorBoundary extends Component {
   render() {
     if (this.state.error) {
       return (
-        <div style={{ background: "var(--bg)", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "sans-serif", color: "#fff", gap: 16, padding: 32 }}>
+        <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "sans-serif", color: "#fff", gap: 16, padding: 32 }}>
           <p style={{ color: "#f87171", fontSize: 14, maxWidth: 600, textAlign: "center" }}>Player error: {this.state.error.message}</p>
           <button onClick={() => { this.setState({ error: null }); this.props.onBack?.(); }} style={{ background: "#facc15", border: "none", borderRadius: 8, padding: "10px 24px", color: "#0a0a0a", fontWeight: 700, cursor: "pointer" }}>← Go Back</button>
         </div>
@@ -252,7 +251,7 @@ export default function App() {
 
 
   if (maintenanceMode) return (
-    <div style={{ background: "var(--bg)", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", gap: 16 }}>
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", gap: 16 }}>
       <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 48, color: "#facc15" }}>peep.</span>
       <p style={{ color: "#fff", fontSize: 22, fontWeight: 600, margin: 0 }}>We'll be right back.</p>
       <p style={{ color: "#555", fontSize: 14, margin: 0 }}>We're doing some maintenance. Check back shortly.</p>
@@ -260,7 +259,7 @@ export default function App() {
   );
 
   if (!authChecked) return (
-    <div style={{ background: "var(--bg)", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 42, color: "#facc15", opacity: 0.8 }}>peep.</span>
     </div>
   );
@@ -521,7 +520,7 @@ function NotifBell({ user }) {
       </button>
 
       {open && (
-        <div style={{ position: "absolute", right: 0, top: "calc(100% + 12px)", width: 310, background: "var(--bg-surface)", border: "1px solid #1e1e1e", borderRadius: 12, overflow: "hidden", zIndex: 200, boxShadow: "0 20px 60px rgba(0,0,0,0.7)" }}>
+        <div style={{ position: "absolute", right: 0, top: "calc(100% + 12px)", width: 310, background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, overflow: "hidden", zIndex: 200, boxShadow: "0 20px 60px rgba(0,0,0,0.7)" }}>
           <div style={{ padding: "12px 16px", borderBottom: "1px solid #1a1a1a", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>Notifications</p>
           </div>
@@ -585,7 +584,6 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
     return sessionStorage.getItem("peep_nav") || "Home";
   });
   const [footerModal, setFooterModal] = useState(null);
-  const { isDark, toggle: toggleTheme } = useTheme();
   const isMobile = useIsMobile();
 
   useEffect(() => { sessionStorage.setItem("peep_nav", activeNav); }, [activeNav]);
@@ -898,7 +896,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
   }
 
   return (
-    <div style={{ background: "var(--bg)", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
       <style>{`.scroll-row::-webkit-scrollbar { display: none; }`}</style>
 
       {/* Navbar */}
@@ -906,7 +904,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
         display: "flex", alignItems: "center", justifyContent: "space-between",
         paddingTop: isMobile ? "max(env(safe-area-inset-top), 44px)" : 14, paddingBottom: 14, paddingLeft: PAD, paddingRight: PAD,
-        background: scrolled ? "var(--nav-bg-scrolled)" : "var(--nav-bg)",
+        background: scrolled ? "rgba(10,10,10,0.96)" : "rgba(10,10,10,0.82)",
         backdropFilter: "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
         borderBottom: scrolled ? "1px solid rgba(255,255,255,0.05)" : "none",
@@ -950,15 +948,6 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
             </div>
           </div>
-          <button onClick={toggleTheme} title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-            style={{ background: "none", border: "none", color: "rgba(255,255,255,0.5)", cursor: "pointer", padding: 4, display: "flex", alignItems: "center", transition: "color 0.15s" }}
-            onMouseEnter={e => e.currentTarget.style.color = "#fff"}
-            onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.5)"}>
-            {isDark
-              ? <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-              : <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-            }
-          </button>
           <NotifBell user={user} />
           {user ? (() => {
             const av = avatarForId(userAvatarId || activeProfile?.avatar_id);
@@ -978,7 +967,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
 
       {/* Search overlay */}
       {searchOpen && (
-        <div style={{ position: "fixed", top: isMobile ? "calc(max(env(safe-area-inset-top), 44px) + 54px)" : 68, left: 0, right: 0, zIndex: 99, background: "var(--overlay-fade)", backdropFilter: "blur(20px)", borderBottom: "1px solid #1a1a1a", maxHeight: isMobile ? "calc(100vh - max(env(safe-area-inset-top), 44px) - 54px)" : "calc(100vh - 68px)", overflowY: "auto" }}>
+        <div style={{ position: "fixed", top: isMobile ? "calc(max(env(safe-area-inset-top), 44px) + 54px)" : 68, left: 0, right: 0, zIndex: 99, background: "rgba(8,8,8,0.98)", backdropFilter: "blur(20px)", borderBottom: "1px solid #1a1a1a", maxHeight: isMobile ? "calc(100vh - max(env(safe-area-inset-top), 44px) - 54px)" : "calc(100vh - 68px)", overflowY: "auto" }}>
           <div style={{ padding: `20px ${PAD} 32px` }}>
             {/* Type filter chips */}
             <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
@@ -1155,7 +1144,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
 
       {/* Mobile bottom tab bar */}
       {isMobile && (
-        <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100, background: "var(--nav-bg-scrolled)", backdropFilter: "blur(20px)", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", height: 60, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+        <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100, background: "rgba(10,10,10,0.97)", backdropFilter: "blur(20px)", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", height: 60, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
           {[
             { id: "Home", label: "Home", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
             { id: "Shorts", label: "Shorts", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="2"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg> },
@@ -1176,7 +1165,7 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
       )}
       {footerModal && (
         <div onClick={() => setFooterModal(null)} style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "var(--bg-surface)", border: "1px solid #1e1e1e", borderRadius: 16, padding: "36px 40px", width: "min(560px, 100%)", maxHeight: "80vh", overflowY: "auto", fontFamily: "'Space Grotesk', sans-serif" }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 16, padding: "36px 40px", width: "min(560px, 100%)", maxHeight: "80vh", overflowY: "auto", fontFamily: "'Space Grotesk', sans-serif" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
               <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#fff" }}>{footerModal.title}</h2>
               <button onClick={() => setFooterModal(null)} style={{ background: "none", border: "none", color: "#555", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>×</button>
@@ -2734,8 +2723,8 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
   );
 
   return (
-    <div style={{ background: "var(--bg)", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
-      <nav style={{ position: "sticky", top: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "space-between", padding: `0 ${PAD}`, height: 68, background: "var(--nav-bg-scrolled)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
+      <nav style={{ position: "sticky", top: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "space-between", padding: `0 ${PAD}`, height: 68, background: "rgba(10,10,10,0.95)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
           <button onClick={onBack} style={{ background: "rgba(255,255,255,0.07)", border: "none", color: "#ccc", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
@@ -2922,7 +2911,7 @@ function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myL
 
         {/* Live chat — Cloudflare-managed streams only */}
         {video.stream_uid && (
-          <div style={{ marginBottom: 24, background: "var(--bg-surface)", border: "1px solid #1e1e1e", borderRadius: 14, overflow: "hidden" }}>
+          <div style={{ marginBottom: 24, background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, overflow: "hidden" }}>
             <div style={{ padding: "12px 16px", borderBottom: "1px solid #1e1e1e", display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite", flexShrink: 0 }} />
               <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>Live Chat</span>
@@ -3206,7 +3195,7 @@ function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList
   const isResuming = resumeEpisode && watchProgress[resumeEpisode.id]?.progress_seconds > 10 && !watchProgress[resumeEpisode.id]?.completed;
 
   return (
-    <div style={{ background: "var(--bg)", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
       {trailerOpen && <TrailerModal url={show.trailer_url} title={show.title} onClose={() => setTrailerOpen(false)} />}
 
       {/* ── Hero ── */}
@@ -3296,7 +3285,7 @@ function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList
       </div>
 
       {/* ── Tab bar ── */}
-      <div style={{ position: "sticky", top: 0, zIndex: 50, background: "var(--nav-bg-scrolled)", backdropFilter: "blur(14px)", borderBottom: "1px solid #1a1a1a" }}>
+      <div style={{ position: "sticky", top: 0, zIndex: 50, background: "rgba(10,10,10,0.97)", backdropFilter: "blur(14px)", borderBottom: "1px solid #1a1a1a" }}>
         <div style={{ display: "flex", padding: `0 ${PAD}` }}>
           {[
             { key: "episodes", label: "Episodes", badge: episodes.length || null },
@@ -3339,7 +3328,7 @@ function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList
                   </div>
                 ) : (
                   <select value={selectedSeason ?? ""} onChange={e => setSelectedSeason(Number(e.target.value))}
-                    style={{ background: "var(--bg-surface)", border: "1px solid #2a2a2a", borderRadius: 8, padding: "10px 16px", color: "#fff", fontSize: 14, cursor: "pointer", outline: "none" }}>
+                    style={{ background: "#111", border: "1px solid #2a2a2a", borderRadius: 8, padding: "10px 16px", color: "#fff", fontSize: 14, cursor: "pointer", outline: "none" }}>
                     {seasons.map(s => <option key={s} value={s}>Season {s}</option>)}
                   </select>
                 )}
@@ -3472,7 +3461,7 @@ function PodcastDetail({ podcast, onBack, onGoHome, onPlay, onProfileOpen, userA
   const isResuming = resumeEp && watchProgress[resumeEp.id]?.progress_seconds > 5 && !watchProgress[resumeEp.id]?.completed;
 
   return (
-    <div style={{ background: "var(--bg)", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
 
       {/* ── Hero ── */}
       <div style={{ position: "relative", overflow: "hidden" }}>
@@ -3659,7 +3648,7 @@ function PodcastPlayerView({ episode, podcast, onBack, onGoHome, onSelect, onPro
   }
 
   return (
-    <div style={{ background: "var(--bg)", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff", display: "flex", flexDirection: "column" }}>
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff", display: "flex", flexDirection: "column" }}>
 
       {/* Blurred background */}
       {podcast.artwork_url && (
@@ -3820,10 +3809,10 @@ function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, o
   const topShow = topShowId ? showsMap[topShowId] : null;
 
   return (
-    <div style={{ background: "var(--bg)", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
 
       {/* Nav */}
-      <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 50, display: "flex", alignItems: "center", padding: `0 ${PAD}`, height: 68, gap: 24, background: "var(--nav-bg-scrolled)", backdropFilter: "blur(16px)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+      <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 50, display: "flex", alignItems: "center", padding: `0 ${PAD}`, height: 68, gap: 24, background: "rgba(10,10,10,0.92)", backdropFilter: "blur(16px)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
         <button onClick={onBack} style={{ background: "rgba(255,255,255,0.07)", border: "none", color: "#ccc", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 6 }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
           Back
@@ -3864,7 +3853,7 @@ function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, o
 
         {/* Edit form */}
         {editing && (
-          <div style={{ background: "var(--bg-surface)", border: "1px solid #1e1e1e", borderRadius: 14, padding: 24, marginBottom: 32 }}>
+          <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, padding: 24, marginBottom: 32 }}>
             <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>Choose an avatar</p>
             <div style={{ display: "grid", gridTemplateColumns: `repeat(${isMobile ? 4 : 6}, 1fr)`, gap: 8, marginBottom: 24 }}>
               {PRESET_AVATARS.map(a => (
@@ -3874,11 +3863,11 @@ function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, o
             <div style={{ height: 1, background: "#1a1a1a", marginBottom: 20 }} />
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: "block", fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Display Name</label>
-              <input type="text" value={name} onChange={e => setName(e.target.value)} maxLength={40} placeholder="Your name" style={{ width: "100%", background: "var(--bg)", border: "1px solid #2a2a2a", borderRadius: 8, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box", fontFamily: "inherit" }} />
+              <input type="text" value={name} onChange={e => setName(e.target.value)} maxLength={40} placeholder="Your name" style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 8, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box", fontFamily: "inherit" }} />
             </div>
             <div style={{ marginBottom: 20 }}>
               <label style={{ display: "block", fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Bio</label>
-              <textarea value={bio} onChange={e => setBio(e.target.value)} rows={3} maxLength={200} placeholder="Write something about yourself..." style={{ width: "100%", background: "var(--bg)", border: "1px solid #2a2a2a", borderRadius: 8, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }} />
+              <textarea value={bio} onChange={e => setBio(e.target.value)} rows={3} maxLength={200} placeholder="Write something about yourself..." style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 8, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }} />
               <p style={{ margin: "4px 0 0", fontSize: 11, color: "#333", textAlign: "right" }}>{bio.length}/200</p>
             </div>
             <button onClick={saveProfile} disabled={saving} style={{ background: "#facc15", border: "none", borderRadius: 8, padding: "10px 28px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
@@ -3897,7 +3886,7 @@ function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, o
             { label: "Favorite Genre", value: favoriteGenre || "—" },
             { label: "Most Watched", value: topShow?.title || "—" },
           ].map(({ label, value }) => (
-            <div key={label} style={{ background: "var(--bg-surface)", border: "1px solid #1a1a1a", borderRadius: 12, padding: "18px 20px" }}>
+            <div key={label} style={{ background: "#111", border: "1px solid #1a1a1a", borderRadius: 12, padding: "18px 20px" }}>
               <p style={{ margin: "0 0 6px", fontSize: 11, color: "#444", textTransform: "uppercase", letterSpacing: 0.8 }}>{label}</p>
               <p style={{ margin: 0, fontSize: isMobile ? 16 : 20, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value}</p>
             </div>
@@ -3985,14 +3974,14 @@ function CreatorPortalPage({ user, onBack, onGoHome }) {
   const paidPayouts = payouts.filter(p => p.status === "paid");
   const totalEarned = paidPayouts.reduce((s, p) => s + (p.payout_amount || 0), 0);
 
-  const card = { marginBottom: 16, background: "var(--bg-surface)", border: "1px solid #1e1e1e", borderRadius: 16, overflow: "hidden" };
+  const card = { marginBottom: 16, background: "#111", border: "1px solid #1e1e1e", borderRadius: 16, overflow: "hidden" };
   const cardHead = { padding: "20px 24px", borderBottom: "1px solid #1a1a1a" };
   const cardBody = { padding: "24px" };
 
   return (
-    <div style={{ background: "var(--bg)", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
 
-      <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 50, display: "flex", alignItems: "center", padding: `0 ${PAD}`, height: 64, gap: 20, background: "var(--nav-bg-scrolled)", backdropFilter: "blur(16px)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+      <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 50, display: "flex", alignItems: "center", padding: `0 ${PAD}`, height: 64, gap: 20, background: "rgba(10,10,10,0.92)", backdropFilter: "blur(16px)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
         <button onClick={onBack} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)", color: "#aaa", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8 }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
           Back
@@ -4033,7 +4022,7 @@ function CreatorPortalPage({ user, onBack, onGoHome }) {
                 { label: "Platform Share", value: stats ? `${stats.share}%` : "—", sub: "of total watch time" },
                 { label: "Total Earned", value: `$${totalEarned.toFixed(2)}`, sub: "lifetime paid out" },
               ].map(({ label, value, sub }) => (
-                <div key={label} style={{ background: "var(--bg-surface)", border: "1px solid #1e1e1e", borderRadius: 14, padding: "20px 22px" }}>
+                <div key={label} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, padding: "20px 22px" }}>
                   <p style={{ margin: "0 0 8px", fontSize: 11, fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: 0.6 }}>{label}</p>
                   <p style={{ margin: "0 0 4px", fontSize: 28, fontWeight: 700, color: "#facc15", letterSpacing: "-0.5px" }}>{value}</p>
                   <p style={{ margin: 0, fontSize: 11, color: "#333" }}>{sub}</p>
@@ -4230,7 +4219,7 @@ function DeleteAccountSection({ user, onSignOut, inline }) {
             Delete Account
           </button>
         ) : (
-          <div style={{ background: "var(--bg-surface)", border: "1px solid #2a2a2a", borderRadius: 12, padding: "20px" }}>
+          <div style={{ background: "#111", border: "1px solid #2a2a2a", borderRadius: 12, padding: "20px" }}>
             <p style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 600, color: "#f87171" }}>Delete your account?</p>
             <p style={{ margin: "0 0 16px", fontSize: 12, color: "#555" }}>This permanently deletes your account, all profiles, and watch history. This cannot be undone.</p>
             {error && <p style={{ margin: "0 0 12px", fontSize: 12, color: "#f87171" }}>{error}</p>}
@@ -4258,7 +4247,7 @@ function DeleteAccountSection({ user, onSignOut, inline }) {
           Delete Account
         </button>
       ) : (
-        <div style={{ background: "var(--bg-surface)", border: "1px solid #2a2a2a", borderRadius: 12, padding: "20px" }}>
+        <div style={{ background: "#111", border: "1px solid #2a2a2a", borderRadius: 12, padding: "20px" }}>
           <p style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 600, color: "#f87171" }}>Delete your account?</p>
           <p style={{ margin: "0 0 16px", fontSize: 12, color: "#555" }}>This permanently deletes your account, all profiles, and watch history. This cannot be undone.</p>
           {error && <p style={{ margin: "0 0 12px", fontSize: 12, color: "#f87171" }}>{error}</p>}
@@ -4369,7 +4358,7 @@ function SettingsPage({ user, activeProfile, isOwner, onBack, onGoHome, onProfil
 
   const [expandedSection, setExpandedSection] = useState(null);
   const inp = { width: "100%", background: "#181818", border: "1px solid #222", borderRadius: 10, padding: "12px 14px", color: "#fff", fontSize: 14, outline: "none", boxSizing: "border-box", fontFamily: "inherit" };
-  const card = { marginBottom: 24, background: "var(--bg-surface)", border: "1px solid #1a1a1a", borderRadius: 12, overflow: "hidden" };
+  const card = { marginBottom: 24, background: "#111", border: "1px solid #1a1a1a", borderRadius: 12, overflow: "hidden" };
   const planLabel = subscription?.plan === "comp" ? "Complimentary" : subscription?.plan_id === "price_1TafqJRgQH3TYy3QOCovduJf" ? "Founding Member — $2.99/mo" : subscription?.plan_id === "price_1Tag3FRgQH3TYy3Ql0KuQNeA" ? "Founding Member — $19.99/yr" : "Peep Monthly — $10/mo";
   const AcctRow = ({ label, value, note, action, onAction, danger = false, noBorder = false }) => (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 18px", borderBottom: noBorder ? "none" : "1px solid #1a1a1a" }}>
@@ -4386,9 +4375,9 @@ function SettingsPage({ user, activeProfile, isOwner, onBack, onGoHome, onProfil
   );
 
   return (
-    <div style={{ background: "var(--bg)", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
 
-      <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 50, display: "flex", alignItems: "center", padding: `0 ${PAD}`, height: 64, gap: 20, background: "var(--nav-bg-scrolled)", backdropFilter: "blur(16px)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+      <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 50, display: "flex", alignItems: "center", padding: `0 ${PAD}`, height: 64, gap: 20, background: "rgba(10,10,10,0.92)", backdropFilter: "blur(16px)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
         <button onClick={onBack} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)", color: "#aaa", fontSize: 14, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 8 }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
           Back
@@ -4742,12 +4731,12 @@ function PasswordResetPage({ onDone, isInvite = false }) {
   }
 
   return (
-    <div style={{ background: "var(--bg)", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", padding: 24 }}>
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", padding: 24 }}>
       <div style={{ width: "min(420px, 100%)" }}>
         <div style={{ textAlign: "center", marginBottom: 36 }}>
           <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 36, color: "#facc15" }}>peep.</span>
         </div>
-        <div style={{ background: "var(--bg-surface)", border: "1px solid #1e1e1e", borderRadius: 16, padding: "36px clamp(20px, 6vw, 40px)" }}>
+        <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 16, padding: "36px clamp(20px, 6vw, 40px)" }}>
           {done ? (
             <div style={{ textAlign: "center" }}>
               <p style={{ fontSize: 20, fontWeight: 700, margin: "0 0 8px", color: "#fff" }}>Password updated!</p>
@@ -4815,7 +4804,7 @@ function EmailVerificationGate({ user }) {
   }
 
   return (
-    <div style={{ background: "var(--bg)", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", padding: 24 }}>
+    <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", padding: 24 }}>
       <div style={{ width: "min(420px, 100%)", textAlign: "center" }}>
         <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 32, color: "#facc15", display: "block", marginBottom: 36 }}>peep.</span>
 
