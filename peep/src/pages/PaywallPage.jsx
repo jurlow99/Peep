@@ -23,7 +23,7 @@ const CARD_OPTIONS = {
   },
 };
 
-function CheckoutForm({ user, onSignOut }) {
+function CheckoutForm({ user, onSignOut, selectedPlan }) {
   const stripe = useStripe();
   const elements = useElements();
   const [loading, setLoading] = useState(false);
@@ -32,7 +32,6 @@ function CheckoutForm({ user, onSignOut }) {
   const [promoCode, setPromoCode] = useState("");
   const [promoLoading, setPromoLoading] = useState(false);
   const [promoError, setPromoError] = useState(null);
-  const [selectedPlan, setSelectedPlan] = useState(FOUNDING_PRICE_ID);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -142,6 +141,7 @@ function CheckoutForm({ user, onSignOut }) {
 }
 
 export function PaywallPage({ user, onSubscribed, onSignOut }) {
+  const [selectedPlan, setSelectedPlan] = useState(FOUNDING_PRICE_ID);
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", padding: 24 }}>
 
@@ -205,7 +205,7 @@ export function PaywallPage({ user, onSubscribed, onSignOut }) {
           </div>
 
           <Elements stripe={stripePromise}>
-            <CheckoutForm user={user} onSignOut={onSignOut} />
+            <CheckoutForm user={user} onSignOut={onSignOut} selectedPlan={selectedPlan} />
           </Elements>
         </div>
       </div>
