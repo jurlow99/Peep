@@ -1148,7 +1148,7 @@ export function CMS({ onExit, currentUser }) {
       if (editingCreator) {
         const { error } = await supabase.from("creators").update(payload).eq("id", editingCreator.id);
         if (error) { showToast(error.message, "error"); return; }
-        showToast("Creator updated"); setCreatorModal(false); loadCreators();
+        showToast("Partner updated"); setCreatorModal(false); loadCreators();
       } else {
         const { error } = await supabase.from("creators").insert(payload);
         if (error) { showToast(error.message, "error"); return; }
@@ -1164,7 +1164,7 @@ export function CMS({ onExit, currentUser }) {
           });
           const invData = await invRes.json();
           if (invData.error) showToast(`Creator added but invite failed: ${invData.error}`, "error");
-          else showToast("Creator added — invite email sent");
+          else showToast("Partner added — invite email sent");
         } catch (invErr) {
           showToast(`Creator added but invite failed: ${invErr.message}`, "error");
         }
@@ -1198,7 +1198,7 @@ export function CMS({ onExit, currentUser }) {
     await supabase.from("creators").delete().eq("id", id);
     setCreatorsList(c => c.filter(x => x.id !== id));
     setDeleteCreatorConfirm(null);
-    showToast("Creator removed");
+    showToast("Partner removed");
   }
 
   // ──── CONTENT-CREATOR LINKS ────
@@ -1387,7 +1387,7 @@ export function CMS({ onExit, currentUser }) {
   }
 
   function exportPayoutsCSV() {
-    const headers = ["Creator", "Email", "Watch Time (mins)", "Watch Share %", "Total Revenue", "Creator Payout", "Status", "Paid Date"];
+    const headers = ["Partner", "Email", "Watch Time (mins)", "Watch Share %", "Total Revenue", "Partner Payout", "Status", "Paid Date"];
     const csvRows = payoutData.map(r => [r.creator.name, r.creator.email, r.watchMins, r.share + "%", totalRevenue.toFixed(2), r.payout.toFixed(2), r.status, r.paid_at ? new Date(r.paid_at).toLocaleDateString() : ""].map(v => `"${v}"`));
     const csv = [headers, ...csvRows].map(r => r.join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
@@ -6097,7 +6097,7 @@ export function CMS({ onExit, currentUser }) {
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fb923c" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
                 </div>
                 <div>
-                  <p style={{ margin: "0 0 3px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Creators</p>
+                  <p style={{ margin: "0 0 3px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Content Partners</p>
                   <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Manage creator partnerships and referral codes</p>
                 </div>
               </div>
@@ -7632,7 +7632,7 @@ export function CMS({ onExit, currentUser }) {
         {/* ────── CREATORS SUB-TAB BAR ────── */}
         {tab === "creators" && (
           <div style={{ display: "flex", gap: 6, marginBottom: 28, paddingBottom: 20, borderBottom: "1px solid #e2e8f0" }}>
-            {[{ key: "list", label: "Creators" }, { key: "review", label: `Review Queue${pendingCount > 0 ? ` (${pendingCount})` : ""}` }, { key: "payouts", label: "Payouts" }].map(({ key, label }) => (
+            {[{ key: "list", label: "Content Partners" }, { key: "review", label: `Review Queue${pendingCount > 0 ? ` (${pendingCount})` : ""}` }, { key: "payouts", label: "Payouts" }].map(({ key, label }) => (
               <button key={key} onClick={() => setCreatorsTab(key)} style={{ background: creatorsTab === key ? "rgba(249,115,22,0.08)" : "transparent", border: `1px solid ${creatorsTab === key ? "rgba(249,115,22,0.3)" : "#e2e8f0"}`, borderRadius: 8, padding: "7px 16px", color: creatorsTab === key ? "#ea580c" : "#6b7280", fontSize: 13, fontWeight: creatorsTab === key ? 600 : 400, cursor: "pointer" }}>
                 {label}
               </button>
@@ -7645,9 +7645,9 @@ export function CMS({ onExit, currentUser }) {
           <div style={{ maxWidth: 1600, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28, flexWrap: "wrap" }}>
               <button onClick={() => setCreatorsTab("list")} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 14px", fontSize: 13, color: "#374151", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>← Back</button>
-              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Creators</h2>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Content Partners</h2>
               <span style={{ fontSize: 13, color: "#9ca3af" }}>{creatorsList.length} creator{creatorsList.length !== 1 ? "s" : ""}</span>
-              <button onClick={() => openCreatorModal()} style={{ marginLeft: "auto", background: "#fb923c", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>+ Add Creator</button>
+              <button onClick={() => openCreatorModal()} style={{ marginLeft: "auto", background: "#fb923c", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>+ Add Partner</button>
             </div>
 
             {creatorsLoading ? (
@@ -7701,7 +7701,7 @@ export function CMS({ onExit, currentUser }) {
             {creatorModal && (
               <div onClick={() => setCreatorModal(false)} style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 16, padding: "32px 36px", width: "min(520px,94vw)", fontFamily: "'Space Grotesk',sans-serif", maxHeight: "90vh", overflowY: "auto" }}>
-                  <h3 style={{ margin: "0 0 24px", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>{editingCreator ? "Edit Creator" : "Add Creator"}</h3>
+                  <h3 style={{ margin: "0 0 24px", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>{editingCreator ? "Edit Partner" : "Add Partner"}</h3>
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     {[["Name", "name", "text", "e.g. Jarrad Wright"], ["Email", "email", "email", "creator@email.com"]].map(([label, key, type, ph]) => (
                       <div key={key}>
@@ -7753,7 +7753,7 @@ export function CMS({ onExit, currentUser }) {
                     </div>
                     <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 16 }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                        <label style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6 }}>Creator Agreement</label>
+                        <label style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6 }}>Partner Agreement</label>
                         {creatorForm.agreement_signed_at && (
                           <span style={{ fontSize: 11, background: "rgba(74,222,128,0.1)", color: "#4ade80", border: "1px solid rgba(74,222,128,0.2)", borderRadius: 20, padding: "2px 10px", fontWeight: 700 }}>
                             SIGNED {creatorForm.agreement_signed_at}
@@ -7847,7 +7847,7 @@ export function CMS({ onExit, currentUser }) {
                     )}
                     <button onClick={() => setCreatorModal(false)} style={{ background: "#f1f5f9", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 600, color: "#475569", cursor: "pointer" }}>Cancel</button>
                     <button onClick={saveCreator} disabled={creatorSaving} style={{ background: "#fb923c", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 700, color: "#fff", cursor: "pointer", opacity: creatorSaving ? 0.7 : 1 }}>
-                      {creatorSaving ? "Saving…" : editingCreator ? "Save Changes" : "Add Creator"}
+                      {creatorSaving ? "Saving…" : editingCreator ? "Save Changes" : "Add Partner"}
                     </button>
                   </div>
                 </div>
@@ -7948,7 +7948,7 @@ export function CMS({ onExit, currentUser }) {
                 style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#0f172a", outline: "none", resize: "vertical", boxSizing: "border-box" }} />
               <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
                 <button onClick={() => { setRejectModal(null); setRejectNote(""); }} style={{ flex: 1, background: "#f1f5f9", border: "none", borderRadius: 8, padding: "11px", fontSize: 13, fontWeight: 600, color: "#475569", cursor: "pointer" }}>Cancel</button>
-                <button onClick={() => rejectEpisode(rejectModal, rejectNote)} style={{ flex: 1, background: "#ef4444", border: "none", borderRadius: 8, padding: "11px", fontSize: 13, fontWeight: 700, color: "#fff", cursor: "pointer" }}>Reject & Notify Creator</button>
+                <button onClick={() => rejectEpisode(rejectModal, rejectNote)} style={{ flex: 1, background: "#ef4444", border: "none", borderRadius: 8, padding: "11px", fontSize: 13, fontWeight: 700, color: "#fff", cursor: "pointer" }}>Reject & Notify Partner</button>
               </div>
             </div>
           </div>
@@ -7976,7 +7976,7 @@ export function CMS({ onExit, currentUser }) {
               </button>
               {showPayoutInfo && (
                 <div style={{ marginTop: 12, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px" }}>
-                  <p style={{ margin: "0 0 12px", fontWeight: 700, fontSize: 14, color: "#0f172a" }}>Creator Revenue Share — How It Works</p>
+                  <p style={{ margin: "0 0 12px", fontWeight: 700, fontSize: 14, color: "#0f172a" }}>Content Partner Revenue Share — How It Works</p>
                   <p style={{ margin: "0 0 10px", fontSize: 13, color: "#374151", lineHeight: 1.6 }}>Every month, <strong>50% of Peep's total revenue</strong> goes into a creator pool. Each creator's cut of that pool is based on how much of the platform's total watch time their content drove that month.</p>
                   <p style={{ margin: "0 0 6px", fontSize: 12, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5 }}>Formula</p>
                   <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px", marginBottom: 12, fontFamily: "monospace", fontSize: 12, color: "#374151" }}>
@@ -8057,7 +8057,7 @@ export function CMS({ onExit, currentUser }) {
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                       <thead>
                         <tr style={{ background: "#f8fafc", borderBottom: "1px solid #f1f5f9" }}>
-                          {["Creator", "Watch Time", "Share", "Payout (50%)", "Status", ""].map(h => (
+                          {["Partner", "Watch Time", "Share", "Payout (50%)", "Status", ""].map(h => (
                             <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, whiteSpace: "nowrap" }}>{h}</th>
                           ))}
                         </tr>
@@ -8139,7 +8139,7 @@ export function CMS({ onExit, currentUser }) {
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                       <thead>
                         <tr style={{ background: "#f8fafc", borderBottom: "1px solid #f1f5f9" }}>
-                          {["Month", "Creator", "Watch Time", "Revenue", "Paid Out", "Date Paid"].map(h => (
+                          {["Month", "Partner", "Watch Time", "Revenue", "Paid Out", "Date Paid"].map(h => (
                             <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6 }}>{h}</th>
                           ))}
                         </tr>
