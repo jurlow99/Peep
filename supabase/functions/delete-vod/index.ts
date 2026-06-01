@@ -1,0 +1,56 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, {
+      headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, content-type" },
+    });
+  }
+
+  try {
+    const authHeader = req.headers.get("Authorization") || "";
+    const token = authHeader.replace("Bearer ", "").trim();
+    if (!token) throw new Error("Unauthorized");
+
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SERVICE_ROLE_KEY")!
+    );
+
+    const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
+    if (!user || authErr) throw new Error("Unauthorized");
+
+    const { uid } = await req.json();
+    if (!uid) throw new Error("uid is required");
+
+    // Verify the VOD belongs to this user's stream
+    const { data: stream } = await supabase
+      .from("live_streams")
+      .select("id")
+      .eq("user_id", user.id)
+      .single();
+    if (!stream) throw new Error("Stream not found");
+
+    const cfAccountId = Deno.env.get("CLOUDFLARE_ACCOUNT_ID")!;
+    const cfToken = Deno.env.get("CLOUDFLARE_API_TOKEN")!;
+
+    const res = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${cfAccountId}/stream/${uid}`,
+      { method: "DELETE", headers: { "Authorization": `Bearer ${cfToken}` } }
+    );
+
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(`Cloudflare error: ${JSON.stringify(data.errors)}`);
+    }
+
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+    });
+  } catch (err: any) {
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 400,
+      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+    });
+  }
+});
