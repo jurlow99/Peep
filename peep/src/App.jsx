@@ -1352,59 +1352,59 @@ function HeroBanner({ video, onPlay, isShow, myList, onToggleList, categoryRank 
   function handleTrailerEnded() { doRestartCycle(); }
 
   return (
-    <div style={{ position: "relative", height: "85vh", minHeight: 580, overflow: "hidden" }}>
+    <div style={{ position: "relative", height: isMobile ? "58vh" : "62vh", minHeight: 420, overflow: "hidden" }}>
       {trailerOpen && <TrailerModal url={video.trailer_url} title={video.title} onClose={() => setTrailerOpen(false)} />}
 
-      {/* Thumbnail — fades out when trailer takes over */}
-      <img src={video.thumbnail} alt={video.title} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 20%", filter: "brightness(0.45) saturate(1.15)", transition: "opacity 1.4s ease", opacity: bgPlaying ? 0 : 1 }} />
+      {/* Thumbnail */}
+      <img src={video.thumbnail} alt={video.title} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 20%", filter: "brightness(0.65) saturate(1.2)", transition: "opacity 1.4s ease", opacity: bgPlaying ? 0 : 1 }} />
 
       {/* Background autoplay trailer */}
       {hasBgTrailer && (
         <video ref={videoRef} src={video.trailer_url} autoPlay muted playsInline onEnded={handleTrailerEnded}
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 20%", filter: "brightness(0.5)", transition: "opacity 1.4s ease", opacity: bgPlaying ? 1 : 0, pointerEvents: "none" }} />
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 20%", filter: "brightness(0.65)", transition: "opacity 1.4s ease", opacity: bgPlaying ? 1 : 0, pointerEvents: "none" }} />
       )}
 
-      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, #0a0a0a 0%, rgba(10,10,10,0.25) 45%, transparent 70%)" }} />
-      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, rgba(10,10,10,0.92) 0%, rgba(10,10,10,0.45) 50%, transparent 80%)" }} />
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, #0a0a0a 0%, rgba(10,10,10,0.2) 50%, transparent 75%)" }} />
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, rgba(10,10,10,0.85) 0%, rgba(10,10,10,0.3) 55%, transparent 85%)" }} />
 
-      <div style={{ position: "absolute", bottom: isMobile ? "10%" : "14%", left: PAD, right: PAD, maxWidth: isMobile ? "100%" : "clamp(460px, 40vw, 680px)", zIndex: 3 }}>
-        <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap", alignItems: "center" }}>
-          {isShow
-            ? <span style={{ background: "rgba(147,197,253,0.12)", border: "1px solid rgba(147,197,253,0.25)", color: "#93c5fd", fontSize: 12, fontWeight: 700, padding: "5px 13px", borderRadius: 4, letterSpacing: 1.5, textTransform: "uppercase" }}>Series</span>
-            : video.category && <span style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.6)", fontSize: 12, fontWeight: 700, padding: "5px 13px", borderRadius: 4, letterSpacing: 1.5, textTransform: "uppercase" }}>{video.category}</span>
-          }
-          {video.category && categoryRank && <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 15 }}>#{categoryRank} in {video.category}</span>}
+      <div style={{ position: "absolute", bottom: isMobile ? "12%" : "16%", left: PAD, right: PAD, maxWidth: isMobile ? "100%" : "clamp(400px, 38vw, 600px)", zIndex: 3 }}>
+
+        {/* Featured label */}
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "rgba(250,204,21,0.12)", border: "1px solid rgba(250,204,21,0.3)", borderRadius: 20, padding: "5px 14px", marginBottom: 16 }}>
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#facc15", flexShrink: 0 }} />
+          <span style={{ fontSize: 11, fontWeight: 700, color: "#facc15", letterSpacing: 1.2, textTransform: "uppercase" }}>
+            {isShow ? "Featured Series" : video.category === "podcast" ? "Featured Podcast" : "Featured"}
+          </span>
         </div>
 
-        <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: "clamp(42px, 5.5vw, 84px)", lineHeight: 1.05, margin: "0 0 18px", fontWeight: 400, letterSpacing: "-0.02em" }}>{video.title}</h1>
+        <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: "clamp(32px, 4vw, 60px)", lineHeight: 1.1, margin: "0 0 12px", fontWeight: 800, letterSpacing: "-0.02em" }}>{video.title}</h1>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20, flexWrap: "wrap" }}>
-          {video.score && <span style={{ color: "#6ee7b7", fontSize: 15, fontWeight: 600 }}>{video.score}% Match</span>}
-          {video.year && <span style={{ color: "rgba(255,255,255,0.38)", fontSize: 15 }}>{video.year}</span>}
-          {video.rating && <span style={{ border: "1px solid rgba(255,255,255,0.18)", color: "rgba(255,255,255,0.38)", fontSize: 13, padding: "3px 9px", borderRadius: 3, letterSpacing: 0.3 }}>{video.rating}</span>}
-          {video.duration && <span style={{ color: "rgba(255,255,255,0.38)", fontSize: 15 }}>{video.duration}</span>}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+          {isShow && <span style={{ fontSize: 13, fontWeight: 600, color: "#facc15" }}>Series</span>}
+          {video.year && <span style={{ color: "rgba(255,255,255,0.45)", fontSize: 13 }}>{video.year}</span>}
+          {video.rating && <span style={{ border: "1px solid rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.45)", fontSize: 12, padding: "2px 8px", borderRadius: 3 }}>{video.rating}</span>}
+          {video.category && !isShow && <span style={{ color: "rgba(255,255,255,0.45)", fontSize: 13, textTransform: "capitalize" }}>{video.category}</span>}
         </div>
 
         {video.description && (
-          <p style={{ fontSize: 17, color: "rgba(255,255,255,0.58)", lineHeight: 1.7, margin: "0 0 36px", display: "-webkit-box", WebkitLineClamp: isMobile ? 2 : 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+          <p style={{ fontSize: 15, color: "rgba(255,255,255,0.6)", lineHeight: 1.65, margin: "0 0 28px", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
             {video.description}
           </p>
         )}
 
-        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <button onClick={() => onPlay(video)}
-            style={{ background: "#fff", color: "#0a0a0a", border: "none", borderRadius: 8, padding: isMobile ? "13px 26px" : "15px 34px", fontSize: isMobile ? 15 : 16, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 9, letterSpacing: "0.01em", transition: "background 0.15s, transform 0.15s" }}
-            onMouseEnter={e => { e.currentTarget.style.background = "#e8e8e8"; e.currentTarget.style.transform = "translateY(-1px)"; }}
-            onMouseLeave={e => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.transform = "none"; }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="6,3 20,12 6,21" /></svg>
+            style={{ background: "#facc15", color: "#0a0a0a", border: "none", borderRadius: 8, padding: isMobile ? "11px 22px" : "12px 28px", fontSize: isMobile ? 14 : 15, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, transition: "opacity 0.15s, transform 0.15s" }}
+            onMouseEnter={e => { e.currentTarget.style.opacity = "0.88"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+            onMouseLeave={e => { e.currentTarget.style.opacity = "1"; e.currentTarget.style.transform = "none"; }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="6,3 20,12 6,21" /></svg>
             {isShow ? "Watch Now" : "Play"}
           </button>
           {video.trailer_url && (
             <button onClick={() => setTrailerOpen(true)}
-              style={{ background: "rgba(255,255,255,0.08)", backdropFilter: "blur(8px)", color: "rgba(255,255,255,0.85)", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 8, padding: "15px 28px", fontSize: 16, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 9, transition: "background 0.15s" }}
-              onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.14)"}
-              onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.08)"}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="10,8 16,12 10,16" fill="currentColor" stroke="none" /></svg>
+              style={{ background: "rgba(255,255,255,0.1)", backdropFilter: "blur(8px)", color: "#fff", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 8, padding: isMobile ? "11px 18px" : "12px 22px", fontSize: isMobile ? 14 : 15, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, transition: "background 0.15s" }}
+              onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.18)"}
+              onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}>
               Trailer
             </button>
           )}
@@ -1413,11 +1413,11 @@ function HeroBanner({ video, onPlay, isShow, myList, onToggleList, categoryRank 
             const inList = myList?.[`${type}_${video.id}`];
             return (
               <button onClick={() => onToggleList?.(video.id, type)}
-                style={{ background: "rgba(255,255,255,0.08)", backdropFilter: "blur(8px)", color: inList ? "#facc15" : "rgba(255,255,255,0.85)", border: `1px solid ${inList ? "rgba(250,204,21,0.35)" : "rgba(255,255,255,0.14)"}`, borderRadius: 8, padding: "15px 28px", fontSize: 16, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 9, transition: "background 0.15s" }}
-                onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.14)"}
-                onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.08)"}>
+                style={{ background: "transparent", color: inList ? "#facc15" : "rgba(255,255,255,0.6)", border: "none", padding: isMobile ? "11px 4px" : "12px 4px", fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 7, transition: "color 0.15s" }}
+                onMouseEnter={e => e.currentTarget.style.color = inList ? "#facc15" : "#fff"}
+                onMouseLeave={e => e.currentTarget.style.color = inList ? "#facc15" : "rgba(255,255,255,0.6)"}>
                 {inList
-                  ? <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>My List</>
+                  ? <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>Saved</>
                   : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>My List</>
                 }
               </button>
@@ -1429,10 +1429,10 @@ function HeroBanner({ video, onPlay, isShow, myList, onToggleList, categoryRank 
       {/* Mute / unmute */}
       {bgPlaying && hasBgTrailer && (
         <button onClick={() => setMuted(m => !m)}
-          style={{ position: "absolute", bottom: isMobile ? "calc(50% + 20px)" : "14%", right: 24, background: "rgba(0,0,0,0.45)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff", zIndex: 10 }}>
+          style={{ position: "absolute", bottom: 20, right: 24, background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "50%", width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff", zIndex: 10 }}>
           {muted
-            ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><line x1="23" y1="9" x2="17" y2="15" /><line x1="17" y1="9" x2="23" y2="15" /></svg>
-            : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" /></svg>
+            ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><line x1="23" y1="9" x2="17" y2="15" /><line x1="17" y1="9" x2="23" y2="15" /></svg>
+            : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" /></svg>
           }
         </button>
       )}
