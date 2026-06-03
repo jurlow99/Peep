@@ -6347,7 +6347,7 @@ export function CMS({ onExit, currentUser }) {
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <FieldInput label="Title *" value={form.title} onChange={v => setForm(f => ({ ...f, title: v }))} placeholder="e.g. Metropolis" />
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                      <FieldSelect label="Category" value={form.category} onChange={v => setForm(f => ({ ...f, category: v }))} options={categories} />
+                      <FieldCombo label="Category" value={form.category} onChange={v => setForm(f => ({ ...f, category: v }))} options={categories} />
                       <FieldSelect label="Rating" value={form.rating} onChange={v => setForm(f => ({ ...f, rating: v }))} options={["NR", "G", "PG", "PG-13", "R"]} />
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
@@ -6408,7 +6408,7 @@ export function CMS({ onExit, currentUser }) {
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <FieldInput label="Title *" value={showForm.title} onChange={v => setShowForm(f => ({ ...f, title: v }))} placeholder="e.g. The Twilight Zone" />
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                      <FieldSelect label="Category" value={showForm.category} onChange={v => setShowForm(f => ({ ...f, category: v }))} options={["Strange", "Conspiracy", "Space", "Paranormal", "Animation", "Comedy", "Documentary", "Found Footage", "Cult", "Experimental", "Public Access", "Horror"]} />
+                      <FieldCombo label="Category" value={showForm.category} onChange={v => setShowForm(f => ({ ...f, category: v }))} options={categories} />
                       <FieldSelect label="Rating" value={showForm.rating} onChange={v => setShowForm(f => ({ ...f, rating: v }))} options={["NR", "G", "PG", "PG-13", "R"]} />
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -8427,6 +8427,29 @@ function FieldInput({ label, value, onChange, placeholder, type = "text" }) {
         onFocus={e => (e.target.style.borderColor = "#4f46e5")}
         onBlur={e => (e.target.style.borderColor = "#e2e8f0")}
       />
+    </div>
+  );
+}
+
+function FieldCombo({ label, value, onChange, options, placeholder }) {
+  const id = `combo-${label.replace(/\s+/g, "-").toLowerCase()}`;
+  return (
+    <div>
+      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>
+        {label}
+      </label>
+      <input
+        list={id}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder || "Type or pick..."}
+        style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+        onFocus={e => e.target.style.borderColor = "#4f46e5"}
+        onBlur={e => e.target.style.borderColor = "#e2e8f0"}
+      />
+      <datalist id={id}>
+        {options.map(o => <option key={o} value={o} />)}
+      </datalist>
     </div>
   );
 }
