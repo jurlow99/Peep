@@ -1751,7 +1751,18 @@ export function CMS({ onExit, currentUser }) {
       url: row.url ?? "",
       trailer_url: row.trailer_url ?? "",
       description: row.description ?? "",
-      tags: Array.isArray(row.tags) ? row.tags.join(", ") : (row.tags ?? ""),
+      tags: (() => {
+        if (!row.tags) return "";
+        if (Array.isArray(row.tags)) {
+          // Filter out any elements that are themselves arrays/objects (corrupted)
+          const clean = row.tags.filter(t => typeof t === "string" && !t.startsWith("[") && !t.startsWith("{"));
+          return clean.join(", ");
+        }
+        if (typeof row.tags === "string") {
+          try { const p = JSON.parse(row.tags); if (Array.isArray(p)) return p.filter(t => typeof t === "string" && !t.startsWith("[")).join(", "); } catch {}
+        }
+        return "";
+      })(),
     });
   }
 
@@ -1767,9 +1778,18 @@ export function CMS({ onExit, currentUser }) {
       score: form.score !== "" ? Number(form.score) : null,
       year: form.year !== "" ? Number(form.year) : null,
       trailer_url: form.trailer_url.trim() || null,
-      tags: form.tags
-        ? form.tags.split(",").map(t => t.trim()).filter(Boolean)
-        : [],
+      tags: (() => {
+        const raw = form.tags.trim();
+        if (!raw) return [];
+        // If it looks like JSON, try to parse it rather than splitting blindly
+        if (raw.startsWith("[")) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) return parsed.filter(t => typeof t === "string" && t.trim()).map(t => t.trim());
+          } catch {}
+        }
+        return raw.split(",").map(t => t.trim()).filter(Boolean);
+      })(),
     };
   }
 
