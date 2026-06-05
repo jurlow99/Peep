@@ -21,90 +21,94 @@ const CATEGORY_LABELS = {
 };
 
 function StreamCard({ stream, viewers, isLive, isFollowing, onToggleFollow, user }) {
+  const [hovered, setHovered] = useState(false);
   const slug = stream.username || (stream.channel_name || stream.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
   const count = viewers || 0;
   const viewerLabel = count >= 1000 ? `${(count / 1000).toFixed(1)}k` : String(count);
+  const avatar = stream.profile_picture || stream.avatar_url;
+  const initial = (stream.channel_name || stream.title || "?")[0].toUpperCase();
 
   return (
-    <div style={{ position: "relative" }}>
-      <a href={`/stream/${slug}`} style={{ textDecoration: "none", color: "inherit", display: "block" }}
-        onMouseEnter={e => e.currentTarget.querySelector(".card-thumb").style.transform = "scale(1.03)"}
-        onMouseLeave={e => e.currentTarget.querySelector(".card-thumb").style.transform = "scale(1)"}>
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{ borderRadius: 12, overflow: "hidden", background: "#0f0f0f", border: `1px solid ${hovered ? "#2a2a2a" : "#161616"}`, transition: "border-color 0.15s" }}
+    >
+      <a href={`/stream/${slug}`} style={{ textDecoration: "none", color: "inherit", display: "block" }}>
 
         {/* Thumbnail */}
-        <div style={{ position: "relative", aspectRatio: "16/9", borderRadius: 10, overflow: "hidden", background: "#111", marginBottom: 10 }}>
-          <div className="card-thumb" style={{ width: "100%", height: "100%", transition: "transform 0.2s ease" }}>
+        <div style={{ position: "relative", aspectRatio: "16/9", overflow: "hidden", background: "#111" }}>
+          <div style={{ width: "100%", height: "100%", transition: "transform 0.25s ease", transform: hovered ? "scale(1.03)" : "scale(1)" }}>
             {stream.thumbnail || stream.hero_image
               ? <img src={stream.thumbnail || stream.hero_image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="rgba(255,255,255,0.15)"><path d="M17 10.5V7a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h12a1 1 0 001-1v-3.5l4 4v-11l-4 4z"/></svg>
+              : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <svg width="36" height="36" viewBox="0 0 24 24" fill="rgba(255,255,255,0.1)"><path d="M17 10.5V7a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h12a1 1 0 001-1v-3.5l4 4v-11l-4 4z"/></svg>
                 </div>
             }
           </div>
 
-          {/* Live / Offline badge */}
-          {!isLive && (
-            <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)" }} />
-          )}
+          {!isLive && <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)" }} />}
+
+          {/* Status badge */}
           {isLive ? (
-            <div style={{ position: "absolute", top: 8, left: 8, display: "flex", alignItems: "center", gap: 5, background: "#ef4444", borderRadius: 5, padding: "3px 8px" }}>
+            <div style={{ position: "absolute", top: 10, left: 10, display: "flex", alignItems: "center", gap: 5, background: "#ef4444", borderRadius: 5, padding: "3px 9px" }}>
               <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#fff", animation: "livepulse 1.5s infinite" }} />
               <span style={{ fontSize: 10, fontWeight: 800, color: "#fff", letterSpacing: 0.8 }}>LIVE</span>
             </div>
           ) : (
-            <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(0,0,0,0.6)", borderRadius: 5, padding: "3px 8px", border: "1px solid rgba(255,255,255,0.08)" }}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: "#888", letterSpacing: 0.8 }}>OFFLINE</span>
+            <div style={{ position: "absolute", top: 10, left: 10, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)", borderRadius: 5, padding: "3px 9px", border: "1px solid rgba(255,255,255,0.07)" }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: "#666", letterSpacing: 0.8 }}>OFFLINE</span>
             </div>
+          )}
+
+          {/* Follow button — inside thumbnail, top right */}
+          {user && user.id !== stream.user_id && (
+            <button
+              onClick={e => { e.preventDefault(); e.stopPropagation(); onToggleFollow(stream.id); }}
+              style={{
+                position: "absolute", top: 10, right: 10,
+                background: isFollowing ? "rgba(250,204,21,0.85)" : "rgba(0,0,0,0.6)",
+                backdropFilter: "blur(6px)",
+                border: `1px solid ${isFollowing ? "transparent" : "rgba(255,255,255,0.15)"}`,
+                borderRadius: 6, padding: "4px 11px",
+                color: isFollowing ? "#0a0a0a" : "#ddd",
+                fontSize: 11, fontWeight: 700, cursor: "pointer", transition: "all 0.15s",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {isFollowing ? "Following" : "+ Follow"}
+            </button>
           )}
 
           {/* Viewer count */}
           {isLive && count > 0 && (
-            <div style={{ position: "absolute", bottom: 8, right: 8, background: "rgba(0,0,0,0.75)", borderRadius: 5, padding: "3px 8px", display: "flex", alignItems: "center", gap: 4 }}>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="rgba(255,255,255,0.7)"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5z"/></svg>
-              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.85)", fontWeight: 600 }}>{viewerLabel}</span>
+            <div style={{ position: "absolute", bottom: 10, right: 10, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)", borderRadius: 5, padding: "3px 8px", display: "flex", alignItems: "center", gap: 4 }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="rgba(255,255,255,0.6)"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5z"/></svg>
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.8)", fontWeight: 600 }}>{viewerLabel}</span>
             </div>
           )}
         </div>
 
         {/* Info */}
-        <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-          <div style={{ width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: "#fff" }}>
-            {(stream.channel_name || stream.title || "?")[0].toUpperCase()}
+        <div style={{ display: "flex", gap: 11, alignItems: "flex-start", padding: "12px 14px 14px" }}>
+          <div style={{ width: 38, height: 38, borderRadius: "50%", flexShrink: 0, overflow: "hidden", background: "linear-gradient(135deg, #1e1b4b, #4c1d95)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700, color: "#fff" }}>
+            {avatar ? <img src={avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : initial}
           </div>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 700, color: isLive ? "#fff" : "#888", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div style={{ minWidth: 0, flex: 1, paddingTop: 1 }}>
+            <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 600, color: isLive ? "#fff" : "#777", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.3 }}>
               {stream.stream_title || stream.channel_name || stream.title}
             </p>
-            <p style={{ margin: "0 0 4px", fontSize: 12, color: "#555", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <p style={{ margin: "0 0 6px", fontSize: 12, color: "#444", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {stream.channel_name || stream.title}
             </p>
             {stream.category && stream.category !== "general" && (
-              <span style={{ fontSize: 11, color: "#555", background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 4, padding: "2px 7px" }}>
+              <span style={{ fontSize: 11, color: "#666", background: "rgba(255,255,255,0.05)", border: "1px solid #222", borderRadius: 4, padding: "2px 8px" }}>
                 {CATEGORY_LABELS[stream.category] || stream.category}
               </span>
             )}
           </div>
         </div>
       </a>
-
-      {/* Follow button — absolutely positioned so it doesn't block the link */}
-      {user && user.id !== stream.user_id && (
-        <button
-          onClick={e => { e.preventDefault(); e.stopPropagation(); onToggleFollow(stream.id); }}
-          style={{
-            position: "absolute", top: 46, right: 0,
-            background: isFollowing ? "rgba(250,204,21,0.12)" : "rgba(255,255,255,0.06)",
-            border: `1px solid ${isFollowing ? "rgba(250,204,21,0.3)" : "rgba(255,255,255,0.1)"}`,
-            borderRadius: 6, padding: "4px 10px", color: isFollowing ? "#facc15" : "#888",
-            fontSize: 11, fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
-            whiteSpace: "nowrap",
-          }}
-          onMouseEnter={e => { if (!isFollowing) { e.currentTarget.style.color = "#fff"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.25)"; } }}
-          onMouseLeave={e => { if (!isFollowing) { e.currentTarget.style.color = "#888"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"; } }}
-        >
-          {isFollowing ? "Following" : "+ Follow"}
-        </button>
-      )}
     </div>
   );
 }
@@ -280,7 +284,7 @@ export function LiveTVPage({ streams, user, streamsLoading }) {
         {/* Offline channels section */}
         {filteredOffline.length > 0 && (
           <div>
-            <p style={{ margin: "0 0 16px", fontSize: 11, fontWeight: 700, color: "#3a3a4a", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+            <p style={{ margin: "0 0 16px", fontSize: 11, fontWeight: 700, color: "#555", letterSpacing: "0.12em", textTransform: "uppercase" }}>
               {liveStreams.length > 0 ? "Other Channels" : "All Channels"}
             </p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 24 }}>
@@ -294,7 +298,7 @@ export function LiveTVPage({ streams, user, streamsLoading }) {
         {/* Upcoming schedule */}
         {schedule.length > 0 && (
           <div style={{ marginTop: 64 }}>
-            <p style={{ margin: "0 0 16px", fontSize: 11, fontWeight: 700, color: "#3a3a4a", letterSpacing: "0.12em", textTransform: "uppercase" }}>Coming Up</p>
+            <p style={{ margin: "0 0 16px", fontSize: 11, fontWeight: 700, color: "#555", letterSpacing: "0.12em", textTransform: "uppercase" }}>Coming Up</p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 10 }}>
               {schedule.map(s => {
                 const d = new Date(s.scheduled_at);
