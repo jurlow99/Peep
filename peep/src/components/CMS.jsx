@@ -1424,7 +1424,7 @@ export function CMS({ onExit, currentUser }) {
       supabase.from("shows").select("*", { count: "exact", head: true }),
       supabase.from("episodes").select("*", { count: "exact", head: true }),
       supabase.from("watch_progress").select("user_id, content_id, content_type, completed, progress_seconds, duration_seconds, last_watched_at"),
-      supabase.from("ratings").select("user_id, content_id, rating"),
+      supabase.from("ratings").select("user_id, content_id, content_type, rating"),
       supabase.from("user_list").select("user_id, content_id, content_type"),
       supabase.from("profiles").select("id, username, email, created_at").order("created_at", { ascending: true }),
       supabase.from("videos").select("id, category"),
@@ -1442,12 +1442,13 @@ export function CMS({ onExit, currentUser }) {
       watchTimeMap[key] = (watchTimeMap[key] || 0) + secs;
       totalWatchSeconds += secs;
     });
+    const parseId = (type, id) => type === "movie" ? id : parseInt(id);
     const topWatchedRaw = Object.entries(watchMap)
       .sort((a, b) => b[1] - a[1]).slice(0, 10)
-      .map(([key, count]) => { const [type, id] = key.split(":"); return { type, id: parseInt(id), count }; });
+      .map(([key, count]) => { const [type, ...rest] = key.split(":"); const id = rest.join(":"); return { type, id: parseId(type, id), count }; });
     const topByTimeRaw = Object.entries(watchTimeMap)
       .sort((a, b) => b[1] - a[1]).slice(0, 10)
-      .map(([key, secs]) => { const [type, id] = key.split(":"); return { type, id: parseInt(id), secs }; });
+      .map(([key, secs]) => { const [type, ...rest] = key.split(":"); const id = rest.join(":"); return { type, id: parseId(type, id), secs }; });
 
     // Build raw rated + saved before title fetch so all IDs are included
     // Cross-reference content_type from watch_progress since ratings table may not have it
@@ -1455,7 +1456,7 @@ export function CMS({ onExit, currentUser }) {
     (watchData || []).forEach(w => { if (w.content_id && w.content_type) watchTypeMap[w.content_id] = w.content_type; });
     const ratingMap = {};
     (ratingsData || []).forEach(r => {
-      if (r.rating === 1) {
+      if (r.rating >= 4) {
         const ctype = r.content_type || watchTypeMap[r.content_id] || null;
         if (!ctype) return;
         const key = `${ctype}:${r.content_id}`;
@@ -1464,23 +1465,23 @@ export function CMS({ onExit, currentUser }) {
     });
     const topRatedRaw = Object.entries(ratingMap)
       .sort((a, b) => b[1] - a[1]).slice(0, 10)
-      .map(([key, count]) => { const [type, id] = key.split(":"); return { type, id: parseInt(id), count }; });
+      .map(([key, count]) => { const [type, ...rest] = key.split(":"); const id = rest.join(":"); return { type, id: parseId(type, id), count }; });
 
     const saveMap = {};
     (listData || []).forEach(s => { const key = `${s.content_type}:${s.content_id}`; saveMap[key] = (saveMap[key] || 0) + 1; });
     const topSavedRaw = Object.entries(saveMap).sort((a, b) => b[1] - a[1]).slice(0, 10)
-      .map(([key, count]) => { const [type, id] = key.split(":"); return { type, id: parseInt(id), count }; });
+      .map(([key, count]) => { const [type, ...rest] = key.split(":"); const id = rest.join(":"); return { type, id: parseId(type, id), count }; });
 
     // Unified title fetch — covers all four panels and all content types
     const allItems = [...topWatchedRaw, ...topByTimeRaw, ...topRatedRaw, ...topSavedRaw];
-    const allKeys = [...new Set(allItems.map(t => `${t.type}:${t.id}`))];
-    const idsFor = (prefix) => allKeys.filter(k => k.startsWith(prefix + ":")).map(k => parseInt(k.split(":")[1]));
-    const allEpIds = [...new Set((watchData || []).filter(w => w.content_type === "episode").map(w => w.content_id))];
+    // movies use UUID strings; episodes/shows/podcasts use bigint
+    const idsForStr = (prefix) => [...new Set(allItems.filter(t => t.type === prefix).map(t => t.id))];
+    const allEpIds = [...new Set((watchData || []).filter(w => w.content_type === "episode").map(w => parseInt(w.content_id)))].filter(Boolean);
     const [movTitles, epTitles, podEpTitles, showTitles, epShowRes] = await Promise.all([
-      idsFor("movie").length ? supabase.from("videos").select("id, title").in("id", idsFor("movie")) : { data: [] },
-      idsFor("episode").length ? supabase.from("episodes").select("id, title").in("id", idsFor("episode")) : { data: [] },
-      idsFor("podcast_episode").length ? supabase.from("podcast_episodes").select("id, title").in("id", idsFor("podcast_episode")) : { data: [] },
-      idsFor("show").length ? supabase.from("shows").select("id, title").in("id", idsFor("show")) : { data: [] },
+      idsForStr("movie").length ? supabase.from("videos").select("id, title").in("id", idsForStr("movie")) : { data: [] },
+      idsForStr("episode").length ? supabase.from("episodes").select("id, title").in("id", idsForStr("episode")) : { data: [] },
+      idsForStr("podcast_episode").length ? supabase.from("podcast_episodes").select("id, title").in("id", idsForStr("podcast_episode")) : { data: [] },
+      idsForStr("show").length ? supabase.from("shows").select("id, title").in("id", idsForStr("show")) : { data: [] },
       allEpIds.length ? supabase.from("episodes").select("id, show_id").in("id", allEpIds) : { data: [] },
     ]);
     const titleMap = {};
