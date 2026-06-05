@@ -142,15 +142,27 @@ export function StreamerDashboard() {
   };
 
   useEffect(() => {
+    // Only auto-restore if the user signed in during this browser session
+    const activeThisSession = sessionStorage.getItem("streamer_session_active");
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user) loadAll(session.user.id);
-      else setLoading(false);
+      if (session?.user && activeThisSession) {
+        setUser(session.user);
+        loadAll(session.user.id);
+      } else {
+        setLoading(false);
+      }
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) loadAll(session.user.id);
-      else { setStream(null); setLoading(false); }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" && session?.user) {
+        sessionStorage.setItem("streamer_session_active", "1");
+        setUser(session.user);
+        loadAll(session.user.id);
+      } else if (event === "SIGNED_OUT") {
+        sessionStorage.removeItem("streamer_session_active");
+        setUser(null);
+        setStream(null);
+        setLoading(false);
+      }
     });
     return () => subscription.unsubscribe();
   }, []);
