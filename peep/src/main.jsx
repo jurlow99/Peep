@@ -8,7 +8,7 @@ import { StreamerSignInPage } from './pages/AuthPages.jsx'
 import { SetPasswordPage } from './pages/SetPasswordPage.jsx'
 import { StreamerDashboard } from './pages/StreamerDashboard.jsx'
 import { ApplyToStreamPage } from './pages/ApplyToStreamPage.jsx'
-import StreamerProfile from './pages/StreamerProfile.jsx'
+import { StreamerProfile } from './pages/StreamerProfile.jsx'
 
 const path = window.location.pathname
 
