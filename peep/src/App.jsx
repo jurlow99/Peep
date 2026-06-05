@@ -60,7 +60,7 @@ export default function App() {
   const userIdRef = useRef(null);
   const [subscription, setSubscription] = useState(null);
   const [subChecked, setSubChecked] = useState(false);
-  const [isStreamer, setIsStreamer] = useState(false);
+  const [streamRecord, setStreamRecord] = useState(null);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [passwordRecovery, setPasswordRecovery] = useState(() => {
     // Catch invite links — Supabase puts type=invite in the hash; must read it before Supabase clears it
@@ -133,6 +133,13 @@ export default function App() {
       .eq("email", user.email.toLowerCase()).eq("status", "active").maybeSingle()
       .then(({ data }) => setCreatorRecord(data ?? null));
   }, [user?.email, userRole]);
+
+  // Check if signed-in user is a streamer (for Streamer Dashboard link in profile menu)
+  useEffect(() => {
+    if (!user?.id) { setStreamRecord(null); return; }
+    supabase.from("live_streams").select("id, channel_name, username").eq("user_id", user.id).maybeSingle()
+      .then(({ data }) => setStreamRecord(data ?? null));
+  }, [user?.id]);
 
   // Load saved profile from localStorage when user is known
   useEffect(() => {
@@ -274,7 +281,7 @@ export default function App() {
     return <PaywallPage user={user} onSubscribed={() => window.location.href = "/?subscribed=1"} onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }} />;
   }
 
-  const profileScreenEl = profileOpen && <ProfileScreen user={user} activeProfile={activeProfile} onClose={() => setProfileOpen(false)} onAvatarChange={id => setUserAvatarId(id)} onProfileUpdate={updated => { setActiveProfile(updated); localStorage.setItem(`peep_profile_${user.id}`, JSON.stringify(updated)); }} onSwitchProfile={switchProfile} onViewProfile={() => { setProfileOpen(false); setPage("profile"); }} onOpenSettings={() => { setProfileOpen(false); setPage("settings"); }} onCreatorDash={creatorRecord ? () => { setProfileOpen(false); setPage("creator"); } : null} />;
+  const profileScreenEl = profileOpen && <ProfileScreen user={user} activeProfile={activeProfile} onClose={() => setProfileOpen(false)} onAvatarChange={id => setUserAvatarId(id)} onProfileUpdate={updated => { setActiveProfile(updated); localStorage.setItem(`peep_profile_${user.id}`, JSON.stringify(updated)); }} onSwitchProfile={switchProfile} onViewProfile={() => { setProfileOpen(false); setPage("profile"); }} onOpenSettings={() => { setProfileOpen(false); setPage("settings"); }} onCreatorDash={creatorRecord ? () => { setProfileOpen(false); setPage("creator"); } : null} onStreamerDash={streamRecord ? () => { window.location.href = "/streamer"; } : null} />;
 
   if (page === "player" && selectedVideo) {
     const isLiveVideo = selectedVideo._type === "live" || selectedVideo._type === "live_epg";

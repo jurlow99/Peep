@@ -22,7 +22,7 @@ export function avatarForId(id) {
   return PRESET_AVATARS.find(a => a.id === id) ?? null;
 }
 
-export function ProfileScreen({ user, activeProfile, onClose, onAvatarChange, onProfileUpdate, onSwitchProfile, onViewProfile, onOpenSettings, onCreatorDash }) {
+export function ProfileScreen({ user, activeProfile, onClose, onAvatarChange, onProfileUpdate, onSwitchProfile, onViewProfile, onOpenSettings, onCreatorDash, onStreamerDash }) {
   const [profile, setProfile] = useState(null);
   const [savedAvatar, setSavedAvatar] = useState(null);
   const [selectedAvatar, setSelectedAvatar] = useState(null);
@@ -123,6 +123,14 @@ export function ProfileScreen({ user, activeProfile, onClose, onAvatarChange, on
 
         {/* Actions */}
         <div style={{ padding: "24px", borderTop: "1px solid #1a1a1a", flexShrink: 0, display: "flex", flexDirection: "column", gap: 10, marginTop: "auto" }}>
+          {onStreamerDash && (
+            <button onClick={() => { onClose(); onStreamerDash(); }}
+              style={{ width: "100%", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 10, padding: "12px", color: "#ef4444", fontSize: 14, fontWeight: 600, cursor: "pointer", transition: "background 0.15s", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+              onMouseEnter={e => e.currentTarget.style.background = "rgba(239,68,68,0.14)"}
+              onMouseLeave={e => e.currentTarget.style.background = "rgba(239,68,68,0.08)"}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49"/><path d="M7.76 7.76a6 6 0 0 0 0 8.49"/></svg> Streamer Dashboard
+            </button>
+          )}
           {onCreatorDash && (
             <button onClick={() => { onClose(); onCreatorDash(); }}
               style={{ width: "100%", background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.3)", borderRadius: 10, padding: "12px", color: "#facc15", fontSize: 14, fontWeight: 600, cursor: "pointer", transition: "background 0.15s", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
