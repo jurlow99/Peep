@@ -7,6 +7,7 @@ import { PaywallPage } from "./pages/PaywallPage";
 import { ProfileScreen, avatarForId, PRESET_AVATARS } from "./components/ProfileScreen";
 import { ProfileSelect } from "./components/ProfileSelect";
 import { CreatorDashboard } from "./pages/CreatorDashboard";
+import { LiveTVPage } from "./pages/LiveTV";
 
 class PlayerErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null }; }
@@ -1123,11 +1124,19 @@ function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggl
         </div>
       )}
 
-      {/* Content rows (Home) */}
-      {activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "My List" && activeNav !== "Podcasts" && !loading && (allContent.length > 0 || continueWatching.length > 0) && (
+      {/* Streams tab */}
+      {activeNav === "Streams" && !loading && (
+        <LiveTVPage streams={liveStreams} user={user} streamsLoading={loading} />
+      )}
+
+      {/* Content rows (Home / Movies / Series / My List) */}
+      {activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "My List" && activeNav !== "Podcasts" && activeNav !== "Streams" && !loading && (allContent.length > 0 || continueWatching.length > 0) && (
         <div style={{ position: "relative", zIndex: 1, marginTop: 0, paddingBottom: 80 }}>
           {continueWatching.length > 0 && activeNav === "Home" && (
             <ContinueWatchingRow items={continueWatching} onPlay={onPlay} onRemove={handleRemoveCW} />
+          )}
+          {activeNav === "Home" && liveStreams.filter(s => s.is_live).length > 0 && (
+            <LiveSection streams={liveStreams.filter(s => s.is_live)} onPlay={onPlay} />
           )}
           {filteredContent.length === 0 ? (
             <div style={{ padding: "100px 0", textAlign: "center", color: "#444", fontSize: 15 }}>
