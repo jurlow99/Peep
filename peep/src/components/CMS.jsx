@@ -1902,7 +1902,20 @@ export function CMS({ onExit, currentUser }) {
       pages: carousel.pages ?? "home",
     });
     if (carousel.type === "handpicked") {
-      try { setHandpickedSelected(JSON.parse(carousel.filter_value || "[]")); } catch { setHandpickedSelected([]); }
+      try {
+        const stored = JSON.parse(carousel.filter_value || "[]");
+        const pool = [
+          ...rows.map(v => ({ id: v.id, type: "movie", title: v.title, subtitle: v.category, thumbnail: v.poster || v.thumbnail })),
+          ...showsList.map(s => ({ id: s.id, type: "show", title: s.title, subtitle: "Series", thumbnail: s.poster || s.thumbnail })),
+          ...musicVideosList.map(mv => ({ id: mv.id, type: "music_video", title: mv.title, subtitle: mv.artist, thumbnail: mv.thumbnail || mv.poster })),
+          ...songsList.map(s => ({ id: s.id, type: "song", title: s.title, subtitle: s.artist, thumbnail: s.thumbnail })),
+        ];
+        const enriched = stored.map(({ id, type }) => {
+          const found = pool.find(p => p.id === id && p.type === type);
+          return found ?? { id, type, title: "", thumbnail: null };
+        });
+        setHandpickedSelected(enriched);
+      } catch { setHandpickedSelected([]); }
     } else {
       setHandpickedSelected([]);
     }
