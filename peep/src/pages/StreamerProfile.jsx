@@ -410,7 +410,7 @@ export function StreamerProfile() {
     );
   }
 
-  const channelName = stream.channel_name || stream.title;
+  const channelName = stream.channel_name || stream.title || "Unnamed Channel";
   const avatarLetter = channelName[0]?.toUpperCase() || "?";
 
   const FollowBtn = () => (
