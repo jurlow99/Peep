@@ -924,7 +924,7 @@ export function CMS({ onExit, currentUser }) {
     }
     setStorageAddSaving(false);
     if (!error) {
-      showToast(`"${f.title}" added to library`);
+      showToast(`"${f.title}" published to Peep`);
       setStorageAddModal(null);
     } else {
       showToast("Error: " + error.message);
@@ -5039,7 +5039,7 @@ export function CMS({ onExit, currentUser }) {
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 24 }}>
                       {[
                         { label: "Total Users", value: reportData.userCount, color: "#34d399", desc: "Registered accounts across all profiles" },
-                        { label: "Videos", value: reportData.videoCount, color: "#4f46e5", desc: "Movies uploaded to the library" },
+                        { label: "Videos", value: reportData.videoCount, color: "#4f46e5", desc: "Movies published on Peep" },
                         { label: "Shows", value: reportData.showCount, color: "#4f46e5", desc: "Series with one or more episodes" },
                         { label: "Episodes", value: reportData.episodeCount, color: "#4f46e5", desc: "Individual episode entries across all shows" },
                         { label: "Watch Sessions", value: reportData.watchSessions, color: "#60a5fa", desc: "Total times any content was played" },
@@ -8208,7 +8208,7 @@ export function CMS({ onExit, currentUser }) {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28, flexWrap: "wrap", gap: 12 }}>
               <div>
                 <p style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 700, color: "#0f172a" }}>Uploaded Files</p>
-                <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Raw files uploaded to storage. Click "Add to Library" to make a file visible on Peep.</p>
+                <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Files in your Supabase bucket. Click "Publish" to make them watchable on Peep.</p>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={() => { setStorageAddForm({ title: "", type: "movie", show_id: "", podcast_id: "", description: "", year: new Date().getFullYear(), genre: "", artist: "", episode_number: 1, season_number: 1, linked_id: "", linked_table: "videos", url: "" }); setStorageAddModal({ name: "External URL", folder: "", url: "" }); }} style={{ padding: "10px 18px", background: "#4f46e5", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add from URL</button>
@@ -8243,8 +8243,8 @@ export function CMS({ onExit, currentUser }) {
                 <>
                   <div style={{ display: "flex", gap: 8, marginBottom: 28 }}>
                     {[
-                      { key: "pending", label: "Not in Library", count: pending.length, color: "#f59e0b" },
-                      { key: "ingested", label: "In Library", count: ingested.length, color: "#22c55e" },
+                      { key: "pending", label: "Unpublished", count: pending.length, color: "#f59e0b" },
+                      { key: "ingested", label: "Published", count: ingested.length, color: "#22c55e" },
                       { key: "all", label: "All", count: storageFiles.length, color: "#6366f1" },
                     ].map(({ key, label, count, color }) => (
                       <button key={key} onClick={() => setStorageFilter(key)} style={{ padding: "8px 18px", borderRadius: 8, border: `1.5px solid ${storageFilter === key ? color : "#e2e8f0"}`, background: storageFilter === key ? color : "#fff", color: storageFilter === key ? "#fff" : "#64748b", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
@@ -8283,7 +8283,7 @@ export function CMS({ onExit, currentUser }) {
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
                                     <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{file.name}</p>
-                                    {file.ingested && <span style={{ fontSize: 10, fontWeight: 700, color: "#16a34a", background: "#dcfce7", borderRadius: 4, padding: "2px 7px", flexShrink: 0 }}>In Library</span>}
+                                    {file.ingested && <span style={{ fontSize: 10, fontWeight: 700, color: "#16a34a", background: "#dcfce7", borderRadius: 4, padding: "2px 7px", flexShrink: 0 }}>Published</span>}
                                   </div>
                                   <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>{file.metadata?.size ? `${(file.metadata.size / 1024 / 1024).toFixed(1)} MB` : ""}</p>
                                 </div>
@@ -8296,7 +8296,7 @@ export function CMS({ onExit, currentUser }) {
                                       setStorageAddModal(file);
                                     }}
                                     style={{ padding: "7px 14px", background: "#0f172a", color: "#fff", border: "none", borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
-                                  >Add to Library</button>
+                                  >Publish</button>
                                 )}
                               </div>
                             ))}
@@ -8313,7 +8313,7 @@ export function CMS({ onExit, currentUser }) {
               <>
                 <div onClick={() => setStorageAddModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200 }} />
                 <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 201, background: "#fff", borderRadius: 16, padding: 32, width: "min(520px, 95vw)", maxHeight: "90vh", overflowY: "auto" }}>
-                  <p style={{ margin: "0 0 20px", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>Add to Library</p>
+                  <p style={{ margin: "0 0 20px", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>Publish to Peep</p>
                   <div style={{ marginBottom: 16 }}>
                     <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Video URL *</label>
                     <input value={storageAddForm.url} onChange={e => setStorageAddForm(p => ({ ...p, url: e.target.value }))} placeholder="https://archive.org/... or Supabase URL" style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13, boxSizing: "border-box" }} />
@@ -8400,7 +8400,7 @@ export function CMS({ onExit, currentUser }) {
                   <div style={{ display: "flex", gap: 10 }}>
                     <button onClick={() => setStorageAddModal(null)} style={{ flex: 1, padding: "11px 0", background: "#f1f5f9", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#64748b" }}>Cancel</button>
                     <button onClick={saveStorageItem} disabled={storageAddSaving || !storageAddForm.title || !storageAddForm.url.trim()} style={{ flex: 2, padding: "11px 0", background: "#0f172a", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#fff", opacity: storageAddSaving || !storageAddForm.title || !storageAddForm.url.trim() ? 0.6 : 1 }}>
-                      {storageAddSaving ? "Saving…" : "Add to Library"}
+                      {storageAddSaving ? "Publishing…" : "Publish to Peep"}
                     </button>
                   </div>
                 </div>
