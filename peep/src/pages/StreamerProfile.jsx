@@ -6,7 +6,7 @@ const YELLOW = "#facc15";
 const CHAT_WIDTH = 340;
 
 const CATEGORY_LABELS = {
-  general: "General", gaming: "Gaming", music: "Music",
+  general: "General", gaming: "Gaming",
   talk: "Talk", irl: "IRL", sports: "Sports",
   education: "Education", creative: "Creative",
 };

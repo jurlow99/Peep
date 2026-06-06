@@ -10,7 +10,6 @@ const RTMP_BASE = "rtmps://live.cloudflare.com/live/";
 const CATEGORIES = [
   { value: "general",   label: "General" },
   { value: "gaming",    label: "Gaming" },
-  { value: "music",     label: "Music" },
   { value: "talk",      label: "Talk / Podcast" },
   { value: "irl",       label: "IRL" },
   { value: "sports",    label: "Sports" },

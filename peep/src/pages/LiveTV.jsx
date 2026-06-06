@@ -6,7 +6,6 @@ const PAD = "clamp(16px, 5vw, 96px)";
 const CATEGORIES = [
   { value: "all",       label: "All" },
   { value: "gaming",    label: "Gaming" },
-  { value: "music",     label: "Music" },
   { value: "talk",      label: "Talk" },
   { value: "irl",       label: "IRL" },
   { value: "sports",    label: "Sports" },
@@ -15,7 +14,7 @@ const CATEGORIES = [
 ];
 
 const CATEGORY_LABELS = {
-  general: "General", gaming: "Gaming", music: "Music",
+  general: "General", gaming: "Gaming",
   talk: "Talk", irl: "IRL", sports: "Sports",
   education: "Education", creative: "Creative",
 };
