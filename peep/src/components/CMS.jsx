@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "../supabase";
 import { ImageUploader } from "./ImageUploader";
 import { SongImporter } from "./SongImporter";
+import { CloudflareVideoUploader } from "./CloudflareVideoUploader";
 
 const EMPTY_ROW = {
   title: "",
@@ -6401,7 +6402,23 @@ export function CMS({ onExit, currentUser }) {
                         </div>
                       )}
                     </div>
-                    <FieldInput label="Video URL *" value={form.url} onChange={v => setForm(f => ({ ...f, url: v }))} placeholder="https://archive.org/..." />
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Video *</label>
+                      <CloudflareVideoUploader
+                        onComplete={({ hlsUrl, thumbnailUrl }) => {
+                          setForm(f => ({
+                            ...f,
+                            url: hlsUrl,
+                            thumbnail: f.thumbnail || thumbnailUrl,
+                          }));
+                        }}
+                        onError={msg => showToast("Upload error: " + msg, "error")}
+                      />
+                      <p style={{ margin: "8px 0 4px", fontSize: 11, color: "#9ca3af" }}>— or paste a URL directly —</p>
+                      <input value={form.url} onChange={e => setForm(f => ({ ...f, url: e.target.value }))}
+                        placeholder="https://..." style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                        onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                    </div>
                     <FieldInput label="Trailer URL" value={form.trailer_url} onChange={v => setForm(f => ({ ...f, trailer_url: v }))} placeholder="https://youtube.com/watch?v=... (optional)" />
                     <FieldInput label="Tags (comma-separated)" value={form.tags} onChange={v => setForm(f => ({ ...f, tags: v }))} placeholder="Silent, Epic, Classic" />
                     <div>
