@@ -387,7 +387,7 @@ export function CMS({ onExit, currentUser }) {
   const [storageLoading, setStorageLoading] = useState(false);
   const [storageFilter, setStorageFilter] = useState("pending");
   const [storageAddModal, setStorageAddModal] = useState(null);
-  const [storageAddForm, setStorageAddForm] = useState({ title: "", type: "movie", show_id: "", podcast_id: "", description: "", year: new Date().getFullYear(), genre: "", artist: "", episode_number: 1, season_number: 1, linked_id: "", linked_table: "videos" });
+  const [storageAddForm, setStorageAddForm] = useState({ title: "", type: "movie", show_id: "", podcast_id: "", description: "", year: new Date().getFullYear(), genre: "", artist: "", episode_number: 1, season_number: 1, linked_id: "", linked_table: "videos", url: "" });
   const [storageAddSaving, setStorageAddSaving] = useState(false);
   const [bossTodos, setBossTodos] = useState([]);
   const [newTodo, setNewTodo] = useState("");
@@ -907,7 +907,7 @@ export function CMS({ onExit, currentUser }) {
   async function saveStorageItem() {
     setStorageAddSaving(true);
     const f = storageAddForm;
-    const url = storageAddModal?.url;
+    const url = f.url.trim() || storageAddModal?.url;
     let error = null;
     if (f.type === "movie") {
       ({ error } = await supabase.from("videos").insert({ title: f.title, url, description: f.description, year: f.year || null, genre: f.genre || null }));
@@ -3304,12 +3304,7 @@ export function CMS({ onExit, currentUser }) {
               {/* Header row with Add button */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
                 <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Shorts ({rows.length})</h2>
-                <button
-                  onClick={() => { setForm(EMPTY_ROW); setEditingId(null); setDrawerOpen(true); }}
-                  style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
-                >
-                  + Add Movie
-                </button>
+                <span style={{ fontSize: 12, color: "#9ca3af" }}>Add content via Storage →</span>
               </div>
 
           {/* Controls */}
@@ -8215,9 +8210,10 @@ export function CMS({ onExit, currentUser }) {
                 <p style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 700, color: "#0f172a" }}>Uploaded Files</p>
                 <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Raw files uploaded to storage. Click "Add to Library" to make a file visible on Peep.</p>
               </div>
-              <button onClick={loadStorageFiles} style={{ padding: "10px 20px", background: "#0f172a", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                {storageLoading ? "Scanning…" : "Refresh"}
-              </button>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => { setStorageAddForm({ title: "", type: "movie", show_id: "", podcast_id: "", description: "", year: new Date().getFullYear(), genre: "", artist: "", episode_number: 1, season_number: 1, linked_id: "", linked_table: "videos", url: "" }); setStorageAddModal({ name: "External URL", folder: "", url: "" }); }} style={{ padding: "10px 18px", background: "#4f46e5", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add from URL</button>
+                <button onClick={loadStorageFiles} style={{ padding: "10px 20px", background: "#0f172a", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{storageLoading ? "Scanning…" : "Refresh"}</button>
+              </div>
             </div>
 
             {storageLoading && <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Spinner /></div>}
@@ -8296,7 +8292,7 @@ export function CMS({ onExit, currentUser }) {
                                   <button
                                     onClick={() => {
                                       const cleanName = file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ").replace(/\b\w/g, c => c.toUpperCase());
-                                      setStorageAddForm({ title: cleanName, type: file.typeHint, show_id: "", podcast_id: "", description: "", year: new Date().getFullYear(), genre: "", artist: "", episode_number: 1, season_number: 1, linked_id: "", linked_table: "videos" });
+                                      setStorageAddForm({ title: cleanName, type: file.typeHint, show_id: "", podcast_id: "", description: "", year: new Date().getFullYear(), genre: "", artist: "", episode_number: 1, season_number: 1, linked_id: "", linked_table: "videos", url: file.url });
                                       setStorageAddModal(file);
                                     }}
                                     style={{ padding: "7px 14px", background: "#0f172a", color: "#fff", border: "none", borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
@@ -8317,9 +8313,11 @@ export function CMS({ onExit, currentUser }) {
               <>
                 <div onClick={() => setStorageAddModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200 }} />
                 <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 201, background: "#fff", borderRadius: 16, padding: 32, width: "min(520px, 95vw)", maxHeight: "90vh", overflowY: "auto" }}>
-                  <p style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>Add to Library</p>
-                  <p style={{ margin: "0 0 4px", fontSize: 13, color: "#9ca3af", wordBreak: "break-all" }}>{storageAddModal.name}</p>
-                  <p style={{ margin: "0 0 20px", fontSize: 12, color: "#94a3b8" }}>/{storageAddModal.folder}</p>
+                  <p style={{ margin: "0 0 20px", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>Add to Library</p>
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Video URL *</label>
+                    <input value={storageAddForm.url} onChange={e => setStorageAddForm(p => ({ ...p, url: e.target.value }))} placeholder="https://archive.org/... or Supabase URL" style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13, boxSizing: "border-box" }} />
+                  </div>
                   <div style={{ marginBottom: 16 }}>
                     <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Content Type</label>
                     <select value={storageAddForm.type} onChange={e => setStorageAddForm(p => ({ ...p, type: e.target.value }))} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14, background: "#fff", color: "#0f172a" }}>
@@ -8401,7 +8399,7 @@ export function CMS({ onExit, currentUser }) {
                   </div>
                   <div style={{ display: "flex", gap: 10 }}>
                     <button onClick={() => setStorageAddModal(null)} style={{ flex: 1, padding: "11px 0", background: "#f1f5f9", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#64748b" }}>Cancel</button>
-                    <button onClick={saveStorageItem} disabled={storageAddSaving || !storageAddForm.title} style={{ flex: 2, padding: "11px 0", background: "#0f172a", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#fff", opacity: storageAddSaving || !storageAddForm.title ? 0.6 : 1 }}>
+                    <button onClick={saveStorageItem} disabled={storageAddSaving || !storageAddForm.title || !storageAddForm.url.trim()} style={{ flex: 2, padding: "11px 0", background: "#0f172a", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#fff", opacity: storageAddSaving || !storageAddForm.title || !storageAddForm.url.trim() ? 0.6 : 1 }}>
                       {storageAddSaving ? "Saving…" : "Add to Library"}
                     </button>
                   </div>
