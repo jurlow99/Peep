@@ -494,11 +494,18 @@ export function StreamerProfile() {
       {(stream.is_live || streamEnded) ? (
         /* ══════════════ LIVE / ENDED ══════════════ */
         <>
+          <style>{`
+            @media (max-width: 640px) {
+              .live-layout { flex-direction: column !important; height: auto !important; }
+              .live-player { height: 56vw !important; }
+              .live-chat { width: 100% !important; height: 340px !important; border-left: none !important; border-top: 1px solid #111; }
+            }
+          `}</style>
           {/* Player + Chat */}
-          <div style={{ display: "flex", background: "#000", height: `min(64vh, calc((100vw - ${CHAT_WIDTH}px) * 9 / 16))` }}>
+          <div className="live-layout" style={{ display: "flex", background: "#000", height: `min(64vh, calc((100vw - ${CHAT_WIDTH}px) * 9 / 16))` }}>
 
             {/* Player */}
-            <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
+            <div className="live-player" style={{ flex: 1, minWidth: 0, position: "relative" }}>
               {streamEnded ? (
                 <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#050505", position: "relative", overflow: "hidden" }}>
                   {(stream.hero_image || stream.thumbnail) && (
@@ -524,7 +531,7 @@ export function StreamerProfile() {
             </div>
 
             {/* Chat */}
-            <div style={{ width: CHAT_WIDTH, flexShrink: 0, display: "flex", flexDirection: "column", borderLeft: "1px solid #111", background: "#080808" }}>
+            <div className="live-chat" style={{ width: CHAT_WIDTH, flexShrink: 0, display: "flex", flexDirection: "column", borderLeft: "1px solid #111", background: "#080808" }}>
               {/* Chat header */}
               <div style={{ padding: "0 14px", height: 44, display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid #111", flexShrink: 0 }}>
                 <div style={{ width: 7, height: 7, borderRadius: "50%", background: streamEnded ? "#333" : "#ef4444", animation: streamEnded ? "none" : "livepulse 1.5s infinite", flexShrink: 0 }} />
