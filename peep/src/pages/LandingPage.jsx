@@ -91,7 +91,8 @@ export function LandingPage() {
       <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: "max(env(safe-area-inset-top), 44px)", paddingBottom: 14, paddingLeft: PAD, paddingRight: PAD, background: "rgba(10,10,10,0.88)", backdropFilter: "blur(18px)", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
         <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 26, color: YELLOW, animation: "flicker 12s ease-in-out infinite" }}>peep.</span>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <a href="/signin" className="lp-nav-link" style={{ color: "#555", fontSize: 14, fontWeight: 500, textDecoration: "none", padding: "8px 12px", transition: "color 0.15s", whiteSpace: "nowrap" }}>Sign In</a>
+          <a href="/streamer-signin" className="lp-nav-link" style={{ color: "#444", fontSize: 13, fontWeight: 500, textDecoration: "none", padding: "8px 12px", transition: "color 0.15s", whiteSpace: "nowrap" }}>Streamer Login</a>
+          <a href="/signin" className="lp-nav-link" style={{ color: "#555", fontSize: 13, fontWeight: 500, textDecoration: "none", padding: "8px 12px", transition: "color 0.15s", whiteSpace: "nowrap" }}>Sign In</a>
           <a href="/signup" className="lp-cta-btn" style={{ background: YELLOW, color: "#0a0a0a", fontSize: 13, fontWeight: 700, textDecoration: "none", padding: "9px 16px", borderRadius: 8, transition: "transform 0.2s, box-shadow 0.2s", display: "inline-block", whiteSpace: "nowrap" }}>Get Started</a>
         </div>
       </nav>
@@ -137,16 +138,41 @@ export function LandingPage() {
 
           <p style={{ animation: "fadeUp 0.7s 0.5s ease both", margin: "0 auto 44px", fontSize: 14, color: "#555" }}>Founding membership from <span style={{ color: YELLOW, fontWeight: 700 }}>$2.99/mo</span> — limited spots.</p>
 
-          <div style={{ animation: "fadeUp 0.7s 0.6s ease both", display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-            <a href="/signup" className="lp-cta-btn" style={{ background: YELLOW, color: "#0a0a0a", fontSize: 15, fontWeight: 700, textDecoration: "none", padding: "15px 40px", borderRadius: 10, display: "inline-block", transition: "transform 0.2s, box-shadow 0.2s" }}>
-              Start Watching →
-            </a>
-            <a href="/signin" className="lp-ghost" style={{ background: "rgba(255,255,255,0.04)", color: "#888", fontSize: 15, fontWeight: 500, textDecoration: "none", padding: "15px 40px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", display: "inline-block", transition: "border-color 0.2s, color 0.2s" }}>
-              Sign In
-            </a>
+          <div style={{ animation: "fadeUp 0.7s 0.6s ease both", display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", width: "100%" }}>
+            {/* Viewer card */}
+            <div style={{ flex: "1 1 220px", maxWidth: 280, background: "rgba(250,204,21,0.04)", border: `1px solid rgba(250,204,21,0.18)`, borderRadius: 16, padding: "24px 22px", display: "flex", flexDirection: "column", gap: 14, textAlign: "left" }}>
+              <div>
+                <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 700, color: YELLOW, letterSpacing: "0.1em", textTransform: "uppercase" }}>I want to watch</p>
+                <p style={{ margin: 0, fontSize: 13, color: "#555", lineHeight: 1.6 }}>Subscribe and stream weird content you won't find anywhere else.</p>
+              </div>
+              <a href="/signup" className="lp-cta-btn" style={{ background: YELLOW, color: "#0a0a0a", fontSize: 14, fontWeight: 700, textDecoration: "none", padding: "12px 18px", borderRadius: 9, textAlign: "center", transition: "transform 0.2s, box-shadow 0.2s", display: "block" }}>
+                Start Watching →
+              </a>
+              <a href="/signin" style={{ color: "#444", fontSize: 12, textDecoration: "none", textAlign: "center", transition: "color 0.15s" }}
+                onMouseEnter={e => e.currentTarget.style.color = "#888"}
+                onMouseLeave={e => e.currentTarget.style.color = "#444"}>
+                Already have an account? <span style={{ color: "#666", fontWeight: 600 }}>Sign In</span>
+              </a>
+            </div>
+
+            {/* Streamer card */}
+            <div style={{ flex: "1 1 220px", maxWidth: 280, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 16, padding: "24px 22px", display: "flex", flexDirection: "column", gap: 14, textAlign: "left" }}>
+              <div>
+                <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 700, color: "#888", letterSpacing: "0.1em", textTransform: "uppercase" }}>I want to stream</p>
+                <p style={{ margin: 0, fontSize: 13, color: "#555", lineHeight: 1.6 }}>Broadcast live to an audience that actually wants strange content.</p>
+              </div>
+              <a href="/apply-to-stream" className="lp-ghost" style={{ background: "transparent", color: "#aaa", fontSize: 14, fontWeight: 700, textDecoration: "none", padding: "12px 18px", borderRadius: 9, textAlign: "center", border: "1px solid rgba(255,255,255,0.1)", display: "block", transition: "border-color 0.2s, color 0.2s" }}>
+                Apply to Stream →
+              </a>
+              <a href="/streamer-signin" style={{ color: "#444", fontSize: 12, textDecoration: "none", textAlign: "center", transition: "color 0.15s" }}
+                onMouseEnter={e => e.currentTarget.style.color = "#888"}
+                onMouseLeave={e => e.currentTarget.style.color = "#444"}>
+                Already a streamer? <span style={{ color: "#666", fontWeight: 600 }}>Sign In</span>
+              </a>
+            </div>
           </div>
-          <div style={{ animation: "fadeUp 0.7s 0.75s ease both", marginTop: 18 }}>
-            <a href="#pricing" style={{ color: "#555", fontSize: 13, fontWeight: 500, textDecoration: "none", borderBottom: "1px solid #2a2a2a", paddingBottom: 2, transition: "color 0.15s" }}>
+          <div style={{ animation: "fadeUp 0.7s 0.75s ease both", marginTop: 6 }}>
+            <a href="#pricing" style={{ color: "#444", fontSize: 12, fontWeight: 500, textDecoration: "none", borderBottom: "1px solid #1e1e1e", paddingBottom: 2, transition: "color 0.15s" }}>
               View Plans
             </a>
           </div>
