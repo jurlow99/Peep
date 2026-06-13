@@ -237,18 +237,23 @@ export function StreamerProfile() {
   }, [stream?.id, stream?.stream_uid]);
 
   async function loadStream() {
-    const { data: streams } = await supabase.from("live_streams").select("*").order("id");
-    const match = streams?.find(s => {
-      const slug = s.slug || s.username || (s.channel_name || s.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-      return slug === username;
-    });
-    setStream(match ?? null);
-    setLoading(false);
-    if (match) {
-      loadFollowers(match.id);
-      loadViewers(match.id);
-      loadSchedule(match.id);
-      loadVods(match.id, match.stream_uid);
+    try {
+      const { data: streams } = await supabase.from("live_streams").select("*").order("id");
+      const match = streams?.find(s => {
+        const slug = s.slug || s.username || (s.channel_name || s.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        return slug === username;
+      });
+      setStream(match ?? null);
+      if (match) {
+        loadFollowers(match.id);
+        loadViewers(match.id);
+        loadSchedule(match.id);
+        loadVods(match.id, match.stream_uid);
+      }
+    } catch (_) {
+      setStream(null);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -372,7 +377,7 @@ export function StreamerProfile() {
         <a href="/" style={{ textDecoration: "none", marginBottom: 36 }}>
           <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 36, color: YELLOW }}>peep.</span>
         </a>
-        <p style={{ color: "#444", fontSize: 15, margin: "0 0 20px" }}>Channel not found.</p>
+        <p style={{ color: "#aaa", fontSize: 15, margin: "0 0 20px" }}>Channel not found.</p>
         <a href="/" style={{ color: YELLOW, fontSize: 13, textDecoration: "none" }}>← Back to Peep</a>
       </div>
     );
