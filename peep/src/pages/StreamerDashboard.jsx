@@ -159,6 +159,12 @@ export function StreamerDashboard() {
   const [notifsLoading, setNotifsLoading]   = useState(false);
   const [markingRead, setMarkingRead]       = useState(false);
 
+  // Live chat (studio monitor)
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput]       = useState("");
+  const [chatSending, setChatSending]   = useState(false);
+  const chatBottomRef = useRef(null);
+
   // VODs
   const [vods, setVods]             = useState([]);
   const [vodsLoading, setVodsLoading] = useState(false);
@@ -384,6 +390,7 @@ export function StreamerDashboard() {
       setLiveStartedAt(null);
       setLiveDuration(0);
       setPreviewOpen(false);
+      setViewers(0);
     }
   }, [stream?.is_live, stream?.id]);
 
@@ -407,6 +414,23 @@ export function StreamerDashboard() {
     return () => clearInterval(t);
   }, [stream?.id]);
 
+  // Live chat subscription
+  useEffect(() => {
+    if (!stream?.id || !stream?.is_live) { setChatMessages([]); return; }
+    supabase.from("stream_chat")
+      .select("id, message, user_id, display_name, created_at")
+      .eq("stream_id", stream.id).order("created_at", { ascending: true }).limit(200)
+      .then(({ data }) => { if (data) setChatMessages(data); });
+    const ch = supabase.channel(`dash-chat-${stream.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "stream_chat", filter: `stream_id=eq.${stream.id}` },
+        ({ new: msg }) => {
+          setChatMessages(prev => [...prev, msg]);
+          setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+        })
+      .subscribe();
+    return () => supabase.removeChannel(ch);
+  }, [stream?.id, stream?.is_live]);
+
   async function saveName() {
     if (!displayName.trim() || !stream) return;
     setSavingName(true);
@@ -415,6 +439,20 @@ export function StreamerDashboard() {
     setStream(s => ({ ...s, channel_name: name }));
     setSavingName(false);
     showToast("Channel name updated!");
+  }
+
+  async function sendChat() {
+    if (!chatInput.trim() || chatSending || !stream?.id) return;
+    const msg = chatInput.trim();
+    setChatSending(true); setChatInput("");
+    const channelName = stream.channel_name || stream.title || "Streamer";
+    await supabase.from("stream_chat").insert({
+      stream_id: stream.id,
+      user_id: (await supabase.auth.getSession()).data.session?.user?.id,
+      display_name: `${channelName} 🎥`,
+      message: msg,
+    });
+    setChatSending(false);
   }
 
   async function saveHandle() {
@@ -797,6 +835,45 @@ export function StreamerDashboard() {
               {previewOpen && (
                 <LivePreview url={stream.stream_url} />
               )}
+            </div>
+          )}
+
+          {/* ── LIVE CHAT MONITOR ── */}
+          {stream.is_live && (
+            <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden" }}>
+              <div style={{ padding: "16px 24px 12px", display: "flex", alignItems: "center", gap: 10, borderBottom: `1px solid ${BORDER}` }}>
+                <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite", flexShrink: 0 }} />
+                <span style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>Live Chat</span>
+                <span style={{ marginLeft: "auto", fontSize: 11, color: "#444" }}>{chatMessages.length} messages</span>
+              </div>
+              {/* Messages */}
+              <div style={{ height: 260, overflowY: "auto", padding: "10px 0", display: "flex", flexDirection: "column", gap: 1 }}>
+                {chatMessages.length === 0
+                  ? <p style={{ color: "#2a2a2a", fontSize: 12, margin: "auto 0", textAlign: "center" }}>No messages yet</p>
+                  : chatMessages.map(m => (
+                    <div key={m.id} style={{ fontSize: 13, lineHeight: 1.55, wordBreak: "break-word", padding: "3px 20px", borderRadius: 4 }}>
+                      <span style={{ color: YELLOW, fontWeight: 700, marginRight: 6, fontSize: 12 }}>{m.display_name}</span>
+                      <span style={{ color: "#888" }}>{m.message}</span>
+                    </div>
+                  ))
+                }
+                <div ref={chatBottomRef} />
+              </div>
+              {/* Input */}
+              <div style={{ padding: "10px 16px", borderTop: `1px solid ${BORDER}`, display: "flex", gap: 8 }}>
+                <input
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendChat()}
+                  placeholder="Chat as streamer…"
+                  maxLength={300}
+                  style={{ flex: 1, background: "#0d0d0d", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "9px 12px", color: "#fff", fontSize: 13, outline: "none", fontFamily: "inherit" }}
+                />
+                <button onClick={sendChat} disabled={!chatInput.trim() || chatSending}
+                  style={{ background: chatInput.trim() ? YELLOW : "#111", border: "none", borderRadius: 8, padding: "9px 16px", color: chatInput.trim() ? "#0a0a0a" : "#333", fontSize: 13, fontWeight: 700, cursor: !chatInput.trim() || chatSending ? "not-allowed" : "pointer", flexShrink: 0, fontFamily: "inherit" }}>
+                  Send
+                </button>
+              </div>
             </div>
           )}
 
