@@ -656,33 +656,54 @@ export function StreamerDashboard() {
                   </div>
                 </div>
               </div>
-              <div style={{ borderTop: `1px solid ${BORDER}`, margin: "0 0 18px" }} />
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <div style={{ borderTop: `1px solid ${BORDER}`, margin: "0 0 16px" }} />
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {[
-                  { label: "Stream Card Thumbnail", hint: "Shows on Streams page — live & offline", pendingKey: "thumbnail", dbField: "thumbnail", uploading: uploadingThumb, setUploading: setUploadingThumb, toastMsg: "Thumbnail updated!", current: stream.thumbnail },
-                  { label: "Profile Banner", hint: "Shows on your channel page", pendingKey: "hero", dbField: "hero_image", uploading: uploadingHero, setUploading: setUploadingHero, toastMsg: "Banner updated!", current: stream.hero_image },
-                ].map(({ label, hint, pendingKey, dbField, uploading, setUploading, toastMsg, current }) => {
+                  { label: "Thumbnail", where: "Streams page card", size: "1280 × 720 recommended", pendingKey: "thumbnail", dbField: "thumbnail", uploading: uploadingThumb, setUploading: setUploadingThumb, toastMsg: "Thumbnail updated!", current: stream.thumbnail },
+                  { label: "Channel Banner", where: "Top of your channel page", size: "1920 × 480 recommended", pendingKey: "hero", dbField: "hero_image", uploading: uploadingHero, setUploading: setUploadingHero, toastMsg: "Banner updated!", current: stream.hero_image },
+                ].map(({ label, where, size, pendingKey, dbField, uploading, setUploading, toastMsg, current }) => {
                   const pending = pendingFiles[pendingKey];
                   const preview = pending?.previewUrl || current;
                   return (
-                    <div key={pendingKey}>
-                      <Label>{label} <span style={{ color: "#2a2a2a", fontWeight: 400 }}>{hint}</span></Label>
-                      <div style={{ aspectRatio: "16/9", background: "#0d0d0d", border: `1px solid ${pending ? YELLOW : BORDER}`, borderRadius: 10, overflow: "hidden", marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        {preview ? <img src={preview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2a2a2a" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>}
+                    <div key={pendingKey} style={{ display: "flex", gap: 12, alignItems: "center", background: "#0d0d0d", border: `1px solid ${pending ? YELLOW : BORDER}`, borderRadius: 10, padding: "10px 12px", transition: "border-color 0.15s" }}>
+                      {/* Thumbnail preview */}
+                      <div style={{ width: 80, height: 50, borderRadius: 6, overflow: "hidden", background: "#111", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        {preview
+                          ? <img src={preview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2a2a2a" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                        }
                       </div>
-                      <div style={{ display: "flex", gap: 6 }}>
+                      {/* Info */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: "#ccc" }}>{label}</p>
+                        <p style={{ margin: "0 0 3px", fontSize: 11, color: "#333" }}>{where}</p>
+                        <p style={{ margin: 0, fontSize: 10, color: "#2a2a2a", fontVariantNumeric: "tabular-nums" }}>{size}</p>
+                      </div>
+                      {/* Actions */}
+                      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                         {pending ? (
                           <>
-                            <button onClick={() => saveImage(pendingKey, dbField, setUploading, toastMsg)} disabled={uploading} style={{ flex: 1, background: YELLOW, border: "none", borderRadius: 8, padding: "8px 0", color: "#0a0a0a", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: uploading ? 0.6 : 1 }}>{uploading ? "Saving…" : "Save"}</button>
-                            <button onClick={() => cancelPending(pendingKey)} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 10px", color: "#666", fontSize: 12, cursor: "pointer" }}>Cancel</button>
+                            <button onClick={() => saveImage(pendingKey, dbField, setUploading, toastMsg)} disabled={uploading}
+                              style={{ background: YELLOW, border: "none", borderRadius: 7, padding: "6px 14px", color: "#0a0a0a", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: uploading ? 0.6 : 1 }}>
+                              {uploading ? "Saving…" : "Save"}
+                            </button>
+                            <button onClick={() => cancelPending(pendingKey)}
+                              style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "6px 10px", color: "#555", fontSize: 12, cursor: "pointer" }}>
+                              Cancel
+                            </button>
                           </>
                         ) : (
                           <>
-                            <label style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "7px 0", color: "#bbb", fontSize: 12, fontWeight: 600, cursor: "pointer", textAlign: "center" }}>
+                            <label style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "6px 14px", color: "#bbb", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                               <input type="file" accept="image/*" onChange={e => handleImagePick(e, pendingKey)} style={{ display: "none" }} />
-                              Choose Image
+                              {current ? "Replace" : "Upload"}
                             </label>
-                            {current && <button onClick={() => clearImage(dbField)} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "7px 10px", color: "#444", fontSize: 11, cursor: "pointer" }}>Remove</button>}
+                            {current && (
+                              <button onClick={() => clearImage(dbField)}
+                                style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "6px 10px", color: "#333", fontSize: 12, cursor: "pointer" }}>
+                                Remove
+                              </button>
+                            )}
                           </>
                         )}
                       </div>
