@@ -129,8 +129,7 @@ export function StreamerDashboard() {
 
   // Live health data from Cloudflare
   const [streamHealth, setStreamHealth] = useState(null); // { state, bitrate, fps, width, height }
-  const [liveDebug, setLiveDebug] = useState(null);
-  const [liveStartedAt, setLiveStartedAt] = useState(null);
+const [liveStartedAt, setLiveStartedAt] = useState(null);
   const [liveDuration, setLiveDuration]   = useState(0);
 
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(null), 2500); }
@@ -311,14 +310,13 @@ export function StreamerDashboard() {
       try {
         const res  = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/check-live-status?stream_uid=${stream.stream_uid}&stream_id=${stream.id}`);
         const json = await res.json();
-        setLiveDebug(JSON.stringify(json, null, 2));
         if (typeof json.is_live === "boolean") {
           setStream(s => s.is_live !== json.is_live ? { ...s, is_live: json.is_live } : s);
           if (json.is_live && !liveStartedAt) setLiveStartedAt(Date.now());
           if (!json.is_live) { setLiveStartedAt(null); setLiveDuration(0); }
         }
         if (json.health) setStreamHealth(json.health);
-      } catch (e) { setLiveDebug(`fetch error: ${e.message}`); }
+      } catch (_) {}
     }
     pollLive();
     const t = setInterval(pollLive, 8000);
@@ -634,14 +632,6 @@ export function StreamerDashboard() {
         {!streamHealth && !stream.is_live && (
           <div style={{ padding: `0 ${PAD} 14px` }}>
             <span style={{ fontSize: 12, color: "#2a2a2a" }}>Start streaming in OBS to see connection status here.</span>
-          </div>
-        )}
-
-        {/* Temp debug — remove after fixing */}
-        {liveDebug && (
-          <div style={{ margin: `0 ${PAD} 14px`, background: "#0d0d0d", border: "1px solid #222", borderRadius: 8, padding: "10px 12px" }}>
-            <p style={{ margin: "0 0 4px", fontSize: 10, fontWeight: 700, color: "#444", textTransform: "uppercase", letterSpacing: "0.06em" }}>check-live-status response</p>
-            <pre style={{ margin: 0, fontSize: 11, color: "#888", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{liveDebug}</pre>
           </div>
         )}
       </div>
