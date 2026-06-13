@@ -365,17 +365,27 @@ export function StreamerDashboard() {
     return () => { supabase.removeChannel(ch); clearInterval(t); };
   }, [stream?.id]);
 
-  // Start/stop the live clock when is_live changes
+  // Start/stop the live clock when is_live changes — persisted in localStorage so refresh doesn't reset it
   useEffect(() => {
+    if (!stream?.id) return;
+    const key = `peep_live_start_${stream.id}`;
     if (stream?.is_live) {
-      setLiveStartedAt(prev => prev ?? Date.now());
+      setLiveStartedAt(prev => {
+        if (prev) return prev;
+        const stored = localStorage.getItem(key);
+        if (stored) return parseInt(stored, 10);
+        const now = Date.now();
+        localStorage.setItem(key, String(now));
+        return now;
+      });
       setPreviewOpen(true);
     } else {
+      localStorage.removeItem(key);
       setLiveStartedAt(null);
       setLiveDuration(0);
       setPreviewOpen(false);
     }
-  }, [stream?.is_live]);
+  }, [stream?.is_live, stream?.id]);
 
   // Live duration ticker
   useEffect(() => {
@@ -393,7 +403,7 @@ export function StreamerDashboard() {
       setViewers(count ?? 0);
     }
     fetchViewers();
-    const t = setInterval(fetchViewers, 30000);
+    const t = setInterval(fetchViewers, 10000);
     return () => clearInterval(t);
   }, [stream?.id]);
 
