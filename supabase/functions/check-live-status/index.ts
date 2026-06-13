@@ -1,12 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-const CORS_ORIGIN = Deno.env.get("SITE_URL") || "https://watchpeep.tv";
+import { corsHeaders, handleCors } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, {
-      headers: { "Access-Control-Allow-Origin": CORS_ORIGIN, "Access-Control-Allow-Headers": "authorization, content-type" },
-    });
-  }
+  const corsRes = handleCors(req);
+  if (corsRes) return corsRes;
 
   try {
     const supabase = createClient(
@@ -27,7 +24,7 @@ Deno.serve(async (req) => {
       { headers: { "Authorization": `Bearer ${cfToken}` } }
     );
     const data = await res.json();
-    if (!data.success) throw new Error("Cloudflare error");
+    if (!data.success) throw new Error(`Cloudflare error: ${JSON.stringify(data.errors)}`);
 
     const current = data.result?.status?.current ?? {};
     const state   = current.state ?? "disconnected";
@@ -43,11 +40,11 @@ Deno.serve(async (req) => {
     }
 
     const streamHealth = {
-      state,                                              // "connected" | "disconnected" | "idle"
-      bitrate:    current.bitrate   ?? null,              // bps
-      fps,                                               // frames per second
-      width:      current.width     ?? null,
-      height:     current.height    ?? null,
+      state,
+      bitrate:    current.bitrate    ?? null,
+      fps,
+      width:      current.width      ?? null,
+      height:     current.height     ?? null,
       videoCodec: current.videoCodec ?? null,
       audioCodec: current.audioCodec ?? null,
     };
@@ -55,12 +52,12 @@ Deno.serve(async (req) => {
     await supabase.from("live_streams").update({ is_live: isLive }).eq("id", streamId);
 
     return new Response(JSON.stringify({ is_live: isLive, health: streamHealth }), {
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": CORS_ORIGIN },
+      headers: { "Content-Type": "application/json", ...corsHeaders },
     });
   } catch (err: any) {
     return new Response(JSON.stringify({ error: err.message }), {
       status: 400,
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": CORS_ORIGIN },
+      headers: { "Content-Type": "application/json", ...corsHeaders },
     });
   }
 });

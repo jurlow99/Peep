@@ -220,20 +220,25 @@ export function StreamerProfile() {
   }, [stream?.id]);
 
   useEffect(() => {
-    if (!stream?.id || !stream?.is_live || !stream?.stream_uid) return;
+    if (!stream?.id || !stream?.stream_uid) return;
     const check = async () => {
       try {
-        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/check-live-status?stream_uid=${stream.stream_uid}&stream_id=${stream.id}`);
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY;
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/check-live-status?stream_uid=${stream.stream_uid}&stream_id=${stream.id}`, {
+          headers: { "Authorization": `Bearer ${token}` },
+        });
         const json = await res.json();
-        if (json.is_live === false) setStream(prev => ({ ...prev, is_live: false }));
+        if (typeof json.is_live === "boolean") setStream(prev => ({ ...prev, is_live: json.is_live }));
       } catch (_) {
         const { data } = await supabase.from("live_streams").select("is_live").eq("id", stream.id).single();
-        if (data?.is_live === false) setStream(prev => ({ ...prev, is_live: false }));
+        if (data && typeof data.is_live === "boolean") setStream(prev => ({ ...prev, is_live: data.is_live }));
       }
     };
-    const t = setInterval(check, 20000);
+    check();
+    const t = setInterval(check, 15000);
     return () => clearInterval(t);
-  }, [stream?.id, stream?.is_live, stream?.stream_uid]);
+  }, [stream?.id, stream?.stream_uid]);
 
   async function loadStream() {
     const { data: streams } = await supabase.from("live_streams").select("*").order("id");
