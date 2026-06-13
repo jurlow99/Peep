@@ -223,11 +223,7 @@ export function StreamerProfile() {
     if (!stream?.id || !stream?.stream_uid) return;
     const check = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY;
-        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/check-live-status?stream_uid=${stream.stream_uid}&stream_id=${stream.id}`, {
-          headers: { "Authorization": `Bearer ${token}` },
-        });
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/check-live-status?stream_uid=${stream.stream_uid}&stream_id=${stream.id}`);
         const json = await res.json();
         if (typeof json.is_live === "boolean") setStream(prev => ({ ...prev, is_live: json.is_live }));
       } catch (_) {

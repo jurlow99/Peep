@@ -309,11 +309,7 @@ export function StreamerDashboard() {
       .subscribe();
     async function pollLive() {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY;
-        const res  = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/check-live-status?stream_uid=${stream.stream_uid}&stream_id=${stream.id}`, {
-          headers: { "Authorization": `Bearer ${token}` },
-        });
+        const res  = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/check-live-status?stream_uid=${stream.stream_uid}&stream_id=${stream.id}`);
         const json = await res.json();
         setLiveDebug(JSON.stringify(json, null, 2));
         if (typeof json.is_live === "boolean") {
