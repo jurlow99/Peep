@@ -499,8 +499,16 @@ export function StreamerProfile() {
           <style>{`
             @media (max-width: 640px) {
               .live-layout { flex-direction: column !important; height: auto !important; }
-              .live-player { height: 56vw !important; }
-              .live-chat { width: 100% !important; height: 340px !important; border-left: none !important; border-top: 1px solid #111; }
+              .live-player { height: 56.25vw !important; }
+              .mobile-channel-strip { display: flex !important; }
+              .live-chat {
+                width: 100% !important;
+                height: calc(100svh - 50px - 56.25vw - 46px) !important;
+                min-height: 240px !important;
+                border-left: none !important;
+                border-top: none !important;
+              }
+              .live-channel-bar { display: none !important; }
             }
           `}</style>
           {/* Player + Chat */}
@@ -530,6 +538,22 @@ export function StreamerProfile() {
               ) : (
                 <VideoPlayer key={stream.stream_url} url={stream.stream_url} live style={{ width: "100%", height: "100%" }} />
               )}
+            </div>
+
+            {/* Mobile-only compact channel strip — shown between player and chat on mobile */}
+            <div className="mobile-channel-strip" style={{ display: "none", alignItems: "center", gap: 10, padding: "6px 12px 6px 14px", background: "#0a0a0a", borderBottom: "1px solid #111", flexShrink: 0 }}>
+              <Avatar size={30} />
+              <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 7, overflow: "hidden" }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{channelName}</span>
+                {isLive && (
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: 3, background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 4, padding: "2px 7px", flexShrink: 0 }}>
+                    <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite" }} />
+                    <span style={{ fontSize: 10, fontWeight: 800, color: "#ef4444", letterSpacing: 0.8 }}>LIVE</span>
+                    {viewers > 0 && <span style={{ fontSize: 10, color: "#ef4444", fontWeight: 600 }}>· {viewers}</span>}
+                  </div>
+                )}
+              </div>
+              <FollowBtn />
             </div>
 
             {/* Chat */}
@@ -588,7 +612,7 @@ export function StreamerProfile() {
           </div>
 
           {/* Channel info bar */}
-          <div style={{ padding: "16px 20px 14px", borderBottom: "1px solid #111", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", background: "#0a0a0a" }}>
+          <div className="live-channel-bar" style={{ padding: "16px 20px 14px", borderBottom: "1px solid #111", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", background: "#0a0a0a" }}>
             <Avatar size={44} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3, flexWrap: "wrap" }}>
@@ -607,7 +631,7 @@ export function StreamerProfile() {
                   </span>
                 )}
               </div>
-              <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
+              <div className="channel-sub-row" style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
                 {stream.stream_title && <span style={{ fontSize: 13, color: "#666" }}>{stream.stream_title}</span>}
                 <span style={{ fontSize: 13, color: "#444" }}><strong style={{ color: "#888", fontWeight: 600 }}>{followers.toLocaleString()}</strong> followers</span>
               </div>
