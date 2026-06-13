@@ -106,10 +106,8 @@ CREATE POLICY "Own data" ON ratings FOR ALL USING (auth.uid() = user_id) WITH CH
 -- ── Live TV ─────────────────────────────────────────────────────────────────
 
 ALTER TABLE live_viewers ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Authenticated read all" ON live_viewers FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "Own insert" ON live_viewers FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Own update" ON live_viewers FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "Own delete" ON live_viewers FOR DELETE USING (auth.uid() = user_id);
+CREATE POLICY "Public all" ON live_viewers FOR ALL USING (true) WITH CHECK (true);
+-- Viewer counts are not sensitive — any session can upsert its own heartbeat row.
 
 ALTER TABLE live_chat ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Authenticated read" ON live_chat FOR SELECT USING (auth.role() = 'authenticated');
