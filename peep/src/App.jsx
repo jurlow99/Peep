@@ -179,15 +179,11 @@ export default function App() {
   if (!user) return <LandingPage />;
   if (!user.email_confirmed_at) return <EmailVerificationGate user={user} />;
   if (userRole === "creator") return <CreatorDashboard user={user} onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }} />;
+  // Streamers have no access to the main app — send them back to their dashboard
+  if (streamRecord) { window.location.replace("/streamer"); return null; }
   const isOwner = isOwnerEmail(user?.email);
-  const isStreamer = !!streamRecord;
-  // Streamers bypass profile select and paywall — they can browse freely
-  if (!activeProfile && !isStreamer) return <ProfileSelect user={user} onSelect={selectProfile} />;
-  if (!activeProfile && isStreamer) {
-    const autoProfile = { id: user.id, name: streamRecord.channel_name || user.user_metadata?.full_name || user.email?.split("@")[0] || "Streamer", avatarId: null };
-    selectProfile(autoProfile);
-  }
-  if (!hasActiveSubscription(subscription, isOwner) && subChecked && !isStreamer) {
+  if (!activeProfile) return <ProfileSelect user={user} onSelect={selectProfile} />;
+  if (!hasActiveSubscription(subscription, isOwner) && subChecked) {
     return <PaywallPage user={user} onSubscribed={() => window.location.href = "/?subscribed=1"} onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }} />;
   }
 
