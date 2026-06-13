@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { CMS } from "../components/CMS";
 import { supabase } from "../supabase";
+import { isAdminProfile } from "../lib/auth";
 
 export function AdminPage() {
   const [isAdmin, setIsAdmin] = useState(false);
@@ -14,8 +15,8 @@ export function AdminPage() {
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
-        const { data: profile } = await supabase.from("profiles").select("role").eq("id", session.user.id).maybeSingle();
-        if (profile?.role === "admin") { setIsAdmin(true); setCurrentUser(session.user); }
+        const { data: profile } = await supabase.from("profiles").select("role, is_admin").eq("id", session.user.id).maybeSingle();
+        if (isAdminProfile(profile)) { setIsAdmin(true); setCurrentUser(session.user); }
       }
       setChecking(false);
     });
@@ -27,8 +28,8 @@ export function AdminPage() {
     setError(null);
     const { data, error: signInErr } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
     if (signInErr) { setError(signInErr.message); setLoading(false); return; }
-    const { data: profile } = await supabase.from("profiles").select("role").eq("id", data.user.id).maybeSingle();
-    if (profile?.role !== "admin") {
+    const { data: profile } = await supabase.from("profiles").select("role, is_admin").eq("id", data.user.id).maybeSingle();
+    if (!isAdminProfile(profile)) {
       await supabase.auth.signOut();
       setError("This account doesn't have admin access.");
       setLoading(false);

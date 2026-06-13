@@ -633,7 +633,7 @@ export function StreamerSignInPage() {
 
         <p style={{ textAlign: "center", marginTop: 20, fontSize: 12, color: "#333" }}>
           Want to stream on Peep?{" "}
-          <a href="/apply-to-stream" style={{ color: "#555", textDecoration: "underline" }}>Apply here</a>
+          <a href="/create-channel" style={{ color: "#555", textDecoration: "underline" }}>Create your channel</a>
         </p>
       </div>
     </div>

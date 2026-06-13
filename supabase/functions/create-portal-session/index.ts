@@ -1,24 +1,13 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
+import { getServiceClient, requireUser } from "../_shared/supabase.ts";
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, {
-      headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, content-type" },
-    });
-  }
+  const cors = handleCors(req);
+  if (cors) return cors;
 
   try {
-    const authHeader = req.headers.get("Authorization") || "";
-    const token = authHeader.replace("Bearer ", "").trim();
-    if (!token) throw new Error("Not authenticated");
-
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SERVICE_ROLE_KEY")!
-    );
-
-    const { data: { user }, error: userErr } = await supabase.auth.getUser(token);
-    if (!user || userErr) throw new Error("Not authenticated");
+    const supabase = getServiceClient();
+    const user = await requireUser(req, supabase);
 
     const { data: sub } = await supabase
       .from("subscriptions")
@@ -33,7 +22,7 @@ Deno.serve(async (req) => {
 
     const res = await fetch("https://api.stripe.com/v1/billing_portal/sessions", {
       method: "POST",
-      headers: { "Authorization": `Bearer ${stripeKey}`, "Content-Type": "application/x-www-form-urlencoded" },
+      headers: { Authorization: `Bearer ${stripeKey}`, "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         customer: sub.stripe_customer_id,
         return_url: return_url || "https://watchpeep.tv",
@@ -43,13 +32,9 @@ Deno.serve(async (req) => {
     const session = await res.json();
     if (session.error) throw new Error(session.error.message);
 
-    return new Response(JSON.stringify({ url: session.url }), {
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
-    });
-  } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
-    });
+    return jsonResponse({ url: session.url });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return errorResponse(message, 500);
   }
 });

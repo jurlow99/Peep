@@ -1,6 +1,6 @@
 # CMS — Content Management
 
-The CMS is accessible at `/admin`. It requires an admin account (`is_admin = true` in the `profiles` table).
+The CMS is accessible at `/admin`. It requires an admin account (`profiles.role = 'admin'` in the `profiles` table).
 
 ## Content Types
 

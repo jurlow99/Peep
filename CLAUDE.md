@@ -31,8 +31,13 @@ The main SPA (`App.jsx`) uses `page` state to switch between views (home, player
 
 | File | Purpose |
 |---|---|
-| `peep/src/App.jsx` | Main SPA — all routing state, data fetching, video player |
-| `peep/src/main.jsx` | Entry point — path-based route dispatch |
+| `peep/src/App.jsx` | Main SPA shell — auth gates, page routing, detail views |
+| `peep/src/main.jsx` | Entry point — path-based route dispatch + BrowserRouter |
+| `peep/src/components/browse/Homepage.jsx` | Browse home + nav tabs |
+| `peep/src/components/player/PlayerView.jsx` | Video player |
+| `peep/src/pages/SettingsPage.jsx` | Account settings + billing |
+| `peep/src/hooks/` | useAuth, useSubscription, useMyList (TanStack Query) |
+| `peep/src/lib/` | contentIds, theme, auth helpers (TypeScript) |
 | `peep/src/components/CMS.jsx` | Admin CMS — all content management |
 | `peep/src/pages/StreamerProfile.jsx` | Public streamer page — live player, chat, VODs |
 | `peep/src/pages/StreamerDashboard.jsx` | Streamer portal — go live, analytics, VOD manager |

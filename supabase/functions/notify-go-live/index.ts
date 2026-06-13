@@ -1,9 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+const CORS_ORIGIN = Deno.env.get("SITE_URL") || "https://watchpeep.tv";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
-      headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, content-type" },
+      headers: { "Access-Control-Allow-Origin": CORS_ORIGIN, "Access-Control-Allow-Headers": "authorization, content-type" },
     });
   }
 
@@ -13,7 +14,7 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SERVICE_ROLE_KEY")!
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
     // Get stream info
@@ -31,7 +32,7 @@ Deno.serve(async (req) => {
       .eq("stream_id", stream_id);
     if (!follows || follows.length === 0) {
       return new Response(JSON.stringify({ success: true, sent: 0 }), {
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": CORS_ORIGIN },
       });
     }
 
@@ -43,7 +44,7 @@ Deno.serve(async (req) => {
 
     if (emails.length === 0) {
       return new Response(JSON.stringify({ success: true, sent: 0 }), {
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": CORS_ORIGIN },
       });
     }
 
@@ -106,12 +107,12 @@ Deno.serve(async (req) => {
     });
 
     return new Response(JSON.stringify({ success: true, sent: emails.length }), {
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": CORS_ORIGIN },
     });
   } catch (err: any) {
     return new Response(JSON.stringify({ error: err.message }), {
       status: 400,
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": CORS_ORIGIN },
     });
   }
 });

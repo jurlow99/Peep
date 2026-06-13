@@ -1,86 +1,15 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "../supabase";
 import { ImageUploader } from "./ImageUploader";
-
-const EMPTY_ROW = {
-  title: "",
-  category: "Horror",
-  rating: "NR",
-  score: "",
-  duration: "",
-  year: "",
-  thumbnail: "",
-  poster: "",
-  url: "",
-  trailer_url: "",
-  description: "",
-  tags: "",
-};
-
-const EMPTY_SHOW = {
-  title: "",
-  category: "Horror",
-  rating: "NR",
-  year: "",
-  score: "",
-  thumbnail: "",
-  poster: "",
-  description: "",
-  tags: "",
-  trailer_url: "",
-};
-
-const EMPTY_EPISODE = {
-  show_id: "",
-  season: 1,
-  episode_number: 1,
-  title: "",
-  description: "",
-  url: "",
-  thumbnail: "",
-  duration: "",
-};
-
-const EMPTY_CAROUSEL = {
-  title: "",
-  type: "category",
-  filter_value: "",
-  content_type: "all",
-  enabled: true,
-  position: 0,
-  pages: "home",
-};
-
-const EMPTY_LIVE_STREAM = {
-  title: "",
-  description: "",
-  stream_url: "",
-  thumbnail: "",
-  hero_image: "",
-  is_live: true,
-  is_hero: false,
-};
-
-const EMPTY_PODCAST = {
-  title: "",
-  host: "",
-  description: "",
-  artwork_url: "",
-  link_url: "",
-  episode_count: "",
-  tags: "",
-  enabled: true,
-};
-
-const EMPTY_PODCAST_EPISODE = {
-  podcast_id: "",
-  episode_number: 1,
-  title: "",
-  description: "",
-  audio_url: "",
-  duration: "",
-  thumbnail: "",
-};
+import {
+  EMPTY_ROW,
+  EMPTY_SHOW,
+  EMPTY_EPISODE,
+  EMPTY_CAROUSEL,
+  EMPTY_LIVE_STREAM,
+  EMPTY_PODCAST,
+  EMPTY_PODCAST_EPISODE,
+} from "./cms/constants";
 
 const EMPTY_AD = {
   name: "",
@@ -91,7 +20,13 @@ const EMPTY_AD = {
   active: true,
 };
 
-const SUPABASE_URL = "https://iuozujwtuzuwubhsnhix.supabase.co";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+
+async function getAdminToken() {
+  await supabase.auth.getUser(); // validates + auto-refreshes if expired
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token ?? null;
+}
 
 export function CMS({ onExit, currentUser }) {
   const [tab, setTab] = useState("content");
@@ -485,7 +420,7 @@ export function CMS({ onExit, currentUser }) {
   async function searchUsers(query) {
     if (!query.trim()) { setUserSearchResults([]); return; }
     try {
-      const { data } = await supabase.from("profiles").select("id, username, email, created_at, is_admin").or(`email.ilike.%${query}%,username.ilike.%${query}%`).limit(10);
+      const { data } = await supabase.from("profiles").select("id, username, email, created_at, role, is_admin").or(`email.ilike.%${query}%,username.ilike.%${query}%`).limit(10);
       setUserSearchResults(data || []);
     } catch (err) {
       console.error("searchUsers error:", err);
@@ -588,20 +523,24 @@ export function CMS({ onExit, currentUser }) {
     const profiles = profileData || [];
     if (!profiles.length) { setUsers([]); setUsersLoading(false); return; }
     const ids = profiles.map(p => p.id);
-    const { data: subData } = await supabase.from("subscriptions").select("user_id, status, plan").in("user_id", ids);
+    const [{ data: subData }, { data: streamerData }] = await Promise.all([
+      supabase.from("subscriptions").select("user_id, status, plan").in("user_id", ids),
+      supabase.from("live_streams").select("user_id").in("user_id", ids),
+    ]);
     const subMap = {};
     (subData || []).forEach(s => { subMap[s.user_id] = s; });
-    setUsers(profiles.map(p => ({ ...p, subscription: subMap[p.id] || null })));
+    const streamerSet = new Set((streamerData || []).map(s => s.user_id));
+    setUsers(profiles.map(p => ({ ...p, subscription: subMap[p.id] || null, isStreamer: streamerSet.has(p.id) })));
     setUsersLoading(false);
   }
 
   async function deleteUser(user_id) {
     setDeletingUser(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const token = await getAdminToken();
       const res = await fetch(`${SUPABASE_URL}/functions/v1/delete-user`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({ user_id }),
       });
       const data = await res.json();
@@ -658,10 +597,10 @@ export function CMS({ onExit, currentUser }) {
   async function supportGrantAccess() {
     setSupportActionLoading(true); setSupportActionMsg(null);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const token = await getAdminToken();
       const res = await fetch(`${SUPABASE_URL}/functions/v1/grant-access`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({ email: supportUser.email }),
       });
       const data = await res.json();
@@ -686,10 +625,10 @@ export function CMS({ onExit, currentUser }) {
   async function supportSendPasswordReset() {
     setSupportActionLoading(true); setSupportActionMsg(null);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const token = await getAdminToken();
       const res = await fetch(`${SUPABASE_URL}/functions/v1/send-reset-email`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({ email: supportUser.email }),
       });
       const data = await res.json();
@@ -702,10 +641,10 @@ export function CMS({ onExit, currentUser }) {
   async function supportDeleteUser() {
     setSupportActionLoading(true); setSupportActionMsg(null);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const token = await getAdminToken();
       const res = await fetch(`${SUPABASE_URL}/functions/v1/delete-user`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({ user_id: supportUser.id }),
       });
       const data = await res.json();
@@ -909,10 +848,10 @@ export function CMS({ onExit, currentUser }) {
     setGrantLoading(true);
     setGrantResult(null);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const token = await getAdminToken();
       const res = await fetch("https://iuozujwtuzuwubhsnhix.supabase.co/functions/v1/grant-access", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({ email: grantEmail.trim() }),
       });
       const data = await res.json();
@@ -1013,8 +952,7 @@ export function CMS({ onExit, currentUser }) {
   async function fetchStripeRevenue() {
     setFetchingRevenue(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const token = await getAdminToken();
       const res = await fetch(`${SUPABASE_URL}/functions/v1/get-stripe-revenue`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
@@ -1050,8 +988,7 @@ export function CMS({ onExit, currentUser }) {
     setReviewEpisodes(prev => prev.filter(e => e.id !== ep.id));
     setPendingCount(c => Math.max(0, c - 1));
     showToast("Episode approved — it's now live");
-    const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
+    const token = await getAdminToken();
     fetch(`${SUPABASE_URL}/functions/v1/notify-episode-status`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
@@ -1066,8 +1003,7 @@ export function CMS({ onExit, currentUser }) {
     setRejectModal(null);
     setRejectNote("");
     showToast("Episode rejected — creator notified");
-    const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
+    const token = await getAdminToken();
     fetch(`${SUPABASE_URL}/functions/v1/notify-episode-status`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
@@ -1091,8 +1027,7 @@ export function CMS({ onExit, currentUser }) {
         loadCreators();
         // Send invite
         try {
-          const { data: { session } } = await supabase.auth.getSession();
-          const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
+          const token = await getAdminToken();
           const invRes = await fetch(`${SUPABASE_URL}/functions/v1/invite-creator`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
@@ -1114,8 +1049,7 @@ export function CMS({ onExit, currentUser }) {
   async function resendInvite(creator) {
     setResendingInvite(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const token = await getAdminToken();
       const res = await fetch(`${SUPABASE_URL}/functions/v1/invite-creator`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
@@ -2262,8 +2196,7 @@ export function CMS({ onExit, currentUser }) {
   async function approveApplication(app) {
     setApprovingId(app.id);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const token = await getAdminToken();
       const res = await fetch(`${SUPABASE_URL}/functions/v1/approve-streamer`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
@@ -2284,8 +2217,7 @@ export function CMS({ onExit, currentUser }) {
     if (!rejectTarget) return;
     setRejectingId(rejectTarget.id);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const token = await getAdminToken();
       const res = await fetch(`${SUPABASE_URL}/functions/v1/reject-streamer`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
@@ -4366,7 +4298,7 @@ export function CMS({ onExit, currentUser }) {
                         <div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{p.email || p.username}</div>
                         {p.username && p.email && <div style={{ fontSize: 11, color: "#9ca3af" }}>@{p.username}</div>}
                       </div>
-                      {p.is_admin && <span style={{ fontSize: 10, background: "#ede9fe", color: "#7c3aed", borderRadius: 4, padding: "2px 7px", fontWeight: 700 }}>Admin</span>}
+                      {(p.role === "admin" || p.is_admin) && <span style={{ fontSize: 10, background: "#ede9fe", color: "#7c3aed", borderRadius: 4, padding: "2px 7px", fontWeight: 700 }}>Admin</span>}
                       <span style={{ fontSize: 11, color: "#9ca3af" }}>joined {new Date(p.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span>
                     </div>
                   ))}
@@ -5164,7 +5096,7 @@ export function CMS({ onExit, currentUser }) {
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                   <thead>
                     <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-                      {["Name", "Email", "Subscription", "Joined", ""].map(h => (
+                      {["Name", "Email", "Type", "Subscription", "Joined", ""].map(h => (
                         <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{h}</th>
                       ))}
                     </tr>
@@ -5174,6 +5106,12 @@ export function CMS({ onExit, currentUser }) {
                       <tr key={u.id} style={{ borderBottom: i < arr.length - 1 ? "1px solid #f1f5f9" : "none" }}>
                         <td style={{ padding: "14px 16px", fontWeight: 600, color: "#0f172a" }}>{u.full_name || u.username || "—"}</td>
                         <td style={{ padding: "14px 16px", color: "#6b7280" }}>{u.email}</td>
+                        <td style={{ padding: "14px 16px" }}>
+                          {u.isStreamer
+                            ? <span style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 600, color: "#dc2626" }}>User + Streamer</span>
+                            : <span style={{ background: "rgba(79,70,229,0.08)", border: "1px solid rgba(79,70,229,0.2)", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 600, color: "#4f46e5" }}>User</span>
+                          }
+                        </td>
                         <td style={{ padding: "14px 16px" }}>
                           {u.subscription ? (
                             <span style={{ background: u.subscription.status === "active" ? "rgba(52,211,153,0.1)" : "rgba(248,113,113,0.1)", color: u.subscription.status === "active" ? "#059669" : "#dc2626", border: `1px solid ${u.subscription.status === "active" ? "rgba(52,211,153,0.3)" : "rgba(248,113,113,0.3)"}`, borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 600 }}>
@@ -7865,10 +7803,10 @@ function AdminAccessCard({ supabaseUrl, currentUser }) {
     setActing(true);
     setMsg(null);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const token = await getAdminToken();
       const res = await fetch(`${supabaseUrl}/functions/v1/manage-admin-role`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({ targetEmail: result.email, action }),
       });
       const data = await res.json();

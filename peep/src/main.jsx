@@ -1,13 +1,16 @@
 import { StrictMode, Component } from 'react'
 import { createRoot } from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.jsx'
+import { QueryProvider } from './providers/QueryProvider.jsx'
 import { AdminPage } from './pages/AdminPage.jsx'
 import { SignupPage, SigninPage } from './pages/AuthPages.jsx'
 import { StreamerSignInPage } from './pages/AuthPages.jsx'
 import { SetPasswordPage } from './pages/SetPasswordPage.jsx'
 import { StreamerDashboard } from './pages/StreamerDashboard.jsx'
 import { ApplyToStreamPage } from './pages/ApplyToStreamPage.jsx'
+import { CreateChannelPage } from './pages/CreateChannelPage.jsx'
 import { StreamerProfile } from './pages/StreamerProfile.jsx'
 
 class ErrorBoundary extends Component {
@@ -37,9 +40,14 @@ createRoot(document.getElementById('root')).render(
        path === '/set-password'   ? <SetPasswordPage />    :
        path === '/streamer-signin'? <StreamerSignInPage /> :
        path === '/apply-to-stream'? <ApplyToStreamPage />  :
+       path === '/create-channel' ? <CreateChannelPage /> :
        path === '/streamer'       ? <StreamerDashboard />  :
        path.startsWith('/stream/')? <StreamerProfile />    :
-       <App />}
+       <BrowserRouter>
+         <QueryProvider>
+           <App />
+         </QueryProvider>
+       </BrowserRouter>}
     </ErrorBoundary>
   </StrictMode>,
 )

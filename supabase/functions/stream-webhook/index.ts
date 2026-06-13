@@ -1,16 +1,17 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+const CORS_ORIGIN = Deno.env.get("SITE_URL") || "https://watchpeep.tv";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
-      headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, content-type, webhook-signature" },
+      headers: { "Access-Control-Allow-Origin": CORS_ORIGIN, "Access-Control-Allow-Headers": "authorization, content-type, webhook-signature" },
     });
   }
 
   try {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SERVICE_ROLE_KEY")!
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
     const body = await req.json();
@@ -31,7 +32,7 @@ Deno.serve(async (req) => {
         fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/notify-go-live`, {
           method: "POST",
           headers: {
-            "Authorization": `Bearer ${Deno.env.get("SERVICE_ROLE_KEY")}`,
+            "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ stream_id: stream.id }),
@@ -85,12 +86,12 @@ Deno.serve(async (req) => {
     }
 
     return new Response(JSON.stringify({ success: true }), {
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": CORS_ORIGIN },
     });
   } catch (err: any) {
     return new Response(JSON.stringify({ error: err.message }), {
       status: 400,
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": CORS_ORIGIN },
     });
   }
 });

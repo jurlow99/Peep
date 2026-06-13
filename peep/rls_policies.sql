@@ -3,10 +3,9 @@
 -- Run this in the Supabase SQL editor.
 -- If prompted about RLS, click "Run without RLS".
 --
--- IMPORTANT: Admin write policies require the CMS user to have an active
--- Supabase auth session AND is_admin = true in the profiles table.
+-- IMPORTANT: Admin write policies require role = 'admin' (or legacy is_admin = true).
 -- To make your account admin, run:
---   UPDATE profiles SET is_admin = true WHERE id = '<your-auth-user-id>';
+--   UPDATE profiles SET role = 'admin', is_admin = true WHERE id = '<your-auth-user-id>';
 -- ───────────────────────────────────────────────────────────────────────────
 
 -- Helper function — checks if the current user is an admin
@@ -16,7 +15,9 @@ LANGUAGE sql
 SECURITY DEFINER
 AS $$
   SELECT EXISTS (
-    SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true
+    SELECT 1 FROM profiles
+    WHERE id = auth.uid()
+      AND (role = 'admin' OR is_admin = true)
   );
 $$;
 

@@ -1,20 +1,24 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireAdmin } from "../_shared/supabase.ts";
+import { corsHeaders } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
-      headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, content-type" },
+      headers: corsHeaders,
     });
   }
 
   try {
-    const { name, email } = await req.json();
-    if (!email?.trim() || !name?.trim()) throw new Error("Name and email are required");
-
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SERVICE_ROLE_KEY")!
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+
+    await requireAdmin(req, supabase);
+
+    const { name, email } = await req.json();
+    if (!email?.trim() || !name?.trim()) throw new Error("Name and email are required");
 
     // Generate invite link (creates user in auth if they don't exist)
     const { data, error: linkErr } = await supabase.auth.admin.generateLink({
@@ -71,12 +75,12 @@ Deno.serve(async (req) => {
     if (result.error) throw new Error(result.error.message || JSON.stringify(result.error));
 
     return new Response(JSON.stringify({ success: true, user_id: userId }), {
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      headers: { "Content-Type": "application/json", ...corsHeaders },
     });
   } catch (err: any) {
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500,
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      headers: { "Content-Type": "application/json", ...corsHeaders },
     });
   }
 });

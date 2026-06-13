@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+const CORS_ORIGIN = Deno.env.get("SITE_URL") || "https://watchpeep.tv";
 
 const DEFAULT_PRICE_ID = "price_1TZkbxRgQH3TYy3QAYrrn4Ew";
 
@@ -6,7 +7,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
       headers: {
-        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Origin": CORS_ORIGIN,
         "Access-Control-Allow-Headers": "authorization, content-type",
       },
     });
@@ -65,7 +66,7 @@ Deno.serve(async (req) => {
     // Write to DB directly — don't wait for webhook
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SERVICE_ROLE_KEY")!
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
     await supabaseClient.from("subscriptions").upsert({
       user_id,
@@ -84,12 +85,12 @@ Deno.serve(async (req) => {
       status: paymentIntent?.status ?? sub.status,
       client_secret: paymentIntent?.client_secret ?? null,
     }), {
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": CORS_ORIGIN },
     });
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500,
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": CORS_ORIGIN },
     });
   }
 });

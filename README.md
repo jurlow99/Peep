@@ -35,6 +35,16 @@ npm run dev
 
 Deployed automatically to Cloudflare Pages on every push to `main`.
 
+## Project structure
+
+| Path | Purpose |
+|------|---------|
+| `peep/` | **Canonical frontend** — run all npm commands here |
+| `supabase/` | Edge functions + SQL migrations |
+| `docs/` | Product and ops documentation |
+
+> **Note:** A legacy `src/` at the repo root was removed. All frontend code lives in `peep/src/`.
+
 ## Documentation
 
-Full docs are in the [`/docs`](docs/) folder — CMS, creator system, revenue share, ads, database schema.
+Full docs are in the [`/docs`](docs/) folder — CMS, creator system, revenue share, ads, database schema, [security](docs/SECURITY.md).

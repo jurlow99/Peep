@@ -1,25 +1,19 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireAdmin } from "../_shared/supabase.ts";
+import { corsHeaders } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, content-type" },
-    });
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Verify caller is an authenticated admin via service role check
-    const authHeader = req.headers.get("Authorization") || "";
-    const token = authHeader.replace("Bearer ", "").trim();
-    if (!token) throw new Error("Not authenticated");
-
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SERVICE_ROLE_KEY")!
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { data: { user }, error: userErr } = await supabase.auth.getUser(token);
-    if (!user || userErr) throw new Error("Not authenticated");
+    await requireAdmin(req, supabase);
 
     const { email } = await req.json();
     if (!email?.trim()) throw new Error("Email is required");
@@ -43,12 +37,12 @@ Deno.serve(async (req) => {
     if (error) throw new Error(error.message);
 
     return new Response(JSON.stringify({ success: true, email: target.email }), {
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      headers: { "Content-Type": "application/json", ...corsHeaders },
     });
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500,
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      headers: { "Content-Type": "application/json", ...corsHeaders },
     });
   }
 });

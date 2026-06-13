@@ -34,7 +34,7 @@ Hosted on Supabase (PostgreSQL). All tables are in the `public` schema.
 
 | Table | Description |
 |---|---|
-| `profiles` | Auth user profiles (username, email, is_admin) |
+| `profiles` | Auth user profiles (username, email, role, is_admin legacy) |
 | `viewer_profiles` | Multiple viewer profiles per account |
 | `subscriptions` | Stripe subscription records |
 | `watch_progress` | Per-user watch position and duration for all content |
