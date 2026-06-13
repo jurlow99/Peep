@@ -367,8 +367,9 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, 
         transition: "background 0.4s ease, border-color 0.4s ease",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 36 }}>
-          <span onClick={() => setActiveNav("Home")} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 30, letterSpacing: "-0.5px", userSelect: "none", cursor: "pointer" }}>
-            <span style={{ color: "#facc15" }}>peep.</span>
+          <span onClick={() => setActiveNav("Home")} style={{ display: "inline-flex", alignItems: "flex-end", gap: 5, userSelect: "none", cursor: "pointer" }}>
+            <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 30, letterSpacing: "-0.5px", color: "#facc15", lineHeight: 1 }}>peep.</span>
+            <span style={{ fontSize: 9, fontWeight: 800, color: "#0a0a0a", background: "#facc15", borderRadius: 4, padding: "2px 5px", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4, lineHeight: 1.4 }}>BETA</span>
           </span>
           {!isMobile && (
             <div style={{ display: "flex", gap: 4 }}>

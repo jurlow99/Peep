@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabase";
 
 const PAD = "clamp(16px, 5vw, 96px)";
@@ -19,16 +19,36 @@ const CATEGORY_LABELS = {
   education: "Education", creative: "Creative",
 };
 
+const CSS = `
+  @keyframes livepulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(1.3)} }
+  @keyframes shimmer { 0%{background-position:-400px 0} 100%{background-position:400px 0} }
+  @keyframes fadeup { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes ringpulse { 0%{box-shadow:0 0 0 0 rgba(239,68,68,0.5)} 70%{box-shadow:0 0 0 6px rgba(239,68,68,0)} 100%{box-shadow:0 0 0 0 rgba(239,68,68,0)} }
+  @keyframes btnpop { 0%{transform:scale(1)} 40%{transform:scale(1.14)} 100%{transform:scale(1)} }
+  .stream-card { animation: fadeup 0.35s ease both; }
+  .follow-pop { animation: btnpop 0.28s ease; }
+`;
+
 function viewerStr(n) {
   if (!n) return null;
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 }
 
-function Avatar({ stream, size = 38 }) {
+function Avatar({ stream, size = 38, live = false }) {
   const src = stream.profile_picture || stream.avatar_url;
   const letter = (stream.channel_name || stream.title || "?")[0].toUpperCase();
   return (
-    <div style={{ width: size, height: size, borderRadius: "50%", flexShrink: 0, overflow: "hidden", background: "linear-gradient(135deg, #1e1b4b, #4c1d95)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: Math.round(size * 0.4), fontWeight: 700, color: "#fff" }}>
+    <div style={{
+      width: size, height: size, borderRadius: "50%", flexShrink: 0, overflow: "hidden",
+      background: "linear-gradient(135deg, #1e1b4b, #4c1d95)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontSize: Math.round(size * 0.4), fontWeight: 700, color: "#fff",
+      // red ring + pulse only when live
+      outline: live ? "2px solid #ef4444" : "none",
+      outlineOffset: 2,
+      animation: live ? "ringpulse 2s ease-out infinite" : "none",
+      transition: "outline 0.3s",
+    }}>
       {src ? <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : letter}
     </div>
   );
@@ -46,22 +66,89 @@ function LiveBadge({ size = "sm" }) {
   );
 }
 
+function FollowButton({ isFollowing, onClick }) {
+  const [popping, setPopping] = useState(false);
+
+  function handleClick(e) {
+    e.preventDefault(); e.stopPropagation();
+    setPopping(true);
+    onClick();
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      onAnimationEnd={() => setPopping(false)}
+      className={popping ? "follow-pop" : ""}
+      style={{
+        flexShrink: 0,
+        background: isFollowing ? "rgba(250,204,21,0.08)" : "transparent",
+        border: `1px solid ${isFollowing ? "rgba(250,204,21,0.3)" : "#2a2a2a"}`,
+        borderRadius: 7, padding: "6px 13px",
+        color: isFollowing ? "#facc15" : "#555",
+        fontSize: 12, fontWeight: 700, cursor: "pointer",
+        transition: "background 0.15s, border-color 0.15s, color 0.15s",
+        fontFamily: "inherit",
+      }}
+      onMouseEnter={e => { if (!isFollowing) { e.currentTarget.style.borderColor = "#3a3a3a"; e.currentTarget.style.color = "#aaa"; } }}
+      onMouseLeave={e => { if (!isFollowing) { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#555"; } }}
+    >
+      {isFollowing ? "✓ Following" : "+ Follow"}
+    </button>
+  );
+}
+
+function ThumbnailPlaceholder() {
+  return (
+    <div style={{
+      width: "100%", height: "100%",
+      background: "linear-gradient(90deg, #111 25%, #181818 50%, #111 75%)",
+      backgroundSize: "800px 100%",
+      animation: "shimmer 1.8s infinite linear",
+      display: "flex", alignItems: "center", justifyContent: "center",
+    }}>
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="rgba(255,255,255,0.05)">
+        <path d="M17 10.5V7a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h12a1 1 0 001-1v-3.5l4 4v-11l-4 4z"/>
+      </svg>
+    </div>
+  );
+}
+
 function FeaturedStream({ stream, viewers, isFollowing, onToggleFollow, user }) {
+  const [hovered, setHovered] = useState(false);
+  const [followPopping, setFollowPopping] = useState(false);
   const slug = stream.slug || stream.username || (stream.channel_name || stream.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
   const count = viewers || 0;
   const channelName = stream.channel_name || stream.title;
 
+  function handleFollow(e) {
+    e.preventDefault(); e.stopPropagation();
+    setFollowPopping(true);
+    onToggleFollow(stream.id);
+  }
+
   return (
-    <a href={`/stream/${slug}`} style={{ textDecoration: "none", color: "inherit", display: "block", marginBottom: 40 }}>
-      <div style={{ position: "relative", borderRadius: 16, overflow: "hidden", background: "#0f0f0f", border: "1px solid #1e1e1e", display: "grid", gridTemplateColumns: "1fr 320px" }}>
+    <a href={`/stream/${slug}`} style={{ textDecoration: "none", color: "inherit", display: "block", marginBottom: 40 }}
+      onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+      <div style={{
+        position: "relative", borderRadius: 16, overflow: "hidden",
+        background: "#0f0f0f",
+        border: "1px solid rgba(239,68,68,0.25)",
+        boxShadow: hovered
+          ? "0 0 0 1px rgba(239,68,68,0.35), 0 16px 48px rgba(239,68,68,0.1)"
+          : "0 0 0 0px transparent, 0 4px 24px rgba(0,0,0,0.4)",
+        display: "grid", gridTemplateColumns: "1fr 320px",
+        transition: "box-shadow 0.25s, transform 0.2s",
+        transform: hovered ? "translateY(-2px)" : "translateY(0)",
+      }}>
         {/* Thumbnail */}
         <div style={{ position: "relative", aspectRatio: "16/9", overflow: "hidden", background: "#111" }}>
-          {stream.thumbnail || stream.hero_image
-            ? <img src={stream.thumbnail || stream.hero_image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="rgba(255,255,255,0.07)"><path d="M17 10.5V7a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h12a1 1 0 001-1v-3.5l4 4v-11l-4 4z"/></svg>
-              </div>
-          }
+          <div style={{ width: "100%", height: "100%", transition: "transform 0.4s ease", transform: hovered ? "scale(1.03)" : "scale(1)" }}>
+            {stream.thumbnail || stream.hero_image
+              ? <img src={stream.thumbnail || stream.hero_image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              : <ThumbnailPlaceholder />
+            }
+          </div>
           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, transparent 70%, rgba(0,0,0,0.4))" }} />
           <div style={{ position: "absolute", top: 14, left: 14 }}>
             <LiveBadge size="lg" />
@@ -79,7 +166,7 @@ function FeaturedStream({ stream, viewers, isFollowing, onToggleFollow, user }) 
           <div>
             <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 700, color: "#ef4444", letterSpacing: "0.1em", textTransform: "uppercase" }}>Featured Stream</p>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-              <Avatar stream={stream} size={40} />
+              <Avatar stream={stream} size={40} live />
               <div>
                 <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#fff", lineHeight: 1.2 }}>{channelName}</p>
                 {stream.category && stream.category !== "general" && (
@@ -93,13 +180,18 @@ function FeaturedStream({ stream, viewers, isFollowing, onToggleFollow, user }) 
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <a href={`/stream/${slug}`}
-              style={{ display: "block", background: "#ef4444", border: "none", borderRadius: 8, padding: "12px", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", textAlign: "center", textDecoration: "none" }}>
+              style={{ display: "block", background: "#ef4444", border: "none", borderRadius: 8, padding: "12px", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", textAlign: "center", textDecoration: "none", transition: "background 0.15s", boxShadow: "0 4px 16px rgba(239,68,68,0.3)" }}
+              onMouseEnter={e => e.currentTarget.style.background = "#dc2626"}
+              onMouseLeave={e => e.currentTarget.style.background = "#ef4444"}>
               Watch Live →
             </a>
             {user && user.id !== stream.user_id && (
-              <button onClick={e => { e.preventDefault(); e.stopPropagation(); onToggleFollow(stream.id); }}
-                style={{ background: isFollowing ? "rgba(255,255,255,0.05)" : "transparent", border: `1px solid ${isFollowing ? "#2a2a2a" : "#2a2a2a"}`, borderRadius: 8, padding: "11px", color: isFollowing ? "#555" : "#888", fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>
-                {isFollowing ? "Following ✓" : "+ Follow"}
+              <button
+                onClick={handleFollow}
+                onAnimationEnd={() => setFollowPopping(false)}
+                className={followPopping ? "follow-pop" : ""}
+                style={{ background: isFollowing ? "rgba(255,255,255,0.05)" : "transparent", border: `1px solid ${isFollowing ? "#2a2a2a" : "#2a2a2a"}`, borderRadius: 8, padding: "11px", color: isFollowing ? "#facc15" : "#888", fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "all 0.15s", fontFamily: "inherit" }}>
+                {isFollowing ? "✓ Following" : "+ Follow"}
               </button>
             )}
           </div>
@@ -109,29 +201,44 @@ function FeaturedStream({ stream, viewers, isFollowing, onToggleFollow, user }) 
   );
 }
 
-function StreamCard({ stream, viewers, isLive, isFollowing, onToggleFollow, user }) {
+function StreamCard({ stream, viewers, isLive, isFollowing, onToggleFollow, user, index = 0 }) {
   const [hovered, setHovered] = useState(false);
   const slug = stream.slug || stream.username || (stream.channel_name || stream.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
   const count = viewers || 0;
   const channelName = stream.channel_name || stream.title;
 
+  const liveGlow = isLive && hovered
+    ? "0 0 0 1px rgba(239,68,68,0.3), 0 8px 28px rgba(239,68,68,0.08)"
+    : isLive
+      ? "0 0 0 1px rgba(239,68,68,0.12), 0 2px 12px rgba(0,0,0,0.4)"
+      : "0 2px 12px rgba(0,0,0,0.3)";
+
   return (
     <div
+      className="stream-card"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{ borderRadius: 12, overflow: "hidden", background: "#0f0f0f", border: `1px solid ${hovered ? "#2a2a2a" : "#161616"}`, transition: "border-color 0.15s, transform 0.15s", transform: hovered ? "translateY(-2px)" : "translateY(0)" }}
+      style={{
+        borderRadius: 12, overflow: "hidden", background: "#0f0f0f",
+        border: `1px solid ${isLive ? "rgba(239,68,68,0.15)" : "#161616"}`,
+        boxShadow: liveGlow,
+        transition: "box-shadow 0.2s, transform 0.2s, border-color 0.2s",
+        transform: hovered ? "translateY(-4px)" : "translateY(0)",
+        animationDelay: `${index * 50}ms`,
+      }}
     >
       <a href={`/stream/${slug}`} style={{ textDecoration: "none", color: "inherit", display: "block" }}>
 
         <div style={{ position: "relative", aspectRatio: "16/9", overflow: "hidden", background: "#111" }}>
-          <div style={{ width: "100%", height: "100%", transition: "transform 0.3s ease", transform: hovered ? "scale(1.04)" : "scale(1)" }}>
+          <div style={{ width: "100%", height: "100%", transition: "transform 0.35s ease", transform: hovered ? "scale(1.05)" : "scale(1)" }}>
             {stream.thumbnail || stream.hero_image
               ? <img src={stream.thumbnail || stream.hero_image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              : <div style={{ width: "100%", height: "100%", background: `linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="rgba(255,255,255,0.08)"><path d="M17 10.5V7a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h12a1 1 0 001-1v-3.5l4 4v-11l-4 4z"/></svg>
-                </div>
+              : <ThumbnailPlaceholder />
             }
           </div>
+
+          {/* Hover vignette overlay */}
+          <div style={{ position: "absolute", inset: 0, background: hovered ? "linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 50%)" : "transparent", transition: "background 0.3s", pointerEvents: "none" }} />
 
           {!isLive && <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)" }} />}
 
@@ -143,23 +250,6 @@ function StreamCard({ stream, viewers, isLive, isFollowing, onToggleFollow, user
             )}
           </div>
 
-          {user && user.id !== stream.user_id && (
-            <button
-              onClick={e => { e.preventDefault(); e.stopPropagation(); onToggleFollow(stream.id); }}
-              style={{
-                position: "absolute", top: 10, right: 10,
-                background: isFollowing ? "rgba(250,204,21,0.9)" : "rgba(0,0,0,0.65)",
-                backdropFilter: "blur(6px)",
-                border: `1px solid ${isFollowing ? "transparent" : "rgba(255,255,255,0.12)"}`,
-                borderRadius: 6, padding: "4px 12px",
-                color: isFollowing ? "#0a0a0a" : "#ddd",
-                fontSize: 11, fontWeight: 700, cursor: "pointer", transition: "all 0.15s",
-              }}
-            >
-              {isFollowing ? "Following" : "+ Follow"}
-            </button>
-          )}
-
           {isLive && count > 0 && (
             <div style={{ position: "absolute", bottom: 8, right: 8, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(4px)", borderRadius: 5, padding: "3px 8px", display: "flex", alignItems: "center", gap: 4 }}>
               <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#ef4444" }} />
@@ -168,21 +258,19 @@ function StreamCard({ stream, viewers, isLive, isFollowing, onToggleFollow, user
           )}
         </div>
 
-        <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "12px 14px 14px" }}>
-          <Avatar stream={stream} size={36} />
+        <div style={{ display: "flex", gap: 10, alignItems: "center", padding: "11px 12px 13px" }}>
+          <Avatar stream={stream} size={36} live={isLive} />
           <div style={{ minWidth: 0, flex: 1 }}>
-            <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 600, color: isLive ? "#fff" : "#666", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.3 }}>
+            <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: isLive ? "#e8e8e8" : "#555", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.3 }}>
               {stream.stream_title || channelName}
             </p>
-            <p style={{ margin: "0 0 5px", fontSize: 12, color: "#444", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <p style={{ margin: 0, fontSize: 12, color: "#3a3a3a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {channelName}
             </p>
-            {stream.category && stream.category !== "general" && (
-              <span style={{ fontSize: 11, color: "#555", background: "rgba(255,255,255,0.04)", border: "1px solid #1e1e1e", borderRadius: 4, padding: "2px 7px" }}>
-                {CATEGORY_LABELS[stream.category] || stream.category}
-              </span>
-            )}
           </div>
+          {user && user.id !== stream.user_id && (
+            <FollowButton isFollowing={isFollowing} onClick={() => onToggleFollow(stream.id)} />
+          )}
         </div>
       </a>
     </div>
@@ -253,13 +341,12 @@ export function LiveTVPage({ streams, user, streamsLoading }) {
   const totalViewers = Object.values(viewerCounts).reduce((a, b) => a + b, 0);
   const followingCount = streams.filter(s => followedIds.has(s.id)).length;
 
-  // Pick featured stream: live, sorted by viewer count
   const sortedLive = [...liveStreams].sort((a, b) => (viewerCounts[b.id] || 0) - (viewerCounts[a.id] || 0));
   const featuredStream = sortedLive[0] || null;
   const remainingLive = filteredLive.filter(s => !featuredStream || s.id !== featuredStream.id || activeTab === "following");
 
-  const cardProps = s => ({
-    stream: s, viewers: viewerCounts[s.id] || 0,
+  const cardProps = (s, i) => ({
+    stream: s, viewers: viewerCounts[s.id] || 0, index: i,
     isLive: s.is_live, isFollowing: followedIds.has(s.id),
     onToggleFollow: toggleFollow, user,
   });
@@ -282,7 +369,7 @@ export function LiveTVPage({ streams, user, streamsLoading }) {
 
   return (
     <div style={{ paddingTop: 90, paddingBottom: 80, minHeight: "100vh" }}>
-      <style>{`@keyframes livepulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.3)}}`}</style>
+      <style>{CSS}</style>
       <div style={{ padding: `0 ${PAD}` }}>
 
         {/* Header */}
@@ -300,7 +387,7 @@ export function LiveTVPage({ streams, user, streamsLoading }) {
 
         {/* Featured live stream */}
         {activeTab === "all" && featuredStream && filteredLive.length > 0 && (
-          <FeaturedStream {...cardProps(featuredStream)} />
+          <FeaturedStream {...cardProps(featuredStream, 0)} />
         )}
 
         {/* Tabs */}
@@ -341,7 +428,7 @@ export function LiveTVPage({ streams, user, streamsLoading }) {
               <p style={{ margin: "0 0 18px", fontSize: 11, fontWeight: 700, color: "#ef4444", letterSpacing: "0.12em", textTransform: "uppercase" }}>Live Now</p>
             ) : null}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 20 }}>
-              {remainingLive.map(s => <StreamCard key={s.id} {...cardProps(s)} />)}
+              {remainingLive.map((s, i) => <StreamCard key={s.id} {...cardProps(s, i)} />)}
             </div>
           </div>
         )}
@@ -357,7 +444,7 @@ export function LiveTVPage({ streams, user, streamsLoading }) {
               {liveStreams.length > 0 ? "Other Channels" : "All Channels"}
             </p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 20 }}>
-              {filteredOffline.map(s => <StreamCard key={s.id} {...cardProps(s)} />)}
+              {filteredOffline.map((s, i) => <StreamCard key={s.id} {...cardProps(s, i)} />)}
             </div>
           </div>
         )}
