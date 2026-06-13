@@ -16,30 +16,45 @@ Deno.serve(async (req) => {
 
     const url = new URL(req.url);
     const streamUid = url.searchParams.get("stream_uid");
-    const streamId = url.searchParams.get("stream_id");
+    const streamId  = url.searchParams.get("stream_id");
     if (!streamUid || !streamId) throw new Error("stream_uid and stream_id are required");
 
     const cfAccountId = Deno.env.get("CLOUDFLARE_ACCOUNT_ID")!;
-    const cfToken = Deno.env.get("CLOUDFLARE_API_TOKEN")!;
+    const cfToken     = Deno.env.get("CLOUDFLARE_API_TOKEN")!;
 
-    // Ask Cloudflare if this live input is currently connected
-    const res = await fetch(
+    const res  = await fetch(
       `https://api.cloudflare.com/client/v4/accounts/${cfAccountId}/stream/live_inputs/${streamUid}`,
       { headers: { "Authorization": `Bearer ${cfToken}` } }
     );
     const data = await res.json();
-
     if (!data.success) throw new Error("Cloudflare error");
 
-    const isLive = data.result?.status?.current?.state === "connected";
+    const current = data.result?.status?.current ?? {};
+    const state   = current.state ?? "disconnected";
+    const isLive  = state === "connected";
 
-    // Update DB to match
-    await supabase
-      .from("live_streams")
-      .update({ is_live: isLive })
-      .eq("id", streamId);
+    // Parse frame rate fraction e.g. "30/1" → 30
+    let fps: number | null = null;
+    if (current.frameRate) {
+      const parts = String(current.frameRate).split("/");
+      fps = parts.length === 2
+        ? Math.round(Number(parts[0]) / Number(parts[1]))
+        : Math.round(Number(parts[0]));
+    }
 
-    return new Response(JSON.stringify({ is_live: isLive }), {
+    const streamHealth = {
+      state,                                              // "connected" | "disconnected" | "idle"
+      bitrate:    current.bitrate   ?? null,              // bps
+      fps,                                               // frames per second
+      width:      current.width     ?? null,
+      height:     current.height    ?? null,
+      videoCodec: current.videoCodec ?? null,
+      audioCodec: current.audioCodec ?? null,
+    };
+
+    await supabase.from("live_streams").update({ is_live: isLive }).eq("id", streamId);
+
+    return new Response(JSON.stringify({ is_live: isLive, health: streamHealth }), {
       headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": CORS_ORIGIN },
     });
   } catch (err: any) {

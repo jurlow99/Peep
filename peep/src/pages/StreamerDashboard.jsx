@@ -127,6 +127,11 @@ export function StreamerDashboard() {
   const [copied, setCopied] = useState(null);
   const [toast, setToast]   = useState(null);
 
+  // Live health data from Cloudflare
+  const [streamHealth, setStreamHealth] = useState(null); // { state, bitrate, fps, width, height }
+  const [liveStartedAt, setLiveStartedAt] = useState(null);
+  const [liveDuration, setLiveDuration]   = useState(0);
+
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(null), 2500); }
   function copy(text, which) {
     navigator.clipboard.writeText(text);
@@ -303,15 +308,27 @@ export function StreamerDashboard() {
       .subscribe();
     async function pollLive() {
       try {
-        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/check-live-status?stream_uid=${stream.stream_uid}&stream_id=${stream.id}`);
+        const res  = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/check-live-status?stream_uid=${stream.stream_uid}&stream_id=${stream.id}`);
         const json = await res.json();
-        if (typeof json.is_live === "boolean") setStream(s => s.is_live !== json.is_live ? { ...s, is_live: json.is_live } : s);
+        if (typeof json.is_live === "boolean") {
+          setStream(s => s.is_live !== json.is_live ? { ...s, is_live: json.is_live } : s);
+          if (json.is_live && !liveStartedAt) setLiveStartedAt(Date.now());
+          if (!json.is_live) { setLiveStartedAt(null); setLiveDuration(0); }
+        }
+        if (json.health) setStreamHealth(json.health);
       } catch {}
     }
     pollLive();
     const t = setInterval(pollLive, 8000);
     return () => { supabase.removeChannel(ch); clearInterval(t); };
   }, [stream?.id]);
+
+  // Live duration ticker
+  useEffect(() => {
+    if (!liveStartedAt) return;
+    const t = setInterval(() => setLiveDuration(Math.floor((Date.now() - liveStartedAt) / 1000)), 1000);
+    return () => clearInterval(t);
+  }, [liveStartedAt]);
 
   // Viewer count
   useEffect(() => {
@@ -538,18 +555,85 @@ export function StreamerDashboard() {
         </div>
       </nav>
 
-      {/* Status bar */}
-      <div style={{ padding: `16px ${PAD}`, borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap", background: stream.is_live ? "rgba(239,68,68,0.04)" : "transparent" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {stream.is_live
-            ? <><div style={{ width: 9, height: 9, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite" }} /><span style={{ fontSize: 14, fontWeight: 700, color: "#ef4444" }}>Live</span></>
-            : <><div style={{ width: 9, height: 9, borderRadius: "50%", background: "#333" }} /><span style={{ fontSize: 14, fontWeight: 600, color: "#444" }}>Offline</span></>}
+      {/* Live monitor bar */}
+      <div style={{ borderBottom: `1px solid ${BORDER}`, background: stream.is_live ? "rgba(239,68,68,0.03)" : "#0a0a0a", transition: "background 0.4s" }}>
+
+        {/* Top row — status + quick stats */}
+        <div style={{ padding: `14px ${PAD}`, display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+          {/* Status pill */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: stream.is_live ? "rgba(239,68,68,0.1)" : "#111", border: `1px solid ${stream.is_live ? "rgba(239,68,68,0.25)" : BORDER}`, borderRadius: 20, padding: "5px 14px", transition: "all 0.3s" }}>
+            <div style={{ width: 7, height: 7, borderRadius: "50%", background: stream.is_live ? "#ef4444" : "#333", animation: stream.is_live ? "livepulse 1.5s infinite" : "none", transition: "background 0.3s" }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: stream.is_live ? "#ef4444" : "#444", letterSpacing: 0.5 }}>{stream.is_live ? "LIVE" : "OFFLINE"}</span>
+            {stream.is_live && liveDuration > 0 && (
+              <span style={{ fontSize: 11, color: "rgba(239,68,68,0.6)", fontVariantNumeric: "tabular-nums" }}>{fmtDuration(liveDuration)}</span>
+            )}
+          </div>
+
+          <div style={{ height: 18, width: 1, background: BORDER }} />
+          <span style={{ fontSize: 13, color: "#555" }}><strong style={{ color: stream.is_live ? "#e0e0e0" : "#555" }}>{viewers}</strong> watching</span>
+          <span style={{ fontSize: 13, color: "#555" }}><strong style={{ color: "#e0e0e0" }}>{followCount}</strong> followers</span>
+          <div style={{ flex: 1 }} />
+          <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{stream.channel_name || stream.title}</span>
         </div>
-        <div style={{ height: 20, width: 1, background: BORDER }} />
-        <span style={{ fontSize: 13, color: "#555" }}><strong style={{ color: stream.is_live ? "#fff" : "#555" }}>{viewers}</strong> watching</span>
-        <span style={{ fontSize: 13, color: "#555" }}><strong style={{ color: "#fff" }}>{followCount}</strong> followers</span>
-        <div style={{ flex: 1 }} />
-        <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#fff" }}>{stream.channel_name || stream.title}</h2>
+
+        {/* OBS health row — only shows when we have data */}
+        {streamHealth && (
+          <div style={{ padding: `0 ${PAD} 14px`, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+
+            {/* OBS connected indicator */}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, background: streamHealth.state === "connected" ? "rgba(74,222,128,0.07)" : "rgba(255,255,255,0.03)", border: `1px solid ${streamHealth.state === "connected" ? "rgba(74,222,128,0.2)" : BORDER}`, borderRadius: 7, padding: "4px 11px" }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={streamHealth.state === "connected" ? "#4ade80" : "#333"} strokeWidth="2.5"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill={streamHealth.state === "connected" ? "#4ade80" : "#333"}/></svg>
+              <span style={{ fontSize: 11, fontWeight: 700, color: streamHealth.state === "connected" ? "#4ade80" : "#333" }}>
+                {streamHealth.state === "connected" ? "OBS Connected" : streamHealth.state === "idle" ? "OBS Idle" : "OBS Disconnected"}
+              </span>
+            </div>
+
+            {/* Bitrate */}
+            {streamHealth.bitrate != null && (
+              <div style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(255,255,255,0.03)", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "4px 11px" }}>
+                <span style={{ fontSize: 10, color: "#444", fontWeight: 600 }}>BITRATE</span>
+                <span style={{ fontSize: 11, color: "#888", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                  {streamHealth.bitrate >= 1000000
+                    ? `${(streamHealth.bitrate / 1000000).toFixed(1)} Mbps`
+                    : `${Math.round(streamHealth.bitrate / 1000)} kbps`}
+                </span>
+              </div>
+            )}
+
+            {/* Resolution */}
+            {streamHealth.width && streamHealth.height && (
+              <div style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(255,255,255,0.03)", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "4px 11px" }}>
+                <span style={{ fontSize: 10, color: "#444", fontWeight: 600 }}>RES</span>
+                <span style={{ fontSize: 11, color: "#888", fontWeight: 700 }}>{streamHealth.width}×{streamHealth.height}</span>
+              </div>
+            )}
+
+            {/* FPS */}
+            {streamHealth.fps != null && (
+              <div style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(255,255,255,0.03)", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "4px 11px" }}>
+                <span style={{ fontSize: 10, color: "#444", fontWeight: 600 }}>FPS</span>
+                <span style={{ fontSize: 11, color: "#888", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{streamHealth.fps}</span>
+              </div>
+            )}
+
+            {/* Codec */}
+            {streamHealth.videoCodec && (
+              <div style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(255,255,255,0.03)", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "4px 11px" }}>
+                <span style={{ fontSize: 10, color: "#444", fontWeight: 600 }}>CODEC</span>
+                <span style={{ fontSize: 11, color: "#888", fontWeight: 700 }}>{streamHealth.videoCodec}</span>
+              </div>
+            )}
+
+            <span style={{ fontSize: 10, color: "#2a2a2a", marginLeft: "auto" }}>updates every 8s</span>
+          </div>
+        )}
+
+        {/* No health data yet — nudge to connect OBS */}
+        {!streamHealth && !stream.is_live && (
+          <div style={{ padding: `0 ${PAD} 14px` }}>
+            <span style={{ fontSize: 12, color: "#2a2a2a" }}>Start streaming in OBS to see connection status here.</span>
+          </div>
+        )}
       </div>
 
       {/* Tab bar */}
