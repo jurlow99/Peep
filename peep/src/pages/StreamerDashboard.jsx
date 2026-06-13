@@ -424,7 +424,7 @@ export function StreamerDashboard() {
     const ch = supabase.channel(`dash-chat-${stream.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "live_chat", filter: `channel_id=eq.${stream.id}` },
         ({ new: msg }) => {
-          setChatMessages(prev => [...prev, msg]);
+          setChatMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
           setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
         })
       .subscribe();
@@ -446,12 +446,17 @@ export function StreamerDashboard() {
     const msg = chatInput.trim();
     setChatSending(true); setChatInput("");
     const channelName = stream.channel_name || stream.title || "Streamer";
-    await supabase.from("live_chat").insert({
+    const session = await supabase.auth.getSession();
+    const { data } = await supabase.from("live_chat").insert({
       channel_id: stream.id,
-      user_id: (await supabase.auth.getSession()).data.session?.user?.id,
+      user_id: session.data.session?.user?.id,
       profile_name: `${channelName} 🎥`,
       message: msg,
-    });
+    }).select().single();
+    if (data) {
+      setChatMessages(prev => prev.some(m => m.id === data.id) ? prev : [...prev, data]);
+      setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+    }
     setChatSending(false);
   }
 
