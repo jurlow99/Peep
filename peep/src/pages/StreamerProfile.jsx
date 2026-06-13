@@ -364,7 +364,8 @@ export function StreamerProfile() {
   if (loading) {
     return (
       <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <p style={{ color: "#333", fontSize: 14, fontFamily: "'Space Grotesk', sans-serif" }}>Loading…</p>
+        <div style={{ width: 28, height: 28, border: "2px solid #222", borderTopColor: "#facc15", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
       </div>
     );
   }
