@@ -277,12 +277,12 @@ export function StreamerProfile() {
 
   useEffect(() => {
     if (!stream?.is_live || !stream?.id) { setChatMessages([]); return; }
-    supabase.from("stream_chat")
+    supabase.from("live_chat")
       .select("id, message, user_id, display_name, created_at")
       .eq("stream_id", stream.id).order("created_at", { ascending: true }).limit(200)
       .then(({ data }) => { if (data) setChatMessages(data); });
     const ch = supabase.channel(`chat-${stream.id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "stream_chat", filter: `stream_id=eq.${stream.id}` },
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "live_chat", filter: `stream_id=eq.${stream.id}` },
         ({ new: msg }) => {
           setChatMessages(prev => [...prev, msg]);
           setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
@@ -299,7 +299,7 @@ export function StreamerProfile() {
       setChatInput(""); return;
     }
     setChatSending(true); setChatInput("");
-    await supabase.from("stream_chat").insert({
+    await supabase.from("live_chat").insert({
       stream_id: stream.id, user_id: currentUser.id,
       display_name: currentUser.user_metadata?.full_name || currentUser.email?.split("@")[0] || "Viewer",
       message: msg,

@@ -103,7 +103,7 @@ Cloudflare credentials are in Supabase secrets: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDF
 - `live_streams.is_live` is updated via Cloudflare webhook → `notify-go-live`
 - 20-second polling fallback via `check-live-status` in `StreamerProfile`
 - Viewer heartbeats every 30 s to `live_viewers` table; viewer count = rows with `last_ping` within 90 s
-- Chat in `stream_chat` table via Supabase Realtime
+- Chat in `live_chat` table via Supabase Realtime
 
 ## Auth Notes
 

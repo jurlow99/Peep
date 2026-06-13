@@ -91,12 +91,12 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
   // Cloudflare stream: load and subscribe to chat messages
   useEffect(() => {
     if (!video.stream_uid) return;
-    supabase.from("stream_chat").select("id, message, user_id, display_name, created_at")
+    supabase.from("live_chat").select("id, message, user_id, display_name, created_at")
       .eq("stream_id", video.id).order("created_at", { ascending: true }).limit(200)
       .then(({ data }) => { if (data) setChatMessages(data); });
     const ch = supabase
       .channel(`chat-${video.id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "stream_chat", filter: `stream_id=eq.${video.id}` },
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "live_chat", filter: `stream_id=eq.${video.id}` },
         ({ new: msg }) => {
           setChatMessages(prev => [...prev, msg]);
           setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
@@ -119,7 +119,7 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
     }
     setChatSending(true);
     setChatInput("");
-    await supabase.from("stream_chat").insert({
+    await supabase.from("live_chat").insert({
       stream_id: video.id,
       user_id: user.id,
       display_name: activeProfile?.name || user.email.split("@")[0],
