@@ -263,7 +263,7 @@ export function StreamerProfile() {
     const ping = () => supabase.from("live_viewers").upsert(
       { session_id: sid, channel_id: stream.id, last_ping: new Date().toISOString() },
       { onConflict: "session_id" }
-    );
+    ).then(({ error }) => { if (error) console.error("viewer ping failed:", error); });
     ping();
     const t = setInterval(ping, 30000);
     return () => { clearInterval(t); supabase.from("live_viewers").delete().eq("session_id", sid); };
