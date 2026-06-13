@@ -312,8 +312,6 @@ const [liveStartedAt, setLiveStartedAt] = useState(null);
         const json = await res.json();
         if (typeof json.is_live === "boolean") {
           setStream(s => s.is_live !== json.is_live ? { ...s, is_live: json.is_live } : s);
-          if (json.is_live && !liveStartedAt) setLiveStartedAt(Date.now());
-          if (!json.is_live) { setLiveStartedAt(null); setLiveDuration(0); }
         }
         if (json.health) setStreamHealth(json.health);
       } catch (_) {}
@@ -322,6 +320,16 @@ const [liveStartedAt, setLiveStartedAt] = useState(null);
     const t = setInterval(pollLive, 8000);
     return () => { supabase.removeChannel(ch); clearInterval(t); };
   }, [stream?.id]);
+
+  // Start/stop the live clock when is_live changes
+  useEffect(() => {
+    if (stream?.is_live) {
+      setLiveStartedAt(prev => prev ?? Date.now());
+    } else {
+      setLiveStartedAt(null);
+      setLiveDuration(0);
+    }
+  }, [stream?.is_live]);
 
   // Live duration ticker
   useEffect(() => {
