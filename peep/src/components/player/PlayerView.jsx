@@ -91,12 +91,12 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
   // Cloudflare stream: load and subscribe to chat messages
   useEffect(() => {
     if (!video.stream_uid) return;
-    supabase.from("live_chat").select("id, message, user_id, display_name, created_at")
-      .eq("stream_id", video.id).order("created_at", { ascending: true }).limit(200)
+    supabase.from("live_chat").select("id, message, user_id, profile_name, created_at")
+      .eq("channel_id", video.id).order("created_at", { ascending: true }).limit(200)
       .then(({ data }) => { if (data) setChatMessages(data); });
     const ch = supabase
       .channel(`chat-${video.id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "live_chat", filter: `stream_id=eq.${video.id}` },
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "live_chat", filter: `channel_id=eq.${video.id}` },
         ({ new: msg }) => {
           setChatMessages(prev => [...prev, msg]);
           setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
@@ -120,9 +120,9 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
     setChatSending(true);
     setChatInput("");
     await supabase.from("live_chat").insert({
-      stream_id: video.id,
+      channel_id: video.id,
       user_id: user.id,
-      display_name: activeProfile?.name || user.email.split("@")[0],
+      profile_name: activeProfile?.name || user.email.split("@")[0],
       message: msg,
     });
     setChatSending(false);
@@ -863,10 +863,10 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
               ) : chatMessages.map(m => (
                 <div key={m.id} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                   <div style={{ width: 26, height: 26, borderRadius: "50%", background: "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
-                    {(m.display_name || "?")[0].toUpperCase()}
+                    {(m.profile_name || "?")[0].toUpperCase()}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: "#facc15", marginRight: 6 }}>{m.display_name || "Viewer"}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#facc15", marginRight: 6 }}>{m.profile_name || "Viewer"}</span>
                     <span style={{ fontSize: 13, color: "#e5e5e5", wordBreak: "break-word" }}>{m.message}</span>
                   </div>
                 </div>

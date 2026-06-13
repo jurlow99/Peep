@@ -418,11 +418,11 @@ export function StreamerDashboard() {
   useEffect(() => {
     if (!stream?.id || !stream?.is_live) { setChatMessages([]); return; }
     supabase.from("live_chat")
-      .select("id, message, user_id, display_name, created_at")
-      .eq("stream_id", stream.id).order("created_at", { ascending: true }).limit(200)
+      .select("id, message, user_id, profile_name, created_at")
+      .eq("channel_id", stream.id).order("created_at", { ascending: true }).limit(200)
       .then(({ data }) => { if (data) setChatMessages(data); });
     const ch = supabase.channel(`dash-chat-${stream.id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "live_chat", filter: `stream_id=eq.${stream.id}` },
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "live_chat", filter: `channel_id=eq.${stream.id}` },
         ({ new: msg }) => {
           setChatMessages(prev => [...prev, msg]);
           setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
@@ -447,9 +447,9 @@ export function StreamerDashboard() {
     setChatSending(true); setChatInput("");
     const channelName = stream.channel_name || stream.title || "Streamer";
     await supabase.from("live_chat").insert({
-      stream_id: stream.id,
+      channel_id: stream.id,
       user_id: (await supabase.auth.getSession()).data.session?.user?.id,
-      display_name: `${channelName} 🎥`,
+      profile_name: `${channelName} 🎥`,
       message: msg,
     });
     setChatSending(false);
@@ -852,7 +852,7 @@ export function StreamerDashboard() {
                   ? <p style={{ color: "#2a2a2a", fontSize: 12, margin: "auto 0", textAlign: "center" }}>No messages yet</p>
                   : chatMessages.map(m => (
                     <div key={m.id} style={{ fontSize: 13, lineHeight: 1.55, wordBreak: "break-word", padding: "3px 20px", borderRadius: 4 }}>
-                      <span style={{ color: YELLOW, fontWeight: 700, marginRight: 6, fontSize: 12 }}>{m.display_name}</span>
+                      <span style={{ color: YELLOW, fontWeight: 700, marginRight: 6, fontSize: 12 }}>{m.profile_name}</span>
                       <span style={{ color: "#888" }}>{m.message}</span>
                     </div>
                   ))
