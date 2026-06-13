@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import Hls from "hls.js";
 import { supabase } from "../supabase";
 
 const BG = "#0a0a0a";
@@ -40,6 +41,48 @@ function StatCard({ label, value, sub }) {
       <p style={{ margin: "0 0 6px", fontSize: 12, color: "#555", fontWeight: 600, letterSpacing: 0.2 }}>{label}</p>
       <p style={{ margin: "0 0 2px", fontSize: 28, fontWeight: 800, color: "#fff" }}>{value}</p>
       {sub && <p style={{ margin: 0, fontSize: 12, color: "#444" }}>{sub}</p>}
+    </div>
+  );
+}
+
+function LivePreview({ url }) {
+  const videoRef = useRef(null);
+  const hlsRef   = useRef(null);
+  const [muted, setMuted] = useState(true);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el || !url) return;
+    hlsRef.current?.destroy();
+    if (url.includes(".m3u8") && Hls.isSupported()) {
+      const h = new Hls({ startLevel: -1 });
+      h.loadSource(url);
+      h.attachMedia(el);
+      h.on(Hls.Events.MANIFEST_PARSED, () => el.play().catch(() => {}));
+      hlsRef.current = h;
+    } else if (el.canPlayType("application/vnd.apple.mpegurl")) {
+      el.src = url;
+      el.play().catch(() => {});
+    }
+    return () => { hlsRef.current?.destroy(); hlsRef.current = null; el.pause(); el.src = ""; };
+  }, [url]);
+
+  return (
+    <div style={{ borderTop: "1px solid #1a1a1a", background: "#000", position: "relative" }}>
+      <video
+        ref={videoRef}
+        muted={muted}
+        playsInline
+        style={{ display: "block", width: "100%", aspectRatio: "16/9", background: "#000" }}
+      />
+      <button
+        onClick={() => { const el = videoRef.current; if (el) { el.muted = !el.muted; setMuted(el.muted); } }}
+        style={{ position: "absolute", bottom: 12, right: 12, background: "rgba(0,0,0,0.75)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 7, padding: "6px 12px", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", backdropFilter: "blur(6px)" }}>
+        {muted ? "🔇 Unmute" : "🔊 Mute"}
+      </button>
+      <p style={{ position: "absolute", top: 10, left: 12, margin: 0, fontSize: 10, color: "rgba(255,255,255,0.25)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+        Your stream (muted by default)
+      </p>
     </div>
   );
 }
@@ -128,9 +171,10 @@ export function StreamerDashboard() {
   const [toast, setToast]   = useState(null);
 
   // Live health data from Cloudflare
-  const [streamHealth, setStreamHealth] = useState(null); // { state, bitrate, fps, width, height }
-const [liveStartedAt, setLiveStartedAt] = useState(null);
+  const [streamHealth, setStreamHealth] = useState(null);
+  const [liveStartedAt, setLiveStartedAt] = useState(null);
   const [liveDuration, setLiveDuration]   = useState(0);
+  const [previewOpen, setPreviewOpen]     = useState(false);
 
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(null), 2500); }
   function copy(text, which) {
@@ -325,9 +369,11 @@ const [liveStartedAt, setLiveStartedAt] = useState(null);
   useEffect(() => {
     if (stream?.is_live) {
       setLiveStartedAt(prev => prev ?? Date.now());
+      setPreviewOpen(true);
     } else {
       setLiveStartedAt(null);
       setLiveDuration(0);
+      setPreviewOpen(false);
     }
   }, [stream?.is_live]);
 
@@ -717,6 +763,32 @@ const [liveStartedAt, setLiveStartedAt] = useState(null);
               </div>
             </div>
           </SectionCard>
+
+          {/* ── STREAM PREVIEW ── */}
+          {stream.stream_url && (
+            <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden" }}>
+              <button
+                onClick={() => setPreviewOpen(o => !o)}
+                style={{ width: "100%", background: "none", border: "none", padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", color: "#fff" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                  <span style={{ fontSize: 15, fontWeight: 700 }}>Stream Preview</span>
+                  {stream.is_live && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 5, padding: "2px 8px" }}>
+                      <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite" }} />
+                      <span style={{ fontSize: 10, fontWeight: 800, color: "#ef4444", letterSpacing: 0.8 }}>LIVE</span>
+                    </div>
+                  )}
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2" style={{ transform: previewOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </button>
+              {previewOpen && (
+                <LivePreview url={stream.stream_url} />
+              )}
+            </div>
+          )}
 
           {/* ── CHANNEL IDENTITY ── */}
           <SectionCard title="Channel">
