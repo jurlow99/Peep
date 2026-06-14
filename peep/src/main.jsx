@@ -6,11 +6,8 @@ import App from './App.jsx'
 import { QueryProvider } from './providers/QueryProvider.jsx'
 import { AdminPage } from './pages/AdminPage.jsx'
 import { SignupPage, SigninPage } from './pages/AuthPages.jsx'
-import { StreamerSignInPage } from './pages/AuthPages.jsx'
 import { SetPasswordPage } from './pages/SetPasswordPage.jsx'
 import { StreamerDashboard } from './pages/StreamerDashboard.jsx'
-import { ApplyToStreamPage } from './pages/ApplyToStreamPage.jsx'
-import { CreateChannelPage } from './pages/CreateChannelPage.jsx'
 import { StreamerProfile } from './pages/StreamerProfile.jsx'
 
 class ErrorBoundary extends Component {
@@ -31,18 +28,20 @@ class ErrorBoundary extends Component {
 
 const path = window.location.pathname
 
+// Legacy streamer-only routes → redirect to unified flow
+if (path === '/streamer-signin' || path === '/apply-to-stream' || path === '/create-channel') {
+  window.location.replace('/signin?redirect=/streamer');
+}
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ErrorBoundary>
-      {path === '/admin'          ? <AdminPage />          :
-       path === '/signup'         ? <SignupPage />         :
-       path === '/signin'         ? <SigninPage />         :
-       path === '/set-password'   ? <SetPasswordPage />    :
-       path === '/streamer-signin'? <StreamerSignInPage /> :
-       path === '/apply-to-stream'? <ApplyToStreamPage />  :
-       path === '/create-channel' ? <CreateChannelPage /> :
-       path === '/streamer'       ? <StreamerDashboard />  :
-       path.startsWith('/stream/')? <StreamerProfile />    :
+      {path === '/admin'          ? <AdminPage />         :
+       path === '/signup'         ? <SignupPage />        :
+       path === '/signin'         ? <SigninPage />        :
+       path === '/set-password'   ? <SetPasswordPage />   :
+       path === '/streamer'       ? <StreamerDashboard /> :
+       path.startsWith('/stream/')? <StreamerProfile />   :
        <BrowserRouter>
          <QueryProvider>
            <App />

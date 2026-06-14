@@ -3,18 +3,16 @@ import { useLocation } from "react-router-dom";
 import { supabase } from "./supabase";
 import { AuthModal } from "./components/AuthModal";
 import { LandingPage } from "./pages/LandingPage";
-import { PaywallPage } from "./pages/PaywallPage";
 import { ProfileScreen, avatarForId, PRESET_AVATARS } from "./components/ProfileScreen";
-import { ProfileSelect } from "./components/ProfileSelect";
 import { CreatorDashboard } from "./pages/CreatorDashboard";
 import { LiveTVPage } from "./pages/LiveTV";
+import { StreamerDashboard } from "./pages/StreamerDashboard";
 import { Homepage } from "./components/browse/Homepage";
 import { CatalogCard } from "./components/browse/BrowseWidgets";
 import { PlayerView } from "./components/player/PlayerView";
 import { SettingsPage } from "./pages/SettingsPage";
 import { PasswordResetPage, EmailVerificationGate } from "./components/auth/AuthGates";
 import { useAuth } from "./hooks/useAuth";
-import { useSubscription, hasActiveSubscription } from "./hooks/useSubscription";
 import { useMyList } from "./hooks/useMyList";
 import { isOwnerEmail } from "./lib/auth";
 import { PAD, CARD_W, SAFE_TOP } from "./lib/theme";
@@ -56,8 +54,9 @@ function resolvePage(pathname, search) {
   if (pathname === "/settings") return "settings";
   if (pathname === "/profile") return "profile";
   if (pathname === "/creator") return "creator";
+  if (pathname === "/studio") return "studio";
   const pg = new URLSearchParams(search).get("page");
-  if (pg === "settings" || pg === "profile" || pg === "creator") return pg;
+  if (pg === "settings" || pg === "profile" || pg === "creator" || pg === "studio") return pg;
   return "home";
 }
 
@@ -82,10 +81,10 @@ export default function App() {
     passwordRecovery,
     setPasswordRecovery,
   } = useAuth();
-  const { subscription, subChecked } = useSubscription(user?.id);
   const { myList, toggleList } = useMyList(user?.id, activeProfile?.id, () => setAuthOpen(true));
   const [creatorRecord, setCreatorRecord] = useState(null);
   const [betaAck, setBetaAck] = useState(() => localStorage.getItem("peep_beta_ack") === "true");
+  const [guestMode, setGuestMode] = useState(() => sessionStorage.getItem("peep_guest") === "1");
   // Capture deep-link params before any effect clears the URL
   const [deepLink] = useState(() => {
     const p = new URLSearchParams(window.location.search);
@@ -119,13 +118,21 @@ export default function App() {
       .then(({ data }) => setStreamRecord(data ?? null));
   }, [user?.id]);
 
-  // Load saved profile from localStorage when user is known
+  // Load saved profile from localStorage, or auto-select the first viewer profile
   useEffect(() => {
     if (!user) { setActiveProfile(null); return; }
     try {
       const stored = JSON.parse(localStorage.getItem(`peep_profile_${user.id}`));
-      setActiveProfile(stored ?? null);
-    } catch { setActiveProfile(null); }
+      if (stored) { setActiveProfile(stored); return; }
+    } catch {}
+    // No stored profile — auto-select first viewer profile
+    supabase.from("viewer_profiles").select("*").eq("user_id", user.id).order("id", { ascending: true }).limit(1).maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setActiveProfile(data);
+          localStorage.setItem(`peep_profile_${user.id}`, JSON.stringify(data));
+        }
+      });
   }, [user?.id]);
 
   // Presence heartbeat — mark this user online while browsing
@@ -176,18 +183,12 @@ export default function App() {
     </div>
   );
   if (passwordRecovery) return <PasswordResetPage isInvite={passwordRecovery === "invite"} onDone={() => { setPasswordRecovery(false); window.location.href = "/"; }} />;
-  if (!user) return <LandingPage />;
-  if (!user.email_confirmed_at) return <EmailVerificationGate user={user} />;
-  if (userRole === "creator") return <CreatorDashboard user={user} onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }} />;
-  // Streamers have no access to the main app — send them back to their dashboard
-  if (streamRecord) { window.location.replace("/streamer"); return null; }
-  const isOwner = isOwnerEmail(user?.email);
-  if (!activeProfile) return <ProfileSelect user={user} onSelect={selectProfile} />;
-  if (!hasActiveSubscription(subscription, isOwner) && subChecked) {
-    return <PaywallPage user={user} onSubscribed={() => window.location.href = "/?subscribed=1"} onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }} />;
-  }
+  if (!user && !guestMode) return <LandingPage onBrowse={() => { sessionStorage.setItem("peep_guest", "1"); setGuestMode(true); }} />;
+  if (user && !user.email_confirmed_at) return <EmailVerificationGate user={user} />;
+  if (user && userRole === "creator") return <CreatorDashboard user={user} onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }} />;
 
-  const profileScreenEl = profileOpen && <ProfileScreen user={user} activeProfile={activeProfile} onClose={() => setProfileOpen(false)} onAvatarChange={id => setUserAvatarId(id)} onProfileUpdate={updated => { setActiveProfile(updated); localStorage.setItem(`peep_profile_${user.id}`, JSON.stringify(updated)); }} onSwitchProfile={switchProfile} onViewProfile={() => { setProfileOpen(false); setPage("profile"); }} onOpenSettings={() => { setProfileOpen(false); setPage("settings"); }} onCreatorDash={creatorRecord ? () => { setProfileOpen(false); setPage("creator"); } : null} onStreamerDash={streamRecord ? () => { window.location.href = "/streamer"; } : null} />;
+  const goToStudio = () => { setProfileOpen(false); setPage("studio"); };
+  const profileScreenEl = profileOpen && <ProfileScreen user={user} activeProfile={activeProfile} onClose={() => setProfileOpen(false)} onAvatarChange={id => setUserAvatarId(id)} onProfileUpdate={updated => { setActiveProfile(updated); localStorage.setItem(`peep_profile_${user.id}`, JSON.stringify(updated)); }} onSwitchProfile={switchProfile} onViewProfile={() => { setProfileOpen(false); setPage("profile"); }} onOpenSettings={() => { setProfileOpen(false); setPage("settings"); }} onCreatorDash={creatorRecord ? () => { setProfileOpen(false); setPage("creator"); } : null} onStreamerDash={streamRecord ? goToStudio : null} />;
 
   if (page === "player" && selectedVideo) {
     const isLiveVideo = selectedVideo._type === "live" || selectedVideo._type === "live_epg";
@@ -269,7 +270,7 @@ export default function App() {
         <SettingsPage
           user={user}
           activeProfile={activeProfile}
-          isOwner={isOwner}
+          isOwner={isOwnerEmail(user?.email)}
           onBack={() => setPage("home")}
           onGoHome={goHome}
           onProfileUpdate={updated => {
@@ -354,7 +355,10 @@ export default function App() {
       <Homepage
         onPlay={v => { setSelectedVideo(v); setPage("player"); }}
         onShowSelect={s => { setSelectedShow(s); setPage("show"); }}
-{...listProps}
+        onGoLive={() => setPage("studio")}
+        onExitStudio={() => setPage("home")}
+        studioContent={page === "studio" ? <StreamerDashboard embedded preloadedUser={user} /> : null}
+        {...listProps}
       />
     </>
   );

@@ -417,28 +417,34 @@ export function LiveSection({ streams }) {
 function LiveCard({ stream }) {
   const [hovered, setHovered] = useState(false);
   const slug = stream.username || (stream.channel_name || stream.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const name = stream.channel_name || stream.title || "";
+  const initial = name[0]?.toUpperCase() || "?";
+  const CATEGORY_LABELS = { general: "General", gaming: "Gaming", talk: "Talk", irl: "IRL", sports: "Sports", education: "Education", creative: "Creative" };
   return (
     <a href={`/stream/${slug}`}
       onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
       style={{ display: "block", textDecoration: "none", color: "inherit", borderRadius: 12, overflow: "hidden", background: "#141414", border: `1px solid ${hovered ? "#ef4444" : "#1e1e1e"}`, transform: hovered ? "scale(1.02)" : "scale(1)", transition: "all 0.2s", boxShadow: hovered ? "0 8px 32px rgba(239,68,68,0.2)" : "none" }}>
       <div style={{ position: "relative", aspectRatio: "16/9", overflow: "hidden" }}>
         {stream.thumbnail
-          ? <img src={stream.thumbnail} alt={stream.channel_name || stream.title} style={{ width: "100%", height: "100%", objectFit: "cover", filter: hovered ? "brightness(0.55)" : "brightness(0.8)", transition: "filter 0.2s" }} />
+          ? <img src={stream.thumbnail} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover", filter: hovered ? "brightness(0.55)" : "brightness(0.85)", transition: "filter 0.2s" }} />
           : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #1a0000, #3a0000)", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <svg width="40" height="40" viewBox="0 0 24 24" fill="#ef4444" opacity="0.4"><polygon points="5,3 19,12 5,21" /></svg>
             </div>
         }
+        {/* LIVE badge */}
         {stream.is_live && (
           <div style={{ position: "absolute", top: 10, left: 10, display: "flex", alignItems: "center", gap: 5, background: "#ef4444", borderRadius: 5, padding: "4px 10px" }}>
             <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#fff", animation: "livepulse 1.5s infinite" }} />
             <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 0.5 }}>{stream.badge_text || "LIVE"}</span>
           </div>
         )}
+        {/* Channel number */}
         {stream.channel_number != null && stream.channel_number !== "" && (
           <div style={{ position: "absolute", top: 10, right: 10, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)", borderRadius: 5, padding: "4px 8px", fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: 0.5 }}>
             CH {stream.channel_number}
           </div>
         )}
+        {/* Play overlay */}
         {hovered && (
           <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <div style={{ width: 52, height: 52, borderRadius: "50%", background: "rgba(239,68,68,0.9)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 20px rgba(239,68,68,0.5)" }}>
@@ -447,21 +453,27 @@ function LiveCard({ stream }) {
           </div>
         )}
       </div>
-      <div style={{ padding: "14px 16px" }}>
-        <p style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 600, color: "#fff" }}>{stream.channel_name || stream.title}</p>
-        {stream.now_airing && (
-          <p style={{ margin: "0 0 3px", fontSize: 12, color: "#ef4444", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            Now: {stream.now_airing}
-          </p>
-        )}
-        {stream.up_next && (
-          <p style={{ margin: 0, fontSize: 11, color: "#555", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            Up Next: {stream.up_next}
-          </p>
-        )}
-        {!stream.now_airing && stream.description && (
-          <p style={{ margin: 0, fontSize: 12, color: "#666", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{stream.description}</p>
-        )}
+      <div style={{ padding: "12px 14px 14px", display: "flex", gap: 10, alignItems: "flex-start" }}>
+        {/* Avatar */}
+        <div style={{ width: 36, height: 36, borderRadius: "50%", flexShrink: 0, overflow: "hidden", border: "2px solid #1e1e1e", background: "linear-gradient(135deg, #312e81, #6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: "#fff" }}>
+          {stream.avatar_url
+            ? <img src={stream.avatar_url} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            : initial}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</p>
+          {stream.stream_title && (
+            <p style={{ margin: "0 0 5px", fontSize: 12, color: "#888", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{stream.stream_title}</p>
+          )}
+          {stream.now_airing && (
+            <p style={{ margin: "0 0 5px", fontSize: 12, color: "#ef4444", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Now: {stream.now_airing}</p>
+          )}
+          {stream.category && stream.category !== "general" && (
+            <span style={{ fontSize: 10, fontWeight: 600, color: "#666", background: "#1a1a1a", border: "1px solid #222", borderRadius: 4, padding: "2px 7px" }}>
+              {CATEGORY_LABELS[stream.category] || stream.category}
+            </span>
+          )}
+        </div>
       </div>
     </a>
   );
@@ -469,80 +481,6 @@ function LiveCard({ stream }) {
 
 
 // ─── Continue Watching ────────────────────────────────────────────────────────
-
-const CW_CARD_W = "clamp(200px, 26vw, 300px)";
-
-export function ContinueWatchingRow({ items, onPlay, onRemove }) {
-  const scrollRef = useRef(null);
-  const isMobile = useIsMobile();
-  const scroll = dir => scrollRef.current?.scrollBy({ left: dir * scrollRef.current.clientWidth * 0.85, behavior: "smooth" });
-  return (
-    <div style={{ marginBottom: 8 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: `0 ${PAD}`, marginBottom: 12 }}>
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#facc15" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        <h2 style={{ margin: 0, fontSize: "clamp(16px, 1.4vw, 20px)", fontWeight: 600, color: "#e5e5e5" }}>Continue Watching</h2>
-      </div>
-      <div style={{ position: "relative" }}>
-        {!isMobile && <button onClick={() => scroll(-1)} style={{ position: "absolute", left: 0, top: 0, bottom: 0, zIndex: 10, background: "linear-gradient(to right, rgba(10,10,10,0.95), transparent)", border: "none", color: "#fff", width: 64, cursor: "pointer", fontSize: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>}
-        {!isMobile && <button onClick={() => scroll(1)} style={{ position: "absolute", right: 0, top: 0, bottom: 0, zIndex: 10, background: "linear-gradient(to left, rgba(10,10,10,0.95), transparent)", border: "none", color: "#fff", width: 64, cursor: "pointer", fontSize: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>›</button>}
-        <div ref={scrollRef} className="scroll-row" style={{ display: "flex", gap: 14, overflowX: "auto", scrollbarWidth: "none", padding: `10px ${PAD} 28px` }}>
-          {items.map(item => <ContinueWatchingCard key={`${item._type}_${item.id}`} item={item} onPlay={onPlay} onRemove={onRemove} />)}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ContinueWatchingCard({ item, onPlay, onRemove }) {
-  const [hovered, setHovered] = useState(false);
-  const pct = item._progress?.duration_seconds > 0 ? Math.min(100, (item._progress.progress_seconds / item._progress.duration_seconds) * 100) : 0;
-
-  const isEpisode = item._type === "episode";
-  const displayTitle = isEpisode && item._show ? item._show.title : item.title;
-  const displayThumb = isEpisode && item._show
-    ? (item.thumbnail || item._show.thumbnail || item._show.poster)
-    : (item.thumbnail || item.poster);
-  const subtitle = isEpisode && item.season != null
-    ? `S${item.season} E${item.episode_number} · ${Math.round(pct)}% watched`
-    : `${Math.round(pct)}% watched`;
-
-  return (
-    <div style={{ flexShrink: 0, width: CW_CARD_W, cursor: "pointer", position: "relative" }}
-      onClick={() => onPlay(item)} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
-      {hovered && onRemove && (
-        <button
-          onClick={e => { e.stopPropagation(); onRemove(item); }}
-          title="Mark as watched"
-          style={{ position: "absolute", top: 8, right: 8, zIndex: 20, width: 26, height: 26, borderRadius: "50%", background: "rgba(0,0,0,0.75)", border: "1px solid rgba(255,255,255,0.15)", color: "#aaa", fontSize: 14, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          ×
-        </button>
-      )}
-      <div style={{ borderRadius: 10, overflow: "hidden", background: "#141414", transform: hovered ? "scale(1.03) translateY(-3px)" : "scale(1)", transition: "transform 0.25s, box-shadow 0.25s", boxShadow: hovered ? "0 16px 40px rgba(0,0,0,0.65)" : "0 2px 8px rgba(0,0,0,0.3)" }}>
-        <div style={{ position: "relative", aspectRatio: "16/9", overflow: "hidden" }}>
-          <img src={displayThumb} alt={displayTitle}
-            style={{ width: "100%", height: "100%", objectFit: "cover", filter: hovered ? "brightness(0.5)" : "brightness(0.75)", transition: "filter 0.25s" }} />
-          {hovered && (
-            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <div style={{ width: 48, height: 48, borderRadius: "50%", background: "rgba(255,255,255,0.92)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="#0a0a0a"><polygon points="5,3 19,12 5,21" /></svg>
-              </div>
-            </div>
-          )}
-          {isEpisode && item.season != null && (
-            <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(4px)", color: "#bbb", fontSize: 10, padding: "3px 7px", borderRadius: 4 }}>S{item.season} E{item.episode_number}</div>
-          )}
-          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 3, background: "rgba(0,0,0,0.5)" }}>
-            <div style={{ height: "100%", background: "#facc15", width: `${pct}%` }} />
-          </div>
-        </div>
-        <div style={{ padding: "10px 14px 12px", background: hovered ? "#1c1c1c" : "#141414", transition: "background 0.25s" }}>
-          <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{displayTitle}</p>
-          <p style={{ margin: 0, fontSize: 11, color: "#555" }}>{subtitle}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ─── Video Card ───────────────────────────────────────────────────────────────
 

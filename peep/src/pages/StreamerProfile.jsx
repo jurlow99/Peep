@@ -177,6 +177,9 @@ function VideoPlayer({ url, live = false, style = {} }) {
   );
 }
 
+// Hard-blocked terms — always filtered regardless of channel settings
+const HARD_BLOCKED = ["cp", "childporn", "child porn", "loli", "pedo", "jailbait", "underage nude", "minor nude", "csam"];
+
 export function StreamerProfile() {
   const username = window.location.pathname.replace("/stream/", "").replace(/\/$/, "").toLowerCase();
 
@@ -197,12 +200,18 @@ export function StreamerProfile() {
   const [chatSending, setChatSending]     = useState(false);
   const [streamEnded, setStreamEnded]     = useState(false);
   const [copied, setCopied]               = useState(false);
+  const [globalBanned, setGlobalBanned]   = useState([]);
+  const [reportOpen, setReportOpen]       = useState(false);
+  const [reportReason, setReportReason]   = useState("");
+  const [reportSent, setReportSent]       = useState(false);
   const chatBottomRef = useRef(null);
   const prevIsLiveRef = useRef(null);
 
   useEffect(() => {
     loadStream();
     supabase.auth.getSession().then(({ data: { session } }) => setCurrentUser(session?.user ?? null));
+    supabase.from("app_settings").select("value").eq("key", "global_banned_words").maybeSingle()
+      .then(({ data }) => { if (data?.value) { try { setGlobalBanned(JSON.parse(data.value)); } catch {} } });
   }, []);
 
   useEffect(() => {
@@ -295,8 +304,9 @@ export function StreamerProfile() {
   async function sendChat() {
     if (!chatInput.trim() || !currentUser || chatSending) return;
     const msg = chatInput.trim();
-    const banned = stream?.banned_words || [];
-    if (banned.length > 0 && banned.some(w => msg.toLowerCase().includes(w.toLowerCase()))) {
+    const lower = msg.toLowerCase().replace(/\s+/g, " ");
+    const allBanned = [...HARD_BLOCKED, ...globalBanned, ...(stream?.banned_words || [])];
+    if (allBanned.some(w => lower.includes(w.toLowerCase()))) {
       setChatInput(""); return;
     }
     setChatSending(true); setChatInput("");
@@ -338,10 +348,10 @@ export function StreamerProfile() {
     setVodsLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
       const prevParam = previousUids.length ? `&previous_uids=${previousUids.join(",")}` : "";
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-vods?stream_uid=${streamUid}${prevParam}`, {
-        headers: token ? { "Authorization": `Bearer ${token}` } : {},
+        headers: { "Authorization": `Bearer ${token}` },
       });
       const json = await res.json();
       setVods(json.vods || []);
@@ -422,6 +432,59 @@ export function StreamerProfile() {
     </button>
   );
 
+  async function submitReport() {
+    if (!reportReason.trim()) return;
+    const slug = stream.username || (stream.channel_name || stream.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    await supabase.from("content_reports").insert({
+      reporter_id: currentUser?.id ?? null,
+      content_type: "stream",
+      content_id: slug,
+      channel_name: stream.channel_name || stream.title,
+      reason: reportReason.trim(),
+      status: "pending",
+    });
+    setReportSent(true);
+    setTimeout(() => { setReportOpen(false); setReportSent(false); setReportReason(""); }, 2000);
+  }
+
+  const ReportBtn = () => (
+    <button onClick={() => setReportOpen(true)}
+      style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.04)", border: "1px solid #2a2a2a", borderRadius: 8, padding: "9px 14px", color: "#555", fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0, fontFamily: "inherit" }}
+      title="Report this stream">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+      Report
+    </button>
+  );
+
+  const ReportModal = () => reportOpen ? (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9000 }} onClick={e => { if (e.target === e.currentTarget) setReportOpen(false); }}>
+      <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, padding: 28, width: "min(400px, 90vw)", fontFamily: "inherit" }}>
+        {reportSent ? (
+          <div style={{ textAlign: "center", padding: "24px 0" }}>
+            <div style={{ fontSize: 32, marginBottom: 10 }}>✓</div>
+            <p style={{ color: "#fff", fontWeight: 700, margin: "0 0 6px" }}>Report submitted</p>
+            <p style={{ color: "#555", fontSize: 13, margin: 0 }}>Our moderation team will review it.</p>
+          </div>
+        ) : (
+          <>
+            <p style={{ margin: "0 0 16px", fontWeight: 700, color: "#fff", fontSize: 16 }}>Report Stream</p>
+            <p style={{ margin: "0 0 14px", color: "#666", fontSize: 13 }}>What's the issue with this stream?</p>
+            {["Illegal content (CSAM / exploitation)", "Violence or graphic content", "Hate speech or harassment", "Spam or scam", "Other"].map(r => (
+              <label key={r} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", cursor: "pointer", borderBottom: "1px solid #1a1a1a" }}>
+                <input type="radio" name="report" value={r} checked={reportReason === r} onChange={() => setReportReason(r)} style={{ accentColor: "#ef4444" }} />
+                <span style={{ fontSize: 13, color: reportReason === r ? "#fff" : "#888" }}>{r}</span>
+              </label>
+            ))}
+            <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
+              <button onClick={submitReport} disabled={!reportReason} style={{ flex: 1, background: "#ef4444", border: "none", borderRadius: 9, padding: "10px", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", opacity: !reportReason ? 0.4 : 1 }}>Submit Report</button>
+              <button onClick={() => setReportOpen(false)} style={{ background: "transparent", border: "1px solid #2a2a2a", borderRadius: 9, padding: "10px 16px", color: "#555", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  ) : null;
+
   const SupportBtn = () => stream.donation_link ? (
     <a href={stream.donation_link} target="_blank" rel="noopener noreferrer"
       style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.05)", border: "1px solid #2a2a2a", borderRadius: 8, padding: "9px 16px", color: "#888", fontSize: 13, fontWeight: 600, textDecoration: "none", flexShrink: 0, transition: "all 0.15s" }}
@@ -488,6 +551,7 @@ export function StreamerProfile() {
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
+      <ReportModal />
       <style>{`
         @keyframes livepulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.3)}}
         .chat-msg:hover { background: rgba(255,255,255,0.02); }
@@ -652,6 +716,7 @@ export function StreamerProfile() {
             <div style={{ display: "flex", gap: 7, flexShrink: 0 }}>
               <ShareBtn />
               <SupportBtn />
+              <ReportBtn />
               <FollowBtn />
             </div>
           </div>
@@ -701,6 +766,7 @@ export function StreamerProfile() {
               <div style={{ display: "flex", gap: 8, paddingBottom: 4, flexShrink: 0 }}>
                 <ShareBtn />
                 <SupportBtn />
+                <ReportBtn />
                 <FollowBtn size="lg" />
               </div>
             </div>
