@@ -352,9 +352,7 @@ export function LiveTVPage({ streams, user, streamsLoading }) {
   const totalViewers = Object.values(viewerCounts).reduce((a, b) => a + b, 0);
   const followingCount = streams.filter(s => followedIds.has(s.id)).length;
 
-  const sortedLive = [...liveStreams].sort((a, b) => (viewerCounts[b.id] || 0) - (viewerCounts[a.id] || 0));
-  const featuredStream = sortedLive[0] || null;
-  const remainingLive = filteredLive.filter(s => !featuredStream || s.id !== featuredStream.id || activeTab === "following");
+  const sortedFilteredLive = [...filteredLive].sort((a, b) => (viewerCounts[b.id] || 0) - (viewerCounts[a.id] || 0));
 
   const cardProps = (s, i) => ({
     stream: s, viewers: viewerCounts[s.id] || 0, index: i,
@@ -415,11 +413,6 @@ export function LiveTVPage({ streams, user, streamsLoading }) {
           </p>
         )}
 
-        {/* Featured live stream */}
-        {activeTab === "all" && featuredStream && filteredLive.length > 0 && (
-          <FeaturedStream {...cardProps(featuredStream, 0)} />
-        )}
-
         {/* Tabs */}
         <div style={{ display: "flex", gap: 6, marginBottom: 20 }}>
           {[{ id: "all", label: "All Channels" }, { id: "following", label: `Following${followingCount > 0 ? ` (${followingCount})` : ""}` }].map(t => (
@@ -452,13 +445,13 @@ export function LiveTVPage({ streams, user, streamsLoading }) {
         )}
 
         {/* Live Now */}
-        {remainingLive.length > 0 && (
-          <div style={{ marginBottom: 52 }}>
-            {(activeTab === "all" && offlineStreams.length > 0) || activeTab === "following" ? (
-              <p style={{ margin: "0 0 18px", fontSize: 11, fontWeight: 700, color: "#ef4444", letterSpacing: "0.12em", textTransform: "uppercase" }}>Live Now</p>
-            ) : null}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 20 }}>
-              {remainingLive.map((s, i) => <StreamCard key={s.id} {...cardProps(s, i)} />)}
+        {sortedFilteredLive.length > 0 && (
+          <div style={{ marginBottom: 48 }}>
+            {offlineStreams.length > 0 && (
+              <p style={{ margin: "0 0 16px", fontSize: 11, fontWeight: 700, color: "#ef4444", letterSpacing: "0.12em", textTransform: "uppercase" }}>Live Now</p>
+            )}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 16 }}>
+              {sortedFilteredLive.map((s, i) => <StreamCard key={s.id} {...cardProps(s, i)} />)}
             </div>
           </div>
         )}
@@ -470,10 +463,10 @@ export function LiveTVPage({ streams, user, streamsLoading }) {
         {/* Offline channels */}
         {filteredOffline.length > 0 && (
           <div>
-            <p style={{ margin: "0 0 18px", fontSize: 11, fontWeight: 700, color: "#444", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+            <p style={{ margin: "0 0 16px", fontSize: 11, fontWeight: 700, color: "#444", letterSpacing: "0.12em", textTransform: "uppercase" }}>
               {liveStreams.length > 0 ? "Other Channels" : "All Channels"}
             </p>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 20 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 16 }}>
               {filteredOffline.map((s, i) => <StreamCard key={s.id} {...cardProps(s, i)} />)}
             </div>
           </div>
