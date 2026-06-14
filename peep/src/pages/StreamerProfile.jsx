@@ -718,6 +718,8 @@ export function StreamerProfile() {
       <style>{`
         @keyframes livepulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.3)}}
         .chat-msg:hover { background: rgba(255,255,255,0.02); }
+        .chat-msg:hover .dots-btn { opacity: 1 !important; }
+        .dots-btn-open { opacity: 1 !important; }
       `}</style>
 
       {/* Nav */}
@@ -839,18 +841,21 @@ export function StreamerProfile() {
                     const showDots = canStreamerDelete || withinWindow;
                     const menuOpen = openMenuId === m.id;
                     return (
-                      <div key={m.id} className="chat-msg" style={{ fontSize: 13, lineHeight: 1.6, wordBreak: "break-word", padding: "3px 14px 3px 14px", borderRadius: 4, position: "relative" }}
-                        onMouseEnter={e => { if (showDots) e.currentTarget.querySelector(".dots-btn")?.style && (e.currentTarget.querySelector(".dots-btn").style.opacity = "1"); }}
-                        onMouseLeave={e => { if (!menuOpen) e.currentTarget.querySelector(".dots-btn")?.style && (e.currentTarget.querySelector(".dots-btn").style.opacity = "0"); }}>
-                        <span style={{ color: "#2a2a2a", fontSize: 10, marginRight: 5, userSelect: "none" }}>{chatTimestamp(m.created_at)}</span>
-                        {isStreamer && <span title="Streamer" style={{ marginRight: 4, fontSize: 11 }}>👑</span>}
-                        <span style={{ color: nameColor, fontWeight: 700, marginRight: 5 }}>{m.profile_name}</span>
-                        <span style={{ color: "#bbb" }}>{m.message}</span>
+                      <div key={m.id} className="chat-msg" style={{ fontSize: 13, lineHeight: 1.6, wordBreak: "break-word", padding: "3px 6px 3px 14px", borderRadius: 4, display: "flex", alignItems: "flex-start", gap: 4 }}>
+                        {/* Message text */}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ color: "#2a2a2a", fontSize: 10, marginRight: 5, userSelect: "none" }}>{chatTimestamp(m.created_at)}</span>
+                          {isStreamer && <span title="Streamer" style={{ marginRight: 4, fontSize: 11 }}>👑</span>}
+                          <span style={{ color: nameColor, fontWeight: 700, marginRight: 5 }}>{m.profile_name}</span>
+                          <span style={{ color: "#bbb" }}>{m.message}</span>
+                        </div>
+                        {/* Dots menu */}
                         {showDots && (
-                          <div style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)" }}>
-                            <button className="dots-btn" onClick={e => { e.stopPropagation(); setOpenMenuId(menuOpen ? null : m.id); }}
-                              style={{ opacity: menuOpen ? 1 : 0, background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 5, width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "opacity 0.15s", gap: 2 }}>
-                              <span style={{ fontSize: 12, color: "#666", letterSpacing: 1, lineHeight: 1 }}>···</span>
+                          <div style={{ position: "relative", flexShrink: 0, alignSelf: "center" }}>
+                            <button className={`dots-btn${menuOpen ? " dots-btn-open" : ""}`}
+                              onClick={e => { e.stopPropagation(); setOpenMenuId(menuOpen ? null : m.id); }}
+                              style={{ opacity: 0, background: "none", border: "none", borderRadius: 5, width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "opacity 0.15s", padding: 0 }}>
+                              <span style={{ fontSize: 14, color: "#555", letterSpacing: 1, lineHeight: 1 }}>···</span>
                             </button>
                             {menuOpen && (
                               <div ref={msgMenuRef} style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", background: "#141414", border: "1px solid #222", borderRadius: 8, padding: 4, zIndex: 20, minWidth: 130, boxShadow: "0 8px 24px rgba(0,0,0,0.5)" }}>
