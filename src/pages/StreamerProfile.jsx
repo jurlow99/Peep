@@ -197,6 +197,7 @@ export function StreamerProfile() {
   const [followers, setFollowers]         = useState(0);
   const [viewers, setViewers]             = useState(0);
   const [vods, setVods]                   = useState([]);
+  const [channelVideos, setChannelVideos] = useState([]);
   const [vodsLoading, setVodsLoading]     = useState(false);
   const [schedule, setSchedule]           = useState([]);
   const [currentUser, setCurrentUser]     = useState(null);
@@ -303,6 +304,8 @@ export function StreamerProfile() {
         loadViewers(match.id);
         loadSchedule(match.id);
         loadVods(match.id, match.stream_uid, match.previous_stream_uids || []);
+        supabase.from("streamer_videos").select("*").eq("stream_id", match.id).order("created_at", { ascending: false })
+          .then(({ data }) => setChannelVideos(data || []));
       }
     } catch (_) {
       setStream(null);
@@ -811,6 +814,25 @@ export function StreamerProfile() {
               </div>
             )}
             <VodGrid />
+            {channelVideos.length > 0 && (
+              <div style={{ marginTop: 44 }}>
+                <p style={{ margin: "0 0 16px", fontSize: 11, fontWeight: 700, color: "#333", letterSpacing: "0.12em", textTransform: "uppercase" }}>Videos</p>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
+                  {channelVideos.map(v => (
+                    <div key={v.id} style={{ background: "#0d0d0d", border: "1px solid rgba(255,255,255,0.04)", borderRadius: 10, overflow: "hidden" }}>
+                      <div style={{ position: "relative", aspectRatio: "16/9", background: "#090910" }}>
+                        {v.thumbnail_url ? <img src={v.thumbnail_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}><svg width="28" height="28" viewBox="0 0 24 24" fill="rgba(255,255,255,0.07)"><polygon points="5,3 19,12 5,21"/></svg></div>}
+                      </div>
+                      <div style={{ padding: "10px 12px" }}>
+                        <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: "#ccc", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.title}</p>
+                        <p style={{ margin: 0, fontSize: 11, color: "#333" }}>{new Date(v.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </>
 
@@ -969,6 +991,36 @@ export function StreamerProfile() {
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          )}
+
+          {/* Uploaded Videos */}
+          {channelVideos.length > 0 && (
+            <div style={{ padding: "32px 24px 0" }}>
+              <p style={{ margin: "0 0 16px", fontSize: 11, fontWeight: 700, color: "#333", letterSpacing: "0.12em", textTransform: "uppercase" }}>Videos</p>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
+                {channelVideos.map(v => (
+                  <div key={v.id}
+                    onClick={() => setVodPlaying({ url: v.hls_url, title: v.title, uid: v.cloudflare_uid })}
+                    style={{ background: "#0d0d0d", border: "1px solid rgba(255,255,255,0.04)", borderRadius: 10, overflow: "hidden", cursor: "pointer", transition: "transform 0.15s, border-color 0.15s" }}
+                    onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.09)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.04)"; }}>
+                    <div style={{ position: "relative", aspectRatio: "16/9", background: "#090910" }}>
+                      {v.thumbnail_url
+                        ? <img src={v.thumbnail_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="rgba(255,255,255,0.07)"><polygon points="5,3 19,12 5,21"/></svg>
+                          </div>
+                      }
+                    </div>
+                    <div style={{ padding: "10px 12px" }}>
+                      <p style={{ margin: "0 0 3px", fontSize: 13, fontWeight: 600, color: "#ccc", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.title}</p>
+                      {v.description && <p style={{ margin: "0 0 3px", fontSize: 12, color: "#444", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.description}</p>}
+                      <p style={{ margin: 0, fontSize: 11, color: "#2a2a2a" }}>{new Date(v.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}

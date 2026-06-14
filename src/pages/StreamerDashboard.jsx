@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Hls from "hls.js";
 import { supabase } from "../supabase";
+import { CloudflareVideoUploader } from "../components/CloudflareVideoUploader";
 
 const BG = "#0a0a0a";
 const YELLOW = "#facc15";
@@ -205,6 +206,15 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
   const [watchingVod, setWatchingVod] = useState(null);
   const [vodExpanded, setVodExpanded] = useState(false);
 
+  const [uploads, setUploads]             = useState([]);
+  const [uploadsLoading, setUploadsLoading] = useState(false);
+  const [pendingUpload, setPendingUpload] = useState(null); // { uid, hlsUrl, thumbnailUrl }
+  const [uploadTitle, setUploadTitle]     = useState("");
+  const [uploadDesc, setUploadDesc]       = useState("");
+  const [savingUpload, setSavingUpload]   = useState(false);
+  const [deletingUpload, setDeletingUpload] = useState(null);
+  const [editingUpload, setEditingUpload] = useState(null);
+
   const [copied, setCopied] = useState(null);
   const [toast, setToast]   = useState(null);
   const [enablingStream, setEnablingStream] = useState(false);
@@ -268,6 +278,7 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
       loadAnalytics(data.id);
       loadNotifications(data.id);
       loadVods(data.stream_uid, data.previous_stream_uids || []);
+      loadUploads(data.id);
     }
     setLoading(false);
   }
@@ -275,6 +286,54 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
   async function loadFollows(streamId) {
     const { count } = await supabase.from("streamer_follows").select("*", { count: "exact", head: true }).eq("stream_id", streamId);
     setFollowCount(count ?? 0);
+  }
+
+  async function loadUploads(streamId) {
+    setUploadsLoading(true);
+    const { data } = await supabase.from("streamer_videos").select("*").eq("stream_id", streamId).order("created_at", { ascending: false });
+    setUploads(data || []);
+    setUploadsLoading(false);
+  }
+
+  async function saveUpload() {
+    if (!pendingUpload || !uploadTitle.trim() || !stream || !user) return;
+    setSavingUpload(true);
+    const { data, error } = await supabase.from("streamer_videos").insert({
+      stream_id: stream.id,
+      user_id: user.id,
+      cloudflare_uid: pendingUpload.uid,
+      title: uploadTitle.trim(),
+      description: uploadDesc.trim() || null,
+      hls_url: pendingUpload.hlsUrl,
+      thumbnail_url: pendingUpload.thumbnailUrl,
+    }).select().single();
+    if (!error && data) {
+      setUploads(u => [data, ...u]);
+      setPendingUpload(null);
+      setUploadTitle("");
+      setUploadDesc("");
+      showToast("Video published!");
+    } else {
+      showToast("Failed to save video.");
+    }
+    setSavingUpload(false);
+  }
+
+  async function deleteUpload(id) {
+    setSavingVod(true);
+    await supabase.from("streamer_videos").delete().eq("id", id);
+    setUploads(u => u.filter(v => v.id !== id));
+    setDeletingUpload(null);
+    setSavingVod(false);
+    showToast("Video deleted.");
+  }
+
+  async function saveUploadTitle(id, title) {
+    setSavingVod(true);
+    await supabase.from("streamer_videos").update({ title }).eq("id", id);
+    setUploads(u => u.map(v => v.id === id ? { ...v, title } : v));
+    setEditingUpload(null);
+    setSavingVod(false);
   }
 
   async function loadSchedule(streamId) {
@@ -696,7 +755,8 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
     { id: "channel",       label: "Channel" },
     { id: "analytics",     label: "Analytics" },
     { id: "notifications", label: "Notifications", badge: unreadCount },
-    { id: "vods",          label: "VODs" },
+    { id: "vods",          label: "Past Streams" },
+    { id: "videos",        label: "Videos" },
   ];
 
   return (
@@ -1316,6 +1376,108 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
             </div>
           </SectionCard>
 
+        </div>
+      )}
+
+      {/* ── VIDEOS TAB ── */}
+      {activeTab === "videos" && (
+        <div style={{ padding: `24px ${PAD} 80px`, maxWidth: 860 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#fff" }}>Videos</h2>
+            <span style={{ fontSize: 13, color: "#444" }}>{uploads.length} video{uploads.length !== 1 ? "s" : ""}</span>
+          </div>
+
+          {!pendingUpload ? (
+            <div style={{ marginBottom: 24 }}>
+              <CloudflareVideoUploader
+                onComplete={result => { setPendingUpload(result); setUploadTitle(""); setUploadDesc(""); }}
+                onError={msg => showToast("Upload error: " + msg)}
+              />
+            </div>
+          ) : (
+            <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 20, marginBottom: 24 }}>
+              <p style={{ margin: "0 0 14px", fontSize: 13, fontWeight: 700, color: "#4ade80" }}>✓ Upload complete — add details before publishing</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div>
+                  <Label>Title <span style={{ color: "#555", fontWeight: 400 }}>required</span></Label>
+                  <input value={uploadTitle} onChange={e => setUploadTitle(e.target.value)} placeholder="Give your video a title…" maxLength={120} style={inp} autoFocus />
+                </div>
+                <div>
+                  <Label>Description <span style={{ color: "#555", fontWeight: 400 }}>optional</span></Label>
+                  <textarea value={uploadDesc} onChange={e => setUploadDesc(e.target.value)} placeholder="What's this video about?" maxLength={500} rows={3} style={{ ...inp, resize: "vertical", lineHeight: 1.6 }} />
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={saveUpload} disabled={savingUpload || !uploadTitle.trim()}
+                    style={{ background: YELLOW, border: "none", borderRadius: 9, padding: "10px 22px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: !uploadTitle.trim() ? 0.4 : 1 }}>
+                    {savingUpload ? "Publishing…" : "Publish Video"}
+                  </button>
+                  <button onClick={() => { setPendingUpload(null); setUploadTitle(""); setUploadDesc(""); }}
+                    style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 9, padding: "10px 16px", color: "#555", fontSize: 13, cursor: "pointer" }}>
+                    Discard
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {uploadsLoading ? <p style={{ color: "#555", fontSize: 14 }}>Loading…</p>
+            : uploads.length === 0 && !pendingUpload ? (
+              <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "40px 24px", textAlign: "center" }}>
+                <p style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 600, color: "#fff" }}>No videos yet</p>
+                <p style={{ margin: 0, fontSize: 13, color: "#444" }}>Upload your first video above — it'll appear on your channel page.</p>
+              </div>
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14 }}>
+                {uploads.map(v => {
+                  const isDeleting = deletingUpload === v.id;
+                  const isEditing  = editingUpload?.id === v.id;
+                  return (
+                    <div key={v.id} style={{ background: CARD, border: `1px solid ${isDeleting ? "rgba(239,68,68,0.3)" : BORDER}`, borderRadius: 12, overflow: "hidden" }}>
+                      <div onClick={() => setWatchingVod({ url: v.hls_url, title: v.title })}
+                        style={{ position: "relative", aspectRatio: "16/9", background: "#090910", cursor: "pointer", overflow: "hidden" }}
+                        onMouseEnter={e => e.currentTarget.querySelector(".vod-play")?.style && (e.currentTarget.querySelector(".vod-play").style.opacity = "1")}
+                        onMouseLeave={e => e.currentTarget.querySelector(".vod-play")?.style && (e.currentTarget.querySelector(".vod-play").style.opacity = "0")}>
+                        {v.thumbnail_url
+                          ? <img src={v.thumbnail_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}><svg width="28" height="28" viewBox="0 0 24 24" fill="rgba(255,255,255,0.08)"><polygon points="5,3 19,12 5,21" /></svg></div>}
+                        <div className="vod-play" style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", opacity: 0, transition: "opacity 0.15s" }}>
+                          <div style={{ width: 44, height: 44, borderRadius: "50%", background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ padding: "12px 14px" }}>
+                        {isEditing ? (
+                          <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                            <input value={editingUpload.title} onChange={e => setEditingUpload(ev => ({ ...ev, title: e.target.value }))}
+                              onKeyDown={e => { if (e.key === "Enter") saveUploadTitle(v.id, editingUpload.title); if (e.key === "Escape") setEditingUpload(null); }}
+                              style={{ ...inp, padding: "7px 10px", fontSize: 13, flex: 1 }} autoFocus />
+                            <button onClick={() => saveUploadTitle(v.id, editingUpload.title)} disabled={savingVod} style={{ background: YELLOW, border: "none", borderRadius: 8, padding: "0 12px", color: "#0a0a0a", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{savingVod ? "…" : "Save"}</button>
+                            <button onClick={() => setEditingUpload(null)} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "0 10px", color: "#666", fontSize: 12, cursor: "pointer" }}>✕</button>
+                          </div>
+                        ) : (
+                          <p style={{ margin: "0 0 3px", fontSize: 13, fontWeight: 600, color: "#e0e0e0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.title}</p>
+                        )}
+                        <p style={{ margin: "0 0 10px", fontSize: 11, color: "#444" }}>{new Date(v.created_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}</p>
+                        {isDeleting ? (
+                          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                            <span style={{ fontSize: 12, color: "#dc2626", flex: 1 }}>Delete this video?</span>
+                            <button onClick={() => deleteUpload(v.id)} disabled={savingVod} style={{ background: "#dc2626", border: "none", borderRadius: 7, padding: "5px 12px", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{savingVod ? "…" : "Yes"}</button>
+                            <button onClick={() => setDeletingUpload(null)} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "5px 10px", color: "#666", fontSize: 12, cursor: "pointer" }}>No</button>
+                          </div>
+                        ) : (
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <button onClick={() => setWatchingVod({ url: v.hls_url, title: v.title })} style={{ flex: 1, background: "rgba(255,255,255,0.04)", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "6px 0", color: "#bbb", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Watch</button>
+                            <button onClick={() => setEditingUpload({ id: v.id, title: v.title })} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "6px 10px", color: "#888", fontSize: 12, cursor: "pointer" }}>Rename</button>
+                            <button onClick={() => setDeletingUpload(v.id)} style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 7, padding: "6px 10px", color: "#dc2626", fontSize: 12, cursor: "pointer" }}>Delete</button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
         </div>
       )}
 
