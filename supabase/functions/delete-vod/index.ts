@@ -32,12 +32,17 @@ Deno.serve(async (req) => {
       .single();
     if (!stream) throw new Error("Stream not found");
 
-    // Block deletion if there's an open moderation report against this channel
-    const slug = stream.slug || stream.username || (stream.channel_name || stream.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    // Block deletion if there's an open moderation report against this channel.
+    // content_id in reports is set as: stream.username || derived from channel_name/title
+    const possibleSlugs = [
+      stream.slug,
+      stream.username,
+      (stream.channel_name || stream.title || "").toLowerCase().replace(/[^a-z0-9]/g, ""),
+    ].filter(Boolean);
     const { count } = await supabase
       .from("content_reports")
       .select("id", { count: "exact", head: true })
-      .eq("content_id", slug)
+      .in("content_id", possibleSlugs)
       .eq("status", "pending");
     if ((count ?? 0) > 0) {
       throw new Error("This channel has a pending moderation review. VODs cannot be deleted until the report is resolved.");

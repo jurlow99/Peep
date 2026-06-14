@@ -730,16 +730,21 @@ export function CMS({ onExit, currentUser }) {
     setDrawerFormType("report");
     setDrawerOpen(true);
 
-    // Load reporter profile and channel VODs in parallel
-    const [profileRes, streamRes] = await Promise.all([
+    // Load reporter profile and all streams in parallel
+    const [profileRes, streamsRes] = await Promise.all([
       report.reporter_id
         ? supabase.from("profiles").select("username, full_name, avatar_url").eq("id", report.reporter_id).maybeSingle()
         : Promise.resolve({ data: null }),
-      supabase.from("live_streams").select("stream_uid, previous_stream_uids").eq("slug", report.content_id).maybeSingle(),
+      supabase.from("live_streams").select("stream_uid, previous_stream_uids, slug, username, channel_name, title"),
     ]);
     setReporterProfile(profileRes.data ?? false);
 
-    const streamUid = streamRes.data?.stream_uid;
+    // Match using the same slug logic as StreamerProfile
+    const matchedStream = streamsRes.data?.find(s => {
+      const slug = s.slug || s.username || (s.channel_name || s.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      return slug === report.content_id;
+    });
+    const streamUid = matchedStream?.stream_uid;
     if (streamUid) {
       setReportVodsLoading(true);
       try {
