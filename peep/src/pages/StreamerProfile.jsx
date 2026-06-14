@@ -126,7 +126,7 @@ function VideoPlayer({ url, live = false, style = {} }) {
   if (!live) {
     return (
       <div style={{ position: "relative", background: "#000", ...style }}>
-        <video ref={ref} controls style={{ display: "block", width: "100%", height: "100%", background: "#000" }} />
+        <video ref={ref} controls controlsList="nofullscreen nodownload" disablePictureInPicture playsInline style={{ display: "block", width: "100%", height: "100%", background: "#000" }} />
         {overlays}
       </div>
     );
@@ -714,16 +714,14 @@ export function StreamerProfile() {
             )}
           </div>
 
-          {/* VOD player modal */}
+          {/* VOD player — floating corner card */}
           {vodPlaying && (
-            <div onClick={() => setVodPlaying(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-              <div onClick={e => e.stopPropagation()} style={{ width: "min(480px, calc(100vw - 48px))", background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, overflow: "hidden", boxShadow: "0 24px 80px rgba(0,0,0,0.8)" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", borderBottom: "1px solid #1e1e1e" }}>
-                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#e0e0e0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, marginRight: 10 }}>{vodPlaying.title || "Past Stream"}</p>
-                  <button onClick={() => setVodPlaying(null)} style={{ background: "rgba(255,255,255,0.06)", border: "none", borderRadius: 6, width: 28, height: 28, color: "#aaa", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>×</button>
-                </div>
-                <VideoPlayer key={vodPlaying.url} url={vodPlaying.url} style={{ width: "100%", aspectRatio: "16/9" }} />
+            <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 200, width: "min(380px, calc(100vw - 32px))", background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, overflow: "hidden", boxShadow: "0 16px 48px rgba(0,0,0,0.8)" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", borderBottom: "1px solid #1e1e1e" }}>
+                <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: "#e0e0e0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, marginRight: 8 }}>{vodPlaying.title || "Past Stream"}</p>
+                <button onClick={() => setVodPlaying(null)} style={{ background: "rgba(255,255,255,0.06)", border: "none", borderRadius: 5, width: 26, height: 26, color: "#aaa", fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>×</button>
               </div>
+              <VideoPlayer key={vodPlaying.url} url={vodPlaying.url} style={{ width: "100%", aspectRatio: "16/9" }} />
             </div>
           )}
 
