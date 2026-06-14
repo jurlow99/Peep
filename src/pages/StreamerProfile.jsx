@@ -724,7 +724,12 @@ export function StreamerProfile() {
                   <div style={{ display: "inline-flex", alignItems: "center", gap: 3, background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 4, padding: "2px 7px", flexShrink: 0 }}>
                     <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite" }} />
                     <span style={{ fontSize: 10, fontWeight: 800, color: "#ef4444", letterSpacing: 0.8 }}>LIVE</span>
-                    {viewers > 0 && <span style={{ fontSize: 10, color: "#ef4444", fontWeight: 600 }}>· {viewers}</span>}
+                  </div>
+                )}
+                {isLive && viewers > 0 && (
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "#111", border: "1px solid #222", borderRadius: 4, padding: "2px 7px", flexShrink: 0 }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: "#888" }}>{viewers.toLocaleString()}</span>
                   </div>
                 )}
               </div>
@@ -796,7 +801,12 @@ export function StreamerProfile() {
                   <div style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 5, padding: "2px 9px" }}>
                     <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite" }} />
                     <span style={{ fontSize: 10, fontWeight: 800, color: "#ef4444", letterSpacing: 0.8 }}>LIVE</span>
-                    {viewers > 0 && <span style={{ fontSize: 10, color: "#ef4444", fontWeight: 600 }}>· {viewers.toLocaleString()}</span>}
+                  </div>
+                )}
+                {isLive && viewers > 0 && (
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "#111", border: "1px solid #222", borderRadius: 5, padding: "3px 9px" }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#aaa" }}>{viewers.toLocaleString()}</span>
                   </div>
                 )}
                 {streamEnded && <span style={{ fontSize: 11, color: "#444", background: "#111", border: "1px solid #1e1e1e", borderRadius: 4, padding: "2px 9px" }}>Ended</span>}
