@@ -757,6 +757,7 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
     { id: "notifications", label: "Notifications", badge: unreadCount },
     { id: "vods",          label: "Past Streams" },
     { id: "videos",        label: "Videos" },
+    { id: "help",          label: "Help" },
   ];
 
   return (
@@ -1500,6 +1501,197 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
                 })}
               </div>
             )}
+        </div>
+      )}
+
+      {/* ── HELP TAB ── */}
+      {activeTab === "help" && (
+        <div style={{ padding: `24px ${PAD} 80px`, maxWidth: 860 }}>
+          <h2 style={{ margin: "0 0 6px", fontSize: 20, fontWeight: 700, color: "#fff" }}>Streaming Guide</h2>
+          <p style={{ margin: "0 0 28px", fontSize: 14, color: "#444" }}>Everything you need to go live using OBS or Streamlabs.</p>
+
+          {/* Recommended Settings */}
+          <SectionCard title="Recommended Settings" collapsible defaultOpen>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 10 }}>
+              {[
+                { label: "Resolution", value: "1920 × 1080" },
+                { label: "Frame Rate", value: "30 or 60 fps" },
+                { label: "Encoder", value: "x264 or NVENC" },
+                { label: "Video Bitrate", value: "4000–6000 kbps" },
+                { label: "Audio Bitrate", value: "128–160 kbps" },
+                { label: "Keyframe Interval", value: "2 seconds" },
+              ].map(({ label, value }) => (
+                <div key={label} style={{ background: "#0d0d0d", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "12px 14px" }}>
+                  <p style={{ margin: "0 0 3px", fontSize: 11, color: "#444", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</p>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#e0e0e0" }}>{value}</p>
+                </div>
+              ))}
+            </div>
+          </SectionCard>
+
+          {/* OBS Setup */}
+          <SectionCard title="OBS Studio Setup" collapsible defaultOpen>
+            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+              <div>
+                <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 600, color: "#888" }}>Step 1 — Stream Settings</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {[
+                    "Open OBS → Settings → Stream",
+                    'Set Service to "Custom…"',
+                    "Paste your RTMP Server into the Server field",
+                    "Paste your Stream Key into the Stream Key field",
+                    "Click Apply → OK",
+                  ].map((t, i) => (
+                    <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                      <div style={{ width: 20, height: 20, borderRadius: "50%", background: "#1a1a1a", border: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: YELLOW, flexShrink: 0, marginTop: 1 }}>{i + 1}</div>
+                      <span style={{ fontSize: 13, color: "#777", lineHeight: 1.6 }}>{t}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 18 }}>
+                <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 600, color: "#888" }}>Step 2 — Video Settings</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {[
+                    "Settings → Video",
+                    "Base (Canvas) Resolution: 1920×1080",
+                    "Output (Scaled) Resolution: 1920×1080",
+                    "Common FPS: 30 or 60",
+                  ].map((t, i) => (
+                    <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                      <div style={{ width: 20, height: 20, borderRadius: "50%", background: "#1a1a1a", border: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: YELLOW, flexShrink: 0, marginTop: 1 }}>{i + 1}</div>
+                      <span style={{ fontSize: 13, color: "#777", lineHeight: 1.6 }}>{t}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 18 }}>
+                <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 600, color: "#888" }}>Step 3 — Output Settings</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {[
+                    'Settings → Output → set Output Mode to "Advanced"',
+                    "Encoder: x264 (CPU) or NVENC (NVIDIA GPU)",
+                    "Bitrate: 4000–6000 kbps",
+                    "Keyframe Interval: 2",
+                    'Profile: "high"',
+                  ].map((t, i) => (
+                    <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                      <div style={{ width: 20, height: 20, borderRadius: "50%", background: "#1a1a1a", border: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: YELLOW, flexShrink: 0, marginTop: 1 }}>{i + 1}</div>
+                      <span style={{ fontSize: 13, color: "#777", lineHeight: 1.6 }}>{t}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ background: "rgba(250,204,21,0.04)", border: "1px solid rgba(250,204,21,0.1)", borderRadius: 10, padding: "12px 14px" }}>
+                <p style={{ margin: "0 0 4px", fontSize: 12, fontWeight: 700, color: "#a16207" }}>Tip — Skip the Auto-Config Wizard</p>
+                <p style={{ margin: 0, fontSize: 12, color: "#78350f", lineHeight: 1.5 }}>OBS's Auto-Config Wizard only works with Twitch and YouTube. Set everything manually in Settings.</p>
+              </div>
+            </div>
+          </SectionCard>
+
+          {/* Streamlabs Setup */}
+          <SectionCard title="Streamlabs Setup" collapsible defaultOpen={false}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+              <div>
+                <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 600, color: "#888" }}>Step 1 — Stream Settings</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {[
+                    "Open Streamlabs → Settings (gear icon) → Stream",
+                    'Set Stream Type to "Custom Streaming Server"',
+                    "Paste your RTMP Server into the URL field",
+                    "Paste your Stream Key into the Stream Key field",
+                    "Click Done",
+                  ].map((t, i) => (
+                    <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                      <div style={{ width: 20, height: 20, borderRadius: "50%", background: "#1a1a1a", border: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: YELLOW, flexShrink: 0, marginTop: 1 }}>{i + 1}</div>
+                      <span style={{ fontSize: 13, color: "#777", lineHeight: 1.6 }}>{t}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 18 }}>
+                <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 600, color: "#888" }}>Step 2 — Video Settings</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {[
+                    "Settings → Video",
+                    "Base (Canvas) Resolution: 1920×1080",
+                    "Output Resolution: 1920×1080",
+                    "FPS: 30 or 60",
+                  ].map((t, i) => (
+                    <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                      <div style={{ width: 20, height: 20, borderRadius: "50%", background: "#1a1a1a", border: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: YELLOW, flexShrink: 0, marginTop: 1 }}>{i + 1}</div>
+                      <span style={{ fontSize: 13, color: "#777", lineHeight: 1.6 }}>{t}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ background: "rgba(250,204,21,0.04)", border: "1px solid rgba(250,204,21,0.1)", borderRadius: 10, padding: "12px 14px" }}>
+                <p style={{ margin: "0 0 4px", fontSize: 12, fontWeight: 700, color: "#a16207" }}>Tip — Don't use the Streamlabs login flow</p>
+                <p style={{ margin: 0, fontSize: 12, color: "#78350f", lineHeight: 1.5 }}>Log in with Twitch/YouTube only works for those platforms. Use Custom Streaming Server with your Peep RTMP credentials instead.</p>
+              </div>
+            </div>
+          </SectionCard>
+
+          {/* Your credentials */}
+          {stream && (
+            <SectionCard title="Your Stream Credentials" collapsible defaultOpen={false}>
+              <p style={{ margin: "0 0 14px", fontSize: 13, color: "#555" }}>Copy these into OBS or Streamlabs. Keep your stream key private.</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div>
+                  <Label>RTMP Server</Label>
+                  <div style={{ display: "flex", gap: 7 }}>
+                    <code style={{ flex: 1, background: "#0d0d0d", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "9px 11px", fontSize: 11, color: YELLOW, wordBreak: "break-all", lineHeight: 1.5 }}>{RTMP_BASE}</code>
+                    <button onClick={() => copy(RTMP_BASE, "help-rtmp")} style={{ flexShrink: 0, background: copied === "help-rtmp" ? "rgba(250,204,21,0.1)" : "rgba(255,255,255,0.04)", border: `1px solid ${copied === "help-rtmp" ? "rgba(250,204,21,0.3)" : BORDER}`, borderRadius: 8, padding: "0 14px", color: copied === "help-rtmp" ? YELLOW : "#666", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{copied === "help-rtmp" ? "✓ Copied" : "Copy"}</button>
+                  </div>
+                </div>
+                <div>
+                  <Label>Stream Key</Label>
+                  <div style={{ display: "flex", gap: 7 }}>
+                    <code style={{ flex: 1, background: "#0d0d0d", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "9px 11px", fontSize: 11, color: "#555", wordBreak: "break-all", lineHeight: 1.5, filter: "blur(4px)", userSelect: "none" }}>{"•".repeat(40)}</code>
+                    <button onClick={() => { copy(stream.stream_key, "help-key"); }} style={{ flexShrink: 0, background: copied === "help-key" ? "rgba(250,204,21,0.1)" : "rgba(255,255,255,0.04)", border: `1px solid ${copied === "help-key" ? "rgba(250,204,21,0.3)" : BORDER}`, borderRadius: 8, padding: "0 14px", color: copied === "help-key" ? YELLOW : "#666", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{copied === "help-key" ? "✓ Copied" : "Copy Key"}</button>
+                  </div>
+                </div>
+              </div>
+            </SectionCard>
+          )}
+
+          {/* Common issues */}
+          <SectionCard title="Common Issues" collapsible defaultOpen={false}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+              {[
+                {
+                  q: "My stream looks stretched, portrait, or has black bars",
+                  a: "Your OBS/Streamlabs canvas resolution isn't set to 16:9. Go to Settings → Video and set both Base and Output Resolution to 1920×1080. Then right-click your sources → Transform → Fit to Screen to fill the canvas.",
+                },
+                {
+                  q: "Stream shows as offline even though I'm broadcasting",
+                  a: "It can take 15–30 seconds for your stream to register as live. If it stays offline, double-check your RTMP server and stream key are entered correctly in OBS/Streamlabs.",
+                },
+                {
+                  q: "Viewers see buffering or low quality",
+                  a: "Lower your video bitrate to 3000–4000 kbps and check your upload speed. You need at least 2× your bitrate in upload speed for a stable stream.",
+                },
+                {
+                  q: "Auto-Config Wizard isn't working",
+                  a: "The wizard only supports Twitch and YouTube. Skip it and configure Settings manually using the steps above.",
+                },
+                {
+                  q: "No VOD saved after my stream",
+                  a: "VODs are automatically saved when your stream ends. It may take a few minutes to process. If it's missing after 10 minutes, try rotating your stream key and streaming again.",
+                },
+              ].map(({ q, a }, i, arr) => (
+                <div key={i} style={{ padding: "16px 0", borderBottom: i < arr.length - 1 ? `1px solid ${BORDER}` : "none" }}>
+                  <p style={{ margin: "0 0 6px", fontSize: 13, fontWeight: 700, color: "#ccc" }}>{q}</p>
+                  <p style={{ margin: 0, fontSize: 13, color: "#555", lineHeight: 1.7 }}>{a}</p>
+                </div>
+              ))}
+            </div>
+          </SectionCard>
         </div>
       )}
 
