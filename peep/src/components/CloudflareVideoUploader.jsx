@@ -54,8 +54,9 @@ export function CloudflareVideoUploader({ onComplete, onError, disabled }) {
       await new Promise((resolve, reject) => {
         const upload = new tus.Upload(file, {
           uploadUrl: uploadURL,
-          chunkSize: 50 * 1024 * 1024, // 50 MB chunks
+          chunkSize: 50 * 1024 * 1024,
           retryDelays: [0, 3000, 6000, 12000],
+          storeFingerprintForResuming: false,
           metadata: { filename: file.name, filetype: file.type },
           onProgress(loaded, total) {
             setUploadPct(Math.round((loaded / total) * 100));
