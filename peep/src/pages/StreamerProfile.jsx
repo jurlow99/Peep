@@ -187,6 +187,11 @@ export function StreamerProfile() {
   const [loading, setLoading]             = useState(true);
   const [vodPlaying, setVodPlaying]       = useState(null);
   const [vodExpanded, setVodExpanded]     = useState(false);
+  const [comments, setComments]           = useState([]);
+  const [commentInput, setCommentInput]   = useState("");
+  const [postingComment, setPostingComment] = useState(false);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [userProfile, setUserProfile]     = useState(null);
   const [isFollowing, setIsFollowing]     = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [followers, setFollowers]         = useState(0);
@@ -205,6 +210,7 @@ export function StreamerProfile() {
   const [reportReason, setReportReason]   = useState("");
   const [reportSent, setReportSent]       = useState(false);
   const chatBottomRef = useRef(null);
+  const commentsEndRef = useRef(null);
   const prevIsLiveRef = useRef(null);
 
   useEffect(() => {
@@ -219,6 +225,44 @@ export function StreamerProfile() {
     if (prevIsLiveRef.current === true && stream.is_live === false) setStreamEnded(true);
     prevIsLiveRef.current = stream.is_live;
   }, [stream?.is_live]);
+
+  useEffect(() => {
+    if (!currentUser) { setUserProfile(null); return; }
+    supabase.from("profiles").select("username, full_name, avatar_url").eq("id", currentUser.id).maybeSingle()
+      .then(({ data }) => setUserProfile(data ?? null));
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    if (!vodPlaying?.uid) { setComments([]); return; }
+    loadComments(vodPlaying.uid);
+  }, [vodPlaying?.uid]);
+
+  async function loadComments(uid) {
+    setCommentsLoading(true);
+    const { data } = await supabase.from("vod_comments").select("*").eq("vod_uid", uid).order("created_at", { ascending: true }).limit(100);
+    setComments(data || []);
+    setCommentsLoading(false);
+  }
+
+  async function postComment() {
+    if (!commentInput.trim() || !currentUser || postingComment || !vodPlaying?.uid) return;
+    setPostingComment(true);
+    const displayName = userProfile?.username || userProfile?.full_name || currentUser.user_metadata?.full_name || currentUser.email?.split("@")[0] || "Viewer";
+    const { data, error } = await supabase.from("vod_comments").insert({
+      vod_uid: vodPlaying.uid,
+      stream_id: stream.id,
+      user_id: currentUser.id,
+      username: displayName,
+      avatar_url: userProfile?.avatar_url || null,
+      body: commentInput.trim(),
+    }).select().single();
+    if (!error && data) {
+      setComments(c => [...c, data]);
+      setCommentInput("");
+      setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+    }
+    setPostingComment(false);
+  }
 
   useEffect(() => {
     if (!stream?.id) return;
@@ -535,7 +579,7 @@ export function StreamerProfile() {
               : metaName;
             return (
             <div key={v.uid}
-              onClick={() => !stream.is_live && setVodPlaying({ url: v.playback?.hls, title: vodTitle })}
+              onClick={() => !stream.is_live && setVodPlaying({ url: v.playback?.hls, title: vodTitle, uid: v.uid })}
               style={{ background: "#0d0d0d", border: "1px solid rgba(255,255,255,0.04)", borderRadius: 10, overflow: "hidden", cursor: stream.is_live ? "default" : "pointer", transition: "transform 0.15s, border-color 0.15s" }}
               onMouseEnter={e => { if (!stream.is_live) { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.09)"; } }}
               onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.04)"; }}>
@@ -812,37 +856,98 @@ export function StreamerProfile() {
             <SocialLinksRow />
           </div>
 
-          {/* VOD player */}
+          {/* Inline VOD player + comments */}
           {vodPlaying && (
-            vodExpanded ? (
-              <div onClick={() => setVodExpanded(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-                <div onClick={e => e.stopPropagation()} style={{ width: "min(860px, calc(100vw - 48px))", background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, overflow: "hidden", boxShadow: "0 24px 80px rgba(0,0,0,0.9)" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", borderBottom: "1px solid #1e1e1e" }}>
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#e0e0e0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, marginRight: 8 }}>{vodPlaying.title || "Past Stream"}</p>
-                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                      <button onClick={() => setVodExpanded(false)} title="Minimize" style={{ background: "rgba(255,255,255,0.06)", border: "none", borderRadius: 5, width: 28, height: 28, color: "#aaa", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="21" y2="3"/><line x1="3" y1="21" x2="14" y2="10"/></svg>
-                      </button>
-                      <button onClick={() => { setVodPlaying(null); setVodExpanded(false); }} style={{ background: "rgba(255,255,255,0.06)", border: "none", borderRadius: 5, width: 28, height: 28, color: "#aaa", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+            <div style={{ borderBottom: "1px solid #111" }}>
+              {/* Fullscreen overlay */}
+              {vodExpanded && (
+                <div onClick={() => setVodExpanded(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.92)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+                  <div onClick={e => e.stopPropagation()} style={{ width: "min(900px, calc(100vw - 48px))", background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, overflow: "hidden", boxShadow: "0 24px 80px rgba(0,0,0,0.9)" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", borderBottom: "1px solid #1e1e1e" }}>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#e0e0e0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, marginRight: 8 }}>{vodPlaying.title || "Past Stream"}</p>
+                      <button onClick={() => setVodExpanded(false)} style={{ background: "rgba(255,255,255,0.06)", border: "none", borderRadius: 5, width: 28, height: 28, color: "#aaa", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
                     </div>
+                    <VideoPlayer key={vodPlaying.url + "-fs"} url={vodPlaying.url} style={{ width: "100%", aspectRatio: "16/9" }} />
                   </div>
-                  <VideoPlayer key={vodPlaying.url} url={vodPlaying.url} style={{ width: "100%", aspectRatio: "16/9" }} />
                 </div>
-              </div>
-            ) : (
-              <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 200, width: "min(340px, calc(100vw - 32px))", background: "#111", border: "1px solid #1e1e1e", borderRadius: 12, overflow: "hidden", boxShadow: "0 16px 48px rgba(0,0,0,0.8)" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", borderBottom: "1px solid #1e1e1e" }}>
-                  <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: "#e0e0e0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, marginRight: 8 }}>{vodPlaying.title || "Past Stream"}</p>
-                  <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
-                    <button onClick={() => setVodExpanded(true)} title="Expand" style={{ background: "rgba(255,255,255,0.06)", border: "none", borderRadius: 5, width: 26, height: 26, color: "#aaa", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              )}
+
+              {/* Inline player */}
+              <div style={{ padding: "20px 24px 0" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                  <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "#e0e0e0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, marginRight: 12 }}>{vodPlaying.title || "Past Stream"}</p>
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                    <button onClick={() => setVodExpanded(true)} title="Fullscreen" style={{ background: "rgba(255,255,255,0.06)", border: "none", borderRadius: 6, width: 28, height: 28, color: "#777", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
                     </button>
-                    <button onClick={() => { setVodPlaying(null); setVodExpanded(false); }} style={{ background: "rgba(255,255,255,0.06)", border: "none", borderRadius: 5, width: 26, height: 26, color: "#aaa", fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+                    <button onClick={() => { setVodPlaying(null); setComments([]); }} style={{ background: "rgba(255,255,255,0.06)", border: "none", borderRadius: 6, width: 28, height: 28, color: "#777", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
                   </div>
                 </div>
-                <VideoPlayer key={vodPlaying.url} url={vodPlaying.url} style={{ width: "100%", aspectRatio: "16/9" }} />
+                <div style={{ borderRadius: 12, overflow: "hidden", background: "#000", aspectRatio: "16/9", maxHeight: "60vh" }}>
+                  <VideoPlayer key={vodPlaying.url} url={vodPlaying.url} style={{ width: "100%", height: "100%" }} />
+                </div>
               </div>
-            )
+
+              {/* Comments */}
+              <div style={{ padding: "24px 24px 32px" }}>
+                <p style={{ margin: "0 0 16px", fontSize: 11, fontWeight: 700, color: "#333", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+                  Comments{comments.length > 0 ? ` (${comments.length})` : ""}
+                </p>
+
+                {currentUser ? (
+                  <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
+                    <input
+                      value={commentInput}
+                      onChange={e => setCommentInput(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && postComment()}
+                      placeholder="Add a comment…"
+                      maxLength={500}
+                      style={{ flex: 1, background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 9, padding: "10px 13px", color: "#fff", fontSize: 13, outline: "none", fontFamily: "inherit" }}
+                    />
+                    <button onClick={postComment} disabled={postingComment || !commentInput.trim()}
+                      style={{ background: "#facc15", border: "none", borderRadius: 9, padding: "0 18px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: postingComment || !commentInput.trim() ? 0.4 : 1, flexShrink: 0 }}>
+                      {postingComment ? "…" : "Post"}
+                    </button>
+                  </div>
+                ) : (
+                  <p style={{ margin: "0 0 20px", fontSize: 13, color: "#444" }}>
+                    <a href="/signin" style={{ color: "#facc15", textDecoration: "none" }}>Sign in</a> to comment.
+                  </p>
+                )}
+
+                {commentsLoading ? (
+                  <p style={{ color: "#333", fontSize: 13 }}>Loading…</p>
+                ) : comments.length === 0 ? (
+                  <p style={{ color: "#2a2a2a", fontSize: 13 }}>No comments yet. Be the first.</p>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                    {comments.map(c => (
+                      <div key={c.id} style={{ display: "flex", gap: 10 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg, #1e1b4b, #4c1d95)", flexShrink: 0, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff" }}>
+                          {c.avatar_url ? <img src={c.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : (c.username || "?")[0].toUpperCase()}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 3, flexWrap: "wrap" }}>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: "#ccc" }}>{c.username}</span>
+                            <span style={{ fontSize: 11, color: "#2a2a2a" }}>
+                              {new Date(c.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                            </span>
+                          </div>
+                          <p style={{ margin: 0, fontSize: 14, color: "#777", lineHeight: 1.6, wordBreak: "break-word" }}>{c.body}</p>
+                        </div>
+                        {currentUser?.id === c.user_id && (
+                          <button
+                            onClick={async () => { await supabase.from("vod_comments").delete().eq("id", c.id); setComments(prev => prev.filter(x => x.id !== c.id)); }}
+                            style={{ background: "none", border: "none", color: "#2a2a2a", cursor: "pointer", fontSize: 18, flexShrink: 0, alignSelf: "flex-start", lineHeight: 1, padding: "0 4px" }}
+                            title="Delete">×</button>
+                        )}
+                      </div>
+                    ))}
+                    <div ref={commentsEndRef} />
+                  </div>
+                )}
+              </div>
+            </div>
           )}
 
           {/* Upcoming schedule */}
