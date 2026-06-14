@@ -347,10 +347,13 @@ export function StreamerProfile() {
   useEffect(() => {
     if (!stream?.is_live || !stream?.id) return;
     const sid = Math.random().toString(36).slice(2);
-    const ping = () => supabase.from("live_viewers").upsert(
-      { session_id: sid, channel_id: stream.id, last_ping: new Date().toISOString() },
-      { onConflict: "session_id" }
-    );
+    const ping = async () => {
+      await supabase.from("live_viewers").upsert(
+        { session_id: sid, channel_id: stream.id, last_ping: new Date().toISOString() },
+        { onConflict: "session_id" }
+      );
+      loadViewers(stream.id);
+    };
     ping();
     const t = setInterval(ping, 30000);
     return () => { clearInterval(t); supabase.from("live_viewers").delete().eq("session_id", sid); };
@@ -358,7 +361,8 @@ export function StreamerProfile() {
 
   useEffect(() => {
     if (!stream?.id || !stream?.is_live) return;
-    const t = setInterval(() => loadViewers(stream.id), 30000);
+    loadViewers(stream.id);
+    const t = setInterval(() => loadViewers(stream.id), 15000);
     return () => clearInterval(t);
   }, [stream?.id, stream?.is_live]);
 
