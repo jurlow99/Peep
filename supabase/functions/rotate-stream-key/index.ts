@@ -21,10 +21,9 @@ Deno.serve(async (req) => {
     const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
     if (!user || authErr) throw new Error("Unauthorized");
 
-    // Load the stream owned by this user
     const { data: stream, error: streamErr } = await supabase
       .from("live_streams")
-      .select("id, stream_uid, channel_name, title")
+      .select("id, stream_uid, channel_name, title, previous_stream_uids")
       .eq("user_id", user.id)
       .single();
     if (streamErr || !stream) throw new Error("Stream not found");
@@ -32,15 +31,7 @@ Deno.serve(async (req) => {
     const cfAccountId = Deno.env.get("CLOUDFLARE_ACCOUNT_ID")!;
     const cfToken = Deno.env.get("CLOUDFLARE_API_TOKEN")!;
 
-    // Delete old live input
-    if (stream.stream_uid) {
-      await fetch(
-        `https://api.cloudflare.com/client/v4/accounts/${cfAccountId}/stream/live_inputs/${stream.stream_uid}`,
-        { method: "DELETE", headers: { "Authorization": `Bearer ${cfToken}` } }
-      );
-    }
-
-    // Create new live input
+    // Create new live input — do NOT delete the old one so VODs are preserved
     const cfRes = await fetch(
       `https://api.cloudflare.com/client/v4/accounts/${cfAccountId}/stream/live_inputs`,
       {
@@ -59,9 +50,15 @@ Deno.serve(async (req) => {
     const newKey = cfData.result.rtmps.streamKey;
     const hlsUrl = `https://customer-x9w8t8qxjaf49jqb.cloudflarestream.com/${newUid}/manifest/video.m3u8`;
 
+    // Preserve old UID in previous_stream_uids so past VODs remain visible
+    const previousUids: string[] = stream.previous_stream_uids || [];
+    if (stream.stream_uid && !previousUids.includes(stream.stream_uid)) {
+      previousUids.push(stream.stream_uid);
+    }
+
     await supabase
       .from("live_streams")
-      .update({ stream_uid: newUid, stream_key: newKey, stream_url: hlsUrl })
+      .update({ stream_uid: newUid, stream_key: newKey, stream_url: hlsUrl, previous_stream_uids: previousUids })
       .eq("id", stream.id);
 
     return new Response(JSON.stringify({ success: true, stream_key: newKey, stream_uid: newUid }), {

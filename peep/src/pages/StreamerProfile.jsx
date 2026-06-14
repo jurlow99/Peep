@@ -248,7 +248,7 @@ export function StreamerProfile() {
         loadFollowers(match.id);
         loadViewers(match.id);
         loadSchedule(match.id);
-        loadVods(match.id, match.stream_uid);
+        loadVods(match.id, match.stream_uid, match.previous_stream_uids || []);
       }
     } catch (_) {
       setStream(null);
@@ -332,13 +332,14 @@ export function StreamerProfile() {
     setSchedule(data || []);
   }
 
-  async function loadVods(streamId, streamUid) {
+  async function loadVods(streamId, streamUid, previousUids = []) {
     if (!streamUid) return;
     setVodsLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-vods?stream_uid=${streamUid}`, {
+      const prevParam = previousUids.length ? `&previous_uids=${previousUids.join(",")}` : "";
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-vods?stream_uid=${streamUid}${prevParam}`, {
         headers: token ? { "Authorization": `Bearer ${token}` } : {},
       });
       const json = await res.json();
