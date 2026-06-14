@@ -384,7 +384,24 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
         { headers: session?.access_token ? { "Authorization": `Bearer ${session.access_token}` } : {} }
       );
       const json = await res.json();
-      setVods(json.vods || []);
+      const allVods = json.vods || [];
+      setVods(allVods);
+
+      // Silently delete VODs older than 30 days to keep Cloudflare storage usage down.
+      // Runs in the background — errors (e.g. moderation lock) are intentionally ignored.
+      const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      const expired = allVods.filter(v => new Date(v.created).getTime() < cutoff);
+      if (expired.length > 0 && session?.access_token) {
+        expired.forEach(v => {
+          fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-vod`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ uid: v.uid }),
+          }).then(r => r.json()).then(result => {
+            if (!result.error) setVods(vs => vs.filter(x => x.uid !== v.uid));
+          }).catch(() => {});
+        });
+      }
     } catch (_) {}
     setVodsLoading(false);
   }
