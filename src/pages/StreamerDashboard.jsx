@@ -847,6 +847,28 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
       {activeTab === "studio" && (
         <div style={{ padding: `24px ${PAD} 80px`, display: "flex", flexDirection: "column", gap: 12, maxWidth: 860 }}>
 
+          {/* Channel identity */}
+          <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14 }}>
+            <div style={{ width: 48, height: 48, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700, color: "#fff", flexShrink: 0, overflow: "hidden" }}>
+              {stream.avatar_url ? <img src={stream.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : (stream.channel_name || stream.title || "?")[0].toUpperCase()}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: "0 0 2px", fontSize: 16, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{stream.channel_name || stream.title}</p>
+              {stream.stream_title
+                ? <p style={{ margin: 0, fontSize: 12, color: "#555", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{stream.stream_title}</p>
+                : <p style={{ margin: 0, fontSize: 12, color: "#333" }}>No stream title set</p>
+              }
+            </div>
+            {(() => { const slug = stream.username || (stream.channel_name || stream.title || "").toLowerCase().replace(/[^a-z0-9]/g, ""); return (
+              <a href={`/stream/${slug}`} target="_blank" rel="noopener noreferrer"
+                style={{ flexShrink: 0, background: "rgba(255,255,255,0.04)", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "7px 14px", color: "#666", fontSize: 12, fontWeight: 600, textDecoration: "none", transition: "color 0.15s, border-color 0.15s" }}
+                onMouseEnter={e => { e.currentTarget.style.color = "#bbb"; e.currentTarget.style.borderColor = "#333"; }}
+                onMouseLeave={e => { e.currentTarget.style.color = "#666"; e.currentTarget.style.borderColor = BORDER; }}>
+                View Channel →
+              </a>
+            ); })()}
+          </div>
+
           {/* Go Live */}
           <SectionCard title="Go Live" collapsible defaultOpen={!stream.is_live}>
             {/* RTMP + Key */}
