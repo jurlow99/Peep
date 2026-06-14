@@ -544,7 +544,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, 
       )}
 
       {/* Catalog pages for Movies / Series */}
-      {(activeNav === "Movies" || activeNav === "Series") && !loading && (
+      {!studioContent && (activeNav === "Movies" || activeNav === "Series") && !loading && (
         <CatalogPage
           type={activeNav}
           content={filteredContent}
@@ -559,7 +559,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, 
 
 
       {/* My List — full grid */}
-      {activeNav === "My List" && !loading && (
+      {!studioContent && activeNav === "My List" && !loading && (
         <div style={{ position: "relative", zIndex: 1, paddingTop: isMobile ? "calc(max(env(safe-area-inset-top), 44px) + 60px)" : 100, paddingBottom: 80 }}>
           <div style={{ padding: `0 ${PAD} 32px` }}>
             <h1 style={{ margin: "0 0 6px", fontFamily: "'DM Serif Display', serif", fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 400, color: "#fff" }}>My List</h1>
@@ -590,7 +590,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, 
       )}
 
       {/* Podcasts page — always renders when on Podcasts tab */}
-      {activeNav === "Podcasts" && !loading && (
+      {!studioContent && activeNav === "Podcasts" && !loading && (
         <div style={{ paddingTop: isMobile ? "calc(max(env(safe-area-inset-top), 44px) + 48px)" : 108, paddingBottom: 80 }}>
           <div style={{ padding: `0 ${PAD} 32px` }}>
             <h1 style={{ margin: 0, fontFamily: "'DM Serif Display', serif", fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 400, color: "#fff" }}>Podcasts</h1>
@@ -607,12 +607,12 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, 
       )}
 
       {/* Streams tab */}
-      {activeNav === "Streams" && !loading && (
+      {!studioContent && activeNav === "Streams" && !loading && (
         <LiveTVPage streams={liveStreams} user={user} streamsLoading={loading} />
       )}
 
       {/* ── FEATURED HERO (Home tab, desktop) ── */}
-      {activeNav === "Home" && !loading && !isMobile && (featured || liveNow.length > 0) && (
+      {!studioContent && activeNav === "Home" && !loading && !isMobile && (featured || liveNow.length > 0) && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 16, padding: "20px 24px 0", maxWidth: 1400 }}>
           {/* Big left card */}
           {(() => {
@@ -685,7 +685,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, 
       )}
 
       {/* Content rows (Home / Movies / Series / My List) */}
-      {activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "My List" && activeNav !== "Podcasts" && activeNav !== "Streams" && !loading && allContent.length > 0 && (
+      {!studioContent && activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "My List" && activeNav !== "Podcasts" && activeNav !== "Streams" && !loading && allContent.length > 0 && (
         <div style={{ position: "relative", zIndex: 1, marginTop: 0, paddingBottom: 80 }}>
           {activeNav === "Home" && liveNow.length > 0 && !(!isMobile) && (
             <LiveSection streams={liveNow} />
