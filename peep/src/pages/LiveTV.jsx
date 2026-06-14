@@ -138,11 +138,12 @@ function FeaturedStream({ stream, viewers, isFollowing, onToggleFollow, user }) 
           ? "0 0 0 1px rgba(239,68,68,0.35), 0 16px 48px rgba(239,68,68,0.1)"
           : "0 0 0 0px transparent, 0 4px 24px rgba(0,0,0,0.4)",
         display: "grid", gridTemplateColumns: "1fr 320px",
+        maxHeight: 380,
         transition: "box-shadow 0.25s, transform 0.2s",
         transform: hovered ? "translateY(-2px)" : "translateY(0)",
       }}>
         {/* Thumbnail */}
-        <div style={{ position: "relative", aspectRatio: "16/9", overflow: "hidden", background: "#111" }}>
+        <div style={{ position: "relative", overflow: "hidden", background: "#111" }}>
           <div style={{ width: "100%", height: "100%", transition: "transform 0.4s ease", transform: hovered ? "scale(1.03)" : "scale(1)" }}>
             {stream.thumbnail || stream.hero_image
               ? <img src={stream.thumbnail || stream.hero_image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
