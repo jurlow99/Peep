@@ -11,7 +11,7 @@ const CATEGORY_LABELS = {
   education: "Education", creative: "Creative",
 };
 
-function VideoPlayer({ url, live = false, style = {} }) {
+function VideoPlayer({ url, live = false, viewers = 0, style = {} }) {
   const containerRef = useRef(null);
   const ref = useRef(null);
   const hlsRef = useRef(null);
@@ -180,6 +180,12 @@ function VideoPlayer({ url, live = false, style = {} }) {
             <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#fff", animation: "livepulse 1.5s infinite" }} />
             <span style={{ fontSize: 10, fontWeight: 800, color: "#fff", letterSpacing: 0.8 }}>LIVE</span>
           </div>
+          {viewers > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(0,0,0,0.55)", borderRadius: 4, padding: "3px 8px", backdropFilter: "blur(4px)", flexShrink: 0 }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              <span style={{ fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.85)" }}>{viewers.toLocaleString()}</span>
+            </div>
+          )}
           <div style={{ flex: 1 }} />
           <button onClick={e => { e.stopPropagation(); toggleMute(); }} style={btnStyle}>
             {muted
@@ -705,7 +711,7 @@ export function StreamerProfile() {
                   </div>
                 </div>
               ) : (
-                <VideoPlayer key={stream.stream_url} url={stream.stream_url} live style={{ width: "100%", height: "100%" }} />
+                <VideoPlayer key={stream.stream_url} url={stream.stream_url} live viewers={viewers} style={{ width: "100%", height: "100%" }} />
               )}
             </div>
 
