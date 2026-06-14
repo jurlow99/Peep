@@ -714,15 +714,16 @@ export function StreamerProfile() {
             )}
           </div>
 
-          {/* VOD player */}
+          {/* VOD player modal */}
           {vodPlaying && (
-            <div style={{ position: "relative", background: "#000", borderBottom: "1px solid #111" }}>
-              <VideoPlayer key={vodPlaying.url} url={vodPlaying.url} style={{ width: "100%", maxHeight: "60vh" }} />
-              <button onClick={() => setVodPlaying(null)}
-                style={{ position: "absolute", top: 12, right: 12, background: "rgba(0,0,0,0.8)", border: "none", borderRadius: "50%", width: 34, height: 34, color: "#fff", fontSize: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1, backdropFilter: "blur(6px)" }}>×</button>
-              {vodPlaying.title && (
-                <p style={{ margin: 0, padding: "8px 18px", fontSize: 12, color: "#555", background: "#0a0a0a", borderBottom: "1px solid #111" }}>{vodPlaying.title}</p>
-              )}
+            <div onClick={() => setVodPlaying(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+              <div onClick={e => e.stopPropagation()} style={{ width: "min(480px, calc(100vw - 48px))", background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, overflow: "hidden", boxShadow: "0 24px 80px rgba(0,0,0,0.8)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", borderBottom: "1px solid #1e1e1e" }}>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#e0e0e0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, marginRight: 10 }}>{vodPlaying.title || "Past Stream"}</p>
+                  <button onClick={() => setVodPlaying(null)} style={{ background: "rgba(255,255,255,0.06)", border: "none", borderRadius: 6, width: 28, height: 28, color: "#aaa", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>×</button>
+                </div>
+                <VideoPlayer key={vodPlaying.url} url={vodPlaying.url} style={{ width: "100%", aspectRatio: "16/9" }} />
+              </div>
             </div>
           )}
 
