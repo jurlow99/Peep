@@ -156,6 +156,11 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
   const [category, setCategory]         = useState("general");
   const [bio, setBio]                   = useState("");
   const [donationLink, setDonationLink] = useState("");
+  const [twitterUrl, setTwitterUrl]     = useState("");
+  const [youtubeUrl, setYoutubeUrl]     = useState("");
+  const [tiktokUrl, setTiktokUrl]       = useState("");
+  const [discordUrl, setDiscordUrl]     = useState("");
+  const [instagramUrl, setInstagramUrl] = useState("");
   const [savingInfo, setSavingInfo]     = useState(false);
 
   const [uploadingThumb, setUploadingThumb]   = useState(false);
@@ -251,6 +256,11 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
       setCategory(data.category || "general");
       setBio(data.bio || "");
       setDonationLink(data.donation_link || "");
+      setTwitterUrl(data.twitter_url || "");
+      setYoutubeUrl(data.youtube_url || "");
+      setTiktokUrl(data.tiktok_url || "");
+      setDiscordUrl(data.discord_url || "");
+      setInstagramUrl(data.instagram_url || "");
       setBannedWords(data.banned_words || []);
       setListed(data.listed ?? false);
       loadFollows(data.id);
@@ -494,8 +504,15 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
     if (!stream) return;
     setSavingInfo(true);
     const cleanDonation = donationLink.trim();
-    await supabase.from("live_streams").update({ stream_title: streamTitle.trim() || null, category, bio: bio.trim() || null, donation_link: cleanDonation || null }).eq("id", stream.id);
-    setStream(s => ({ ...s, stream_title: streamTitle.trim() || null, category, bio: bio.trim() || null, donation_link: cleanDonation || null }));
+    const socialFields = {
+      twitter_url: twitterUrl.trim() || null,
+      youtube_url: youtubeUrl.trim() || null,
+      tiktok_url: tiktokUrl.trim() || null,
+      discord_url: discordUrl.trim() || null,
+      instagram_url: instagramUrl.trim() || null,
+    };
+    await supabase.from("live_streams").update({ stream_title: streamTitle.trim() || null, category, bio: bio.trim() || null, donation_link: cleanDonation || null, ...socialFields }).eq("id", stream.id);
+    setStream(s => ({ ...s, stream_title: streamTitle.trim() || null, category, bio: bio.trim() || null, donation_link: cleanDonation || null, ...socialFields }));
     setSavingInfo(false);
     showToast("Channel info saved!");
   }
@@ -985,6 +1002,23 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
             <div style={{ marginBottom: 16 }}>
               <Label>Donation Link <span style={{ color: "#2a2a2a", fontWeight: 400 }}>Ko-fi, PayPal, Streamlabs…</span></Label>
               <input value={donationLink} onChange={e => setDonationLink(e.target.value)} placeholder="https://ko-fi.com/yourchannel" type="url" style={inp} />
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <Label>Social Links</Label>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {[
+                  { label: "Twitter / X", value: twitterUrl, set: setTwitterUrl, ph: "https://twitter.com/yourhandle" },
+                  { label: "YouTube", value: youtubeUrl, set: setYoutubeUrl, ph: "https://youtube.com/@yourchannel" },
+                  { label: "TikTok", value: tiktokUrl, set: setTiktokUrl, ph: "https://tiktok.com/@yourhandle" },
+                  { label: "Discord", value: discordUrl, set: setDiscordUrl, ph: "https://discord.gg/yourserver" },
+                  { label: "Instagram", value: instagramUrl, set: setInstagramUrl, ph: "https://instagram.com/yourhandle" },
+                ].map(({ label, value, set, ph }) => (
+                  <div key={label} style={{ display: "grid", gridTemplateColumns: "100px 1fr", gap: 8, alignItems: "center" }}>
+                    <span style={{ fontSize: 12, color: "#444", textAlign: "right" }}>{label}</span>
+                    <input value={value} onChange={e => set(e.target.value)} placeholder={ph} type="url" style={inp} />
+                  </div>
+                ))}
+              </div>
             </div>
             <button onClick={saveStreamInfo} disabled={savingInfo} style={{ background: YELLOW, border: "none", borderRadius: 9, padding: "10px 22px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: savingInfo ? "wait" : "pointer", opacity: savingInfo ? 0.6 : 1 }}>
               {savingInfo ? "Saving…" : "Save Changes"}

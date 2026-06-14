@@ -283,9 +283,19 @@ export function LiveTVPage({ streams, user, streamsLoading }) {
   const [activeTab, setActiveTab] = useState("all");
   const [schedule, setSchedule] = useState([]);
   const [followedIds, setFollowedIds] = useState(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const liveStreams = streams.filter(s => s.is_live);
-  const offlineStreams = streams.filter(s => !s.is_live);
+  const searchFiltered = searchQuery.trim()
+    ? streams.filter(s => {
+        const q = searchQuery.trim().toLowerCase();
+        const name = (s.channel_name || s.title || "").toLowerCase();
+        const handle = (s.username || "").toLowerCase();
+        return name.includes(q) || handle.includes(q);
+      })
+    : streams;
+
+  const liveStreams = searchFiltered.filter(s => s.is_live);
+  const offlineStreams = searchFiltered.filter(s => !s.is_live);
 
   useEffect(() => {
     supabase.from("stream_schedule")
@@ -373,9 +383,9 @@ export function LiveTVPage({ streams, user, streamsLoading }) {
       <div style={{ padding: `0 ${PAD}` }}>
 
         {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20, flexWrap: "wrap" }}>
           <h1 style={{ margin: 0, fontSize: "clamp(22px, 3vw, 30px)", fontWeight: 700, color: "#fff" }}>Streams</h1>
-          {liveStreams.length > 0 && (
+          {liveStreams.length > 0 && !searchQuery && (
             <div style={{ display: "flex", alignItems: "center", gap: 7, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.18)", borderRadius: 20, padding: "5px 14px" }}>
               <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite" }} />
               <span style={{ fontSize: 12, color: "#ef4444", fontWeight: 600 }}>
@@ -383,7 +393,26 @@ export function LiveTVPage({ streams, user, streamsLoading }) {
               </span>
             </div>
           )}
+          <div style={{ marginLeft: "auto", position: "relative" }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="2" style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search channels…"
+              style={{ background: "#0f0f0f", border: "1px solid #1e1e1e", borderRadius: 20, padding: "8px 14px 8px 34px", color: "#ccc", fontSize: 13, outline: "none", width: 200, fontFamily: "inherit", transition: "border-color 0.15s" }}
+              onFocus={e => e.currentTarget.style.borderColor = "#333"}
+              onBlur={e => e.currentTarget.style.borderColor = "#1e1e1e"}
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery("")} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#444", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: 0 }}>×</button>
+            )}
+          </div>
         </div>
+        {searchQuery && (
+          <p style={{ margin: "0 0 20px", fontSize: 13, color: "#444" }}>
+            {searchFiltered.length === 0 ? `No channels found for "${searchQuery}"` : `${searchFiltered.length} channel${searchFiltered.length !== 1 ? "s" : ""} found`}
+          </p>
+        )}
 
         {/* Featured live stream */}
         {activeTab === "all" && featuredStream && filteredLive.length > 0 && (
