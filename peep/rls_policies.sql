@@ -161,3 +161,8 @@ CREATE POLICY "Admin only" ON blocked_users FOR ALL USING (is_admin()) WITH CHEC
 
 ALTER TABLE admin_login_attempts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Admin only" ON admin_login_attempts FOR ALL USING (is_admin()) WITH CHECK (is_admin());
+
+-- content_reports: anyone can insert (to file a report), only admins can read/update/delete
+ALTER TABLE content_reports ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated insert" ON content_reports FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Admin all" ON content_reports FOR ALL USING (is_admin()) WITH CHECK (is_admin());

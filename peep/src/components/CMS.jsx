@@ -721,6 +721,12 @@ export function CMS({ onExit, currentUser }) {
     if (selectedReport?.id === id) setSelectedReport(prev => ({ ...prev, status }));
   }
 
+  async function deleteReport(id) {
+    await supabase.from("content_reports").delete().eq("id", id);
+    setContentReports(prev => prev.filter(r => r.id !== id));
+    if (selectedReport?.id === id) { setSelectedReport(null); setDrawerOpen(false); }
+  }
+
   async function openReportDrawer(report) {
     setSelectedReport(report);
     setReportNotes(report.notes || "");
@@ -5878,11 +5884,16 @@ export function CMS({ onExit, currentUser }) {
             {/* Reports queue */}
             <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden" }}>
               <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #e2e8f0" }}>
-                {["pending", "actioned", "dismissed", "all"].map(f => {
+                {[
+                  { value: "pending", label: "Pending" },
+                  { value: "actioned", label: "Resolved" },
+                  { value: "dismissed", label: "Dismissed" },
+                  { value: "all", label: "All" },
+                ].map(({ value: f, label }) => {
                   const count = f === "all" ? contentReports.length : contentReports.filter(r => r.status === f).length;
                   return (
-                    <button key={f} onClick={() => setReportsFilter(f)} style={{ flex: 1, background: reportsFilter === f ? "#f8fafc" : "transparent", border: "none", borderBottom: reportsFilter === f ? "2px solid #fb923c" : "none", padding: "12px 8px", fontSize: 13, fontWeight: reportsFilter === f ? 600 : 400, color: reportsFilter === f ? "#0f172a" : "#6b7280", cursor: "pointer", textTransform: "capitalize" }}>
-                      {f} {count > 0 && <span style={{ background: f === "pending" ? "#fef2f2" : "#f1f5f9", color: f === "pending" ? "#dc2626" : "#6b7280", borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 700 }}>{count}</span>}
+                    <button key={f} onClick={() => setReportsFilter(f)} style={{ flex: 1, background: reportsFilter === f ? "#f8fafc" : "transparent", border: "none", borderBottom: reportsFilter === f ? "2px solid #fb923c" : "none", padding: "12px 8px", fontSize: 13, fontWeight: reportsFilter === f ? 600 : 400, color: reportsFilter === f ? "#0f172a" : "#6b7280", cursor: "pointer" }}>
+                      {label} {count > 0 && <span style={{ background: f === "pending" ? "#fef2f2" : "#f1f5f9", color: f === "pending" ? "#dc2626" : "#6b7280", borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 700 }}>{count}</span>}
                     </button>
                   );
                 })}
@@ -5903,27 +5914,38 @@ export function CMS({ onExit, currentUser }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {visible.map(r => (
-                        <tr key={r.id} onClick={() => openReportDrawer(r)} style={{ borderBottom: "1px solid #f1f5f9", cursor: "pointer", transition: "background 0.1s" }}
-                          onMouseEnter={e => e.currentTarget.style.background = "#f8fafc"}
-                          onMouseLeave={e => e.currentTarget.style.background = ""}>
-                          <td style={{ padding: "12px 16px", fontSize: 13, color: "#0f172a", fontWeight: 600 }}>
-                            {r.channel_name || r.content_id}
-                            {r.notes && <span title="Has notes" style={{ marginLeft: 6, fontSize: 10, color: "#fb923c" }}>●</span>}
-                          </td>
-                          <td style={{ padding: "12px 16px", fontSize: 13, color: "#374151", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.reason}</td>
-                          <td style={{ padding: "12px 16px" }}>
-                            <span style={{ display: "inline-block", background: r.status === "pending" ? "#fef2f2" : r.status === "actioned" ? "#f0fdf4" : "#f1f5f9", color: r.status === "pending" ? "#dc2626" : r.status === "actioned" ? "#16a34a" : "#6b7280", borderRadius: 6, padding: "2px 9px", fontSize: 12, fontWeight: 600, textTransform: "capitalize" }}>{r.status}</span>
-                          </td>
-                          <td style={{ padding: "12px 16px", fontSize: 12, color: "#9ca3af" }}>{new Date(r.created_at).toLocaleDateString()}</td>
-                          <td style={{ padding: "12px 16px" }}>
-                            <button onClick={e => { e.stopPropagation(); openReportDrawer(r); }}
-                              style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 6, padding: "5px 12px", fontSize: 12, color: "#374151", fontWeight: 600, cursor: "pointer" }}>
-                              View →
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      {visible.map(r => {
+                        const statusLabel = r.status === "actioned" ? "Resolved" : r.status === "pending" ? "Pending" : "Dismissed";
+                        const statusColor = r.status === "pending" ? "#dc2626" : r.status === "actioned" ? "#16a34a" : "#6b7280";
+                        const statusBg = r.status === "pending" ? "#fef2f2" : r.status === "actioned" ? "#f0fdf4" : "#f1f5f9";
+                        return (
+                          <tr key={r.id} onClick={() => openReportDrawer(r)} style={{ borderBottom: "1px solid #f1f5f9", cursor: "pointer", transition: "background 0.1s" }}
+                            onMouseEnter={e => e.currentTarget.style.background = "#f8fafc"}
+                            onMouseLeave={e => e.currentTarget.style.background = ""}>
+                            <td style={{ padding: "12px 16px", fontSize: 13, color: "#0f172a", fontWeight: 600 }}>
+                              {r.channel_name || r.content_id}
+                              {r.notes && <span title="Has investigation notes" style={{ marginLeft: 6, fontSize: 10, color: "#fb923c" }}>●</span>}
+                            </td>
+                            <td style={{ padding: "12px 16px", fontSize: 13, color: "#374151", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.reason}</td>
+                            <td style={{ padding: "12px 16px" }}>
+                              <span style={{ display: "inline-block", background: statusBg, color: statusColor, borderRadius: 6, padding: "2px 9px", fontSize: 12, fontWeight: 600 }}>{statusLabel}</span>
+                            </td>
+                            <td style={{ padding: "12px 16px", fontSize: 12, color: "#9ca3af" }}>{new Date(r.created_at).toLocaleDateString()}</td>
+                            <td style={{ padding: "12px 16px" }}>
+                              <div style={{ display: "flex", gap: 6 }}>
+                                <button onClick={e => { e.stopPropagation(); openReportDrawer(r); }}
+                                  style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 6, padding: "5px 12px", fontSize: 12, color: "#374151", fontWeight: 600, cursor: "pointer" }}>
+                                  Review →
+                                </button>
+                                <button onClick={e => { e.stopPropagation(); if (window.confirm("Delete this report permanently?")) deleteReport(r.id); }}
+                                  style={{ background: "none", border: "1px solid #fecaca", borderRadius: 6, padding: "5px 10px", fontSize: 12, color: "#dc2626", fontWeight: 600, cursor: "pointer" }}>
+                                  Delete
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 );
@@ -6059,7 +6081,10 @@ export function CMS({ onExit, currentUser }) {
                       <div>
                         <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5 }}>
                           Channel VODs
-                          <span style={{ marginLeft: 6, color: "#ef4444", fontWeight: 500, fontSize: 10, textTransform: "none", letterSpacing: 0 }}>⚠ Locked from deletion while report is pending</span>
+                          {r.status === "pending"
+                            ? <span style={{ marginLeft: 6, color: "#ef4444", fontWeight: 500, fontSize: 10, textTransform: "none", letterSpacing: 0 }}>⚠ Locked from deletion</span>
+                            : <span style={{ marginLeft: 6, color: "#16a34a", fontWeight: 500, fontSize: 10, textTransform: "none", letterSpacing: 0 }}>✓ Deletion unlocked</span>
+                          }
                         </p>
                         {reportVodsLoading ? (
                           <p style={{ fontSize: 13, color: "#9ca3af" }}>Loading recordings…</p>
@@ -6136,25 +6161,28 @@ export function CMS({ onExit, currentUser }) {
                       </div>
 
                       {/* Actions */}
-                      <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 20, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        {r.status !== "actioned" && (
-                          <button onClick={() => updateReportStatus(r.id, "actioned")}
-                            style={{ flex: 1, background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "10px", fontSize: 13, color: "#16a34a", fontWeight: 700, cursor: "pointer" }}>
-                            ✓ Mark Actioned
-                          </button>
-                        )}
-                        {r.status !== "dismissed" && (
-                          <button onClick={() => updateReportStatus(r.id, "dismissed")}
-                            style={{ flex: 1, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px", fontSize: 13, color: "#6b7280", fontWeight: 700, cursor: "pointer" }}>
-                            Dismiss
-                          </button>
-                        )}
-                        {r.status !== "pending" && (
+                      <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 20, display: "flex", flexDirection: "column", gap: 10 }}>
+                        {r.status === "pending" ? (
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <button onClick={() => updateReportStatus(r.id, "actioned")}
+                              style={{ flex: 1, background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "11px", fontSize: 13, color: "#16a34a", fontWeight: 700, cursor: "pointer" }}>
+                              ✓ Mark Resolved
+                            </button>
+                            <button onClick={() => updateReportStatus(r.id, "dismissed")}
+                              style={{ flex: 1, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "11px", fontSize: 13, color: "#6b7280", fontWeight: 700, cursor: "pointer" }}>
+                              Dismiss
+                            </button>
+                          </div>
+                        ) : (
                           <button onClick={() => updateReportStatus(r.id, "pending")}
-                            style={{ flex: 1, background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 8, padding: "10px", fontSize: 13, color: "#ea580c", fontWeight: 700, cursor: "pointer" }}>
-                            Reopen
+                            style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 8, padding: "9px", fontSize: 13, color: "#ea580c", fontWeight: 600, cursor: "pointer" }}>
+                            Re-open as Pending
                           </button>
                         )}
+                        <button onClick={() => { if (window.confirm("Delete this report permanently? The VOD lock will be lifted immediately.")) deleteReport(r.id); }}
+                          style={{ background: "none", border: "1px solid #fecaca", borderRadius: 8, padding: "9px", fontSize: 13, color: "#dc2626", fontWeight: 600, cursor: "pointer" }}>
+                          Delete Report Permanently
+                        </button>
                       </div>
                     </div>
                   );
