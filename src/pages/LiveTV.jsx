@@ -253,7 +253,7 @@ function StreamCard({ stream, viewers, isLive, isFollowing, onToggleFollow, user
 
           {isLive && count > 0 && (
             <div style={{ position: "absolute", bottom: 8, right: 8, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(4px)", borderRadius: 5, padding: "3px 8px", display: "flex", alignItems: "center", gap: 4 }}>
-              <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#ef4444" }} />
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="2.5" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
               <span style={{ fontSize: 10, color: "rgba(255,255,255,0.8)", fontWeight: 600 }}>{viewerStr(count)}</span>
             </div>
           )}
@@ -314,7 +314,7 @@ export function LiveTVPage({ streams, user, streamsLoading }) {
 
   useEffect(() => {
     async function loadViewers() {
-      const cutoff = new Date(Date.now() - 90000).toISOString();
+      const cutoff = new Date(Date.now() - 60000).toISOString();
       const { data } = await supabase.from("live_viewers").select("channel_id").gte("last_ping", cutoff);
       if (!data) return;
       const counts = {};
@@ -322,7 +322,7 @@ export function LiveTVPage({ streams, user, streamsLoading }) {
       setViewerCounts(counts);
     }
     loadViewers();
-    const t = setInterval(loadViewers, 30000);
+    const t = setInterval(loadViewers, 15000);
     return () => clearInterval(t);
   }, []);
 
