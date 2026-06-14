@@ -55,7 +55,7 @@ function VideoPlayer({ url, live = false, style = {} }) {
   function attachHls(el, src, attempt = 0) {
     if (!alive.current) return;
     hlsRef.current?.destroy();
-    const h = new Hls({ startLevel: -1, capLevelToPlayerSize: false, autoLevelCapping: -1 });
+    const h = new Hls({ startLevel: -1, capLevelToPlayerSize: false, autoLevelCapping: -1, lowLatencyMode: true, liveSyncDuration: 2, liveMaxLatencyDuration: 6, maxBufferLength: 8 });
     h.loadSource(src); h.attachMedia(el);
     h.on(Hls.Events.MANIFEST_PARSED, () => {
       if (!alive.current) return;
