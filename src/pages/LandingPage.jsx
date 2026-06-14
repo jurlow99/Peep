@@ -45,7 +45,7 @@ const FAQ_ITEMS = [
   { q: "Is it really free?", a: "Yes. Watch everything on Peep for free — short ads keep the lights on, same as YouTube. Create a free account to save your list and pick up where you left off." },
   { q: "Do I need to download anything?", a: "No. Runs entirely in your browser on any device. Nothing to install." },
   { q: "How do I go ad-free?", a: "Coming soon. We'll offer an optional paid tier for ad-free viewing. For now, short pre-roll ads run before videos." },
-  { q: "Can I stream on Peep?", a: "Yes — apply to stream and we'll get you set up with your own live channel." },
+  { q: "Can I stream on Peep?", a: "Yes — create an account and enable streaming from your profile. You'll get your own live channel with a stream key." },
 ];
 
 function FaqItem({ q, a, open, onToggle }) {
@@ -91,7 +91,6 @@ export function LandingPage({ onBrowse }) {
       <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: "max(env(safe-area-inset-top), 44px)", paddingBottom: 14, paddingLeft: PAD, paddingRight: PAD, background: "rgba(10,10,10,0.88)", backdropFilter: "blur(18px)", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
         <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 26, color: YELLOW, animation: "flicker 12s ease-in-out infinite" }}>peep.</span>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <a href="/streamer-signin" className="lp-nav-link" style={{ color: "#444", fontSize: 13, fontWeight: 500, textDecoration: "none", padding: "8px 12px", transition: "color 0.15s", whiteSpace: "nowrap" }}>Streamer Login</a>
           <a href="/signin" className="lp-nav-link" style={{ color: "#555", fontSize: 13, fontWeight: 500, textDecoration: "none", padding: "8px 12px", transition: "color 0.15s", whiteSpace: "nowrap" }}>Sign In</a>
           <button onClick={onBrowse} className="lp-cta-btn" style={{ background: YELLOW, color: "#0a0a0a", fontSize: 13, fontWeight: 700, border: "none", padding: "9px 16px", borderRadius: 8, transition: "transform 0.2s, box-shadow 0.2s", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>Watch Free</button>
         </div>
@@ -154,12 +153,6 @@ export function LandingPage({ onBrowse }) {
                 onMouseEnter={e => e.currentTarget.style.color = "#888"}
                 onMouseLeave={e => e.currentTarget.style.color = "#555"}>
                 Sign in
-              </a>
-              <span style={{ color: "#222" }}>·</span>
-              <a href="/apply-to-stream" style={{ color: "#555", fontSize: 13, fontWeight: 500, textDecoration: "none", transition: "color 0.15s" }}
-                onMouseEnter={e => e.currentTarget.style.color = "#888"}
-                onMouseLeave={e => e.currentTarget.style.color = "#555"}>
-                Stream on Peep
               </a>
             </div>
           </div>

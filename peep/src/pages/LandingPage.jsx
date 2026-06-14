@@ -42,10 +42,10 @@ const features = [
 
 const FAQ_ITEMS = [
   { q: "What kind of content is on Peep?", a: "Weird stuff. Strange films, conspiracy documentaries, space content, paranormal, underground comedy, cult animation — if it's strange and it's real, it belongs here. No algorithm-bait, no mainstream filler." },
-  { q: "Is this like Netflix or Hulu?", a: "No. Peep is for the content those platforms won't touch. Think late-night rabbit holes, not primetime schedules." },
+  { q: "Is it really free?", a: "Yes. Watch everything on Peep for free — short ads keep the lights on, same as YouTube. Create a free account to save your list and pick up where you left off." },
   { q: "Do I need to download anything?", a: "No. Runs entirely in your browser on any device. Nothing to install." },
-  { q: "Can multiple people use one account?", a: "Yes — multiple viewer profiles under one account. Everyone gets their own watch history and saved list." },
-  { q: "How do I cancel?", a: "Account settings, two clicks, done. No questions. No guilt email." },
+  { q: "How do I go ad-free?", a: "Coming soon. We'll offer an optional paid tier for ad-free viewing. For now, short pre-roll ads run before videos." },
+  { q: "Can I stream on Peep?", a: "Yes — create an account and enable streaming from your profile. You'll get your own live channel with a stream key." },
 ];
 
 function FaqItem({ q, a, open, onToggle }) {
@@ -71,7 +71,7 @@ function useScrollReveal() {
   }, []);
 }
 
-export function LandingPage() {
+export function LandingPage({ onBrowse }) {
   const [openFaq, setOpenFaq] = useState(null);
   const orbRef = useRef(null);
   const orbRef2 = useRef(null);
@@ -91,9 +91,8 @@ export function LandingPage() {
       <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: "max(env(safe-area-inset-top), 44px)", paddingBottom: 14, paddingLeft: PAD, paddingRight: PAD, background: "rgba(10,10,10,0.88)", backdropFilter: "blur(18px)", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
         <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 26, color: YELLOW, animation: "flicker 12s ease-in-out infinite" }}>peep.</span>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <a href="/streamer-signin" className="lp-nav-link" style={{ color: "#444", fontSize: 13, fontWeight: 500, textDecoration: "none", padding: "8px 12px", transition: "color 0.15s", whiteSpace: "nowrap" }}>Streamer Login</a>
           <a href="/signin" className="lp-nav-link" style={{ color: "#555", fontSize: 13, fontWeight: 500, textDecoration: "none", padding: "8px 12px", transition: "color 0.15s", whiteSpace: "nowrap" }}>Sign In</a>
-          <a href="/signup" className="lp-cta-btn" style={{ background: YELLOW, color: "#0a0a0a", fontSize: 13, fontWeight: 700, textDecoration: "none", padding: "9px 16px", borderRadius: 8, transition: "transform 0.2s, box-shadow 0.2s", display: "inline-block", whiteSpace: "nowrap" }}>Get Started</a>
+          <button onClick={onBrowse} className="lp-cta-btn" style={{ background: YELLOW, color: "#0a0a0a", fontSize: 13, fontWeight: 700, border: "none", padding: "9px 16px", borderRadius: 8, transition: "transform 0.2s, box-shadow 0.2s", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>Watch Free</button>
         </div>
       </nav>
 
@@ -136,45 +135,26 @@ export function LandingPage() {
             Not what you'd expect. Not what the algorithm recommends. Just weird.
           </p>
 
-          <p style={{ animation: "fadeUp 0.7s 0.5s ease both", margin: "0 auto 44px", fontSize: 14, color: "#555" }}>Founding membership from <span style={{ color: YELLOW, fontWeight: 700 }}>$2.99/mo</span> — limited spots.</p>
+          <p style={{ animation: "fadeUp 0.7s 0.5s ease both", margin: "0 auto 40px", fontSize: 14, color: "#555" }}>Free to watch. No credit card. No catch.</p>
 
-          <div style={{ animation: "fadeUp 0.7s 0.6s ease both", display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", width: "100%" }}>
-            {/* Viewer card */}
-            <div style={{ flex: "1 1 220px", maxWidth: 280, background: "rgba(250,204,21,0.04)", border: `1px solid rgba(250,204,21,0.18)`, borderRadius: 16, padding: "24px 22px", display: "flex", flexDirection: "column", gap: 14, textAlign: "left" }}>
-              <div>
-                <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 700, color: YELLOW, letterSpacing: "0.1em", textTransform: "uppercase" }}>I want to watch</p>
-                <p style={{ margin: 0, fontSize: 13, color: "#555", lineHeight: 1.6 }}>Subscribe and stream weird content you won't find anywhere else.</p>
-              </div>
-              <a href="/signup" className="lp-cta-btn" style={{ background: YELLOW, color: "#0a0a0a", fontSize: 14, fontWeight: 700, textDecoration: "none", padding: "12px 18px", borderRadius: 9, textAlign: "center", transition: "transform 0.2s, box-shadow 0.2s", display: "block" }}>
-                Start Watching →
-              </a>
-              <a href="/signin" style={{ color: "#444", fontSize: 12, textDecoration: "none", textAlign: "center", transition: "color 0.15s" }}
+          <div style={{ animation: "fadeUp 0.7s 0.6s ease both", display: "flex", flexDirection: "column", alignItems: "center", gap: 14, width: "100%" }}>
+            <button onClick={onBrowse} className="lp-cta-btn"
+              style={{ background: YELLOW, color: "#0a0a0a", fontSize: 16, fontWeight: 800, border: "none", padding: "16px 44px", borderRadius: 12, cursor: "pointer", transition: "transform 0.2s, box-shadow 0.2s", fontFamily: "inherit", letterSpacing: 0.2 }}>
+              Watch Free →
+            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+              <a href="/signup" style={{ color: "#555", fontSize: 13, fontWeight: 500, textDecoration: "none", transition: "color 0.15s" }}
                 onMouseEnter={e => e.currentTarget.style.color = "#888"}
-                onMouseLeave={e => e.currentTarget.style.color = "#444"}>
-                Already have an account? <span style={{ color: "#666", fontWeight: 600 }}>Sign In</span>
+                onMouseLeave={e => e.currentTarget.style.color = "#555"}>
+                Create free account
+              </a>
+              <span style={{ color: "#222" }}>·</span>
+              <a href="/signin" style={{ color: "#555", fontSize: 13, fontWeight: 500, textDecoration: "none", transition: "color 0.15s" }}
+                onMouseEnter={e => e.currentTarget.style.color = "#888"}
+                onMouseLeave={e => e.currentTarget.style.color = "#555"}>
+                Sign in
               </a>
             </div>
-
-            {/* Streamer card */}
-            <div style={{ flex: "1 1 220px", maxWidth: 280, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 16, padding: "24px 22px", display: "flex", flexDirection: "column", gap: 14, textAlign: "left" }}>
-              <div>
-                <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 700, color: "#888", letterSpacing: "0.1em", textTransform: "uppercase" }}>I want to stream</p>
-                <p style={{ margin: 0, fontSize: 13, color: "#555", lineHeight: 1.6 }}>Broadcast live to an audience that actually wants strange content.</p>
-              </div>
-              <a href="/apply-to-stream" className="lp-ghost" style={{ background: "transparent", color: "#aaa", fontSize: 14, fontWeight: 700, textDecoration: "none", padding: "12px 18px", borderRadius: 9, textAlign: "center", border: "1px solid rgba(255,255,255,0.1)", display: "block", transition: "border-color 0.2s, color 0.2s" }}>
-                Apply to Stream →
-              </a>
-              <a href="/streamer-signin" style={{ color: "#444", fontSize: 12, textDecoration: "none", textAlign: "center", transition: "color 0.15s" }}
-                onMouseEnter={e => e.currentTarget.style.color = "#888"}
-                onMouseLeave={e => e.currentTarget.style.color = "#444"}>
-                Already a streamer? <span style={{ color: "#666", fontWeight: 600 }}>Sign In</span>
-              </a>
-            </div>
-          </div>
-          <div style={{ animation: "fadeUp 0.7s 0.75s ease both", marginTop: 6 }}>
-            <a href="#pricing" style={{ color: "#444", fontSize: 12, fontWeight: 500, textDecoration: "none", borderBottom: "1px solid #1e1e1e", paddingBottom: 2, transition: "color 0.15s" }}>
-              View Plans
-            </a>
           </div>
         </div>
       </section>
@@ -223,81 +203,31 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* Pricing */}
-      <section id="pricing" style={{ padding: `96px ${PAD}`, borderTop: "1px solid #111" }}>
-        <div style={{ maxWidth: 900, margin: "0 auto" }}>
+      {/* How it works */}
+      <section style={{ padding: `96px ${PAD}`, borderTop: "1px solid #111" }}>
+        <div style={{ maxWidth: 860, margin: "0 auto" }}>
           <div className="reveal" style={{ textAlign: "center", marginBottom: 56 }}>
-            <h2 style={{ fontFamily: "'Righteous', sans-serif", fontWeight: 400, margin: "0 0 10px", fontSize: "clamp(28px, 4vw, 44px)" }}>Pick your plan</h2>
-            <p style={{ color: "#444", fontSize: 15, margin: 0 }}>Founding spots are limited. Lock in the low price before they're gone.</p>
+            <h2 style={{ fontFamily: "'Righteous', sans-serif", fontWeight: 400, margin: "0 0 10px", fontSize: "clamp(28px, 4vw, 44px)" }}>How it works</h2>
+            <p style={{ color: "#444", fontSize: 15, margin: 0 }}>Simple as it gets.</p>
           </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
-
-            {/* Founding Member */}
-            <div className="reveal reveal-delay-1" style={{ position: "relative", background: "rgba(250,204,21,0.03)", border: `2px solid ${YELLOW}`, borderRadius: 18, padding: "32px 28px", display: "flex", flexDirection: "column" }}>
-              <div style={{ position: "absolute", top: -1, right: 20, background: YELLOW, color: "#0a0a0a", fontSize: 10, fontWeight: 800, padding: "4px 12px", borderRadius: "0 0 8px 8px", letterSpacing: 1, textTransform: "uppercase" }}>Limited</div>
-              <p style={{ margin: "0 0 6px", fontSize: 12, color: YELLOW, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Founding Member</p>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 4, margin: "0 0 6px" }}>
-                <span style={{ fontSize: 42, fontWeight: 800, color: "#fff", letterSpacing: -1 }}>$2.99</span>
-                <span style={{ fontSize: 14, color: "#555" }}>/mo</span>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
+            {[
+              { step: "01", title: "No account needed", desc: "Hit Watch Free and you're in. No credit card, no email, no wait." },
+              { step: "02", title: "Short ads, full content", desc: "A short pre-roll ad before each video. That's it. Same deal as YouTube." },
+              { step: "03", title: "Save your spot", desc: "Create a free account to save your list and pick up where you left off across devices." },
+            ].map(({ step, title, desc }) => (
+              <div key={step} className="reveal" style={{ background: "#0e0e0e", border: "1px solid #1c1c1c", borderRadius: 16, padding: "30px 26px" }}>
+                <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 800, color: YELLOW, letterSpacing: 2, textTransform: "uppercase" }}>{step}</p>
+                <h3 style={{ margin: "0 0 8px", fontFamily: "'Righteous', sans-serif", fontWeight: 400, fontSize: 17 }}>{title}</h3>
+                <p style={{ margin: 0, fontSize: 13, color: "#555", lineHeight: 1.75 }}>{desc}</p>
               </div>
-              <p style={{ margin: "0 0 24px", fontSize: 12, color: "#555" }}>Billed monthly</p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 32, flex: 1 }}>
-                {["Everything on Peep", "Ad-free forever", "Founding badge on your profile", "Lock in this price forever", "Cancel anytime"].map(perk => (
-                  <div key={perk} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={YELLOW} strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                    <span style={{ fontSize: 13, color: "#aaa" }}>{perk}</span>
-                  </div>
-                ))}
-              </div>
-              <a href="/signup" className="lp-cta-btn" style={{ background: YELLOW, color: "#0a0a0a", fontSize: 14, fontWeight: 700, textDecoration: "none", padding: "13px", borderRadius: 10, display: "block", textAlign: "center", transition: "transform 0.2s, box-shadow 0.2s" }}>
-                Get Founding Access →
-              </a>
-            </div>
-
-            {/* Founding Annual */}
-            <div className="reveal reveal-delay-2" style={{ position: "relative", background: "#0e0e0e", border: "1px solid #1c1c1c", borderRadius: 18, padding: "32px 28px", display: "flex", flexDirection: "column" }}>
-              <div style={{ position: "absolute", top: -1, right: 20, background: "#22c55e", color: "#fff", fontSize: 10, fontWeight: 800, padding: "4px 12px", borderRadius: "0 0 8px 8px", letterSpacing: 1, textTransform: "uppercase" }}>Best Value</div>
-              <p style={{ margin: "0 0 6px", fontSize: 12, color: "#22c55e", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Founding Annual</p>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 4, margin: "0 0 6px" }}>
-                <span style={{ fontSize: 42, fontWeight: 800, color: "#fff", letterSpacing: -1 }}>$19.99</span>
-                <span style={{ fontSize: 14, color: "#555" }}>/yr</span>
-              </div>
-              <p style={{ margin: "0 0 24px", fontSize: 12, color: "#555" }}>That's $1.67/mo — save 44%</p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 32, flex: 1 }}>
-                {["Everything on Peep", "Ad-free forever", "Founding badge on your profile", "Biggest savings available", "Cancel anytime"].map(perk => (
-                  <div key={perk} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                    <span style={{ fontSize: 13, color: "#aaa" }}>{perk}</span>
-                  </div>
-                ))}
-              </div>
-              <a href="/signup" style={{ background: "#111", border: "1px solid #2a2a2a", color: "#fff", fontSize: 14, fontWeight: 700, textDecoration: "none", padding: "13px", borderRadius: 10, display: "block", textAlign: "center" }}>
-                Get Annual Access →
-              </a>
-            </div>
-
-            {/* Standard */}
-            <div className="reveal reveal-delay-3" style={{ background: "#0e0e0e", border: "1px solid #1c1c1c", borderRadius: 18, padding: "32px 28px", display: "flex", flexDirection: "column" }}>
-              <p style={{ margin: "0 0 6px", fontSize: 12, color: "#555", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Standard</p>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 4, margin: "0 0 6px" }}>
-                <span style={{ fontSize: 42, fontWeight: 800, color: "#fff", letterSpacing: -1 }}>$10</span>
-                <span style={{ fontSize: 14, color: "#555" }}>/mo</span>
-              </div>
-              <p style={{ margin: "0 0 24px", fontSize: 12, color: "#555" }}>Billed monthly</p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 32, flex: 1 }}>
-                {["Everything on Peep", "Cancel anytime", "No long-term commitment"].map(perk => (
-                  <div key={perk} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                    <span style={{ fontSize: 13, color: "#555" }}>{perk}</span>
-                  </div>
-                ))}
-              </div>
-              <a href="/signup" style={{ background: "#111", border: "1px solid #2a2a2a", color: "#777", fontSize: 14, fontWeight: 700, textDecoration: "none", padding: "13px", borderRadius: 10, display: "block", textAlign: "center" }}>
-                Get Started →
-              </a>
-            </div>
-
+            ))}
+          </div>
+          <div className="reveal" style={{ textAlign: "center", marginTop: 48 }}>
+            <button onClick={onBrowse} className="lp-cta-btn"
+              style={{ background: YELLOW, color: "#0a0a0a", fontSize: 15, fontWeight: 800, border: "none", padding: "14px 40px", borderRadius: 11, cursor: "pointer", transition: "transform 0.2s, box-shadow 0.2s", fontFamily: "inherit" }}>
+              Start Watching Free →
+            </button>
           </div>
         </div>
       </section>
