@@ -100,7 +100,12 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, 
     if (showsRes.data) setShows(showsRes.data);
     if (carouselsRes.data) setCarousels(carouselsRes.data);
     if (podcastsRes.data) setPodcasts(podcastsRes.data.filter(p => p.enabled !== false));
-    if (liveRes.data) setLiveStreams(liveRes.data);
+    if (liveRes.error) {
+      const { data: fallback } = await supabase.from("live_streams").select("*").order("id", { ascending: true });
+      if (fallback) setLiveStreams(fallback);
+    } else if (liveRes.data) {
+      setLiveStreams(liveRes.data);
+    }
     if (epgRes.data) setEpgEntries(epgRes.data);
     setLoading(false);
 

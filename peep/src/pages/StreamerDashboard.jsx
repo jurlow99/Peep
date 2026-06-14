@@ -437,10 +437,14 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
     if (!stream || savingListed) return;
     setSavingListed(true);
     const next = !listed;
-    await supabase.from("live_streams").update({ listed: next }).eq("id", stream.id);
+    const { error } = await supabase.from("live_streams").update({ listed: next }).eq("id", stream.id);
+    setSavingListed(false);
+    if (error) {
+      showToast("Update failed — the listed column may not exist yet. Run the SQL migration in Supabase.");
+      return;
+    }
     setListed(next);
     setStream(s => ({ ...s, listed: next }));
-    setSavingListed(false);
     showToast(next ? "Channel listed publicly!" : "Channel removed from directory.");
   }
 
