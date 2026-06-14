@@ -189,7 +189,13 @@ function AccountTab({ user }) {
     setEmailSaving(true); setEmailMsg(null);
     const { error } = await supabase.auth.updateUser({ email: newEmail.trim() });
     setEmailSaving(false);
-    if (error) setEmailMsg({ type: "error", text: error.message });
+    if (error) {
+      const msg = error.message?.toLowerCase() || "";
+      const friendly = msg.includes("already") || msg.includes("registered") || msg.includes("taken")
+        ? "That email is already linked to another account."
+        : error.message;
+      setEmailMsg({ type: "error", text: friendly });
+    }
     else { setEmailMsg({ type: "ok", text: `Confirmation link sent to ${newEmail.trim()} — click it to complete the change.` }); setNewEmail(""); }
   }
 
