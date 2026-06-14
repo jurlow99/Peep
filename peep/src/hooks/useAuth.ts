@@ -17,26 +17,31 @@ export function useAuth() {
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
+        // getUser() hits the server — always returns the current email even after a change
+        const { data: { user: freshUser } } = await supabase.auth.getUser();
+        const activeUser = freshUser ?? session.user;
         const { data: blocked } = await supabase
           .from("blocked_users")
           .select("id")
-          .eq("email", session.user.email)
+          .eq("email", activeUser.email)
           .maybeSingle();
         if (blocked) {
           await supabase.auth.signOut();
           setAuthChecked(true);
           return;
         }
-        userIdRef.current = session.user.id;
+        userIdRef.current = activeUser.id;
         const { data: profile } = await supabase
           .from("profiles")
           .select("avatar_id, role")
-          .eq("id", session.user.id)
+          .eq("id", activeUser.id)
           .maybeSingle();
         if (profile?.avatar_id) setUserAvatarId(profile.avatar_id);
         setUserRole((profile?.role as ProfileRole) || "viewer");
+        setUser(activeUser);
+      } else {
+        setUser(null);
       }
-      setUser(session?.user ?? null);
       setAuthChecked(true);
     });
 
