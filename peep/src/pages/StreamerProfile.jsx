@@ -249,8 +249,10 @@ export function StreamerProfile() {
   const [chatSending, setChatSending]     = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [slowCooldown, setSlowCooldown]   = useState(0);
+  const [openMenuId, setOpenMenuId]       = useState(null);
   const emojiPickerRef = useRef(null);
   const slowTimerRef = useRef(null);
+  const msgMenuRef = useRef(null);
   const [streamEnded, setStreamEnded]     = useState(false);
   const [copied, setCopied]               = useState(false);
   const [globalBanned, setGlobalBanned]   = useState([]);
@@ -417,6 +419,13 @@ export function StreamerProfile() {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [showEmojiPicker]);
+
+  useEffect(() => {
+    if (!openMenuId) return;
+    const handler = e => { if (msgMenuRef.current && !msgMenuRef.current.contains(e.target)) setOpenMenuId(null); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [openMenuId]);
 
   useEffect(() => () => clearInterval(slowTimerRef.current), []);
 
@@ -824,20 +833,48 @@ export function StreamerProfile() {
                   : chatMessages.map(m => {
                     const isStreamer = m.user_id === stream.user_id;
                     const nameColor = isStreamer ? YELLOW : usernameColor(m.profile_name || "");
-                    const canDelete = currentUser?.id === stream.user_id || currentUser?.id === m.user_id;
+                    const isOwnMsg = currentUser?.id === m.user_id;
+                    const withinWindow = isOwnMsg && (Date.now() - new Date(m.created_at).getTime()) < 30000;
+                    const canStreamerDelete = currentUser?.id === stream.user_id;
+                    const showDots = canStreamerDelete || withinWindow;
+                    const menuOpen = openMenuId === m.id;
                     return (
-                      <div key={m.id} className="chat-msg" style={{ fontSize: 13, lineHeight: 1.6, wordBreak: "break-word", padding: "3px 14px", borderRadius: 4, position: "relative" }}
-                        onMouseEnter={e => { if (canDelete) e.currentTarget.querySelector(".del-btn")?.style && (e.currentTarget.querySelector(".del-btn").style.opacity = "1"); }}
-                        onMouseLeave={e => { if (canDelete) e.currentTarget.querySelector(".del-btn")?.style && (e.currentTarget.querySelector(".del-btn").style.opacity = "0"); }}>
+                      <div key={m.id} className="chat-msg" style={{ fontSize: 13, lineHeight: 1.6, wordBreak: "break-word", padding: "3px 14px 3px 14px", borderRadius: 4, position: "relative" }}
+                        onMouseEnter={e => { if (showDots) e.currentTarget.querySelector(".dots-btn")?.style && (e.currentTarget.querySelector(".dots-btn").style.opacity = "1"); }}
+                        onMouseLeave={e => { if (!menuOpen) e.currentTarget.querySelector(".dots-btn")?.style && (e.currentTarget.querySelector(".dots-btn").style.opacity = "0"); }}>
                         <span style={{ color: "#2a2a2a", fontSize: 10, marginRight: 5, userSelect: "none" }}>{chatTimestamp(m.created_at)}</span>
                         {isStreamer && <span title="Streamer" style={{ marginRight: 4, fontSize: 11 }}>👑</span>}
                         <span style={{ color: nameColor, fontWeight: 700, marginRight: 5 }}>{m.profile_name}</span>
                         <span style={{ color: "#bbb" }}>{m.message}</span>
-                        {canDelete && (
-                          <button className="del-btn" onClick={() => deleteMsg(m.id)}
-                            style={{ opacity: 0, position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "rgba(239,68,68,0.15)", border: "none", borderRadius: 4, width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "opacity 0.15s" }}>
-                            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                          </button>
+                        {showDots && (
+                          <div style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)" }}>
+                            <button className="dots-btn" onClick={e => { e.stopPropagation(); setOpenMenuId(menuOpen ? null : m.id); }}
+                              style={{ opacity: menuOpen ? 1 : 0, background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 5, width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "opacity 0.15s", gap: 2 }}>
+                              <span style={{ fontSize: 12, color: "#666", letterSpacing: 1, lineHeight: 1 }}>···</span>
+                            </button>
+                            {menuOpen && (
+                              <div ref={msgMenuRef} style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", background: "#141414", border: "1px solid #222", borderRadius: 8, padding: 4, zIndex: 20, minWidth: 130, boxShadow: "0 8px 24px rgba(0,0,0,0.5)" }}>
+                                {withinWindow && (
+                                  <button onClick={() => { deleteMsg(m.id); setOpenMenuId(null); }}
+                                    style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", background: "none", border: "none", borderRadius: 6, padding: "8px 10px", color: "#f87171", fontSize: 12, fontWeight: 600, cursor: "pointer", textAlign: "left" }}
+                                    onMouseEnter={e => e.currentTarget.style.background = "rgba(239,68,68,0.08)"}
+                                    onMouseLeave={e => e.currentTarget.style.background = "none"}>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+                                    Unsend
+                                  </button>
+                                )}
+                                {canStreamerDelete && (
+                                  <button onClick={() => { deleteMsg(m.id); setOpenMenuId(null); }}
+                                    style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", background: "none", border: "none", borderRadius: 6, padding: "8px 10px", color: "#f87171", fontSize: 12, fontWeight: 600, cursor: "pointer", textAlign: "left" }}
+                                    onMouseEnter={e => e.currentTarget.style.background = "rgba(239,68,68,0.08)"}
+                                    onMouseLeave={e => e.currentTarget.style.background = "none"}>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                                    Delete
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
                     );
