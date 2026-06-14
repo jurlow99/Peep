@@ -735,12 +735,12 @@ export function CMS({ onExit, currentUser }) {
       report.reporter_id
         ? supabase.from("profiles").select("username, full_name, avatar_url").eq("id", report.reporter_id).maybeSingle()
         : Promise.resolve({ data: null }),
-      supabase.from("live_streams").select("stream_uid, previous_stream_uids, slug, username, channel_name, title"),
+      supabase.from("live_streams").select("*"),
     ]);
     setReporterProfile(profileRes.data ?? false);
 
     // Match using the same slug logic as StreamerProfile
-    const matchedStream = streamsRes.data?.find(s => {
+    const matchedStream = (streamsRes.data || []).find(s => {
       const slug = s.slug || s.username || (s.channel_name || s.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
       return slug === report.content_id;
     });
@@ -748,11 +748,14 @@ export function CMS({ onExit, currentUser }) {
     if (streamUid) {
       setReportVodsLoading(true);
       try {
-        const prevParam = streamRes.data?.previous_stream_uids?.length
-          ? `&previous_uids=${streamRes.data.previous_stream_uids.join(",")}`
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
+        const prevUids = matchedStream?.previous_stream_uids;
+        const prevParam = Array.isArray(prevUids) && prevUids.length
+          ? `&previous_uids=${prevUids.join(",")}`
           : "";
         const res = await fetch(`${SUPABASE_URL}/functions/v1/get-vods?stream_uid=${streamUid}${prevParam}`, {
-          headers: { "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+          headers: { "Authorization": `Bearer ${token}` },
         });
         const json = await res.json();
         setReportVods(json.vods || []);
