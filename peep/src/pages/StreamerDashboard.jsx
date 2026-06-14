@@ -26,11 +26,27 @@ function Toast({ msg }) {
   );
 }
 
-function SectionCard({ title, children, style = {} }) {
+function SectionCard({ title, children, style = {}, collapsible = false, defaultOpen = true, badge }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const isOpen = !collapsible || open;
   return (
-    <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, marginBottom: 16, overflow: "hidden", ...style }}>
-      {title && <div style={{ padding: "20px 24px 0" }}><p style={{ margin: "0 0 20px", fontSize: 18, fontWeight: 700, color: "#fff" }}>{title}</p></div>}
-      <div style={{ padding: title ? "0 24px 24px" : "24px" }}>{children}</div>
+    <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden", ...style }}>
+      {title && (
+        <div
+          onClick={collapsible ? () => setOpen(o => !o) : undefined}
+          style={{ padding: "16px 22px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: isOpen ? `1px solid ${BORDER}` : "none", cursor: collapsible ? "pointer" : "default", userSelect: "none" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{title}</span>
+            {badge && <span style={{ fontSize: 10, fontWeight: 700, background: "rgba(250,204,21,0.15)", color: YELLOW, border: "1px solid rgba(250,204,21,0.25)", borderRadius: 5, padding: "1px 7px" }}>{badge}</span>}
+          </div>
+          {collapsible && (
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="2.5" style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.2s", flexShrink: 0 }}>
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          )}
+        </div>
+      )}
+      {isOpen && <div style={{ padding: "20px 22px" }}>{children}</div>}
     </div>
   );
 }
@@ -68,21 +84,13 @@ function LivePreview({ url }) {
   }, [url]);
 
   return (
-    <div style={{ borderTop: "1px solid #1a1a1a", background: "#000", position: "relative" }}>
-      <video
-        ref={videoRef}
-        muted={muted}
-        playsInline
-        style={{ display: "block", width: "100%", aspectRatio: "16/9", background: "#000" }}
-      />
+    <div style={{ background: "#000", position: "relative" }}>
+      <video ref={videoRef} muted={muted} playsInline style={{ display: "block", width: "100%", aspectRatio: "16/9", background: "#000" }} />
       <button
         onClick={() => { const el = videoRef.current; if (el) { el.muted = !el.muted; setMuted(el.muted); } }}
         style={{ position: "absolute", bottom: 12, right: 12, background: "rgba(0,0,0,0.75)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 7, padding: "6px 12px", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", backdropFilter: "blur(6px)" }}>
-        {muted ? "🔇 Unmute" : "🔊 Mute"}
+        {muted ? "Unmute" : "Mute"}
       </button>
-      <p style={{ position: "absolute", top: 10, left: 12, margin: 0, fontSize: 10, color: "rgba(255,255,255,0.25)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-        Your stream (muted by default)
-      </p>
     </div>
   );
 }
@@ -110,74 +118,62 @@ export function StreamerDashboard() {
   const [loading, setLoading]         = useState(true);
   const [activeTab, setActiveTab]     = useState("studio");
 
-  // Channel name + handle
   const [displayName, setDisplayName] = useState("");
   const [savingName, setSavingName]   = useState(false);
   const [handle, setHandle]           = useState("");
   const [savingHandle, setSavingHandle] = useState(false);
 
-  // Stream info
   const [streamTitle, setStreamTitle]   = useState("");
   const [category, setCategory]         = useState("general");
   const [bio, setBio]                   = useState("");
   const [donationLink, setDonationLink] = useState("");
   const [savingInfo, setSavingInfo]     = useState(false);
 
-  // Channel art
   const [uploadingThumb, setUploadingThumb]   = useState(false);
   const [uploadingHero, setUploadingHero]     = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [pendingFiles, setPendingFiles]       = useState({ thumbnail: null, hero: null, avatar: null });
 
-  // Stream key
   const [revealKey, setRevealKey]         = useState(false);
   const [rotatingKey, setRotatingKey]     = useState(false);
   const [confirmRotate, setConfirmRotate] = useState(false);
 
-  // Stats
-  const [viewers, setViewers]       = useState(0);
+  const [viewers, setViewers]         = useState(0);
   const [followCount, setFollowCount] = useState(0);
 
-  // Schedule
-  const [schedule, setSchedule]     = useState([]);
-  const [schedTitle, setSchedTitle] = useState("");
-  const [schedDate, setSchedDate]   = useState("");
+  const [schedule, setSchedule]       = useState([]);
+  const [schedTitle, setSchedTitle]   = useState("");
+  const [schedDate, setSchedDate]     = useState("");
   const [addingSched, setAddingSched] = useState(false);
 
-  // Chat moderation
   const [bannedWords, setBannedWords] = useState([]);
   const [newWord, setNewWord]         = useState("");
   const [savingWords, setSavingWords] = useState(false);
 
-  // Analytics
   const [analyticsFollowers, setAnalyticsFollowers] = useState([]);
   const [analyticsLoading, setAnalyticsLoading]     = useState(false);
 
-  // Notifications
   const [notifications, setNotifications]   = useState([]);
   const [unreadCount, setUnreadCount]       = useState(0);
   const [notifsLoading, setNotifsLoading]   = useState(false);
   const [markingRead, setMarkingRead]       = useState(false);
 
-  // Live chat (studio monitor)
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput]       = useState("");
   const [chatSending, setChatSending]   = useState(false);
   const chatBottomRef = useRef(null);
 
-  // VODs
-  const [vods, setVods]             = useState([]);
+  const [vods, setVods]               = useState([]);
   const [vodsLoading, setVodsLoading] = useState(false);
-  const [editingVod, setEditingVod] = useState(null); // { uid, title }
+  const [editingVod, setEditingVod]   = useState(null);
   const [deletingVod, setDeletingVod] = useState(null);
-  const [savingVod, setSavingVod]   = useState(false);
-  const [watchingVod, setWatchingVod] = useState(null); // { url, title }
+  const [savingVod, setSavingVod]     = useState(false);
+  const [watchingVod, setWatchingVod] = useState(null);
 
   const [copied, setCopied] = useState(null);
   const [toast, setToast]   = useState(null);
 
-  // Live health data from Cloudflare
-  const [streamHealth, setStreamHealth] = useState(null);
+  const [streamHealth, setStreamHealth]   = useState(null);
   const [liveStartedAt, setLiveStartedAt] = useState(null);
   const [liveDuration, setLiveDuration]   = useState(0);
   const [previewOpen, setPreviewOpen]     = useState(false);
@@ -191,31 +187,23 @@ export function StreamerDashboard() {
 
   const inp = {
     background: "#0d0d0d", border: `1px solid ${BORDER}`, borderRadius: 10,
-    padding: "12px 14px", color: "#fff", fontSize: 14, outline: "none",
+    padding: "11px 13px", color: "#fff", fontSize: 13, outline: "none",
     boxSizing: "border-box", fontFamily: "inherit", width: "100%",
   };
 
   useEffect(() => {
-    // Only auto-restore if the user signed in during this browser session
     const activeThisSession = sessionStorage.getItem("streamer_session_active");
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user && activeThisSession) {
-        setUser(session.user);
-        loadAll(session.user.id);
-      } else {
-        setLoading(false);
-      }
+      if (session?.user && activeThisSession) { setUser(session.user); loadAll(session.user.id); }
+      else setLoading(false);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" && session?.user) {
         sessionStorage.setItem("streamer_session_active", "1");
-        setUser(session.user);
-        loadAll(session.user.id);
+        setUser(session.user); loadAll(session.user.id);
       } else if (event === "SIGNED_OUT") {
         sessionStorage.removeItem("streamer_session_active");
-        setUser(null);
-        setStream(null);
-        setLoading(false);
+        setUser(null); setStream(null); setLoading(false);
       }
     });
     return () => subscription.unsubscribe();
@@ -256,8 +244,7 @@ export function StreamerDashboard() {
     setAnalyticsLoading(true);
     const { data } = await supabase.from("streamer_follows")
       .select("created_at, follower_id, profiles(username, full_name)")
-      .eq("stream_id", streamId)
-      .order("created_at", { ascending: false });
+      .eq("stream_id", streamId).order("created_at", { ascending: false });
     setAnalyticsFollowers(data || []);
     setAnalyticsLoading(false);
   }
@@ -310,9 +297,7 @@ export function StreamerDashboard() {
       setVods(vs => vs.filter(v => v.uid !== uid));
       setDeletingVod(null);
       showToast("VOD deleted.");
-    } catch (e) {
-      showToast("Delete failed: " + e.message);
-    }
+    } catch (e) { showToast("Delete failed: " + e.message); }
     setSavingVod(false);
   }
 
@@ -330,26 +315,19 @@ export function StreamerDashboard() {
       setVods(vs => vs.map(v => v.uid === uid ? { ...v, meta: { ...v.meta, name: title } } : v));
       setEditingVod(null);
       showToast("Title updated.");
-    } catch (e) {
-      showToast("Rename failed: " + e.message);
-    }
+    } catch (e) { showToast("Rename failed: " + e.message); }
     setSavingVod(false);
   }
 
-  // Realtime notifications
   useEffect(() => {
     if (!stream?.id) return;
     const ch = supabase.channel(`notifs-${stream.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "streamer_notifications", filter: `stream_id=eq.${stream.id}` },
-        ({ new: n }) => {
-          setNotifications(prev => [n, ...prev]);
-          setUnreadCount(c => c + 1);
-        })
+        ({ new: n }) => { setNotifications(prev => [n, ...prev]); setUnreadCount(c => c + 1); })
       .subscribe();
     return () => supabase.removeChannel(ch);
   }, [stream?.id]);
 
-  // Realtime is_live + polling
   useEffect(() => {
     if (!stream?.id) return;
     const ch = supabase.channel(`streamer-live-${stream.id}`)
@@ -360,9 +338,7 @@ export function StreamerDashboard() {
       try {
         const res  = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/check-live-status?stream_uid=${stream.stream_uid}&stream_id=${stream.id}`);
         const json = await res.json();
-        if (typeof json.is_live === "boolean") {
-          setStream(s => s.is_live !== json.is_live ? { ...s, is_live: json.is_live } : s);
-        }
+        if (typeof json.is_live === "boolean") setStream(s => s.is_live !== json.is_live ? { ...s, is_live: json.is_live } : s);
         if (json.health) setStreamHealth(json.health);
       } catch (_) {}
     }
@@ -371,7 +347,6 @@ export function StreamerDashboard() {
     return () => { supabase.removeChannel(ch); clearInterval(t); };
   }, [stream?.id]);
 
-  // Start/stop the live clock when is_live changes — persisted in localStorage so refresh doesn't reset it
   useEffect(() => {
     if (!stream?.id) return;
     const key = `peep_live_start_${stream.id}`;
@@ -387,21 +362,16 @@ export function StreamerDashboard() {
       setPreviewOpen(true);
     } else {
       localStorage.removeItem(key);
-      setLiveStartedAt(null);
-      setLiveDuration(0);
-      setPreviewOpen(false);
-      setViewers(0);
+      setLiveStartedAt(null); setLiveDuration(0); setPreviewOpen(false); setViewers(0);
     }
   }, [stream?.is_live, stream?.id]);
 
-  // Live duration ticker
   useEffect(() => {
     if (!liveStartedAt) return;
     const t = setInterval(() => setLiveDuration(Math.floor((Date.now() - liveStartedAt) / 1000)), 1000);
     return () => clearInterval(t);
   }, [liveStartedAt]);
 
-  // Viewer count
   useEffect(() => {
     if (!stream?.id) return;
     async function fetchViewers() {
@@ -414,7 +384,6 @@ export function StreamerDashboard() {
     return () => clearInterval(t);
   }, [stream?.id]);
 
-  // Live chat subscription
   useEffect(() => {
     if (!stream?.id || !stream?.is_live) { setChatMessages([]); return; }
     supabase.from("live_chat")
@@ -434,9 +403,8 @@ export function StreamerDashboard() {
   async function saveName() {
     if (!displayName.trim() || !stream) return;
     setSavingName(true);
-    const name = displayName.trim();
-    await supabase.from("live_streams").update({ channel_name: name }).eq("id", stream.id);
-    setStream(s => ({ ...s, channel_name: name }));
+    await supabase.from("live_streams").update({ channel_name: displayName.trim() }).eq("id", stream.id);
+    setStream(s => ({ ...s, channel_name: displayName.trim() }));
     setSavingName(false);
     showToast("Channel name updated!");
   }
@@ -467,7 +435,7 @@ export function StreamerDashboard() {
     setSavingHandle(true);
     const { error } = await supabase.from("live_streams").update({ username: cleaned }).eq("id", stream.id);
     if (error) showToast(error.code === "23505" ? "That handle is already taken." : "Failed to save handle.");
-    else { setStream(s => ({ ...s, username: cleaned })); setHandle(cleaned); showToast("Handle set! Your channel URL is now /stream/" + cleaned); }
+    else { setStream(s => ({ ...s, username: cleaned })); setHandle(cleaned); showToast("Handle set!"); }
     setSavingHandle(false);
   }
 
@@ -478,7 +446,7 @@ export function StreamerDashboard() {
     await supabase.from("live_streams").update({ stream_title: streamTitle.trim() || null, category, bio: bio.trim() || null, donation_link: cleanDonation || null }).eq("id", stream.id);
     setStream(s => ({ ...s, stream_title: streamTitle.trim() || null, category, bio: bio.trim() || null, donation_link: cleanDonation || null }));
     setSavingInfo(false);
-    showToast("Channel info updated!");
+    showToast("Channel info saved!");
   }
 
   async function rotateKey() {
@@ -491,7 +459,7 @@ export function StreamerDashboard() {
       setStream(s => ({ ...s, stream_key: json.stream_key, stream_uid: json.stream_uid }));
       setRevealKey(false);
       showToast("Stream key rotated! Update OBS with the new key.");
-    } catch (e) { showToast("Failed to rotate key: " + e.message); }
+    } catch (e) { showToast("Failed: " + e.message); }
     setRotatingKey(false);
   }
 
@@ -589,7 +557,6 @@ export function StreamerDashboard() {
     <div style={{ background: BG, minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 16px", fontFamily: "'Space Grotesk', sans-serif" }}>
       <a href="/" style={{ textDecoration: "none", marginBottom: 40 }}><span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 42, color: YELLOW }}>peep.</span></a>
       <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 16, padding: "40px 36px", width: "min(440px,100%)", textAlign: "center" }}>
-        <div style={{ fontSize: 40, marginBottom: 16 }}>📺</div>
         <h2 style={{ margin: "0 0 10px", fontSize: 20, fontWeight: 700, color: "#fff" }}>No stream found</h2>
         <p style={{ margin: "0 0 28px", fontSize: 14, color: "#555", lineHeight: 1.6 }}>Your account isn't linked to a stream yet.</p>
         <a href="/apply-to-stream" style={{ display: "block", background: YELLOW, color: "#0a0a0a", fontWeight: 700, fontSize: 14, padding: "13px", borderRadius: 10, textDecoration: "none", marginBottom: 12 }}>Apply to Stream</a>
@@ -599,10 +566,10 @@ export function StreamerDashboard() {
   );
 
   const slug = stream.username || stream.channel_name?.toLowerCase().replace(/[^a-z0-9]/g, "") || stream.id;
+  const channelUrl = `watchpeep.tv/stream/${slug}`;
   const PAD = "clamp(16px,4vw,48px)";
-  const Label = ({ children }) => <p style={{ margin: "0 0 7px", fontSize: 12, color: "#666", fontWeight: 600, letterSpacing: 0.2 }}>{children}</p>;
+  const Label = ({ children }) => <p style={{ margin: "0 0 6px", fontSize: 12, color: "#555", fontWeight: 600, letterSpacing: 0.2 }}>{children}</p>;
 
-  // Analytics computations
   const now = new Date();
   const oneWeekAgo  = new Date(now - 7  * 86400000);
   const oneMonthAgo = new Date(now - 30 * 86400000);
@@ -617,199 +584,149 @@ export function StreamerDashboard() {
 
   const TABS = [
     { id: "studio",        label: "Studio" },
+    { id: "channel",       label: "Channel" },
     { id: "analytics",     label: "Analytics" },
     { id: "notifications", label: "Notifications", badge: unreadCount },
-    { id: "vods",          label: "VOD Manager" },
+    { id: "vods",          label: "VODs" },
   ];
 
   return (
     <div style={{ background: BG, minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
       <style>{`
         @keyframes livepulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(1.3)} }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .studio-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
         .dash-tab-bar { display: flex; gap: 2px; border-bottom: 1px solid #1e1e1e; background: #0a0a0a; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
         .dash-tab-bar::-webkit-scrollbar { display: none; }
         @media (max-width: 700px) {
-          .studio-grid { grid-template-columns: 1fr !important; }
-          .dash-nav { height: auto !important; min-height: 58px; flex-wrap: wrap; padding-top: 10px !important; padding-bottom: 10px !important; gap: 10px; }
-          .dash-nav-right { flex-wrap: wrap; gap: 8px !important; }
+          .dash-nav { height: auto !important; min-height: 56px; flex-wrap: wrap; padding-top: 10px !important; padding-bottom: 10px !important; gap: 8px; }
           .dash-nav-hide-mobile { display: none !important; }
         }
       `}</style>
 
       {/* Nav */}
-      <nav className="dash-nav" style={{ position: "sticky", top: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "space-between", padding: `0 ${PAD}`, height: 58, background: "rgba(10,10,10,0.97)", backdropFilter: "blur(12px)", borderBottom: `1px solid ${BORDER}` }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+      <nav className="dash-nav" style={{ position: "sticky", top: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "space-between", padding: `0 ${PAD}`, height: 56, background: "rgba(10,10,10,0.97)", backdropFilter: "blur(12px)", borderBottom: `1px solid ${BORDER}` }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <a href="/" style={{ textDecoration: "none" }}><span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, color: YELLOW }}>peep.</span></a>
-          <span className="dash-nav-hide-mobile" style={{ color: "#2a2a2a", fontSize: 16 }}>|</span>
-          <span className="dash-nav-hide-mobile" style={{ fontSize: 13, color: "#555", fontWeight: 600 }}>Creator Studio</span>
+          <span className="dash-nav-hide-mobile" style={{ color: "#222", fontSize: 14 }}>|</span>
+          <span className="dash-nav-hide-mobile" style={{ fontSize: 12, color: "#444", fontWeight: 600, letterSpacing: 0.3 }}>Creator Studio</span>
         </div>
-        <div className="dash-nav-right" style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {/* Notification bell */}
-          <button onClick={() => setActiveTab("notifications")} style={{ position: "relative", background: "none", border: "none", cursor: "pointer", padding: "4px", color: unreadCount > 0 ? YELLOW : "#555", display: "flex" }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-            {unreadCount > 0 && (
-              <span style={{ position: "absolute", top: -2, right: -2, background: "#ef4444", color: "#fff", fontSize: 9, fontWeight: 800, borderRadius: "50%", width: 15, height: 15, display: "flex", alignItems: "center", justifyContent: "center" }}>{unreadCount > 9 ? "9+" : unreadCount}</span>
-            )}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button onClick={() => setActiveTab("notifications")} style={{ position: "relative", background: "none", border: "none", cursor: "pointer", padding: "4px", color: unreadCount > 0 ? YELLOW : "#444", display: "flex" }}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            {unreadCount > 0 && <span style={{ position: "absolute", top: -2, right: -2, background: "#ef4444", color: "#fff", fontSize: 9, fontWeight: 800, borderRadius: "50%", width: 14, height: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>{unreadCount > 9 ? "9+" : unreadCount}</span>}
           </button>
-          <a href={`/stream/${slug}`} target="_blank" rel="noopener noreferrer" style={{ color: "#555", fontSize: 13, textDecoration: "none", fontWeight: 500, display: "flex", alignItems: "center", gap: 5 }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          <a href={`/stream/${slug}`} target="_blank" rel="noopener noreferrer" className="dash-nav-hide-mobile" style={{ color: "#444", fontSize: 12, textDecoration: "none", fontWeight: 500, display: "flex", alignItems: "center", gap: 4 }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
             My Channel
           </a>
-          <a href="/?watch=1" className="dash-nav-hide-mobile" style={{ color: "#555", fontSize: 13, textDecoration: "none", fontWeight: 500 }}>← Watch Peep</a>
-          <button onClick={signOut} style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "6px 14px", color: "#666", fontSize: 12, cursor: "pointer" }}>Sign Out</button>
+          <button onClick={signOut} style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "5px 12px", color: "#555", fontSize: 12, cursor: "pointer" }}>Sign Out</button>
         </div>
       </nav>
 
-      {/* Live monitor bar */}
-      <div style={{ borderBottom: `1px solid ${BORDER}`, background: stream.is_live ? "rgba(239,68,68,0.03)" : "#0a0a0a", transition: "background 0.4s" }}>
+      {/* Live status bar */}
+      <div style={{ borderBottom: `1px solid ${BORDER}`, background: stream.is_live ? "rgba(239,68,68,0.03)" : "transparent" }}>
+        <div style={{ padding: `12px ${PAD}`, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
 
-        {/* Top row — status + quick stats */}
-        <div style={{ padding: `14px ${PAD}`, display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
           {/* Status pill */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, background: stream.is_live ? "rgba(239,68,68,0.1)" : "#111", border: `1px solid ${stream.is_live ? "rgba(239,68,68,0.25)" : BORDER}`, borderRadius: 20, padding: "5px 14px", transition: "all 0.3s" }}>
-            <div style={{ width: 7, height: 7, borderRadius: "50%", background: stream.is_live ? "#ef4444" : "#333", animation: stream.is_live ? "livepulse 1.5s infinite" : "none", transition: "background 0.3s" }} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: stream.is_live ? "#ef4444" : "#444", letterSpacing: 0.5 }}>{stream.is_live ? "LIVE" : "OFFLINE"}</span>
-            {stream.is_live && liveDuration > 0 && (
-              <span style={{ fontSize: 11, color: "rgba(239,68,68,0.6)", fontVariantNumeric: "tabular-nums" }}>{fmtDuration(liveDuration)}</span>
-            )}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: stream.is_live ? "rgba(239,68,68,0.1)" : "#111", border: `1px solid ${stream.is_live ? "rgba(239,68,68,0.25)" : BORDER}`, borderRadius: 20, padding: "5px 14px" }}>
+            <div style={{ width: 7, height: 7, borderRadius: "50%", background: stream.is_live ? "#ef4444" : "#333", animation: stream.is_live ? "livepulse 1.5s infinite" : "none" }} />
+            <span style={{ fontSize: 11, fontWeight: 700, color: stream.is_live ? "#ef4444" : "#444", letterSpacing: 0.6 }}>{stream.is_live ? "LIVE" : "OFFLINE"}</span>
+            {stream.is_live && liveDuration > 0 && <span style={{ fontSize: 11, color: "rgba(239,68,68,0.5)", fontVariantNumeric: "tabular-nums" }}>{fmtDuration(liveDuration)}</span>}
           </div>
 
-          <div style={{ height: 18, width: 1, background: BORDER }} />
-          <span style={{ fontSize: 13, color: "#555" }}><strong style={{ color: stream.is_live ? "#e0e0e0" : "#555" }}>{viewers}</strong> watching</span>
-          <span style={{ fontSize: 13, color: "#555" }}><strong style={{ color: "#e0e0e0" }}>{followCount}</strong> followers</span>
-          <div style={{ flex: 1 }} />
-          <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{stream.channel_name || stream.title}</span>
-        </div>
+          <span style={{ fontSize: 13, color: "#444" }}><strong style={{ color: stream.is_live ? "#e0e0e0" : "#555" }}>{viewers}</strong> watching</span>
+          <span style={{ fontSize: 13, color: "#444" }}><strong style={{ color: "#bbb" }}>{followCount}</strong> followers</span>
 
-        {/* OBS health row — only shows when we have data */}
-        {streamHealth && (
-          <div style={{ padding: `0 ${PAD} 14px`, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-
-            {/* OBS connected indicator */}
-            <div style={{ display: "flex", alignItems: "center", gap: 6, background: streamHealth.state === "connected" ? "rgba(74,222,128,0.07)" : "rgba(255,255,255,0.03)", border: `1px solid ${streamHealth.state === "connected" ? "rgba(74,222,128,0.2)" : BORDER}`, borderRadius: 7, padding: "4px 11px" }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={streamHealth.state === "connected" ? "#4ade80" : "#333"} strokeWidth="2.5"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill={streamHealth.state === "connected" ? "#4ade80" : "#333"}/></svg>
-              <span style={{ fontSize: 11, fontWeight: 700, color: streamHealth.state === "connected" ? "#4ade80" : "#333" }}>
-                {streamHealth.state === "connected" ? "OBS Connected" : streamHealth.state === "idle" ? "OBS Idle" : "OBS Disconnected"}
-              </span>
-            </div>
-
-            {/* Bitrate */}
-            {streamHealth.bitrate != null && (
-              <div style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(255,255,255,0.03)", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "4px 11px" }}>
-                <span style={{ fontSize: 10, color: "#444", fontWeight: 600 }}>BITRATE</span>
-                <span style={{ fontSize: 11, color: "#888", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-                  {streamHealth.bitrate >= 1000000
-                    ? `${(streamHealth.bitrate / 1000000).toFixed(1)} Mbps`
-                    : `${Math.round(streamHealth.bitrate / 1000)} kbps`}
+          {/* OBS health chips */}
+          {streamHealth && (
+            <>
+              <div style={{ height: 14, width: 1, background: BORDER }} />
+              <div style={{ display: "flex", alignItems: "center", gap: 6, background: streamHealth.state === "connected" ? "rgba(74,222,128,0.07)" : "rgba(255,255,255,0.02)", border: `1px solid ${streamHealth.state === "connected" ? "rgba(74,222,128,0.2)" : BORDER}`, borderRadius: 6, padding: "3px 10px" }}>
+                <div style={{ width: 5, height: 5, borderRadius: "50%", background: streamHealth.state === "connected" ? "#4ade80" : "#333" }} />
+                <span style={{ fontSize: 11, fontWeight: 600, color: streamHealth.state === "connected" ? "#4ade80" : "#333" }}>
+                  {streamHealth.state === "connected" ? "OBS Connected" : "OBS Idle"}
                 </span>
               </div>
-            )}
+              {streamHealth.bitrate != null && (
+                <span style={{ fontSize: 11, color: "#444", fontWeight: 600 }}>
+                  {streamHealth.bitrate >= 1000000 ? `${(streamHealth.bitrate / 1000000).toFixed(1)} Mbps` : `${Math.round(streamHealth.bitrate / 1000)} kbps`}
+                </span>
+              )}
+              {streamHealth.width && streamHealth.height && <span style={{ fontSize: 11, color: "#333", fontWeight: 600 }}>{streamHealth.width}×{streamHealth.height}</span>}
+              {streamHealth.fps != null && <span style={{ fontSize: 11, color: "#333", fontWeight: 600 }}>{streamHealth.fps} fps</span>}
+            </>
+          )}
 
-            {/* Resolution */}
-            {streamHealth.width && streamHealth.height && (
-              <div style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(255,255,255,0.03)", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "4px 11px" }}>
-                <span style={{ fontSize: 10, color: "#444", fontWeight: 600 }}>RES</span>
-                <span style={{ fontSize: 11, color: "#888", fontWeight: 700 }}>{streamHealth.width}×{streamHealth.height}</span>
-              </div>
-            )}
-
-            {/* FPS */}
-            {streamHealth.fps != null && (
-              <div style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(255,255,255,0.03)", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "4px 11px" }}>
-                <span style={{ fontSize: 10, color: "#444", fontWeight: 600 }}>FPS</span>
-                <span style={{ fontSize: 11, color: "#888", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{streamHealth.fps}</span>
-              </div>
-            )}
-
-            {/* Codec */}
-            {streamHealth.videoCodec && (
-              <div style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(255,255,255,0.03)", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "4px 11px" }}>
-                <span style={{ fontSize: 10, color: "#444", fontWeight: 600 }}>CODEC</span>
-                <span style={{ fontSize: 11, color: "#888", fontWeight: 700 }}>{streamHealth.videoCodec}</span>
-              </div>
-            )}
-
-            <span style={{ fontSize: 10, color: "#2a2a2a", marginLeft: "auto" }}>updates every 8s</span>
-          </div>
-        )}
-
-        {/* No health data yet — nudge to connect OBS */}
-        {!streamHealth && !stream.is_live && (
-          <div style={{ padding: `0 ${PAD} 14px` }}>
-            <span style={{ fontSize: 12, color: "#2a2a2a" }}>Start streaming in OBS to see connection status here.</span>
-          </div>
-        )}
+          <div style={{ flex: 1 }} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: "#888" }}>{stream.channel_name || stream.title}</span>
+        </div>
       </div>
 
       {/* Tab bar */}
       <div className="dash-tab-bar" style={{ padding: `0 ${PAD}` }}>
         {TABS.map(t => (
           <button key={t.id} onClick={() => setActiveTab(t.id)}
-            style={{ position: "relative", background: "none", border: "none", borderBottom: activeTab === t.id ? `2px solid ${YELLOW}` : "2px solid transparent", padding: "14px 18px", color: activeTab === t.id ? YELLOW : "#555", fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "color 0.15s", display: "flex", alignItems: "center", gap: 6 }}>
+            style={{ position: "relative", background: "none", border: "none", borderBottom: activeTab === t.id ? `2px solid ${YELLOW}` : "2px solid transparent", padding: "13px 16px", color: activeTab === t.id ? YELLOW : "#555", fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "color 0.15s", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
             {t.label}
-            {t.badge > 0 && <span style={{ background: "#ef4444", color: "#fff", fontSize: 10, fontWeight: 800, borderRadius: 10, padding: "1px 5px" }}>{t.badge}</span>}
+            {t.badge > 0 && <span style={{ background: "#ef4444", color: "#fff", fontSize: 9, fontWeight: 800, borderRadius: 10, padding: "1px 5px" }}>{t.badge}</span>}
           </button>
         ))}
       </div>
 
       {/* ── STUDIO TAB ── */}
       {activeTab === "studio" && (
-        <div style={{ padding: `28px ${PAD} 80px`, display: "flex", flexDirection: "column", gap: 14, maxWidth: 860 }}>
+        <div style={{ padding: `24px ${PAD} 80px`, display: "flex", flexDirection: "column", gap: 12, maxWidth: 860 }}>
 
-          {/* ── GO LIVE ── */}
-          <SectionCard title="Go Live">
+          {/* Go Live */}
+          <SectionCard title="Go Live" collapsible defaultOpen={!stream.is_live}>
+            {/* RTMP + Key */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
-              {/* RTMP */}
               <div>
                 <Label>RTMP Server</Label>
                 <div style={{ display: "flex", gap: 7 }}>
                   <code style={{ flex: 1, background: "#0d0d0d", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "9px 11px", fontSize: 11, color: YELLOW, wordBreak: "break-all", lineHeight: 1.5 }}>{RTMP_BASE}</code>
-                  <button onClick={() => copy(RTMP_BASE, "rtmp")} style={{ flexShrink: 0, background: copied === "rtmp" ? "rgba(250,204,21,0.1)" : "rgba(255,255,255,0.04)", border: `1px solid ${copied === "rtmp" ? "rgba(250,204,21,0.3)" : BORDER}`, borderRadius: 8, padding: "0 12px", color: copied === "rtmp" ? YELLOW : "#666", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>{copied === "rtmp" ? "✓" : "Copy"}</button>
+                  <button onClick={() => copy(RTMP_BASE, "rtmp")} style={{ flexShrink: 0, background: copied === "rtmp" ? "rgba(250,204,21,0.1)" : "rgba(255,255,255,0.04)", border: `1px solid ${copied === "rtmp" ? "rgba(250,204,21,0.3)" : BORDER}`, borderRadius: 8, padding: "0 12px", color: copied === "rtmp" ? YELLOW : "#666", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{copied === "rtmp" ? "✓" : "Copy"}</button>
                 </div>
               </div>
-              {/* Stream Key */}
               <div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                   <Label>Stream Key</Label>
                   {!confirmRotate
-                    ? <button onClick={() => setConfirmRotate(true)} style={{ background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: 5, padding: "2px 9px", color: "#dc2626", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Rotate</button>
+                    ? <button onClick={() => setConfirmRotate(true)} style={{ background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: 5, padding: "2px 8px", color: "#dc2626", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Rotate</button>
                     : <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
                         <span style={{ fontSize: 11, color: "#dc2626" }}>Sure?</span>
-                        <button onClick={rotateKey} disabled={rotatingKey} style={{ background: "#dc2626", border: "none", borderRadius: 5, padding: "2px 9px", color: "#fff", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{rotatingKey ? "…" : "Yes"}</button>
+                        <button onClick={rotateKey} disabled={rotatingKey} style={{ background: "#dc2626", border: "none", borderRadius: 5, padding: "2px 8px", color: "#fff", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{rotatingKey ? "…" : "Yes"}</button>
                         <button onClick={() => setConfirmRotate(false)} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 5, padding: "2px 7px", color: "#666", fontSize: 11, cursor: "pointer" }}>No</button>
                       </div>}
                 </div>
                 <div style={{ display: "flex", gap: 7 }}>
-                  <code style={{ flex: 1, background: "#0d0d0d", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "9px 11px", fontSize: 11, color: YELLOW, wordBreak: "break-all", lineHeight: 1.5, userSelect: revealKey ? "all" : "none" }}>{revealKey ? stream.stream_key : "••••••••••••••••••••••"}</code>
+                  <code style={{ flex: 1, background: "#0d0d0d", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "9px 11px", fontSize: 11, color: YELLOW, wordBreak: "break-all", lineHeight: 1.5, userSelect: revealKey ? "all" : "none" }}>
+                    {revealKey ? stream.stream_key : "••••••••••••••••••••••"}
+                  </code>
                   <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                     <button onClick={() => setRevealKey(r => !r)} style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "5px 10px", color: "#666", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>{revealKey ? "Hide" : "Show"}</button>
-                    <button onClick={() => copy(stream.stream_key, "key")} style={{ background: copied === "key" ? "rgba(250,204,21,0.1)" : "rgba(255,255,255,0.04)", border: `1px solid ${copied === "key" ? "rgba(250,204,21,0.3)" : BORDER}`, borderRadius: 8, padding: "5px 10px", color: copied === "key" ? YELLOW : "#666", fontSize: 11, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>{copied === "key" ? "✓" : "Copy"}</button>
+                    <button onClick={() => copy(stream.stream_key, "key")} style={{ background: copied === "key" ? "rgba(250,204,21,0.1)" : "rgba(255,255,255,0.04)", border: `1px solid ${copied === "key" ? "rgba(250,204,21,0.3)" : BORDER}`, borderRadius: 8, padding: "5px 10px", color: copied === "key" ? YELLOW : "#666", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>{copied === "key" ? "✓" : "Copy"}</button>
                   </div>
                 </div>
-                {confirmRotate && <p style={{ margin: "6px 0 0", fontSize: 11, color: "#555" }}>Creates a new key — update OBS before streaming again.</p>}
               </div>
             </div>
 
             {/* OBS steps */}
             <div style={{ background: "#0d0d0d", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "14px 16px" }}>
-              <p style={{ margin: "0 0 10px", fontSize: 12, fontWeight: 700, color: "#888", letterSpacing: "0.06em", textTransform: "uppercase" }}>OBS Setup</p>
-              <div style={{ background: "rgba(234,179,8,0.05)", border: "1px solid rgba(234,179,8,0.15)", borderRadius: 7, padding: "8px 11px", marginBottom: 12, display: "flex", gap: 7 }}>
-                <span style={{ fontSize: 12, flexShrink: 0 }}>⚠️</span>
-                <p style={{ margin: 0, fontSize: 12, color: "#92400e", lineHeight: 1.5 }}><strong>Skip the Auto-Config Wizard</strong> — it only works with Twitch/YouTube.</p>
+              <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 700, color: "#555", letterSpacing: "0.08em", textTransform: "uppercase" }}>OBS Setup</p>
+              <div style={{ background: "rgba(234,179,8,0.05)", border: "1px solid rgba(234,179,8,0.1)", borderRadius: 7, padding: "7px 11px", marginBottom: 12 }}>
+                <p style={{ margin: 0, fontSize: 12, color: "#78350f", lineHeight: 1.5 }}>Skip the Auto-Config Wizard — it only works with Twitch/YouTube.</p>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 8 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 8 }}>
                 {[
-                  { n: 1, text: "OBS → Settings → Stream" },
-                  { n: 2, text: 'Service: "Custom…"' },
-                  { n: 3, text: "Paste RTMP Server above" },
-                  { n: 4, text: "Paste Stream Key above" },
-                  { n: 5, text: "1080p · 6000 kbps · H.264" },
-                  { n: 6, text: "Click Start Streaming" },
-                ].map(({ n, text }) => (
-                  <div key={n} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                    <div style={{ width: 20, height: 20, borderRadius: "50%", background: "#1a1a1a", border: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: "#444", flexShrink: 0, marginTop: 1 }}>{n}</div>
+                  "OBS → Settings → Stream",
+                  'Service: "Custom…"',
+                  "Paste RTMP Server above",
+                  "Paste Stream Key above",
+                  "1080p · 6000 kbps · H.264",
+                  "Click Start Streaming",
+                ].map((text, i) => (
+                  <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                    <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#1a1a1a", border: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: "#444", flexShrink: 0, marginTop: 2 }}>{i + 1}</div>
                     <span style={{ fontSize: 12, color: "#555", lineHeight: 1.5 }}>{text}</span>
                   </div>
                 ))}
@@ -817,75 +734,74 @@ export function StreamerDashboard() {
             </div>
           </SectionCard>
 
-          {/* ── STREAM PREVIEW ── */}
+          {/* Stream Preview */}
           {stream.stream_url && (
-            <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden" }}>
-              <button
-                onClick={() => setPreviewOpen(o => !o)}
-                style={{ width: "100%", background: "none", border: "none", padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", color: "#fff" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-                  <span style={{ fontSize: 15, fontWeight: 700 }}>Stream Preview</span>
+            <SectionCard collapsible defaultOpen={previewOpen}
+              title={
+                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  Stream Preview
                   {stream.is_live && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 5, padding: "2px 8px" }}>
-                      <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite" }} />
-                      <span style={{ fontSize: 10, fontWeight: 800, color: "#ef4444", letterSpacing: 0.8 }}>LIVE</span>
-                    </div>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 4, padding: "1px 7px", fontSize: 10, fontWeight: 800, color: "#ef4444" }}>
+                      <span style={{ width: 4, height: 4, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite", display: "inline-block" }} /> LIVE
+                    </span>
                   )}
-                </div>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2" style={{ transform: previewOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>
-                  <polyline points="6 9 12 15 18 9"/>
-                </svg>
-              </button>
-              {previewOpen && (
+                </span>
+              }>
+              <div style={{ margin: "-20px -22px", borderRadius: "0 0 14px 14px", overflow: "hidden" }}>
                 <LivePreview url={stream.stream_url} />
-              )}
-            </div>
+              </div>
+            </SectionCard>
           )}
 
-          {/* ── LIVE CHAT MONITOR ── */}
+          {/* Live Chat */}
           {stream.is_live && (
-            <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden" }}>
-              <div style={{ padding: "16px 24px 12px", display: "flex", alignItems: "center", gap: 10, borderBottom: `1px solid ${BORDER}` }}>
-                <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite", flexShrink: 0 }} />
-                <span style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>Live Chat</span>
-                <span style={{ marginLeft: "auto", fontSize: 11, color: "#444" }}>{chatMessages.length} messages</span>
-              </div>
-              {/* Messages */}
-              <div style={{ height: 260, overflowY: "auto", padding: "10px 0", display: "flex", flexDirection: "column", gap: 1 }}>
+            <SectionCard title="Live Chat" badge={chatMessages.length > 0 ? `${chatMessages.length}` : undefined}>
+              <div style={{ height: 260, overflowY: "auto", padding: "0 0 12px", display: "flex", flexDirection: "column", gap: 1, margin: "-20px -22px 0", padding: "12px 22px" }}>
                 {chatMessages.length === 0
                   ? <p style={{ color: "#2a2a2a", fontSize: 12, margin: "auto 0", textAlign: "center" }}>No messages yet</p>
                   : chatMessages.map(m => (
-                    <div key={m.id} style={{ fontSize: 13, lineHeight: 1.55, wordBreak: "break-word", padding: "3px 20px", borderRadius: 4 }}>
+                    <div key={m.id} style={{ fontSize: 13, lineHeight: 1.55, wordBreak: "break-word", padding: "3px 0", borderRadius: 4 }}>
                       <span style={{ color: YELLOW, fontWeight: 700, marginRight: 6, fontSize: 12 }}>{m.profile_name}</span>
-                      <span style={{ color: "#888" }}>{m.message}</span>
+                      <span style={{ color: "#777" }}>{m.message}</span>
                     </div>
                   ))
                 }
                 <div ref={chatBottomRef} />
               </div>
-              {/* Input */}
-              <div style={{ padding: "10px 16px", borderTop: `1px solid ${BORDER}`, display: "flex", gap: 8 }}>
-                <input
-                  value={chatInput}
-                  onChange={e => setChatInput(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendChat()}
-                  placeholder="Chat as streamer…"
-                  maxLength={300}
-                  style={{ flex: 1, background: "#0d0d0d", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "9px 12px", color: "#fff", fontSize: 13, outline: "none", fontFamily: "inherit" }}
-                />
+              <div style={{ display: "flex", gap: 8, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${BORDER}` }}>
+                <input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendChat()}
+                  placeholder="Chat as streamer…" maxLength={300}
+                  style={{ flex: 1, background: "#0d0d0d", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "9px 12px", color: "#fff", fontSize: 13, outline: "none", fontFamily: "inherit" }} />
                 <button onClick={sendChat} disabled={!chatInput.trim() || chatSending}
-                  style={{ background: chatInput.trim() ? YELLOW : "#111", border: "none", borderRadius: 8, padding: "9px 16px", color: chatInput.trim() ? "#0a0a0a" : "#333", fontSize: 13, fontWeight: 700, cursor: !chatInput.trim() || chatSending ? "not-allowed" : "pointer", flexShrink: 0, fontFamily: "inherit" }}>
+                  style={{ background: chatInput.trim() ? YELLOW : "#111", border: "none", borderRadius: 8, padding: "9px 18px", color: chatInput.trim() ? "#0a0a0a" : "#333", fontSize: 13, fontWeight: 700, cursor: !chatInput.trim() || chatSending ? "not-allowed" : "pointer", flexShrink: 0 }}>
                   Send
                 </button>
               </div>
-            </div>
+            </SectionCard>
           )}
 
-          {/* ── CHANNEL IDENTITY ── */}
-          <SectionCard title="Channel">
-            {/* Name + Handle side by side */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+        </div>
+      )}
+
+      {/* ── CHANNEL TAB ── */}
+      {activeTab === "channel" && (
+        <div style={{ padding: `24px ${PAD} 80px`, display: "flex", flexDirection: "column", gap: 12, maxWidth: 860 }}>
+
+          {/* Channel Identity */}
+          <SectionCard title="Identity" collapsible defaultOpen>
+            {/* Channel URL display */}
+            <div style={{ background: "#0d0d0d", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "12px 14px", marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              <div>
+                <p style={{ margin: "0 0 2px", fontSize: 11, color: "#444", fontWeight: 600, letterSpacing: 0.2 }}>CHANNEL URL</p>
+                <span style={{ fontSize: 13, color: YELLOW, fontWeight: 600 }}>{channelUrl}</span>
+              </div>
+              <button onClick={() => copy(`https://${channelUrl}`, "url")} style={{ flexShrink: 0, background: copied === "url" ? "rgba(250,204,21,0.1)" : "rgba(255,255,255,0.04)", border: `1px solid ${copied === "url" ? "rgba(250,204,21,0.3)" : BORDER}`, borderRadius: 8, padding: "6px 14px", color: copied === "url" ? YELLOW : "#666", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                {copied === "url" ? "Copied!" : "Copy Link"}
+              </button>
+            </div>
+
+            {/* Name + Handle */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>
                 <Label>Channel Name</Label>
                 <div style={{ display: "flex", gap: 7 }}>
@@ -897,71 +813,65 @@ export function StreamerDashboard() {
                 </div>
               </div>
               <div>
-                <Label>Handle {!stream.username && <span style={{ color: "#2a2a2a", fontWeight: 400 }}>— set once</span>}</Label>
+                <Label>Handle {!stream.username && <span style={{ color: "#2a2a2a", fontWeight: 400 }}>— set once, permanent</span>}</Label>
                 {stream.username ? (
                   <div style={{ ...inp, color: "#444", display: "flex", alignItems: "center", gap: 5 }}>
                     <span style={{ color: "#2a2a2a" }}>@</span>{stream.username}
                     <svg style={{ marginLeft: "auto" }} width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#2a2a2a" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
                   </div>
                 ) : (
-                  <>
-                    <div style={{ display: "flex", gap: 7 }}>
-                      <div style={{ flex: 1, display: "flex", alignItems: "center", background: "#0d0d0d", border: `1px solid ${BORDER}`, borderRadius: 9, overflow: "hidden" }}>
-                        <span style={{ padding: "0 9px", color: "#333", fontSize: 14, flexShrink: 0 }}>@</span>
-                        <input value={handle} onChange={e => setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))} onKeyDown={e => e.key === "Enter" && saveHandle()} placeholder="yourchannel" maxLength={30} style={{ ...inp, border: "none", borderRadius: 0, paddingLeft: 0, flex: 1 }} />
-                      </div>
-                      <button onClick={saveHandle} disabled={savingHandle || !handle.trim()} style={{ flexShrink: 0, background: YELLOW, border: "none", borderRadius: 9, padding: "0 14px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: !handle.trim() ? 0.4 : 1 }}>{savingHandle ? "…" : "Set"}</button>
+                  <div style={{ display: "flex", gap: 7 }}>
+                    <div style={{ flex: 1, display: "flex", alignItems: "center", background: "#0d0d0d", border: `1px solid ${BORDER}`, borderRadius: 9, overflow: "hidden" }}>
+                      <span style={{ padding: "0 8px", color: "#333", fontSize: 14, flexShrink: 0 }}>@</span>
+                      <input value={handle} onChange={e => setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))} onKeyDown={e => e.key === "Enter" && saveHandle()} placeholder="yourchannel" maxLength={30} style={{ ...inp, border: "none", borderRadius: 0, paddingLeft: 0, flex: 1 }} />
                     </div>
-                    <p style={{ margin: "4px 0 0", fontSize: 11, color: "#2a2a2a" }}>Can't be changed after — choose carefully.</p>
-                  </>
+                    <button onClick={saveHandle} disabled={savingHandle || !handle.trim()} style={{ flexShrink: 0, background: YELLOW, border: "none", borderRadius: 9, padding: "0 14px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: !handle.trim() ? 0.4 : 1 }}>{savingHandle ? "…" : "Set"}</button>
+                  </div>
                 )}
               </div>
             </div>
+          </SectionCard>
 
-            {/* Stream title + Category */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, marginBottom: 14 }}>
+          {/* Stream Info */}
+          <SectionCard title="Stream Info" collapsible defaultOpen>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, marginBottom: 12 }}>
               <div>
                 <Label>Stream Title</Label>
                 <input value={streamTitle} onChange={e => setStreamTitle(e.target.value)} placeholder="What are you streaming today?" maxLength={120} style={inp} />
               </div>
-              <div style={{ minWidth: 160 }}>
+              <div style={{ minWidth: 150 }}>
                 <Label>Category</Label>
                 <select value={category} onChange={e => setCategory(e.target.value)} style={{ ...inp, appearance: "none", cursor: "pointer" }}>
                   {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                 </select>
               </div>
             </div>
-
-            {/* Bio */}
-            <div style={{ marginBottom: 14 }}>
+            <div style={{ marginBottom: 12 }}>
               <Label>Bio</Label>
               <textarea value={bio} onChange={e => setBio(e.target.value)} placeholder="Tell viewers about your channel…" maxLength={300} rows={3} style={{ ...inp, resize: "vertical", lineHeight: 1.6 }} />
               <p style={{ margin: "3px 0 0", fontSize: 11, color: "#333", textAlign: "right" }}>{bio.length}/300</p>
             </div>
-
-            {/* Donation link */}
-            <div style={{ marginBottom: 18 }}>
+            <div style={{ marginBottom: 16 }}>
               <Label>Donation Link <span style={{ color: "#2a2a2a", fontWeight: 400 }}>Ko-fi, PayPal, Streamlabs…</span></Label>
               <input value={donationLink} onChange={e => setDonationLink(e.target.value)} placeholder="https://ko-fi.com/yourchannel" type="url" style={inp} />
             </div>
-
             <button onClick={saveStreamInfo} disabled={savingInfo} style={{ background: YELLOW, border: "none", borderRadius: 9, padding: "10px 22px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: savingInfo ? "wait" : "pointer", opacity: savingInfo ? 0.6 : 1 }}>
               {savingInfo ? "Saving…" : "Save Changes"}
             </button>
           </SectionCard>
 
-          {/* ── CHANNEL ART ── */}
-          <SectionCard title="Channel Art">
-            {/* Profile picture */}
-            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16, paddingBottom: 16, borderBottom: `1px solid ${BORDER}` }}>
-              <div style={{ width: 64, height: 64, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 700, color: "#fff", flexShrink: 0, overflow: "hidden", border: `2px solid ${pendingFiles.avatar ? YELLOW : BORDER}` }}>
+          {/* Channel Art */}
+          <SectionCard title="Channel Art" collapsible defaultOpen>
+            {/* Avatar */}
+            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid ${BORDER}` }}>
+              <div style={{ width: 60, height: 60, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 700, color: "#fff", flexShrink: 0, overflow: "hidden", border: `2px solid ${pendingFiles.avatar ? YELLOW : BORDER}` }}>
                 {pendingFiles.avatar ? <img src={pendingFiles.avatar.previewUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   : stream.avatar_url ? <img src={stream.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   : <span>{(stream.channel_name || stream.title || "?")[0].toUpperCase()}</span>}
               </div>
               <div style={{ flex: 1 }}>
-                <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: "#ccc" }}>Profile Picture</p>
-                <p style={{ margin: "0 0 8px", fontSize: 11, color: "#333" }}>Shown next to your name everywhere · circle crop</p>
+                <p style={{ margin: "0 0 1px", fontSize: 13, fontWeight: 600, color: "#ccc" }}>Profile Picture</p>
+                <p style={{ margin: "0 0 8px", fontSize: 11, color: "#444" }}>Circle crop · shown everywhere next to your name</p>
                 <div style={{ display: "flex", gap: 6 }}>
                   {pendingFiles.avatar ? (
                     <>
@@ -990,15 +900,14 @@ export function StreamerDashboard() {
                 const pending = pendingFiles[pendingKey];
                 const preview = pending?.previewUrl || current;
                 return (
-                  <div key={pendingKey} style={{ display: "flex", gap: 12, alignItems: "center", background: "#0d0d0d", border: `1px solid ${pending ? YELLOW : BORDER}`, borderRadius: 10, padding: "10px 12px", transition: "border-color 0.15s" }}>
-                    <div style={{ width: 76, height: 48, borderRadius: 6, overflow: "hidden", background: "#111", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div key={pendingKey} style={{ display: "flex", gap: 12, alignItems: "center", background: "#0d0d0d", border: `1px solid ${pending ? YELLOW : BORDER}`, borderRadius: 10, padding: "10px 12px" }}>
+                    <div style={{ width: 72, height: 44, borderRadius: 6, overflow: "hidden", background: "#111", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                       {preview ? <img src={preview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                        : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2a2a2a" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>}
+                        : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2a2a2a" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ margin: "0 0 1px", fontSize: 13, fontWeight: 600, color: "#ccc" }}>{label}</p>
-                      <p style={{ margin: "0 0 1px", fontSize: 11, color: "#333" }}>{where}</p>
-                      <p style={{ margin: 0, fontSize: 10, color: "#222" }}>{size} recommended</p>
+                      <p style={{ margin: 0, fontSize: 11, color: "#333" }}>{where} · {size}</p>
                     </div>
                     <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                       {pending ? (
@@ -1022,49 +931,25 @@ export function StreamerDashboard() {
             </div>
           </SectionCard>
 
-          {/* ── SCHEDULE + MODERATION side by side ── */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-            <SectionCard title="Upcoming Streams">
-              {schedule.length > 0 && (
-                <div style={{ marginBottom: 14 }}>
-                  {schedule.map(s => (
-                    <div key={s.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 0", borderBottom: `1px solid ${BORDER}` }}>
-                      <div>
-                        <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: "#fff" }}>{s.title}</p>
-                        <p style={{ margin: 0, fontSize: 11, color: "#555" }}>{new Date(s.scheduled_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} · {new Date(s.scheduled_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</p>
-                      </div>
-                      <button onClick={() => deleteSchedule(s.id)} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "4px 9px", color: "#333", fontSize: 11, cursor: "pointer" }}>✕</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {schedule.length === 0 && <p style={{ margin: "0 0 14px", fontSize: 13, color: "#2a2a2a" }}>No streams scheduled.</p>}
-              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                <input value={schedTitle} onChange={e => setSchedTitle(e.target.value)} placeholder="Stream title…" style={inp} />
-                <input type="datetime-local" value={schedDate} onChange={e => setSchedDate(e.target.value)} style={{ ...inp, colorScheme: "dark" }} />
-                <button onClick={addSchedule} disabled={addingSched || !schedTitle.trim() || !schedDate} style={{ background: YELLOW, border: "none", borderRadius: 9, padding: "10px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: !schedTitle.trim() || !schedDate ? 0.4 : 1 }}>{addingSched ? "…" : "Schedule"}</button>
+          {/* Moderation */}
+          <SectionCard title="Chat Moderation" collapsible defaultOpen={false}>
+            <p style={{ margin: "0 0 12px", fontSize: 13, color: "#444" }}>Words automatically blocked from your live chat.</p>
+            {bannedWords.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+                {bannedWords.map(w => (
+                  <span key={w} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: 6, padding: "3px 8px", fontSize: 12, color: "#f87171" }}>
+                    {w}
+                    <button onClick={() => setBannedWords(ws => ws.filter(x => x !== w))} style={{ background: "none", border: "none", color: "#ef4444", fontSize: 14, cursor: "pointer", padding: 0, lineHeight: 1 }}>×</button>
+                  </span>
+                ))}
               </div>
-            </SectionCard>
-
-            <SectionCard title="Chat Moderation">
-              <p style={{ margin: "0 0 12px", fontSize: 13, color: "#333" }}>Words that are automatically blocked from chat.</p>
-              {bannedWords.length > 0 && (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
-                  {bannedWords.map(w => (
-                    <span key={w} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: 6, padding: "3px 8px", fontSize: 12, color: "#f87171" }}>
-                      {w}
-                      <button onClick={() => setBannedWords(ws => ws.filter(x => x !== w))} style={{ background: "none", border: "none", color: "#ef4444", fontSize: 14, cursor: "pointer", padding: 0, lineHeight: 1 }}>×</button>
-                    </span>
-                  ))}
-                </div>
-              )}
-              <div style={{ display: "flex", gap: 7, marginBottom: 10 }}>
-                <input value={newWord} onChange={e => setNewWord(e.target.value)} onKeyDown={e => e.key === "Enter" && addBannedWord()} placeholder="Add a word…" style={{ ...inp, flex: 1 }} />
-                <button onClick={addBannedWord} disabled={!newWord.trim()} style={{ flexShrink: 0, background: "rgba(255,255,255,0.05)", border: `1px solid ${BORDER}`, borderRadius: 9, padding: "0 14px", color: "#888", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: !newWord.trim() ? 0.4 : 1 }}>Add</button>
-              </div>
-              <button onClick={saveBannedWords} disabled={savingWords} style={{ background: YELLOW, border: "none", borderRadius: 9, padding: "9px 18px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: savingWords ? "wait" : "pointer", opacity: savingWords ? 0.6 : 1 }}>{savingWords ? "Saving…" : "Save"}</button>
-            </SectionCard>
-          </div>
+            )}
+            <div style={{ display: "flex", gap: 7, marginBottom: 10 }}>
+              <input value={newWord} onChange={e => setNewWord(e.target.value)} onKeyDown={e => e.key === "Enter" && addBannedWord()} placeholder="Add a word…" style={{ ...inp, flex: 1 }} />
+              <button onClick={addBannedWord} disabled={!newWord.trim()} style={{ flexShrink: 0, background: "rgba(255,255,255,0.05)", border: `1px solid ${BORDER}`, borderRadius: 9, padding: "0 14px", color: "#888", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: !newWord.trim() ? 0.4 : 1 }}>Add</button>
+            </div>
+            <button onClick={saveBannedWords} disabled={savingWords} style={{ background: YELLOW, border: "none", borderRadius: 9, padding: "9px 18px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: savingWords ? "wait" : "pointer", opacity: savingWords ? 0.6 : 1 }}>{savingWords ? "Saving…" : "Save"}</button>
+          </SectionCard>
 
         </div>
       )}
@@ -1074,16 +959,14 @@ export function StreamerDashboard() {
         <div style={{ padding: `24px ${PAD} 80px` }}>
           {analyticsLoading ? <p style={{ color: "#555", fontSize: 14 }}>Loading analytics…</p> : (
             <>
-              {/* Stat cards */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 12, marginBottom: 28 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 12, marginBottom: 24 }}>
                 <StatCard label="TOTAL FOLLOWERS" value={followCount.toLocaleString()} />
-                <StatCard label="NEW THIS WEEK" value={thisWeek} sub={thisWeek === 1 ? "1 new follower" : `${thisWeek} new followers`} />
-                <StatCard label="NEW THIS MONTH" value={thisMonth} sub={`last 30 days`} />
+                <StatCard label="NEW THIS WEEK" value={thisWeek} sub={`${thisWeek} new follower${thisWeek !== 1 ? "s" : ""}`} />
+                <StatCard label="NEW THIS MONTH" value={thisMonth} sub="last 30 days" />
                 <StatCard label="PAST STREAMS" value={vods.length} sub="recorded VODs" />
               </div>
 
-              {/* Follower growth chart */}
-              <SectionCard title="Follower Growth — Last 8 Weeks">
+              <SectionCard title="Follower Growth — Last 8 Weeks" style={{ marginBottom: 12 }}>
                 {analyticsFollowers.length === 0 ? (
                   <p style={{ color: "#333", fontSize: 13 }}>No follower data yet.</p>
                 ) : (
@@ -1101,7 +984,6 @@ export function StreamerDashboard() {
                 )}
               </SectionCard>
 
-              {/* Recent followers */}
               <SectionCard title="Recent Followers">
                 {analyticsFollowers.length === 0 ? (
                   <p style={{ color: "#333", fontSize: 13 }}>No followers yet.</p>
@@ -1112,14 +994,14 @@ export function StreamerDashboard() {
                       return (
                         <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: i < 19 && i < analyticsFollowers.length - 1 ? `1px solid ${BORDER}` : "none" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "#fff", flexShrink: 0 }}>{name[0]?.toUpperCase()}</div>
+                            <div style={{ width: 30, height: 30, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff", flexShrink: 0 }}>{name[0]?.toUpperCase()}</div>
                             <span style={{ fontSize: 13, color: "#ccc", fontWeight: 500 }}>{name}</span>
                           </div>
                           <span style={{ fontSize: 12, color: "#444" }}>{timeAgo(f.created_at)}</span>
                         </div>
                       );
                     })}
-                    {analyticsFollowers.length > 20 && <p style={{ margin: "12px 0 0", fontSize: 12, color: "#444" }}>+ {analyticsFollowers.length - 20} more followers</p>}
+                    {analyticsFollowers.length > 20 && <p style={{ margin: "12px 0 0", fontSize: 12, color: "#444" }}>+ {analyticsFollowers.length - 20} more</p>}
                   </div>
                 )}
               </SectionCard>
@@ -1132,7 +1014,7 @@ export function StreamerDashboard() {
       {activeTab === "notifications" && (
         <div style={{ padding: `24px ${PAD} 80px`, maxWidth: 720 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#fff" }}>Notifications</h2>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#fff" }}>Notifications</h2>
             {unreadCount > 0 && (
               <button onClick={markAllRead} disabled={markingRead} style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "7px 14px", color: "#888", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                 {markingRead ? "…" : "Mark all read"}
@@ -1142,23 +1024,23 @@ export function StreamerDashboard() {
           {notifsLoading ? <p style={{ color: "#555", fontSize: 14 }}>Loading…</p>
             : notifications.length === 0 ? (
               <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "48px 24px", textAlign: "center" }}>
-                <p style={{ margin: "0 0 8px", fontSize: 32 }}>🔔</p>
+                <p style={{ margin: "0 0 8px", fontSize: 28 }}>🔔</p>
                 <p style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 600, color: "#fff" }}>No notifications yet</p>
                 <p style={{ margin: 0, fontSize: 13, color: "#444" }}>You'll see alerts here when someone follows your channel.</p>
               </div>
             ) : (
               <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden" }}>
                 {notifications.map((n, i) => (
-                  <div key={n.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", borderBottom: i < notifications.length - 1 ? `1px solid ${BORDER}` : "none", background: n.read ? "transparent" : "rgba(250,204,21,0.03)" }}>
-                    <div style={{ width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: "#fff", flexShrink: 0 }}>{(n.actor_name || "?")[0]?.toUpperCase()}</div>
+                  <div key={n.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", borderBottom: i < notifications.length - 1 ? `1px solid ${BORDER}` : "none", background: n.read ? "transparent" : "rgba(250,204,21,0.02)" }}>
+                    <div style={{ width: 34, height: 34, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "#fff", flexShrink: 0 }}>{(n.actor_name || "?")[0]?.toUpperCase()}</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: "0 0 2px", fontSize: 13, color: n.read ? "#888" : "#fff" }}>
-                        <strong style={{ color: n.read ? "#888" : "#fff" }}>{n.actor_name || "Someone"}</strong>
+                      <p style={{ margin: "0 0 2px", fontSize: 13, color: n.read ? "#666" : "#fff" }}>
+                        <strong style={{ color: n.read ? "#666" : "#fff" }}>{n.actor_name || "Someone"}</strong>
                         {n.type === "follow" ? " followed your channel" : ` — ${n.message}`}
                       </p>
                       <p style={{ margin: 0, fontSize: 11, color: "#444" }}>{timeAgo(n.created_at)}</p>
                     </div>
-                    {!n.read && <div style={{ width: 7, height: 7, borderRadius: "50%", background: YELLOW, flexShrink: 0 }} />}
+                    {!n.read && <div style={{ width: 6, height: 6, borderRadius: "50%", background: YELLOW, flexShrink: 0 }} />}
                   </div>
                 ))}
               </div>
@@ -1166,24 +1048,30 @@ export function StreamerDashboard() {
         </div>
       )}
 
-      {/* ── VOD MANAGER TAB ── */}
+      {/* ── VODS TAB ── */}
       {activeTab === "vods" && (
         <div style={{ padding: `24px ${PAD} 80px` }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#fff" }}>VOD Manager</h2>
+
+          {/* Past Streams */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#fff" }}>Past Streams</h2>
             <span style={{ fontSize: 13, color: "#444" }}>{vods.length} recording{vods.length !== 1 ? "s" : ""}</span>
           </div>
-          {vodsLoading ? <p style={{ color: "#555", fontSize: 14 }}>Loading VODs…</p>
+
+          {vodsLoading ? <p style={{ color: "#555", fontSize: 14, marginBottom: 24 }}>Loading VODs…</p>
             : vods.length === 0 ? (
-              <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "48px 24px", textAlign: "center" }}>
-                <p style={{ margin: "0 0 8px", fontSize: 32 }}>🎬</p>
+              <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "40px 24px", textAlign: "center", marginBottom: 24 }}>
                 <p style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 600, color: "#fff" }}>No recordings yet</p>
                 <p style={{ margin: 0, fontSize: 13, color: "#444" }}>Past streams are saved automatically when you go live.</p>
               </div>
             ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14, marginBottom: 24 }}>
                 {vods.map(v => {
-                  const title = v.meta?.name || "Untitled stream";
+                  const metaName = v.meta?.name || "";
+                  const isAutoGenerated = !metaName || /peep live/i.test(metaName);
+                  const title = isAutoGenerated
+                    ? (stream?.stream_title || new Date(v.created).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }))
+                    : metaName;
                   const isDeleting = deletingVod === v.uid;
                   const isEditing  = editingVod?.uid === v.uid;
                   return (
@@ -1212,9 +1100,9 @@ export function StreamerDashboard() {
                             <button onClick={() => setEditingVod(null)} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "0 10px", color: "#666", fontSize: 12, cursor: "pointer" }}>✕</button>
                           </div>
                         ) : (
-                          <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 600, color: "#e0e0e0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</p>
+                          <p style={{ margin: "0 0 3px", fontSize: 13, fontWeight: 600, color: "#e0e0e0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</p>
                         )}
-                        <p style={{ margin: "0 0 12px", fontSize: 11, color: "#444" }}>{new Date(v.created).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}</p>
+                        <p style={{ margin: "0 0 10px", fontSize: 11, color: "#444" }}>{new Date(v.created).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}</p>
                         {isDeleting ? (
                           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                             <span style={{ fontSize: 12, color: "#dc2626", flex: 1 }}>Delete this VOD?</span>
@@ -1223,7 +1111,7 @@ export function StreamerDashboard() {
                           </div>
                         ) : (
                           <div style={{ display: "flex", gap: 6 }}>
-                            <button onClick={() => setWatchingVod({ url: v.playback?.hls, title: title })} style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "6px 0", color: "#bbb", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Watch</button>
+                            <button onClick={() => setWatchingVod({ url: v.playback?.hls, title })} style={{ flex: 1, background: "rgba(255,255,255,0.04)", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "6px 0", color: "#bbb", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Watch</button>
                             <button onClick={() => setEditingVod({ uid: v.uid, title })} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "6px 10px", color: "#888", fontSize: 12, cursor: "pointer" }}>Rename</button>
                             <button onClick={() => setDeletingVod(v.uid)} style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 7, padding: "6px 10px", color: "#dc2626", fontSize: 12, cursor: "pointer" }}>Delete</button>
                           </div>
@@ -1234,6 +1122,35 @@ export function StreamerDashboard() {
                 })}
               </div>
             )}
+
+          {/* Schedule */}
+          <SectionCard title="Upcoming Streams" collapsible defaultOpen={schedule.length > 0}>
+            {schedule.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                {schedule.map((s, i) => (
+                  <div key={s.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 0", borderBottom: i < schedule.length - 1 ? `1px solid ${BORDER}` : "none" }}>
+                    <div>
+                      <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: "#fff" }}>{s.title}</p>
+                      <p style={{ margin: 0, fontSize: 11, color: "#555" }}>
+                        {new Date(s.scheduled_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} · {new Date(s.scheduled_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                      </p>
+                    </div>
+                    <button onClick={() => deleteSchedule(s.id)} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "4px 9px", color: "#333", fontSize: 11, cursor: "pointer" }}>✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {schedule.length === 0 && <p style={{ margin: "0 0 14px", fontSize: 13, color: "#333" }}>No streams scheduled yet.</p>}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <input value={schedTitle} onChange={e => setSchedTitle(e.target.value)} placeholder="Stream title…" style={inp} />
+              <input type="datetime-local" value={schedDate} onChange={e => setSchedDate(e.target.value)} style={{ ...inp, colorScheme: "dark" }} />
+              <button onClick={addSchedule} disabled={addingSched || !schedTitle.trim() || !schedDate}
+                style={{ background: YELLOW, border: "none", borderRadius: 9, padding: "10px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: !schedTitle.trim() || !schedDate ? 0.4 : 1 }}>
+                {addingSched ? "…" : "Add to Schedule"}
+              </button>
+            </div>
+          </SectionCard>
+
         </div>
       )}
 
@@ -1242,17 +1159,12 @@ export function StreamerDashboard() {
       {/* VOD player modal */}
       {watchingVod && (
         <div onClick={() => setWatchingVod(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.92)", zIndex: 200, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 900 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 560 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
               <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#e0e0e0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, marginRight: 12 }}>{watchingVod.title}</p>
               <button onClick={() => setWatchingVod(null)} style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 6, width: 32, height: 32, color: "#aaa", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>×</button>
             </div>
-            <video
-              src={watchingVod.url}
-              controls
-              autoPlay
-              style={{ display: "block", width: "100%", aspectRatio: "16/9", background: "#000", borderRadius: 10 }}
-            />
+            <video src={watchingVod.url} controls autoPlay style={{ display: "block", width: "100%", aspectRatio: "16/9", background: "#000", borderRadius: 10 }} />
           </div>
         </div>
       )}
