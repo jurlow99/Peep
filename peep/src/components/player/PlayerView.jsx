@@ -177,10 +177,32 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
     if (!videoEl || !isHlsUrl(video.url) || getEmbedUrl(video.url)) return;
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
     if (Hls.isSupported()) {
-      const hls = new Hls({ enableWorker: true });
+      const hlsConfig = isLive
+        ? {
+            enableWorker: true,
+            maxBufferLength: 30,
+            maxMaxBufferLength: 60,
+            backBufferLength: 0,
+            lowLatencyMode: false,
+            liveSyncDurationCount: 3,
+            liveMaxLatencyDurationCount: 10,
+            startLevel: -1,
+            capLevelToPlayerSize: true,
+            fragLoadingMaxRetry: 6,
+            fragLoadingRetryDelay: 1000,
+            manifestLoadingMaxRetry: 4,
+            levelLoadingMaxRetry: 4,
+          }
+        : { enableWorker: true };
+      const hls = new Hls(hlsConfig);
       hls.loadSource(video.url);
       hls.attachMedia(videoEl);
       hls.on(Hls.Events.MANIFEST_PARSED, () => { videoEl.play().catch(() => {}); });
+      if (isLive) {
+        hls.on(Hls.Events.ERROR, (_, d) => {
+          if (!d.fatal && d.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+        });
+      }
       hlsRef.current = hls;
     } else if (videoEl.canPlayType("application/vnd.apple.mpegurl")) {
       videoEl.src = video.url;

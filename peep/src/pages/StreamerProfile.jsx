@@ -55,7 +55,26 @@ function VideoPlayer({ url, live = false, style = {} }) {
   function attachHls(el, src, attempt = 0) {
     if (!alive.current) return;
     hlsRef.current?.destroy();
-    const h = new Hls({ startLevel: -1, capLevelToPlayerSize: false, autoLevelCapping: -1, lowLatencyMode: true, liveSyncDuration: 2, liveMaxLatencyDuration: 6, maxBufferLength: 8 });
+    const h = new Hls({
+      enableWorker: true,
+      // Buffer — large enough to ride out slow segments without stalling
+      maxBufferLength: 30,
+      maxMaxBufferLength: 60,
+      backBufferLength: 0,           // no need to keep past segments in memory for live
+      // Live sync — stay ~3 segments behind live edge (~6s on 2s segments).
+      // Do NOT use lowLatencyMode; Cloudflare Stream is standard HLS, not LL-HLS.
+      lowLatencyMode: false,
+      liveSyncDurationCount: 3,
+      liveMaxLatencyDurationCount: 10, // allow up to ~20s behind before catch-up
+      // Quality — let hls.js pick the best level automatically
+      startLevel: -1,
+      capLevelToPlayerSize: true,
+      // Resilience — retry failed segment/manifest fetches aggressively
+      fragLoadingMaxRetry: 6,
+      fragLoadingRetryDelay: 1000,
+      manifestLoadingMaxRetry: 4,
+      levelLoadingMaxRetry: 4,
+    });
     h.loadSource(src); h.attachMedia(el);
     h.on(Hls.Events.MANIFEST_PARSED, () => {
       if (!alive.current) return;
@@ -63,10 +82,15 @@ function VideoPlayer({ url, live = false, style = {} }) {
       el.play().catch(() => setShowPlay(true));
     });
     h.on(Hls.Events.ERROR, (_, d) => {
-      if (!alive.current || !d.fatal) return;
-      h.destroy();
-      setStarting(true);
-      retryTimer.current = setTimeout(() => attachHls(el, src, attempt + 1), Math.min(5000 + attempt * 3000, 15000));
+      if (!alive.current) return;
+      if (d.fatal) {
+        h.destroy();
+        setStarting(true);
+        retryTimer.current = setTimeout(() => attachHls(el, src, attempt + 1), Math.min(4000 + attempt * 2000, 12000));
+      } else if (d.type === Hls.ErrorTypes.MEDIA_ERROR) {
+        // Non-fatal media errors (buffer stalls, codec glitches) — try to recover in place
+        h.recoverMediaError();
+      }
     });
     hlsRef.current = h;
   }

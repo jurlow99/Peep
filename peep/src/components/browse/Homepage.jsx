@@ -11,7 +11,6 @@ import {
   CatalogPage,
   CatalogCard,
   PodcastRow,
-  LiveSection,
   ContentRow,
 } from "./BrowseWidgets";
 import { Footer } from "./Footer";
@@ -282,12 +281,6 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, 
     { id: "My List", label: "My List", icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg> },
   ];
 
-  // Featured hero items for the right column
-  const heroSideItems = useMemo(() => {
-    const liveItems = liveNow.map(s => ({ ...s, _type: "stream" }));
-    const contentItems = allContent.filter(v => v.id !== featured?.id).slice(0, 4);
-    return [...liveItems, ...contentItems].slice(0, 4);
-  }, [liveNow, allContent, featured]);
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
@@ -616,73 +609,45 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, 
         <LiveTVPage streams={liveStreams} user={user} streamsLoading={loading} />
       )}
 
-      {/* ── FEATURED HERO (Home tab, desktop) ── */}
-      {!studioContent && activeNav === "Home" && !loading && !isMobile && (featured || liveNow.length > 0) && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 16, padding: "20px 24px 0", maxWidth: 1400 }}>
-          {/* Big left card */}
-          {(() => {
-            const f = liveNow[0] ?? (featured ? { ...featured, _type: featuredIsShow ? "show" : "movie" } : null);
-            if (!f) return null;
-            const isLive = f._type === "stream" || f.is_live;
-            const thumb = f.hero_image || f.thumbnail || f.poster;
-            const title = f.channel_name || f.title || "";
-            const slug = isLive ? (f.username || title.toLowerCase().replace(/[^a-z0-9]/g, "")) : null;
-            return (
-              <div
-                onClick={() => isLive ? window.location.href = `/stream/${slug}` : (f._type === "show" ? onShowSelect(f) : onPlay(f))}
-                style={{ position: "relative", borderRadius: 12, overflow: "hidden", cursor: "pointer", background: "#111", aspectRatio: "16/9" }}>
-                {thumb
-                  ? <img src={thumb} alt={title} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                  : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #1a0505, #2d0808)" }} />
-                }
-                <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 50%, transparent 100%)" }} />
-                {isLive && (
-                  <div style={{ position: "absolute", top: 14, left: 14, display: "flex", alignItems: "center", gap: 6, background: "#ef4444", borderRadius: 6, padding: "4px 10px" }}>
-                    <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#fff", animation: "livepulse 1.5s infinite" }} />
-                    <span style={{ fontSize: 11, fontWeight: 800, color: "#fff", letterSpacing: 0.5 }}>LIVE</span>
-                  </div>
-                )}
-                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "20px 20px 18px" }}>
-                  <p style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#fff", lineHeight: 1.2 }}>{title}</p>
-                  {(f.stream_title || f.description) && (
-                    <p style={{ margin: 0, fontSize: 13, color: "rgba(255,255,255,0.6)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.stream_title || f.description}</p>
-                  )}
-                </div>
-                {/* Play button hover */}
-                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", opacity: 0, transition: "opacity 0.2s" }}
-                  onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = 0}>
-                  <div style={{ width: 60, height: 60, borderRadius: "50%", background: "rgba(250,204,21,0.9)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="#0a0a0a"><polygon points="5,3 19,12 5,21"/></svg>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Right column — stacked cards */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, overflow: "hidden" }}>
-            {heroSideItems.map(item => {
-              const isLive = item._type === "stream" || item.is_live;
-              const thumb = item.poster || item.thumbnail || item.hero_image;
-              const title = item.channel_name || item.title || "";
-              const slug = isLive ? (item.username || title.toLowerCase().replace(/[^a-z0-9]/g, "")) : null;
+      {/* ── LIVE NOW STRIP (Home tab) ── */}
+      {!studioContent && activeNav === "Home" && liveNow.length > 0 && !loading && (
+        <div style={{ padding: `24px ${PAD} 0` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+            <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite" }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#ef4444", letterSpacing: "0.1em", textTransform: "uppercase" }}>Live Now</span>
+            <span style={{ fontSize: 12, color: "#333" }}>{liveNow.length} channel{liveNow.length !== 1 ? "s" : ""}</span>
+          </div>
+          <div className="scroll-row" style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4 }}>
+            {liveNow.map(s => {
+              const slug = s.username || (s.channel_name || s.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+              const name = s.channel_name || s.title || "";
               return (
-                <div key={String(item.id) + item._type}
-                  onClick={() => isLive ? window.location.href = `/stream/${slug}` : (item._type === "show" ? onShowSelect(item) : onPlay(item))}
-                  style={{ display: "flex", gap: 10, cursor: "pointer", borderRadius: 8, overflow: "hidden", background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.04)", padding: 8, transition: "background 0.15s" }}
-                  onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
-                  onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.02)"}>
-                  <div style={{ width: 96, height: 54, borderRadius: 6, overflow: "hidden", flexShrink: 0, background: "#1a1a1a", position: "relative" }}>
-                    {thumb && <img src={thumb} alt={title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
-                    {isLive && <div style={{ position: "absolute", top: 4, left: 4, background: "#ef4444", borderRadius: 3, padding: "1px 5px", fontSize: 9, fontWeight: 800, color: "#fff" }}>LIVE</div>}
+                <a key={s.id} href={`/stream/${slug}`}
+                  style={{ flexShrink: 0, width: isMobile ? 180 : 220, textDecoration: "none", color: "inherit", borderRadius: 10, overflow: "hidden", background: "#0f0f0f", border: "1px solid rgba(239,68,68,0.15)", transition: "transform 0.15s, border-color 0.15s, box-shadow 0.15s" }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.borderColor = "rgba(239,68,68,0.4)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(239,68,68,0.1)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.borderColor = "rgba(239,68,68,0.15)"; e.currentTarget.style.boxShadow = "none"; }}>
+                  <div style={{ position: "relative", aspectRatio: "16/9", overflow: "hidden", background: "#111" }}>
+                    {s.thumbnail || s.hero_image
+                      ? <img src={s.thumbnail || s.hero_image} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #1a0505, #3a0808)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <svg width="24" height="24" viewBox="0 0 24 24" fill="#ef4444" opacity="0.25"><polygon points="5,3 19,12 5,21"/></svg>
+                        </div>
+                    }
+                    <div style={{ position: "absolute", top: 7, left: 7, display: "flex", alignItems: "center", gap: 4, background: "#ef4444", borderRadius: 4, padding: "2px 7px" }}>
+                      <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#fff", animation: "livepulse 1.5s infinite" }} />
+                      <span style={{ fontSize: 9, fontWeight: 800, color: "#fff", letterSpacing: 0.6 }}>LIVE</span>
+                    </div>
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: "0 0 3px", fontSize: 13, fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.3 }}>{title}</p>
-                    {(item.stream_title || item.category) && (
-                      <p style={{ margin: 0, fontSize: 11, color: "#666", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.stream_title || item.category}</p>
-                    )}
+                  <div style={{ padding: "9px 10px", display: "flex", gap: 8, alignItems: "center" }}>
+                    <div style={{ width: 26, height: 26, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", flexShrink: 0, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: "#fff", outline: "2px solid #ef4444", outlineOffset: 1 }}>
+                      {s.avatar_url ? <img src={s.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : name[0]?.toUpperCase()}
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ margin: "0 0 1px", fontSize: 12, fontWeight: 700, color: "#e8e8e8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</p>
+                      {s.stream_title && <p style={{ margin: 0, fontSize: 11, color: "#444", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.stream_title}</p>}
+                    </div>
                   </div>
-                </div>
+                </a>
               );
             })}
           </div>
@@ -692,9 +657,6 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, 
       {/* Content rows (Home / Movies / Series / My List) */}
       {!studioContent && activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "My List" && activeNav !== "Podcasts" && activeNav !== "Streams" && !loading && allContent.length > 0 && (
         <div style={{ position: "relative", zIndex: 1, marginTop: 0, paddingBottom: 80 }}>
-          {activeNav === "Home" && liveNow.length > 0 && !(!isMobile) && (
-            <LiveSection streams={liveNow} />
-          )}
           {filteredContent.length === 0 ? (
             <div style={{ padding: "100px 0", textAlign: "center", color: "#444", fontSize: 15 }}>
               No {activeNav.toLowerCase()} yet.
