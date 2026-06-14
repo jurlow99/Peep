@@ -231,6 +231,9 @@ export function CMS({ onExit, currentUser }) {
   const [reportNotes, setReportNotes] = useState("");
   const [reporterProfile, setReporterProfile] = useState(null);
   const [notesSaving, setNotesSaving] = useState(false);
+  const [reportVods, setReportVods] = useState([]);
+  const [reportVodsLoading, setReportVodsLoading] = useState(false);
+  const [reportPlayingVod, setReportPlayingVod] = useState(null);
 
   // Subscriptions state
   const [subs, setSubs] = useState([]);
@@ -722,11 +725,34 @@ export function CMS({ onExit, currentUser }) {
     setSelectedReport(report);
     setReportNotes(report.notes || "");
     setReporterProfile(null);
+    setReportVods([]);
+    setReportPlayingVod(null);
     setDrawerFormType("report");
     setDrawerOpen(true);
-    if (report.reporter_id) {
-      const { data } = await supabase.from("profiles").select("username, full_name, avatar_url").eq("id", report.reporter_id).maybeSingle();
-      setReporterProfile(data ?? null);
+
+    // Load reporter profile and channel VODs in parallel
+    const [profileRes, streamRes] = await Promise.all([
+      report.reporter_id
+        ? supabase.from("profiles").select("username, full_name, avatar_url").eq("id", report.reporter_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      supabase.from("live_streams").select("stream_uid, previous_stream_uids").eq("slug", report.content_id).maybeSingle(),
+    ]);
+    setReporterProfile(profileRes.data ?? false);
+
+    const streamUid = streamRes.data?.stream_uid;
+    if (streamUid) {
+      setReportVodsLoading(true);
+      try {
+        const prevParam = streamRes.data?.previous_stream_uids?.length
+          ? `&previous_uids=${streamRes.data.previous_stream_uids.join(",")}`
+          : "";
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/get-vods?stream_uid=${streamUid}${prevParam}`, {
+          headers: { "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+        });
+        const json = await res.json();
+        setReportVods(json.vods || []);
+      } catch (_) {}
+      setReportVodsLoading(false);
     }
   }
 
@@ -6010,11 +6036,75 @@ export function CMS({ onExit, currentUser }) {
                           <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Anonymous (not signed in)</p>
                         ) : reporterProfile === null ? (
                           <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Loading…</p>
+                        ) : reporterProfile === false ? (
+                          <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Profile not found</p>
                         ) : (
                           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                             <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{reporterProfile?.full_name || reporterProfile?.username || "—"}</p>
                             {reporterProfile?.username && <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>@{reporterProfile.username}</p>}
                             <p style={{ margin: 0, fontSize: 11, color: "#9ca3af", fontFamily: "monospace" }}>{r.reporter_id}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* VODs */}
+                      <div>
+                        <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                          Channel VODs
+                          <span style={{ marginLeft: 6, color: "#ef4444", fontWeight: 500, fontSize: 10, textTransform: "none", letterSpacing: 0 }}>⚠ Locked from deletion while report is pending</span>
+                        </p>
+                        {reportVodsLoading ? (
+                          <p style={{ fontSize: 13, color: "#9ca3af" }}>Loading recordings…</p>
+                        ) : reportVods.length === 0 ? (
+                          <p style={{ fontSize: 13, color: "#9ca3af" }}>No recordings found for this channel.</p>
+                        ) : (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            {reportPlayingVod && (
+                              <div style={{ borderRadius: 10, overflow: "hidden", border: "1px solid #e2e8f0", marginBottom: 4 }}>
+                                <iframe
+                                  src={`https://iframe.cloudflarestream.com/${reportPlayingVod}`}
+                                  style={{ width: "100%", aspectRatio: "16/9", border: "none", display: "block" }}
+                                  allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
+                                  allowFullScreen
+                                />
+                                <button onClick={() => setReportPlayingVod(null)}
+                                  style={{ width: "100%", background: "#f8fafc", border: "none", borderTop: "1px solid #e2e8f0", padding: "8px", fontSize: 12, color: "#6b7280", cursor: "pointer" }}>
+                                  Close player ×
+                                </button>
+                              </div>
+                            )}
+                            {reportVods.map(v => {
+                              const title = (v.meta?.name && !/peep live/i.test(v.meta.name))
+                                ? v.meta.name
+                                : new Date(v.created).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
+                              const dur = v.duration
+                                ? `${Math.floor(v.duration / 3600) > 0 ? Math.floor(v.duration / 3600) + "h " : ""}${Math.floor((v.duration % 3600) / 60)}m`
+                                : null;
+                              const playing = reportPlayingVod === v.uid;
+                              return (
+                                <div key={v.uid} style={{ display: "flex", alignItems: "center", gap: 10, background: playing ? "#f0fdf4" : "#f8fafc", border: `1px solid ${playing ? "#bbf7d0" : "#e2e8f0"}`, borderRadius: 8, padding: "8px 10px", cursor: "pointer", transition: "all 0.1s" }}
+                                  onClick={() => setReportPlayingVod(playing ? null : v.uid)}>
+                                  <div style={{ width: 64, height: 36, borderRadius: 5, overflow: "hidden", flexShrink: 0, background: "#e2e8f0", position: "relative" }}>
+                                    {v.thumbnail
+                                      ? <img src={v.thumbnail} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                      : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                          <svg width="16" height="16" viewBox="0 0 24 24" fill="#9ca3af"><polygon points="5,3 19,12 5,21"/></svg>
+                                        </div>
+                                    }
+                                    {!playing && (
+                                      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.3)" }}>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</p>
+                                    {dur && <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>{dur}</p>}
+                                  </div>
+                                  <span style={{ fontSize: 11, fontWeight: 600, color: playing ? "#16a34a" : "#6b7280", flexShrink: 0 }}>{playing ? "Playing" : "Play"}</span>
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </div>

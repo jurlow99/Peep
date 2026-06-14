@@ -27,10 +27,21 @@ Deno.serve(async (req) => {
     // Verify the VOD belongs to this user's stream
     const { data: stream } = await supabase
       .from("live_streams")
-      .select("id")
+      .select("id, slug, username, channel_name, title")
       .eq("user_id", user.id)
       .single();
     if (!stream) throw new Error("Stream not found");
+
+    // Block deletion if there's an open moderation report against this channel
+    const slug = stream.slug || stream.username || (stream.channel_name || stream.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const { count } = await supabase
+      .from("content_reports")
+      .select("id", { count: "exact", head: true })
+      .eq("content_id", slug)
+      .eq("status", "pending");
+    if ((count ?? 0) > 0) {
+      throw new Error("This channel has a pending moderation review. VODs cannot be deleted until the report is resolved.");
+    }
 
     const cfAccountId = Deno.env.get("CLOUDFLARE_ACCOUNT_ID")!;
     const cfToken = Deno.env.get("CLOUDFLARE_API_TOKEN")!;
