@@ -244,149 +244,6 @@ function AccountTab({ user }) {
 }
 
 // ── Subscription Tab ──────────────────────────────────────────────────────────
-function SubscriptionTab({ user, isOwner }) {
-  const [subscription, setSubscription] = useState(null);
-  const [portalLoading, setPortalLoading] = useState(false);
-  const [cancelFlow, setCancelFlow] = useState(null);
-  const [cancelMode, setCancelMode] = useState("end_of_period");
-  const [cancelLoading, setCancelLoading] = useState(false);
-  const [cancelResult, setCancelResult] = useState(null);
-
-  useEffect(() => {
-    supabase.from("subscriptions").select("*").eq("user_id", user.id).maybeSingle().then(({ data }) => setSubscription(data));
-  }, [user.id]);
-
-  async function openBillingPortal() {
-    setPortalLoading(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/create-portal-session`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
-        body: JSON.stringify({ return_url: window.location.href }),
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      window.location.href = data.url;
-    } catch (err) { alert(err.message); }
-    setPortalLoading(false);
-  }
-
-  async function handleCancel() {
-    setCancelLoading(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/cancel-subscription`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
-        body: JSON.stringify({ mode: cancelMode }),
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      setCancelResult(data);
-      setCancelFlow("success");
-      setSubscription(prev => ({ ...prev, status: cancelMode === "immediate" ? "canceled" : "canceling" }));
-    } catch (err) { alert(err.message); }
-    setCancelLoading(false);
-  }
-
-  const planLabel = subscription?.plan === "comp" ? "Complimentary"
-    : subscription?.plan_id === "price_1TafqJRgQH3TYy3QOCovduJf" ? "Founding Member — $2.99/mo"
-    : subscription?.plan_id === "price_1Tag3FRgQH3TYy3Ql0KuQNeA" ? "Founding Member — $19.99/yr"
-    : "Peep Monthly — $10/mo";
-
-  if (isOwner) {
-    return (
-      <Section title="Plan">
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 10, background: `rgba(250,204,21,0.1)`, border: `1px solid rgba(250,204,21,0.2)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill={YELLOW}><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-          </div>
-          <div>
-            <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#fff" }}>Owner</p>
-            <p style={{ margin: 0, fontSize: 13, color: "#555" }}>Full platform access</p>
-          </div>
-        </div>
-      </Section>
-    );
-  }
-
-  return (
-    <>
-      <Section title="Current Plan">
-        {subscription ? (
-          <div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-              <div>
-                <p style={{ margin: "0 0 3px", fontSize: 15, fontWeight: 700, color: "#fff" }}>{planLabel}</p>
-                {subscription.current_period_end && subscription.plan !== "comp" && (
-                  <p style={{ margin: 0, fontSize: 13, color: "#555" }}>
-                    Next billing: {new Date(subscription.current_period_end).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
-                  </p>
-                )}
-              </div>
-              <span style={{ fontSize: 12, fontWeight: 700, color: "#22c55e", background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.2)", borderRadius: 6, padding: "3px 10px" }}>
-                {subscription.status === "active" ? "Active" : subscription.status}
-              </span>
-            </div>
-            {subscription.stripe_customer_id && (
-              <button onClick={openBillingPortal} disabled={portalLoading}
-                style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "9px 20px", color: "#bbb", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                {portalLoading ? "Loading…" : "Manage Billing →"}
-              </button>
-            )}
-          </div>
-        ) : (
-          <p style={{ margin: 0, fontSize: 14, color: "#555" }}>No active subscription.</p>
-        )}
-      </Section>
-
-      {subscription?.stripe_customer_id && subscription?.status === "active" && cancelFlow === null && (
-        <Section title="Cancel">
-          <p style={{ margin: "0 0 14px", fontSize: 13, color: "#555", lineHeight: 1.6 }}>You'll continue to have full access until the end of your billing period.</p>
-          <button onClick={() => setCancelFlow("confirm")}
-            style={{ background: "transparent", border: "1px solid rgba(248,113,113,0.25)", borderRadius: 8, padding: "9px 20px", color: "#f87171", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-            Cancel Subscription
-          </button>
-        </Section>
-      )}
-
-      {cancelFlow === "confirm" && (
-        <Section title="Confirm Cancellation">
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
-            {[
-              { id: "end_of_period", title: "Cancel at end of period", desc: `Keep access until ${subscription?.current_period_end ? new Date(subscription.current_period_end).toLocaleDateString("en-US", { month: "long", day: "numeric" }) : "renewal"}` },
-              { id: "immediate", title: "Cancel immediately", desc: "Access ends now — prorated refund issued" },
-            ].map(opt => (
-              <div key={opt.id} onClick={() => setCancelMode(opt.id)}
-                style={{ border: `1px solid ${cancelMode === opt.id ? "#f87171" : BORDER}`, borderRadius: 10, padding: "14px 16px", cursor: "pointer", background: cancelMode === opt.id ? "rgba(248,113,113,0.04)" : "transparent" }}>
-                <p style={{ margin: "0 0 3px", fontSize: 13, fontWeight: 600, color: cancelMode === opt.id ? "#f87171" : "#aaa" }}>{opt.title}</p>
-                <p style={{ margin: 0, fontSize: 12, color: "#555" }}>{opt.desc}</p>
-              </div>
-            ))}
-          </div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <button onClick={() => setCancelFlow(null)} style={{ flex: 1, background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "11px", color: "#666", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Keep Plan</button>
-            <button onClick={handleCancel} disabled={cancelLoading} style={{ flex: 1, background: "#ef4444", border: "none", borderRadius: 8, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: cancelLoading ? "not-allowed" : "pointer", opacity: cancelLoading ? 0.7 : 1 }}>
-              {cancelLoading ? "Cancelling…" : "Confirm Cancellation"}
-            </button>
-          </div>
-        </Section>
-      )}
-
-      {cancelFlow === "success" && (
-        <Section title="Cancelled">
-          <p style={{ margin: "0 0 14px", fontSize: 14, color: "#aaa", lineHeight: 1.7 }}>
-            {cancelResult?.mode === "immediate"
-              ? `Your subscription has been cancelled.${cancelResult?.refund_issued ? ` A refund of $${(cancelResult.refund_amount / 100).toFixed(2)} has been issued.` : ""}`
-              : "Your subscription is cancelled — you'll keep access until the end of your billing period."}
-          </p>
-        </Section>
-      )}
-    </>
-  );
-}
-
 // ── Preferences Tab ───────────────────────────────────────────────────────────
 function PreferencesTab() {
   const [autoplayNext, setAutoplayNext] = useState(() => getPref(PREF_AUTOPLAY_NEXT));
@@ -406,7 +263,6 @@ function PreferencesTab() {
 const TABS = [
   { id: "profile", label: "Profile", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg> },
   { id: "account", label: "Account", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg> },
-  { id: "subscription", label: "Subscription", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> },
   { id: "preferences", label: "Preferences", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3v1m0 16v1M3 12h1m16 0h1M5.6 5.6l.7.7m11.4-.7-.7.7M5.6 18.4l.7-.7m11.4.7-.7-.7"/><circle cx="12" cy="12" r="4"/></svg> },
 ];
 
@@ -457,7 +313,6 @@ export function SettingsPage({ user, activeProfile, isOwner, onBack, onGoHome, o
 
           {activeTab === "profile" && <ProfileTab user={user} onProfileUpdate={onProfileUpdate} />}
           {activeTab === "account" && <AccountTab user={user} />}
-          {activeTab === "subscription" && <SubscriptionTab user={user} isOwner={isOwner} />}
           {activeTab === "preferences" && <PreferencesTab />}
 
           {/* Admin shortcut */}
