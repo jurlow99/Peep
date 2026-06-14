@@ -145,7 +145,15 @@ export function Footer({ onNavChange, onProfileOpen, onOpenModal }) {
         ].map(col => (
           <div key={col.heading}>
             <p style={{ fontSize: 11.5, fontWeight: 600, color: "#555", margin: "0 0 14px", textTransform: "uppercase", letterSpacing: 0.8 }}>{col.heading}</p>
-            {col.links.map(l => (
+            {col.links.map(l => l === "Support Development" ? (
+              <p key={l} onClick={() => handleLink(l)} style={{ margin: "0 0 10px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 12, background: "#facc15", color: "#0a0a0a", fontWeight: 700, borderRadius: 6, padding: "3px 9px", letterSpacing: 0.2, transition: "background 0.15s" }}
+                  onMouseEnter={e => e.currentTarget.style.background = "#fde047"}
+                  onMouseLeave={e => e.currentTarget.style.background = "#facc15"}>
+                  ♥ Support Development
+                </span>
+              </p>
+            ) : (
               <p key={l} onClick={() => handleLink(l)} style={{ fontSize: 12.5, color: "#3e3e3e", margin: "0 0 10px", cursor: "pointer", transition: "color 0.15s" }}
                 onMouseEnter={e => e.currentTarget.style.color = "#aaa"}
                 onMouseLeave={e => e.currentTarget.style.color = "#3e3e3e"}>
