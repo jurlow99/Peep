@@ -58,8 +58,9 @@ CREATE POLICY "Authenticated read" ON podcast_episodes FOR SELECT USING (auth.ro
 CREATE POLICY "Admin write" ON podcast_episodes FOR ALL USING (is_admin()) WITH CHECK (is_admin());
 
 ALTER TABLE live_streams ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Authenticated read" ON live_streams FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "Admin write" ON live_streams FOR ALL USING (is_admin()) WITH CHECK (is_admin());
+CREATE POLICY "Public read" ON live_streams FOR SELECT USING (true);
+CREATE POLICY "Own update" ON live_streams FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Admin all" ON live_streams FOR ALL USING (is_admin()) WITH CHECK (is_admin());
 
 
 -- ── Platform Tables ─────────────────────────────────────────────────────────
@@ -110,8 +111,9 @@ CREATE POLICY "Public all" ON live_viewers FOR ALL USING (true) WITH CHECK (true
 -- Viewer counts are not sensitive — any session can upsert its own heartbeat row.
 
 ALTER TABLE live_chat ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Authenticated read" ON live_chat FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Public read" ON live_chat FOR SELECT USING (true);
 CREATE POLICY "Own insert" ON live_chat FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Own delete" ON live_chat FOR DELETE USING (auth.uid() = user_id);
 CREATE POLICY "Admin delete" ON live_chat FOR DELETE USING (is_admin());
 
 ALTER TABLE user_presence ENABLE ROW LEVEL SECURITY;

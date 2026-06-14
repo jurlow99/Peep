@@ -824,7 +824,7 @@ export function StreamerProfile() {
                   : chatMessages.map(m => {
                     const isStreamer = m.user_id === stream.user_id;
                     const nameColor = isStreamer ? YELLOW : usernameColor(m.profile_name || "");
-                    const canDelete = currentUser?.id === stream.user_id;
+                    const canDelete = currentUser?.id === stream.user_id || currentUser?.id === m.user_id;
                     return (
                       <div key={m.id} className="chat-msg" style={{ fontSize: 13, lineHeight: 1.6, wordBreak: "break-word", padding: "3px 14px", borderRadius: 4, position: "relative" }}
                         onMouseEnter={e => { if (canDelete) e.currentTarget.querySelector(".del-btn")?.style && (e.currentTarget.querySelector(".del-btn").style.opacity = "1"); }}
