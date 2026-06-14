@@ -346,7 +346,14 @@ export function StreamerProfile() {
 
   useEffect(() => {
     if (!stream?.is_live || !stream?.id) return;
-    const sid = Math.random().toString(36).slice(2);
+    // Reuse the same session ID across refreshes within this tab.
+    // sessionStorage is cleared when the tab closes, so stale rows expire naturally via the 90s TTL.
+    const storageKey = `peep_viewer_sid_${stream.id}`;
+    let sid = sessionStorage.getItem(storageKey);
+    if (!sid) {
+      sid = crypto.randomUUID();
+      sessionStorage.setItem(storageKey, sid);
+    }
     const ping = async () => {
       await supabase.from("live_viewers").upsert(
         { session_id: sid, channel_id: stream.id, last_ping: new Date().toISOString() },
@@ -356,7 +363,12 @@ export function StreamerProfile() {
     };
     ping();
     const t = setInterval(ping, 30000);
-    return () => { clearInterval(t); supabase.from("live_viewers").delete().eq("session_id", sid); };
+    return () => {
+      clearInterval(t);
+      // Best-effort cleanup on unmount — also removed by 90s TTL if tab hard-closes
+      supabase.from("live_viewers").delete().eq("session_id", sid);
+      sessionStorage.removeItem(storageKey);
+    };
   }, [stream?.id, stream?.is_live]);
 
   useEffect(() => {
