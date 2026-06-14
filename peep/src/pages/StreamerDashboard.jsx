@@ -61,6 +61,34 @@ function StatCard({ label, value, sub }) {
   );
 }
 
+function VodPlayer({ url }) {
+  const videoRef = useRef(null);
+  const hlsRef   = useRef(null);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el || !url) return;
+    hlsRef.current?.destroy();
+    if (url.includes(".m3u8") && Hls.isSupported()) {
+      const h = new Hls();
+      h.loadSource(url);
+      h.attachMedia(el);
+      h.on(Hls.Events.MANIFEST_PARSED, () => el.play().catch(() => {}));
+      hlsRef.current = h;
+    } else if (el.canPlayType("application/vnd.apple.mpegurl")) {
+      el.src = url;
+      el.play().catch(() => {});
+    } else {
+      el.src = url;
+    }
+    return () => { hlsRef.current?.destroy(); hlsRef.current = null; el.pause(); el.src = ""; };
+  }, [url]);
+
+  return (
+    <video ref={videoRef} controls playsInline style={{ display: "block", width: "100%", aspectRatio: "16/9", background: "#000" }} />
+  );
+}
+
 function LivePreview({ url }) {
   const videoRef = useRef(null);
   const hlsRef   = useRef(null);
@@ -1164,7 +1192,7 @@ export function StreamerDashboard() {
               <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#e0e0e0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, marginRight: 10 }}>{watchingVod.title}</p>
               <button onClick={() => setWatchingVod(null)} style={{ background: "rgba(255,255,255,0.06)", border: "none", borderRadius: 6, width: 28, height: 28, color: "#aaa", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>×</button>
             </div>
-            <video src={watchingVod.url} controls autoPlay style={{ display: "block", width: "100%", aspectRatio: "16/9", background: "#000" }} />
+            <VodPlayer url={watchingVod.url} />
           </div>
         </div>
       )}
