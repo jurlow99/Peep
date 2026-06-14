@@ -227,6 +227,10 @@ export function CMS({ onExit, currentUser }) {
   const [reportsFilter, setReportsFilter] = useState("pending");
   const [globalBannedWords, setGlobalBannedWords] = useState([]);
   const [bannedWordInput, setBannedWordInput] = useState("");
+  const [selectedReport, setSelectedReport] = useState(null);
+  const [reportNotes, setReportNotes] = useState("");
+  const [reporterProfile, setReporterProfile] = useState(null);
+  const [notesSaving, setNotesSaving] = useState(false);
 
   // Subscriptions state
   const [subs, setSubs] = useState([]);
@@ -711,6 +715,27 @@ export function CMS({ onExit, currentUser }) {
   async function updateReportStatus(id, status) {
     await supabase.from("content_reports").update({ status, reviewed_at: new Date().toISOString() }).eq("id", id);
     setContentReports(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+    if (selectedReport?.id === id) setSelectedReport(prev => ({ ...prev, status }));
+  }
+
+  async function openReportDrawer(report) {
+    setSelectedReport(report);
+    setReportNotes(report.notes || "");
+    setReporterProfile(null);
+    setDrawerFormType("report");
+    setDrawerOpen(true);
+    if (report.reporter_id) {
+      const { data } = await supabase.from("profiles").select("username, full_name, avatar_url").eq("id", report.reporter_id).maybeSingle();
+      setReporterProfile(data ?? null);
+    }
+  }
+
+  async function saveReportNotes() {
+    if (!selectedReport) return;
+    setNotesSaving(true);
+    await supabase.from("content_reports").update({ notes: reportNotes }).eq("id", selectedReport.id);
+    setContentReports(prev => prev.map(r => r.id === selectedReport.id ? { ...r, notes: reportNotes } : r));
+    setNotesSaving(false);
   }
 
   async function saveGlobalBannedWords(words) {
@@ -5845,29 +5870,23 @@ export function CMS({ onExit, currentUser }) {
                     </thead>
                     <tbody>
                       {visible.map(r => (
-                        <tr key={r.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                        <tr key={r.id} onClick={() => openReportDrawer(r)} style={{ borderBottom: "1px solid #f1f5f9", cursor: "pointer", transition: "background 0.1s" }}
+                          onMouseEnter={e => e.currentTarget.style.background = "#f8fafc"}
+                          onMouseLeave={e => e.currentTarget.style.background = ""}>
                           <td style={{ padding: "12px 16px", fontSize: 13, color: "#0f172a", fontWeight: 600 }}>
-                            <a href={`/stream/${r.content_id}`} target="_blank" rel="noopener noreferrer" style={{ color: "#0f172a", textDecoration: "none" }}>
-                              {r.channel_name || r.content_id}
-                            </a>
+                            {r.channel_name || r.content_id}
+                            {r.notes && <span title="Has notes" style={{ marginLeft: 6, fontSize: 10, color: "#fb923c" }}>●</span>}
                           </td>
-                          <td style={{ padding: "12px 16px", fontSize: 13, color: "#374151" }}>{r.reason}</td>
+                          <td style={{ padding: "12px 16px", fontSize: 13, color: "#374151", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.reason}</td>
                           <td style={{ padding: "12px 16px" }}>
                             <span style={{ display: "inline-block", background: r.status === "pending" ? "#fef2f2" : r.status === "actioned" ? "#f0fdf4" : "#f1f5f9", color: r.status === "pending" ? "#dc2626" : r.status === "actioned" ? "#16a34a" : "#6b7280", borderRadius: 6, padding: "2px 9px", fontSize: 12, fontWeight: 600, textTransform: "capitalize" }}>{r.status}</span>
                           </td>
                           <td style={{ padding: "12px 16px", fontSize: 12, color: "#9ca3af" }}>{new Date(r.created_at).toLocaleDateString()}</td>
                           <td style={{ padding: "12px 16px" }}>
-                            <div style={{ display: "flex", gap: 6 }}>
-                              {r.status !== "actioned" && (
-                                <button onClick={() => updateReportStatus(r.id, "actioned")} style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "5px 10px", fontSize: 12, color: "#16a34a", fontWeight: 600, cursor: "pointer" }}>Action</button>
-                              )}
-                              {r.status !== "dismissed" && (
-                                <button onClick={() => updateReportStatus(r.id, "dismissed")} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "5px 10px", fontSize: 12, color: "#6b7280", fontWeight: 600, cursor: "pointer" }}>Dismiss</button>
-                              )}
-                              {r.status !== "pending" && (
-                                <button onClick={() => updateReportStatus(r.id, "pending")} style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 6, padding: "5px 10px", fontSize: 12, color: "#ea580c", fontWeight: 600, cursor: "pointer" }}>Reopen</button>
-                              )}
-                            </div>
+                            <button onClick={e => { e.stopPropagation(); openReportDrawer(r); }}
+                              style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 6, padding: "5px 12px", fontSize: 12, color: "#374151", fontWeight: 600, cursor: "pointer" }}>
+                              View →
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -5939,6 +5958,7 @@ export function CMS({ onExit, currentUser }) {
                   {tab === "live" && drawerFormType === "epg" && (editingEpgId ? "Edit Program" : "Add Program")}
                   {tab === "live" && drawerFormType === "bulk" && "Auto-Schedule Block"}
                   {tab === "analytics" && analyticsTab === "ads" && (editingAdId ? "Edit Ad Tag" : "Add Ad Tag")}
+                  {drawerFormType === "report" && "Report Details"}
                 </h2>
                 <button
                   onClick={closeDrawer}
@@ -5950,6 +5970,97 @@ export function CMS({ onExit, currentUser }) {
 
               {/* Scrollable form content */}
               <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
+
+                {/* ── REPORT DETAIL ── */}
+                {drawerFormType === "report" && selectedReport && (() => {
+                  const r = selectedReport;
+                  const statusColor = r.status === "pending" ? "#dc2626" : r.status === "actioned" ? "#16a34a" : "#6b7280";
+                  const statusBg = r.status === "pending" ? "#fef2f2" : r.status === "actioned" ? "#f0fdf4" : "#f1f5f9";
+                  return (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                      {/* Status + Channel */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                        <span style={{ background: statusBg, color: statusColor, borderRadius: 6, padding: "3px 11px", fontSize: 12, fontWeight: 700, textTransform: "capitalize" }}>{r.status}</span>
+                        <span style={{ fontSize: 12, color: "#9ca3af" }}>{new Date(r.created_at).toLocaleString()}</span>
+                      </div>
+
+                      {/* Channel */}
+                      <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: 16 }}>
+                        <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.5 }}>Reported Channel</p>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#0f172a" }}>{r.channel_name || r.content_id}</p>
+                          <a href={`/stream/${r.content_id}`} target="_blank" rel="noopener noreferrer"
+                            style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "#0f172a", color: "#fff", borderRadius: 6, padding: "4px 10px", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                            Visit
+                          </a>
+                        </div>
+                      </div>
+
+                      {/* Reason */}
+                      <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 10, padding: 16 }}>
+                        <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.5 }}>Reported For</p>
+                        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#7c2d12" }}>{r.reason}</p>
+                      </div>
+
+                      {/* Reporter */}
+                      <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: 16 }}>
+                        <p style={{ margin: "0 0 8px", fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.5 }}>Reporter</p>
+                        {!r.reporter_id ? (
+                          <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Anonymous (not signed in)</p>
+                        ) : reporterProfile === null ? (
+                          <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Loading…</p>
+                        ) : (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                            <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{reporterProfile?.full_name || reporterProfile?.username || "—"}</p>
+                            {reporterProfile?.username && <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>@{reporterProfile.username}</p>}
+                            <p style={{ margin: 0, fontSize: 11, color: "#9ca3af", fontFamily: "monospace" }}>{r.reporter_id}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Admin notes */}
+                      <div>
+                        <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Investigation Notes</label>
+                        <textarea
+                          value={reportNotes}
+                          onChange={e => setReportNotes(e.target.value)}
+                          placeholder="Add notes about what you found, actions taken, etc…"
+                          rows={5}
+                          style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#0f172a", outline: "none", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }}
+                          onFocus={e => e.target.style.borderColor = "#fb923c"}
+                          onBlur={e => e.target.style.borderColor = "#e2e8f0"}
+                        />
+                        <button onClick={saveReportNotes} disabled={notesSaving}
+                          style={{ marginTop: 8, background: "#0f172a", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: notesSaving ? 0.6 : 1 }}>
+                          {notesSaving ? "Saving…" : "Save Notes"}
+                        </button>
+                      </div>
+
+                      {/* Actions */}
+                      <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 20, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        {r.status !== "actioned" && (
+                          <button onClick={() => updateReportStatus(r.id, "actioned")}
+                            style={{ flex: 1, background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "10px", fontSize: 13, color: "#16a34a", fontWeight: 700, cursor: "pointer" }}>
+                            ✓ Mark Actioned
+                          </button>
+                        )}
+                        {r.status !== "dismissed" && (
+                          <button onClick={() => updateReportStatus(r.id, "dismissed")}
+                            style={{ flex: 1, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px", fontSize: 13, color: "#6b7280", fontWeight: 700, cursor: "pointer" }}>
+                            Dismiss
+                          </button>
+                        )}
+                        {r.status !== "pending" && (
+                          <button onClick={() => updateReportStatus(r.id, "pending")}
+                            style={{ flex: 1, background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 8, padding: "10px", fontSize: 13, color: "#ea580c", fontWeight: 700, cursor: "pointer" }}>
+                            Reopen
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* ── MOVIES FORM ── */}
                 {tab === "content" && videoSubTab === "shorts" && (
