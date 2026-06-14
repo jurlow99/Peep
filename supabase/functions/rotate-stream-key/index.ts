@@ -40,6 +40,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           meta: { name: `${stream.channel_name || stream.title} — Peep Live` },
           recording: { mode: "automatic", timeoutSeconds: 10 },
+          lowLatencyHls: true,
         }),
       }
     );

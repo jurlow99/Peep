@@ -67,6 +67,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           meta: { name: `${app.name} — Peep Live` },
           recording: { mode: "automatic", timeoutSeconds: 10 },
+          lowLatencyHls: true,
         }),
       }
     );
