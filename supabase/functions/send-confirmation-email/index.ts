@@ -1,4 +1,3 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const CORS_ORIGIN = Deno.env.get("SITE_URL") || "https://watchpeep.tv";
 
 Deno.serve(async (req) => {
@@ -9,22 +8,10 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { email } = await req.json();
+    const { email, name } = await req.json();
     if (!email?.trim()) throw new Error("Email is required");
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
-
-    const { data, error: linkErr } = await supabase.auth.admin.generateLink({
-      type: "signup",
-      email: email.trim(),
-      options: { redirectTo: "https://watchpeep.tv/" },
-    });
-    if (linkErr) throw new Error(linkErr.message);
-
-    const confirmLink = data.properties.action_link;
+    const firstName = (name || "").trim().split(" ")[0] || "there";
 
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -35,19 +22,28 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         from: "Peep <noreply@watchpeep.tv>",
         to: email.trim(),
-        subject: "Confirm your Peep email",
+        subject: "Welcome to Peep 👋",
         html: `
-          <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:40px 24px;background:#0a0a0a;color:#fff;">
-            <h1 style="font-size:32px;color:#facc15;margin:0 0 24px;">peep.</h1>
-            <h2 style="font-size:20px;font-weight:600;margin:0 0 12px;">Confirm your email</h2>
-            <p style="color:#888;font-size:14px;margin:0 0 28px;line-height:1.6;">
-              Click the button below to verify your email address and activate your account.
+          <div style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;max-width:520px;margin:0 auto;padding:48px 32px;background:#0a0a0a;color:#ffffff;">
+            <h1 style="font-size:36px;color:#facc15;margin:0 0 32px;letter-spacing:-0.5px;">peep.</h1>
+
+            <h2 style="font-size:22px;font-weight:700;margin:0 0 12px;color:#ffffff;">Welcome, ${firstName} 🎉</h2>
+
+            <p style="font-size:15px;color:#888888;line-height:1.7;margin:0 0 20px;">
+              Thanks for signing up. You're now part of the early community — we're currently in <strong style="color:#facc15;">beta</strong>, so things are still taking shape and your feedback genuinely matters.
             </p>
-            <a href="${confirmLink}" style="display:inline-block;background:#facc15;color:#0a0a0a;font-weight:700;font-size:15px;padding:14px 28px;border-radius:10px;text-decoration:none;">
-              Confirm Email
+
+            <p style="font-size:15px;color:#888888;line-height:1.7;margin:0 0 32px;">
+              Watch live streams, catch up on past streams, and explore content — all in one place. We're building this for you, so if something feels off or you have an idea, let us know.
+            </p>
+
+            <a href="https://watchpeep.tv" style="display:inline-block;background:#facc15;color:#0a0a0a;font-weight:700;font-size:15px;padding:14px 28px;border-radius:10px;text-decoration:none;">
+              Start watching →
             </a>
-            <p style="color:#444;font-size:12px;margin:28px 0 0;">
-              If you didn't create a Peep account, ignore this email.
+
+            <p style="font-size:12px;color:#333333;margin:40px 0 0;line-height:1.6;">
+              You're receiving this because you signed up at watchpeep.tv.<br/>
+              If this wasn't you, you can safely ignore this email.
             </p>
           </div>
         `,
