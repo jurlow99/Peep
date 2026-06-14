@@ -117,6 +117,7 @@ export function Footer({ onNavChange, onProfileOpen, onOpenModal }) {
     if (label === "Movies") { onNavChange("Movies"); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
     if (label === "Series") { onNavChange("Series"); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
     if (["Horror", "Comedy", "Drama", "Action", "Sci-Fi", "Documentary"].includes(label)) { onNavChange("Movies"); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+    if (label === "Support Development") { window.location.href = "/support"; return; }
     if (label === "Sign In") { window.location.href = "/signin"; return; }
     if (label === "Create Profile") { window.location.href = "/signup"; return; }
     if (label === "Manage Account") { onProfileOpen?.(); return; }
@@ -137,7 +138,7 @@ export function Footer({ onNavChange, onProfileOpen, onOpenModal }) {
       </div>
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 32, marginBottom: 44 }}>
         {[
-          { heading: "Company", links: ["About Peep", "Press Room", "Careers", "Contact Us"] },
+          { heading: "Company", links: ["About Peep", "Press Room", "Careers", "Contact Us", "Support Development"] },
           { heading: "Browse", links: ["Movies", "Series", "Horror", "Comedy", "Drama"] },
           { heading: "Account", links: ["Sign In", "Create Profile", "Manage Account", "Privacy Settings"] },
           { heading: "Help Center", links: ["FAQ", "Contact Support", "Terms of Use", "Privacy Policy"] },
