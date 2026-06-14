@@ -9,6 +9,7 @@ import { SignupPage, SigninPage } from './pages/AuthPages.jsx'
 import { SetPasswordPage } from './pages/SetPasswordPage.jsx'
 import { StreamerDashboard } from './pages/StreamerDashboard.jsx'
 import { StreamerProfile } from './pages/StreamerProfile.jsx'
+import { SupportPage } from './pages/SupportPage.jsx'
 
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null }; }
@@ -40,6 +41,7 @@ createRoot(document.getElementById('root')).render(
        path === '/signup'         ? <SignupPage />        :
        path === '/signin'         ? <SigninPage />        :
        path === '/set-password'   ? <SetPasswordPage />   :
+       path === '/support'        ? <SupportPage />       :
        path === '/streamer'       ? <StreamerDashboard /> :
        path.startsWith('/stream/')? <StreamerProfile />   :
        <BrowserRouter>
