@@ -57,6 +57,7 @@ export function CloudflareVideoUploader({ onComplete, onError, disabled }) {
           chunkSize: 50 * 1024 * 1024,
           retryDelays: [0, 3000, 6000, 12000],
           storeFingerprintForResuming: false,
+          fingerprint: () => Promise.resolve(`peep-${Date.now()}-${Math.random()}`),
           metadata: { filename: file.name, filetype: file.type },
           onProgress(loaded, total) {
             setUploadPct(Math.round((loaded / total) * 100));
