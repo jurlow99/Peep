@@ -221,6 +221,13 @@ export function CMS({ onExit, currentUser }) {
   const [selectedUserStats, setSelectedUserStats] = useState(null);
   const [userStatsLoading, setUserStatsLoading] = useState(false);
 
+  // Content moderation state
+  const [contentReports, setContentReports] = useState([]);
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [reportsFilter, setReportsFilter] = useState("pending");
+  const [globalBannedWords, setGlobalBannedWords] = useState([]);
+  const [bannedWordInput, setBannedWordInput] = useState("");
+
   // Subscriptions state
   const [subs, setSubs] = useState([]);
   const [subsLoading, setSubsLoading] = useState(false);
@@ -346,6 +353,7 @@ export function CMS({ onExit, currentUser }) {
     if (tab === "members") { loadSubscriptions(); loadUsers(); }
     if (tab === "settings") { loadPromos(); loadBossSettings(); supabase.from("episodes").select("id", { count: "exact", head: true }).eq("status", "pending").then(({ count }) => setPendingCount(count || 0)); }
     if (tab === "security") loadSecurityData();
+    if (tab === "moderation") loadContentReports();
     if (tab === "creators") { loadCreators(); loadContentCreators(); }
     if (tab === "storage") {
       loadStorageFiles();
@@ -689,6 +697,25 @@ export function CMS({ onExit, currentUser }) {
     (settings || []).forEach(r => { s[r.key] = r.value; });
     if (Object.keys(s).length) setLockoutSettings(prev => ({ ...prev, ...s }));
     loadLoginAttempts();
+  }
+
+  async function loadContentReports() {
+    setReportsLoading(true);
+    const { data } = await supabase.from("content_reports").select("*").order("created_at", { ascending: false }).limit(200);
+    setContentReports(data || []);
+    const { data: setting } = await supabase.from("app_settings").select("value").eq("key", "global_banned_words").maybeSingle();
+    if (setting?.value) { try { setGlobalBannedWords(JSON.parse(setting.value)); } catch {} }
+    setReportsLoading(false);
+  }
+
+  async function updateReportStatus(id, status) {
+    await supabase.from("content_reports").update({ status, reviewed_at: new Date().toISOString() }).eq("id", id);
+    setContentReports(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+  }
+
+  async function saveGlobalBannedWords(words) {
+    await supabase.from("app_settings").upsert({ key: "global_banned_words", value: JSON.stringify(words), updated_at: new Date().toISOString() }, { onConflict: "key" });
+    setGlobalBannedWords(words);
   }
 
   async function blockUser() {
@@ -2938,6 +2965,7 @@ export function CMS({ onExit, currentUser }) {
           { key: "storage",   label: `Storage`,                     color: "#22d3ee" },
           { key: "settings",  label: `Settings`,                    color: "#facc15" },
           { key: "security",  label: `Security`,                    color: "#f87171" },
+          { key: "moderation", label: `Moderation${contentReports.filter(r => r.status === "pending").length > 0 ? ` (${contentReports.filter(r => r.status === "pending").length})` : ""}`, color: "#fb923c" },
         ].map(({ key, label, color }) => (
           <button key={key}
             onClick={() => {
@@ -5755,6 +5783,99 @@ export function CMS({ onExit, currentUser }) {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* ────── MODERATION TAB ────── */}
+        {tab === "moderation" && (
+          <div style={{ maxWidth: 900 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, gap: 16, flexWrap: "wrap" }}>
+              <div>
+                <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Moderation</h2>
+                <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Content reports and global word filter.</p>
+              </div>
+              <button onClick={loadContentReports} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 16px", fontSize: 13, color: "#374151", cursor: "pointer", fontWeight: 500 }}>Refresh</button>
+            </div>
+
+            {/* Global banned words */}
+            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: 24, marginBottom: 24 }}>
+              <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: "#0f172a" }}>Global Word Filter</h3>
+              <p style={{ margin: "0 0 16px", fontSize: 13, color: "#6b7280" }}>Blocked in all live chat, site-wide. Applies on top of each channel's own banned words.</p>
+              <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                <input value={bannedWordInput} onChange={e => setBannedWordInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && bannedWordInput.trim()) { const w = bannedWordInput.trim().toLowerCase(); if (!globalBannedWords.includes(w)) saveGlobalBannedWords([...globalBannedWords, w]); setBannedWordInput(""); }}} placeholder="Add a word or phrase…" style={{ flex: 1, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 12px", fontSize: 13, color: "#0f172a", outline: "none" }} />
+                <button onClick={() => { const w = bannedWordInput.trim().toLowerCase(); if (w && !globalBannedWords.includes(w)) { saveGlobalBannedWords([...globalBannedWords, w]); setBannedWordInput(""); }}} style={{ background: "#0f172a", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add</button>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {globalBannedWords.length === 0 && <span style={{ fontSize: 13, color: "#9ca3af" }}>No words added yet.</span>}
+                {globalBannedWords.map(w => (
+                  <span key={w} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "4px 10px", fontSize: 13, color: "#dc2626", fontWeight: 500 }}>
+                    {w}
+                    <button onClick={() => saveGlobalBannedWords(globalBannedWords.filter(x => x !== w))} style={{ background: "none", border: "none", cursor: "pointer", color: "#dc2626", fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Reports queue */}
+            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden" }}>
+              <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #e2e8f0" }}>
+                {["pending", "actioned", "dismissed", "all"].map(f => {
+                  const count = f === "all" ? contentReports.length : contentReports.filter(r => r.status === f).length;
+                  return (
+                    <button key={f} onClick={() => setReportsFilter(f)} style={{ flex: 1, background: reportsFilter === f ? "#f8fafc" : "transparent", border: "none", borderBottom: reportsFilter === f ? "2px solid #fb923c" : "none", padding: "12px 8px", fontSize: 13, fontWeight: reportsFilter === f ? 600 : 400, color: reportsFilter === f ? "#0f172a" : "#6b7280", cursor: "pointer", textTransform: "capitalize" }}>
+                      {f} {count > 0 && <span style={{ background: f === "pending" ? "#fef2f2" : "#f1f5f9", color: f === "pending" ? "#dc2626" : "#6b7280", borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 700 }}>{count}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {reportsLoading ? (
+                <div style={{ padding: 40, textAlign: "center", color: "#9ca3af", fontSize: 14 }}>Loading…</div>
+              ) : (() => {
+                const visible = reportsFilter === "all" ? contentReports : contentReports.filter(r => r.status === reportsFilter);
+                if (visible.length === 0) return <div style={{ padding: 40, textAlign: "center", color: "#9ca3af", fontSize: 14 }}>No {reportsFilter} reports.</div>;
+                return (
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                        {["Channel", "Reason", "Status", "Reported", "Actions"].map(h => (
+                          <th key={h} style={{ padding: "10px 16px", fontSize: 11, fontWeight: 700, color: "#6b7280", textAlign: "left", textTransform: "uppercase", letterSpacing: 0.5 }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visible.map(r => (
+                        <tr key={r.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                          <td style={{ padding: "12px 16px", fontSize: 13, color: "#0f172a", fontWeight: 600 }}>
+                            <a href={`/stream/${r.content_id}`} target="_blank" rel="noopener noreferrer" style={{ color: "#0f172a", textDecoration: "none" }}>
+                              {r.channel_name || r.content_id}
+                            </a>
+                          </td>
+                          <td style={{ padding: "12px 16px", fontSize: 13, color: "#374151" }}>{r.reason}</td>
+                          <td style={{ padding: "12px 16px" }}>
+                            <span style={{ display: "inline-block", background: r.status === "pending" ? "#fef2f2" : r.status === "actioned" ? "#f0fdf4" : "#f1f5f9", color: r.status === "pending" ? "#dc2626" : r.status === "actioned" ? "#16a34a" : "#6b7280", borderRadius: 6, padding: "2px 9px", fontSize: 12, fontWeight: 600, textTransform: "capitalize" }}>{r.status}</span>
+                          </td>
+                          <td style={{ padding: "12px 16px", fontSize: 12, color: "#9ca3af" }}>{new Date(r.created_at).toLocaleDateString()}</td>
+                          <td style={{ padding: "12px 16px" }}>
+                            <div style={{ display: "flex", gap: 6 }}>
+                              {r.status !== "actioned" && (
+                                <button onClick={() => updateReportStatus(r.id, "actioned")} style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "5px 10px", fontSize: 12, color: "#16a34a", fontWeight: 600, cursor: "pointer" }}>Action</button>
+                              )}
+                              {r.status !== "dismissed" && (
+                                <button onClick={() => updateReportStatus(r.id, "dismissed")} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "5px 10px", fontSize: 12, color: "#6b7280", fontWeight: 600, cursor: "pointer" }}>Dismiss</button>
+                              )}
+                              {r.status !== "pending" && (
+                                <button onClick={() => updateReportStatus(r.id, "pending")} style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 6, padding: "5px 10px", fontSize: 12, color: "#ea580c", fontWeight: 600, cursor: "pointer" }}>Reopen</button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                );
+              })()}
+            </div>
           </div>
         )}
 
