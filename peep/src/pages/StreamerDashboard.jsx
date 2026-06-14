@@ -1158,13 +1158,13 @@ export function StreamerDashboard() {
 
       {/* VOD player modal */}
       {watchingVod && (
-        <div onClick={() => setWatchingVod(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.92)", zIndex: 200, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 560 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#e0e0e0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, marginRight: 12 }}>{watchingVod.title}</p>
-              <button onClick={() => setWatchingVod(null)} style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 6, width: 32, height: 32, color: "#aaa", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>×</button>
+        <div onClick={() => setWatchingVod(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: "min(480px, calc(100vw - 48px))", background: "#111", border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden", boxShadow: "0 24px 80px rgba(0,0,0,0.8)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", borderBottom: `1px solid ${BORDER}` }}>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#e0e0e0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, marginRight: 10 }}>{watchingVod.title}</p>
+              <button onClick={() => setWatchingVod(null)} style={{ background: "rgba(255,255,255,0.06)", border: "none", borderRadius: 6, width: 28, height: 28, color: "#aaa", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>×</button>
             </div>
-            <video src={watchingVod.url} controls autoPlay style={{ display: "block", width: "100%", aspectRatio: "16/9", background: "#000", borderRadius: 10 }} />
+            <video src={watchingVod.url} controls autoPlay style={{ display: "block", width: "100%", aspectRatio: "16/9", background: "#000" }} />
           </div>
         </div>
       )}
