@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabase";
 import { PRESET_AVATARS } from "./ProfileScreen";
 
@@ -16,8 +16,13 @@ export function ProfileSelect({ user, onSelect }) {
   const [newName, setNewName] = useState("");
   const [newAvatar, setNewAvatar] = useState("a1");
   const [saving, setSaving] = useState(false);
+  const initRan = useRef(false);
 
-  useEffect(() => { init(); }, []);
+  useEffect(() => {
+    if (initRan.current) return;
+    initRan.current = true;
+    init();
+  }, []);
 
   async function init() {
     const { data } = await supabase
@@ -29,13 +34,28 @@ export function ProfileSelect({ user, onSelect }) {
     let list = data || [];
 
     if (list.length === 0) {
-      const defaultName = user.email?.split("@")[0] || "Main";
-      const { data: created } = await supabase
+      const { data: profile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
+      const defaultName = profile?.full_name || user.user_metadata?.full_name || user.email?.split("@")[0] || "Main";
+      const { data: created, error: insertErr } = await supabase
         .from("viewer_profiles")
         .insert({ user_id: user.id, name: defaultName, avatar_id: "a1" })
         .select()
         .single();
-      if (created) list = [created];
+      if (created) {
+        list = [created];
+      } else {
+        await supabase.auth.signOut();
+        window.location.href = "/";
+        return;
+      }
+    } else {
+      // Fix existing profiles whose name was incorrectly set to the email prefix
+      const emailPrefix = user.email?.split("@")[0];
+      const realName = user.user_metadata?.full_name;
+      if (realName && list[0]?.name === emailPrefix) {
+        await supabase.from("viewer_profiles").update({ name: realName }).eq("id", list[0].id);
+        list = [{ ...list[0], name: realName }, ...list.slice(1)];
+      }
     }
 
     setProfiles(list);
@@ -76,7 +96,6 @@ export function ProfileSelect({ user, onSelect }) {
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", color: "#fff", padding: "80px 24px" }}>
-      <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       <div style={{ position: "absolute", top: 28, left: 40 }}>
@@ -94,11 +113,11 @@ export function ProfileSelect({ user, onSelect }) {
             <div key={profile.id} onClick={() => !managing && onSelect(profile)}
               style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, cursor: managing ? "default" : "pointer" }}>
               <div
-                style={{ width: 116, height: 116, borderRadius: 12, background: av.gradient, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 46, border: "3px solid transparent", transition: "border-color 0.2s, transform 0.2s", position: "relative" }}
+                style={{ width: 116, height: 116, borderRadius: 12, background: av.svg ? "none" : av.gradient, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 46, border: "3px solid transparent", transition: "border-color 0.2s, transform 0.2s", position: "relative", overflow: "hidden" }}
                 onMouseEnter={e => { if (!managing) { e.currentTarget.style.borderColor = "#fff"; e.currentTarget.style.transform = "scale(1.06)"; } }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.transform = "scale(1)"; }}
               >
-                {av.emoji}
+                {av.svg ? <div style={{ width: "100%", height: "100%" }} dangerouslySetInnerHTML={{ __html: av.svg }} /> : av.emoji}
                 {managing && (
                   <div style={{ position: "absolute", inset: 0, borderRadius: 10, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">

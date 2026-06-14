@@ -1,88 +1,15 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "../supabase";
 import { ImageUploader } from "./ImageUploader";
-
-const EMPTY_ROW = {
-  title: "",
-  category: "Horror",
-  rating: "NR",
-  score: "",
-  duration: "",
-  year: "",
-  thumbnail: "",
-  poster: "",
-  url: "",
-  trailer_url: "",
-  description: "",
-  tags: "",
-};
-
-const EMPTY_SHOW = {
-  title: "",
-  category: "Horror",
-  rating: "NR",
-  year: "",
-  score: "",
-  thumbnail: "",
-  poster: "",
-  description: "",
-  tags: "",
-  trailer_url: "",
-};
-
-const EMPTY_EPISODE = {
-  show_id: "",
-  season: 1,
-  episode_number: 1,
-  title: "",
-  description: "",
-  url: "",
-  thumbnail: "",
-  duration: "",
-};
-
-const EMPTY_CAROUSEL = {
-  title: "",
-  type: "category",
-  filter_value: "",
-  content_type: "all",
-  enabled: true,
-  position: 0,
-  pages: "home",
-};
-
-const EMPTY_LIVE_STREAM = {
-  title: "",
-  description: "",
-  stream_url: "",
-  thumbnail: "",
-  is_live: true,
-  badge_text: "LIVE",
-  channel_number: "",
-  now_airing: "",
-  up_next: "",
-};
-
-const EMPTY_PODCAST = {
-  title: "",
-  host: "",
-  description: "",
-  artwork_url: "",
-  link_url: "",
-  episode_count: "",
-  tags: "",
-  enabled: true,
-};
-
-const EMPTY_PODCAST_EPISODE = {
-  podcast_id: "",
-  episode_number: 1,
-  title: "",
-  description: "",
-  audio_url: "",
-  duration: "",
-  thumbnail: "",
-};
+import {
+  EMPTY_ROW,
+  EMPTY_SHOW,
+  EMPTY_EPISODE,
+  EMPTY_CAROUSEL,
+  EMPTY_LIVE_STREAM,
+  EMPTY_PODCAST,
+  EMPTY_PODCAST_EPISODE,
+} from "./cms/constants";
 
 const EMPTY_AD = {
   name: "",
@@ -93,9 +20,20 @@ const EMPTY_AD = {
   active: true,
 };
 
-export function CMS({ onExit }) {
-  const [tab, setTab] = useState("videos");
-  const [videoSubTab, setVideoSubTab] = useState("movies"); // "movies" | "series" | "episodes"
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+
+async function getAdminToken() {
+  await supabase.auth.getUser(); // validates + auto-refreshes if expired
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token ?? null;
+}
+
+export function CMS({ onExit, currentUser }) {
+  const [tab, setTab] = useState("content");
+  const [videoSubTab, setVideoSubTab] = useState("shorts"); // "shorts" | "series" | "episodes" | "carousels" | "podcasts" | "music"
+  const [analyticsTab, setAnalyticsTab] = useState("reports"); // "reports" | "ads"
+  const [membersTab, setMembersTab] = useState("users"); // "users" | "subscriptions" | "support"
+  const [creatorsTab, setCreatorsTab] = useState("list"); // "list" | "review" | "payouts"
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerFormType, setDrawerFormType] = useState(null); // null = tab-based, "epg" = EPG form
 
@@ -104,12 +42,13 @@ export function CMS({ onExit }) {
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_ROW);
+  const typeLabel = t => ({ movie: "Movie", episode: "Episode", podcast_episode: "Podcast Ep" }[t] || t);
   const [saving, setSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [toast, setToast] = useState(null);
   const [searchFilter, setSearchFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
-  const [livePasscodeEntered, setLivePasscodeEntered] = useState(false);
+  const [livePasscodeEntered, setLivePasscodeEntered] = useState(() => sessionStorage.getItem("cms_live_unlocked") === "1");
   const [livePasscodeInput, setLivePasscodeInput] = useState("");
   
   // Carousels state
@@ -119,10 +58,13 @@ export function CMS({ onExit }) {
   const [carouselForm, setCarouselForm] = useState(EMPTY_CAROUSEL);
   const [carouselSaving, setCarouselSaving] = useState(false);
   const [deleteCarouselConfirm, setDeleteCarouselConfirm] = useState(null);
+  const [handpickedSearch, setHandpickedSearch] = useState("");
+  const [handpickedSelected, setHandpickedSelected] = useState([]); // [{id, type, title, thumbnail}]
   
   // Shows state
   const [showsList, setShowsList] = useState([]);
   const [showsLoading, setShowsLoading] = useState(true);
+  const [videosList, setVideosList] = useState([]);
   const [editingShowId, setEditingShowId] = useState(null);
   const [showForm, setShowForm] = useState(EMPTY_SHOW);
   const [showSaving, setShowSaving] = useState(false);
@@ -155,12 +97,35 @@ export function CMS({ onExit }) {
   const [deletePodEpConfirm, setDeletePodEpConfirm] = useState(null);
 
   // Live Streams state
+  const [liveSubTab, setLiveSubTab] = useState("streams");
+  const [applications, setApplications] = useState([]);
+  const [appsLoading, setAppsLoading] = useState(false);
+  const [approvingId, setApprovingId] = useState(null);
+  const [rejectingId, setRejectingId] = useState(null);
+  const [appRejectNote, setAppRejectNote] = useState("");
+  const [rejectTarget, setRejectTarget] = useState(null);
+  const [revealedKeys, setRevealedKeys] = useState({});
   const [liveList, setLiveList] = useState([]);
   const [liveLoading, setLiveLoading] = useState(true);
   const [editingLiveId, setEditingLiveId] = useState(null);
   const [liveForm, setLiveForm] = useState(EMPTY_LIVE_STREAM);
   const [liveSaving, setLiveSaving] = useState(false);
   const [deleteLiveConfirm, setDeleteLiveConfirm] = useState(null);
+  const [deletePlaylistConfirm, setDeletePlaylistConfirm] = useState(null);
+  const [deletingPlaylist, setDeletingPlaylist] = useState(false);
+  const [channelStatuses, setChannelStatuses] = useState({});
+  const [testingChannels, setTestingChannels] = useState(false);
+  const [testProgress, setTestProgress] = useState({ done: 0, total: 0 });
+  const [m3uOpen, setM3uOpen] = useState(false);
+  const [m3uUrl, setM3uUrl] = useState("");
+  const [m3uFetching, setM3uFetching] = useState(false);
+  const [m3uChannels, setM3uChannels] = useState([]);
+  const [m3uSelected, setM3uSelected] = useState(new Set());
+  const [m3uError, setM3uError] = useState("");
+  const [m3uSearch, setM3uSearch] = useState("");
+  const [m3uPage, setM3uPage] = useState(0);
+  const [m3uImporting, setM3uImporting] = useState(false);
+  const [m3uImportDone, setM3uImportDone] = useState(null);
 
   // EPG state
   const [epgEntries, setEpgEntries] = useState([]);
@@ -204,11 +169,42 @@ export function CMS({ onExit }) {
 
   const [heroConfirm, setHeroConfirm] = useState(null); // { current, next, type: "video"|"show" }
 
+  // Creators state
+  const [creatorsList, setCreatorsList] = useState([]);
+  const [creatorsLoading, setCreatorsLoading] = useState(false);
+  const [creatorModal, setCreatorModal] = useState(false);
+  const [editingCreator, setEditingCreator] = useState(null);
+  const [creatorForm, setCreatorForm] = useState({ name: "", email: "", payment_method: "PayPal", payment_handle: "", routing_number: "", status: "active", notes: "", agreement_signed_at: "" });
+  const [creatorSaving, setCreatorSaving] = useState(false);
+  const [deleteCreatorConfirm, setDeleteCreatorConfirm] = useState(null);
+  const [resendingInvite, setResendingInvite] = useState(false);
+
+  // Payouts state
+  const [payoutMonth, setPayoutMonth] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    return d.toISOString().slice(0, 7);
+  });
+  const [payoutData, setPayoutData] = useState([]);
+  const [payoutLoading, setPayoutLoading] = useState(false);
+  const [payoutView, setPayoutView] = useState("current"); // "current" | "history"
+  const [showPayoutInfo, setShowPayoutInfo] = useState(false);
+  const [payoutHistory, setPayoutHistory] = useState([]);
+  const [payoutHistoryLoading, setPayoutHistoryLoading] = useState(false);
+  const [totalRevenue, setTotalRevenue] = useState(0);
+  const [fetchingRevenue, setFetchingRevenue] = useState(false);
+
+  // Content-creator links state
+  const [contentCreators, setContentCreators] = useState([]);
+  const [contentCreatorsLoading, setContentCreatorsLoading] = useState(false);
+
   // Ads state
   const [adList, setAdList] = useState([]);
   const [adLoading, setAdLoading] = useState(false);
   const [editingAdId, setEditingAdId] = useState(null);
   const [adForm, setAdForm] = useState(EMPTY_AD);
+  const [adLastFetched, setAdLastFetched] = useState(null);
+  const [reportLastFetched, setReportLastFetched] = useState(null);
   const [adSaving, setAdSaving] = useState(false);
   const [deleteAdConfirm, setDeleteAdConfirm] = useState(null);
   const [adTableMissing, setAdTableMissing] = useState(false);
@@ -218,13 +214,86 @@ export function CMS({ onExit }) {
   const [reportData, setReportData] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportSection, setReportSection] = useState("overview");
+  const [todayStats, setTodayStats] = useState(null);
+  const [onlineUsers, setOnlineUsers] = useState([]);
+  const [userSearch, setUserSearch] = useState("");
+  const [userSearchResults, setUserSearchResults] = useState([]);
+  const [selectedUserStats, setSelectedUserStats] = useState(null);
+  const [userStatsLoading, setUserStatsLoading] = useState(false);
+
+  // Content moderation state
+  const [contentReports, setContentReports] = useState([]);
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [reportsFilter, setReportsFilter] = useState("pending");
+  const [globalBannedWords, setGlobalBannedWords] = useState([]);
+  const [bannedWordInput, setBannedWordInput] = useState("");
+
+  // Subscriptions state
+  const [subs, setSubs] = useState([]);
+  const [subsLoading, setSubsLoading] = useState(false);
+  const [revokeConfirm, setRevokeConfirm] = useState(null);
+  const [subSearch, setSubSearch] = useState("");
+  const [subStatusFilter, setSubStatusFilter] = useState("all");
+  const [subSort, setSubSort] = useState({ col: "created_at", dir: "desc" });
+
+  // Users state
+  const [users, setUsers] = useState([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usersSearch, setUsersSearch] = useState("");
+  const [deleteUserConfirm, setDeleteUserConfirm] = useState(null);
+  const [deletingUser, setDeletingUser] = useState(false);
+
+  // Support tab state
+  const [supportSearch, setSupportSearch] = useState("");
+  const [supportResults, setSupportResults] = useState([]);
+  const [supportSearching, setSupportSearching] = useState(false);
+  const [supportUser, setSupportUser] = useState(null); // selected user detail
+  const [supportLoading, setSupportLoading] = useState(false);
+  const [supportAction, setSupportAction] = useState(null); // "grant"|"revoke"|"delete"|"reset"
+  const [supportActionLoading, setSupportActionLoading] = useState(false);
+  const [supportActionMsg, setSupportActionMsg] = useState(null);
+  const [supportDeleteConfirm, setSupportDeleteConfirm] = useState(false);
+
+  // The Boss state
+  const [promos, setPromos] = useState([]);
+  const [promosLoading, setPromosLoading] = useState(false);
+  const [promoForm, setPromoForm] = useState({ name: "", code: "" });
+  const [promoSaving, setPromoSaving] = useState(false);
+  const [bossSettings, setBossSettings] = useState({ maintenance_mode: "false", banner_active: "false", banner_text: "", banner_expires_at: "" });
+  const [storageFiles, setStorageFiles] = useState([]);
+  const [storageLoading, setStorageLoading] = useState(false);
+  const [storageFilter, setStorageFilter] = useState("pending");
+  const [storageAddModal, setStorageAddModal] = useState(null);
+  const [storageAddForm, setStorageAddForm] = useState({ title: "", type: "movie", show_id: "", podcast_id: "", description: "", year: new Date().getFullYear(), genre: "", artist: "", episode_number: 1, season_number: 1, linked_id: "", linked_table: "videos", url: "" });
+  const [storageAddSaving, setStorageAddSaving] = useState(false);
+  const [bossTodos, setBossTodos] = useState([]);
+  const [newTodo, setNewTodo] = useState("");
+  const [newTodoLabel, setNewTodoLabel] = useState("");
+  const [newGoal, setNewGoal] = useState("");
+  const [newGoalLabel, setNewGoalLabel] = useState("");
+  const [grantEmail, setGrantEmail] = useState("");
+  const [grantLoading, setGrantLoading] = useState(false);
+  const [grantResult, setGrantResult] = useState(null);
+  const [loginAttempts, setLoginAttempts] = useState([]);
+  const [bossView, setBossView] = useState("main"); // "main" | "security" | "creators" | "payouts" | "review"
+  const [reviewEpisodes, setReviewEpisodes] = useState([]);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [rejectModal, setRejectModal] = useState(null); // episode row
+  const [rejectNote, setRejectNote] = useState("");
+  const [blockedUsers, setBlockedUsers] = useState([]);
+  const [blockEmail, setBlockEmail] = useState("");
+  const [blockReason, setBlockReason] = useState("");
+  const [blockLoading, setBlockLoading] = useState(false);
+  const [activeSessions, setActiveSessions] = useState([]);
+  const [lockoutSettings, setLockoutSettings] = useState({ lockout_max_attempts: "5", lockout_duration_mins: "15" });
 
   const subscriptionRef = useRef(null);
   const carouselSubRef = useRef(null);
   const showSubRef = useRef(null);
   const xmltvFileRef = useRef(null);
 
-  const categories = ["Horror", "Sci-Fi", "Comedy", "Drama", "Action", "Documentary"];
+  const categories = ["Strange", "Conspiracy", "Space", "Paranormal", "Animation", "Comedy", "Documentary", "Found Footage", "Cult", "Experimental", "Public Access", "Horror"];
   const carouselTypes = [
     { value: "category", label: "Category" },
     { value: "trending", label: "Trending" },
@@ -239,6 +308,7 @@ export function CMS({ onExit }) {
     loadShows();
     loadPodcasts();
     loadLiveStreams();
+    loadApplications();
     loadAds();
     loadAdAnalytics();
 
@@ -263,12 +333,969 @@ export function CMS({ onExit }) {
     setBulkMovieSearch("");
   }
 
+  // Admin presence heartbeat — show admin sessions in Online Now
   useEffect(() => {
-    if (tab === "reports") loadReports();
+    const ping = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      supabase.from("user_presence").upsert(
+        { user_id: session.user.id, last_seen: new Date().toISOString(), current_page: "admin" },
+        { onConflict: "user_id" }
+      ).then(() => {});
+    };
+    ping();
+    const t = setInterval(ping, 60000);
+    return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    if (tab === "analytics") { loadReports(); loadAdAnalytics(); loadTodayStats(); loadOnlineUsers(); }
+    if (tab === "members") { loadSubscriptions(); loadUsers(); }
+    if (tab === "settings") { loadPromos(); loadBossSettings(); supabase.from("episodes").select("id", { count: "exact", head: true }).eq("status", "pending").then(({ count }) => setPendingCount(count || 0)); }
+    if (tab === "security") loadSecurityData();
+    if (tab === "moderation") loadContentReports();
+    if (tab === "creators") { loadCreators(); loadContentCreators(); }
+    if (tab === "storage") {
+      loadStorageFiles();
+      supabase.from("videos").select("id, title").order("title").then(({ data }) => setVideosList(data || []));
+      supabase.from("shows").select("id, title").order("title").then(({ data }) => setShowsList(prev => prev.length ? prev : (data || [])));
+    }
   }, [tab]);
+
+  useEffect(() => {
+    if (tab !== "creators") return;
+    if (creatorsTab === "list") { loadCreators(); loadContentCreators(); }
+    if (creatorsTab === "payouts") { loadPayoutHistory(); loadPayouts(); }
+    if (creatorsTab === "review") { loadReviewQueue(); }
+  }, [creatorsTab]);
+
+  useEffect(() => {
+    if (liveSubTab === "applications") loadApplications();
+  }, [liveSubTab]);
+
+  useEffect(() => {
+    if (tab !== "analytics") return;
+    const fiveMin = setInterval(() => { loadAdAnalytics(); loadReports(); loadTodayStats(); }, 5 * 60 * 1000);
+    const oneMin = setInterval(() => { loadTodayStats(); loadOnlineUsers(); }, 60 * 1000);
+    return () => { clearInterval(fiveMin); clearInterval(oneMin); };
+  }, [tab]);
+
+  async function fetchUserStatsForProfile(profile) {
+    try {
+      const uid = profile.id;
+      const [
+        { data: watchRows },
+        { data: adRows },
+        { data: ratingRows },
+        { data: listRows },
+      ] = await Promise.all([
+        supabase.from("watch_progress").select("content_id, content_type, progress_seconds, duration_seconds, completed, last_watched_at").eq("user_id", uid).order("last_watched_at", { ascending: false }),
+        supabase.from("ad_impressions").select("event, created_at, vast_tag_id").eq("user_id", uid).order("created_at", { ascending: false }),
+        supabase.from("ratings").select("*").eq("user_id", uid),
+        supabase.from("user_list").select("content_id, content_type").eq("user_id", uid),
+      ]);
+      const allRows = [...(watchRows || []), ...(listRows || [])];
+      const idsFor = type => [...new Set(allRows.filter(r => r.content_type === type).map(r => r.content_id))];
+      const movieIds = idsFor("movie");
+      const epIds = idsFor("episode");
+      const podEpIds = idsFor("podcast_episode");
+      const [{ data: movTitles }, { data: epTitles }, { data: podEpTitles }, { data: tagNames }] = await Promise.all([
+        movieIds.length ? supabase.from("videos").select("id, title").in("id", movieIds) : { data: [] },
+        epIds.length ? supabase.from("episodes").select("id, title").in("id", epIds) : { data: [] },
+        podEpIds.length ? supabase.from("podcast_episodes").select("id, title").in("id", podEpIds) : { data: [] },
+        supabase.from("vast_tags").select("id, name"),
+      ]);
+      const titleMap = {};
+      (movTitles || []).forEach(v => { titleMap[`movie:${v.id}`] = v.title; });
+      (epTitles || []).forEach(e => { titleMap[`episode:${e.id}`] = e.title; });
+      (podEpTitles || []).forEach(e => { titleMap[`podcast_episode:${e.id}`] = e.title; });
+      const tagMap = {};
+      (tagNames || []).forEach(t => { tagMap[t.id] = t.name; });
+      const watchHistory = (watchRows || []).map(w => ({ ...w, title: titleMap[`${w.content_type}:${w.content_id}`] || null, pct: w.duration_seconds > 0 ? Math.round((w.progress_seconds / w.duration_seconds) * 100) : null })).filter(w => w.title);
+      const adHistory = (adRows || []).map(r => ({ ...r, tagName: tagMap[r.vast_tag_id] || "Unknown Tag" }));
+      const myList = (listRows || []).map(l => ({ ...l, title: titleMap[`${l.content_type}:${l.content_id}`] || null })).filter(l => l.title);
+      const thirtyAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const byDay = {};
+      (watchRows || []).filter(w => w.last_watched_at >= thirtyAgo).forEach(w => { const d = w.last_watched_at.slice(0, 10); byDay[d] = (byDay[d] || 0) + 1; });
+      const sessionTimeline = Object.entries(byDay).sort((a, b) => a[0].localeCompare(b[0]));
+      return { profile, watchHistory, adHistory, myList, ratingRows: ratingRows || [], sessionTimeline };
+    } catch (err) {
+      console.error("fetchUserStatsForProfile error:", err);
+      return { profile, watchHistory: [], adHistory: [], myList: [], ratingRows: [], sessionTimeline: [] };
+    }
+  }
+
+  async function searchUsers(query) {
+    if (!query.trim()) { setUserSearchResults([]); return; }
+    try {
+      const { data } = await supabase.from("profiles").select("id, username, email, created_at, role, is_admin").or(`email.ilike.%${query}%,username.ilike.%${query}%`).limit(10);
+      setUserSearchResults(data || []);
+    } catch (err) {
+      console.error("searchUsers error:", err);
+      setUserSearchResults([]);
+    }
+  }
+
+  async function loadSelectedUserStats(profile) {
+    setUserStatsLoading(true);
+    setSelectedUserStats(null);
+    try {
+      const stats = await fetchUserStatsForProfile(profile);
+      setSelectedUserStats(stats);
+    } catch (err) {
+      console.error("loadSelectedUserStats error:", err);
+      showToast("Failed to load user stats", "error");
+    }
+    setUserStatsLoading(false);
+  }
+
+  async function loadTodayStats() {
+    try {
+      const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+      const todayISO = todayStart.toISOString();
+      const liveISO = new Date(Date.now() - 90 * 1000).toISOString();
+      const [
+        { data: watchToday },
+        { data: adsToday },
+        { count: newUsers },
+        { count: liveCount },
+      ] = await Promise.all([
+        supabase.from("watch_progress").select("progress_seconds").gte("last_watched_at", todayISO),
+        supabase.from("ad_impressions").select("event").gte("created_at", todayISO),
+        supabase.from("profiles").select("*", { count: "exact", head: true }).gte("created_at", todayISO),
+        supabase.from("live_viewers").select("*", { count: "exact", head: true }).gte("last_ping", liveISO),
+      ]);
+      const sessionsToday = (watchToday || []).length;
+      const hoursToday = +((watchToday || []).reduce((s, w) => s + (w.progress_seconds || 0), 0) / 3600).toFixed(1);
+      const adImpressionsToday = (adsToday || []).filter(r => r.event === "impression").length;
+      const adSkipsToday = (adsToday || []).filter(r => r.event === "skip").length;
+      setTodayStats({ sessionsToday, hoursToday, adImpressionsToday, adSkipsToday, newUsers: newUsers || 0, liveNow: liveCount || 0 });
+    } catch (err) {
+      console.error("loadTodayStats error:", err);
+    }
+  }
+
+  async function loadOnlineUsers() {
+    try {
+      const cutoff = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+      const { data: presence, error } = await supabase
+        .from("user_presence")
+        .select("user_id, last_seen, current_page")
+        .gte("last_seen", cutoff)
+        .order("last_seen", { ascending: false });
+      if (error) { console.error("loadOnlineUsers presence error:", error); setOnlineUsers([]); return; }
+      if (!presence || presence.length === 0) { setOnlineUsers([]); return; }
+      const ids = presence.map(r => r.user_id);
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, email, username, full_name")
+        .in("id", ids);
+      const profileMap = {};
+      (profiles || []).forEach(p => { profileMap[p.id] = p; });
+      setOnlineUsers(presence.map(r => ({ ...r, profile: profileMap[r.user_id] || null })));
+    } catch (err) {
+      console.error("loadOnlineUsers error:", err);
+    }
+  }
+
+  async function loadSubscriptions() {
+    setSubsLoading(true);
+    const { data: subsData } = await supabase.from("subscriptions").select("*").order("created_at", { ascending: false });
+    if (!subsData?.length) { setSubs([]); setSubsLoading(false); return; }
+    const userIds = subsData.map(s => s.user_id);
+    const [{ data: presenceData }, { data: watchData }, { data: profileData }] = await Promise.all([
+      supabase.from("user_presence").select("user_id, last_seen").in("user_id", userIds),
+      supabase.from("watch_progress").select("user_id").in("user_id", userIds),
+      supabase.from("viewer_profiles").select("user_id").in("user_id", userIds),
+    ]);
+    const presenceMap = {};
+    (presenceData || []).forEach(p => { presenceMap[p.user_id] = p.last_seen; });
+    const watchMap = {};
+    (watchData || []).forEach(w => { watchMap[w.user_id] = (watchMap[w.user_id] || 0) + 1; });
+    const profileMap = {};
+    (profileData || []).forEach(p => { profileMap[p.user_id] = (profileMap[p.user_id] || 0) + 1; });
+    setSubs(subsData.map(s => ({ ...s, last_seen: presenceMap[s.user_id] || null, watch_sessions: watchMap[s.user_id] || 0, profile_count: profileMap[s.user_id] || 0 })));
+    setSubsLoading(false);
+  }
+
+  async function revokeSubscription(id) {
+    await supabase.from("subscriptions").delete().eq("id", id);
+    setRevokeConfirm(null);
+    loadSubscriptions();
+    showToast("Subscription revoked");
+  }
+
+  async function loadUsers() {
+    setUsersLoading(true);
+    const { data: profileData } = await supabase.from("profiles").select("id, full_name, email, username, created_at").order("created_at", { ascending: false });
+    const profiles = profileData || [];
+    if (!profiles.length) { setUsers([]); setUsersLoading(false); return; }
+    const ids = profiles.map(p => p.id);
+    const [{ data: subData }, { data: streamerData }] = await Promise.all([
+      supabase.from("subscriptions").select("user_id, status, plan").in("user_id", ids),
+      supabase.from("live_streams").select("user_id").in("user_id", ids),
+    ]);
+    const subMap = {};
+    (subData || []).forEach(s => { subMap[s.user_id] = s; });
+    const streamerSet = new Set((streamerData || []).map(s => s.user_id));
+    setUsers(profiles.map(p => ({ ...p, subscription: subMap[p.id] || null, isStreamer: streamerSet.has(p.id) })));
+    setUsersLoading(false);
+  }
+
+  async function deleteUser(user_id) {
+    setDeletingUser(true);
+    try {
+      const token = await getAdminToken();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/delete-user`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ user_id }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setUsers(prev => prev.filter(u => u.id !== user_id));
+      setDeleteUserConfirm(null);
+      showToast("User deleted");
+    } catch (err) {
+      showToast(`Error: ${err.message}`);
+    }
+    setDeletingUser(false);
+  }
+
+  async function searchSupportUsers(query) {
+    if (!query.trim()) { setSupportResults([]); return; }
+    setSupportSearching(true);
+    const q = query.trim();
+    const isUuid = /^[0-9a-f-]{8,}$/i.test(q);
+    const { data } = await supabase.from("profiles").select("id, full_name, email, username, created_at")
+      .or(isUuid ? `id.eq.${q},email.ilike.%${q}%,full_name.ilike.%${q}%` : `email.ilike.%${q}%,full_name.ilike.%${q}%`)
+      .limit(10);
+    let results = data || [];
+
+    // If UUID search found nothing in profiles, check subscriptions + presence
+    if (isUuid && results.length === 0) {
+      const [{ data: sub }, { data: presence }] = await Promise.all([
+        supabase.from("subscriptions").select("user_id, email, created_at").eq("user_id", q).maybeSingle(),
+        supabase.from("user_presence").select("user_id, last_seen").eq("user_id", q).maybeSingle(),
+      ]);
+      if (sub || presence) {
+        results = [{ id: q, full_name: null, email: sub?.email || null, username: null, created_at: sub?.created_at || null, _ghost: true }];
+      }
+    }
+
+    setSupportResults(results);
+    setSupportSearching(false);
+  }
+
+  async function loadSupportUser(profile) {
+    setSupportUser(null);
+    setSupportLoading(true);
+    setSupportActionMsg(null);
+    setSupportDeleteConfirm(false);
+    const [{ data: sub }, { data: presence }, { data: vprofiles }, { data: watchData }] = await Promise.all([
+      supabase.from("subscriptions").select("*").eq("user_id", profile.id).maybeSingle(),
+      supabase.from("user_presence").select("last_seen, current_page").eq("user_id", profile.id).maybeSingle(),
+      supabase.from("viewer_profiles").select("id, name, avatar_id").eq("user_id", profile.id),
+      supabase.from("watch_progress").select("id").eq("user_id", profile.id),
+    ]);
+    setSupportUser({ ...profile, subscription: sub || null, presence: presence || null, viewer_profiles: vprofiles || [], watch_count: watchData?.length || 0 });
+    setSupportLoading(false);
+  }
+
+  async function supportGrantAccess() {
+    setSupportActionLoading(true); setSupportActionMsg(null);
+    try {
+      const token = await getAdminToken();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/grant-access`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ email: supportUser.email }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setSupportActionMsg({ ok: true, text: "Free access granted" });
+      loadSupportUser(supportUser);
+    } catch (err) { setSupportActionMsg({ ok: false, text: err.message }); }
+    setSupportActionLoading(false);
+  }
+
+  async function supportRevokeAccess() {
+    setSupportActionLoading(true); setSupportActionMsg(null);
+    try {
+      const { error } = await supabase.from("subscriptions").delete().eq("user_id", supportUser.id);
+      if (error) throw new Error(error.message);
+      setSupportActionMsg({ ok: true, text: "Access revoked" });
+      loadSupportUser(supportUser);
+    } catch (err) { setSupportActionMsg({ ok: false, text: err.message }); }
+    setSupportActionLoading(false);
+  }
+
+  async function supportSendPasswordReset() {
+    setSupportActionLoading(true); setSupportActionMsg(null);
+    try {
+      const token = await getAdminToken();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/send-reset-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ email: supportUser.email }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setSupportActionMsg({ ok: true, text: `Password reset email sent to ${supportUser.email}` });
+    } catch (err) { setSupportActionMsg({ ok: false, text: err.message }); }
+    setSupportActionLoading(false);
+  }
+
+  async function supportDeleteUser() {
+    setSupportActionLoading(true); setSupportActionMsg(null);
+    try {
+      const token = await getAdminToken();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/delete-user`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ user_id: supportUser.id }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setSupportUser(null);
+      setSupportResults(prev => prev.filter(u => u.id !== supportUser.id));
+      setSupportActionMsg({ ok: true, text: "Account deleted" });
+      setSupportDeleteConfirm(false);
+    } catch (err) { setSupportActionMsg({ ok: false, text: err.message }); }
+    setSupportActionLoading(false);
+  }
+
+  async function loadLoginAttempts() {
+    const { data } = await supabase.from("admin_login_attempts").select("*").order("attempted_at", { ascending: false }).limit(50);
+    setLoginAttempts(data || []);
+  }
+
+  async function loadSecurityData() {
+    const [{ data: blocked }, { data: sessions }, { data: settings }] = await Promise.all([
+      supabase.from("blocked_users").select("*").order("blocked_at", { ascending: false }),
+      supabase.from("user_presence").select("user_id, last_seen, current_page").order("last_seen", { ascending: false }).limit(20),
+      supabase.from("app_settings").select("key, value").in("key", ["lockout_max_attempts", "lockout_duration_mins"]),
+    ]);
+    setBlockedUsers(blocked || []);
+
+    if (sessions?.length) {
+      const userIds = sessions.map(s => s.user_id).filter(Boolean);
+      const [{ data: subData }, { data: profileData }] = await Promise.all([
+        supabase.from("subscriptions").select("user_id, email").in("user_id", userIds),
+        supabase.from("viewer_profiles").select("user_id, name").in("user_id", userIds),
+      ]);
+      const emailMap = {};
+      (subData || []).forEach(s => { emailMap[s.user_id] = s.email; });
+      const nameMap = {};
+      (profileData || []).forEach(p => { if (!nameMap[p.user_id]) nameMap[p.user_id] = p.name; });
+      setActiveSessions(sessions.map(s => ({ ...s, email: emailMap[s.user_id] || null, profileName: nameMap[s.user_id] || null })));
+    } else {
+      setActiveSessions([]);
+    }
+
+    const s = {};
+    (settings || []).forEach(r => { s[r.key] = r.value; });
+    if (Object.keys(s).length) setLockoutSettings(prev => ({ ...prev, ...s }));
+    loadLoginAttempts();
+  }
+
+  async function loadContentReports() {
+    setReportsLoading(true);
+    const { data } = await supabase.from("content_reports").select("*").order("created_at", { ascending: false }).limit(200);
+    setContentReports(data || []);
+    const { data: setting } = await supabase.from("app_settings").select("value").eq("key", "global_banned_words").maybeSingle();
+    if (setting?.value) { try { setGlobalBannedWords(JSON.parse(setting.value)); } catch {} }
+    setReportsLoading(false);
+  }
+
+  async function updateReportStatus(id, status) {
+    await supabase.from("content_reports").update({ status, reviewed_at: new Date().toISOString() }).eq("id", id);
+    setContentReports(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+  }
+
+  async function saveGlobalBannedWords(words) {
+    await supabase.from("app_settings").upsert({ key: "global_banned_words", value: JSON.stringify(words), updated_at: new Date().toISOString() }, { onConflict: "key" });
+    setGlobalBannedWords(words);
+  }
+
+  async function blockUser() {
+    if (!blockEmail.trim()) return;
+    setBlockLoading(true);
+    const { error } = await supabase.from("blocked_users").insert({ email: blockEmail.trim().toLowerCase(), reason: blockReason.trim() || null });
+    if (error) showToast(error.message, "error");
+    else { showToast("User blocked"); setBlockEmail(""); setBlockReason(""); loadSecurityData(); }
+    setBlockLoading(false);
+  }
+
+  async function unblockUser(id) {
+    await supabase.from("blocked_users").delete().eq("id", id);
+    setBlockedUsers(b => b.filter(u => u.id !== id));
+    showToast("User unblocked");
+  }
+
+  const TODO_LABELS = [
+    { name: "Legal", color: "#3b82f6" },
+    { name: "Tech", color: "#7c3aed" },
+    { name: "Business", color: "#fb923c" },
+    { name: "Content", color: "#10b981" },
+    { name: "Finance", color: "#06b6d4" },
+  ];
+
+  const DEFAULT_TODOS = [
+    { id: "t1", text: "Form LLC", done: false, section: "todo", label: "Legal" },
+    { id: "t2", text: "Register DMCA agent at copyright.gov ($6)", done: false, section: "todo", label: "Legal" },
+    { id: "t3", text: "Set up Terms of Service + Privacy Policy", done: false, section: "todo", label: "Legal" },
+    { id: "t4", text: "Write creator agreement template", done: false, section: "todo", label: "Legal" },
+    { id: "t5", text: "Set up Stripe for subscriptions", done: true, section: "todo", label: "Tech" },
+    { id: "g1", text: "First licensed content on platform", done: false, section: "goal", label: "Content" },
+    { id: "g2", text: "Legal Team", done: false, section: "goal", label: "Legal" },
+    { id: "g3", text: "Content Licensing Team", done: false, section: "goal", label: "Content" },
+    { id: "g4", text: "Marketing/Growth Team + Customer Support", done: false, section: "goal", label: "Business" },
+    { id: "g5", text: "Finance/Accounting Team", done: false, section: "goal", label: "Finance" },
+  ];
+
+  async function loadStorageFiles() {
+    setStorageLoading(true);
+    const BUCKET = "peep-media";
+    const VIDEO_EXTS = [".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"];
+    const AUDIO_EXTS = [".mp3", ".wav", ".aac", ".m4a", ".ogg"];
+    const FOLDER_TYPE = { shorts: "short", trailers: "trailer", episodes: "episode", "episodes ": "episode", podcasts: "podcast_episode" };
+    const folders = ["shorts", "trailers", "episodes", "episodes ", "podcasts", ""];
+    const allFiles = [];
+    const scanFolder = async (folder, depth = 0) => {
+      const { data } = await supabase.storage.from(BUCKET).list(folder || undefined, { limit: 500, sortBy: { column: "created_at", order: "desc" } });
+      const subfolders = [];
+      (data || []).forEach(f => {
+        if (!f.id) {
+          // It's a subfolder — recurse one more level
+          if (depth < 2) subfolders.push(folder ? `${folder}/${f.name}` : f.name);
+          return;
+        }
+        const ext = f.name.substring(f.name.lastIndexOf(".")).toLowerCase();
+        if (![...VIDEO_EXTS, ...AUDIO_EXTS].includes(ext)) return;
+        const path = folder ? `${folder}/${f.name}` : f.name;
+        const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
+        const topFolder = folder ? folder.split("/")[0] : "";
+        const typeHint = FOLDER_TYPE[topFolder] ?? (AUDIO_EXTS.includes(ext) ? "podcast_episode" : "movie");
+        allFiles.push({ ...f, folder: folder || "root", path, url: urlData?.publicUrl, isVideo: VIDEO_EXTS.includes(ext), isAudio: AUDIO_EXTS.includes(ext), typeHint });
+      });
+      for (const sub of subfolders) await scanFolder(sub, depth + 1);
+    };
+    for (const folder of folders) await scanFolder(folder);
+    const [movRes, epRes, peRes] = await Promise.all([
+      supabase.from("videos").select("url, trailer_url"),
+      supabase.from("episodes").select("url"),
+      supabase.from("podcast_episodes").select("audio_url"),
+    ]);
+    const normUrl = url => {
+      if (!url) return null;
+      return url.split("/").pop()?.toLowerCase() || null;
+    };
+    const ingestedUrls = new Set([
+      ...(movRes.data || []).flatMap(r => [r.url, r.trailer_url]),
+      ...(epRes.data || []).map(r => r.url),
+      ...(peRes.data || []).map(r => r.audio_url),
+    ].filter(Boolean).map(normUrl));
+    setStorageFiles(allFiles.map(f => ({ ...f, ingested: ingestedUrls.has(normUrl(f.url)) })));
+    setStorageLoading(false);
+  }
+
+  async function saveStorageItem() {
+    setStorageAddSaving(true);
+    const f = storageAddForm;
+    const url = f.url.trim() || storageAddModal?.url;
+    let error = null;
+    if (f.type === "movie") {
+      ({ error } = await supabase.from("videos").insert({ title: f.title, url, description: f.description, year: f.year || null, genre: f.genre || null }));
+    } else if (f.type === "trailer") {
+      const table = f.linked_table;
+      const urlCol = "trailer_url";
+      ({ error } = await supabase.from(table).update({ [urlCol]: url }).eq("id", f.linked_id));
+    } else if (f.type === "episode") {
+      ({ error } = await supabase.from("episodes").insert({ title: f.title, url, show_id: f.show_id, episode_number: f.episode_number, season_number: f.season_number, description: f.description }));
+    } else if (f.type === "podcast_episode") {
+      ({ error } = await supabase.from("podcast_episodes").insert({ title: f.title, audio_url: url, podcast_id: f.podcast_id, description: f.description }));
+    }
+    setStorageAddSaving(false);
+    if (!error) {
+      showToast(`"${f.title}" published to Peep`);
+      setStorageAddModal(null);
+    } else {
+      showToast("Error: " + error.message);
+    }
+  }
+
+  async function loadBossSettings() {
+    const { data } = await supabase.from("app_settings").select("key, value");
+    const s = {};
+    (data || []).forEach(r => { s[r.key] = r.value; });
+    setBossSettings(prev => ({ ...prev, ...s }));
+    const todosRow = (data || []).find(r => r.key === "boss_todos");
+    const parsed = todosRow ? JSON.parse(todosRow.value) : DEFAULT_TODOS;
+    setBossTodos(parsed.map(t => ({ section: "todo", label: "", ...t })));
+  }
+
+  async function saveTodos(todos) {
+    setBossTodos(todos);
+    await supabase.from("app_settings").upsert({ key: "boss_todos", value: JSON.stringify(todos), updated_at: new Date().toISOString() }, { onConflict: "key" });
+  }
+
+  function toggleTodo(id) {
+    saveTodos(bossTodos.map(t => t.id === id ? { ...t, done: !t.done } : t));
+  }
+
+  function deleteTodo(id) {
+    saveTodos(bossTodos.filter(t => t.id !== id));
+  }
+
+  function addTodo() {
+    if (!newTodo.trim()) return;
+    saveTodos([...bossTodos, { id: Date.now().toString(), text: newTodo.trim(), done: false, section: "todo", label: newTodoLabel }]);
+    setNewTodo(""); setNewTodoLabel("");
+  }
+
+  function addGoal() {
+    if (!newGoal.trim()) return;
+    saveTodos([...bossTodos, { id: Date.now().toString(), text: newGoal.trim(), done: false, section: "goal", label: newGoalLabel }]);
+    setNewGoal(""); setNewGoalLabel("");
+  }
+
+  async function saveSetting(key, value) {
+    const { error } = await supabase.from("app_settings").upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: "key" });
+    if (error) {
+      console.error("saveSetting error:", error);
+      showToast(`Failed to save setting: ${error.message}`, "error");
+      return;
+    }
+    setBossSettings(prev => ({ ...prev, [key]: value }));
+  }
+
+  async function grantAccessByEmail() {
+    if (!grantEmail.trim()) return;
+    setGrantLoading(true);
+    setGrantResult(null);
+    try {
+      const token = await getAdminToken();
+      const res = await fetch("https://iuozujwtuzuwubhsnhix.supabase.co/functions/v1/grant-access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ email: grantEmail.trim() }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setGrantResult({ success: true, msg: `Access granted to ${data.email}` });
+      setGrantEmail("");
+    } catch (err) {
+      setGrantResult({ success: false, msg: err.message });
+    }
+    setGrantLoading(false);
+  }
+
+  async function loadPromos() {
+    setPromosLoading(true);
+    const { data } = await supabase.from("promo_codes").select("*").order("created_at", { ascending: false });
+    setPromos(data || []);
+    setPromosLoading(false);
+  }
+
+  async function savePromo() {
+    if (!promoForm.name.trim() || !promoForm.code.trim()) return;
+    setPromoSaving(true);
+    const { error } = await supabase.from("promo_codes").insert({
+      name: promoForm.name.trim(),
+      code: promoForm.code.trim().toUpperCase(),
+      active: true,
+    });
+    if (error) { showToast(error.message, "error"); }
+    else { setPromoForm({ name: "", code: "" }); showToast("Promo code created"); loadPromos(); }
+    setPromoSaving(false);
+  }
+
+  async function togglePromo(id, active) {
+    await supabase.from("promo_codes").update({ active }).eq("id", id);
+    setPromos(p => p.map(x => x.id === id ? { ...x, active } : x));
+  }
+
+  async function deletePromo(id) {
+    await supabase.from("promo_codes").delete().eq("id", id);
+    setPromos(p => p.filter(x => x.id !== id));
+    showToast("Promo code deleted");
+  }
+
+  function exportSubsCSV() {
+    const headers = ["Email", "Status", "Started", "Period Ends", "Last Seen", "Watch Sessions", "Profiles", "Stripe Customer", "Stripe Subscription"];
+    const csvRows = subs.map(s => [
+      s.email || s.user_id,
+      s.status,
+      s.created_at ? new Date(s.created_at).toLocaleDateString() : "",
+      s.current_period_end ? new Date(s.current_period_end).toLocaleDateString() : "",
+      s.last_seen ? new Date(s.last_seen).toLocaleDateString() : "Never",
+      s.watch_sessions,
+      s.profile_count,
+      s.stripe_customer_id || "",
+      s.stripe_subscription_id || "",
+    ].map(v => `"${v}"`));
+    const csv = [headers, ...csvRows].map(r => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `peep-subscribers-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ──── CREATORS ────
+
+
+  async function loadCreators() {
+    setCreatorsLoading(true);
+    const { data } = await supabase.from("creators").select("*").order("created_at", { ascending: false });
+    setCreatorsList(data || []);
+    setCreatorsLoading(false);
+  }
+
+  function parseAgreementDate(notes) {
+    const m = (notes || "").match(/\[AGREEMENT:(\d{4}-\d{2}-\d{2})\]/);
+    return m ? m[1] : "";
+  }
+
+  function buildNotesWithAgreement(notes, dateStr) {
+    const stripped = (notes || "").replace(/\[AGREEMENT:\d{4}-\d{2}-\d{2}\]\s*/g, "").trim();
+    return dateStr ? `[AGREEMENT:${dateStr}]\n${stripped}` : stripped;
+  }
+
+  function openCreatorModal(creator = null) {
+    if (creator) {
+      setEditingCreator(creator);
+      setCreatorForm({ name: creator.name, email: creator.email, payment_method: creator.payment_method || "PayPal", payment_handle: creator.payment_handle || "", routing_number: creator.routing_number || "", status: creator.status, notes: (creator.notes || "").replace(/\[AGREEMENT:\d{4}-\d{2}-\d{2}\]\s*/g, "").trim(), agreement_signed_at: parseAgreementDate(creator.notes) });
+    } else {
+      setEditingCreator(null);
+      setCreatorForm({ name: "", email: "", payment_method: "PayPal", payment_handle: "", status: "active", notes: "", agreement_signed_at: "" });
+    }
+    setCreatorModal(true);
+  }
+
+  async function fetchStripeRevenue() {
+    setFetchingRevenue(true);
+    try {
+      const token = await getAdminToken();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/get-stripe-revenue`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ month: payoutMonth }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setTotalRevenue(data.revenue);
+      showToast(`Pulled $${data.revenue.toFixed(2)} from Stripe for ${payoutMonth}`);
+    } catch (err) {
+      showToast(err.message, "error");
+    }
+    setFetchingRevenue(false);
+  }
+
+  async function loadReviewQueue() {
+    setReviewLoading(true);
+    const { data: eps } = await supabase.from("episodes").select("*, shows(title, thumbnail)").eq("status", "pending").order("created_at", { ascending: false });
+    if (!eps?.length) { setReviewEpisodes([]); setReviewLoading(false); return; }
+
+    // Look up creator for each show
+    const showIds = [...new Set(eps.map(e => String(e.show_id)))];
+    const { data: links } = await supabase.from("content_creators").select("content_id, creators(name, email)").eq("content_type", "show").in("content_id", showIds);
+    const creatorByShow = {};
+    (links || []).forEach(l => { creatorByShow[l.content_id] = l.creators; });
+
+    setReviewEpisodes(eps.map(ep => ({ ...ep, showTitle: ep.shows?.title, showThumb: ep.shows?.thumbnail, creator: creatorByShow[String(ep.show_id)] || null })));
+    setReviewLoading(false);
+  }
+
+  async function approveEpisode(ep) {
+    await supabase.from("episodes").update({ status: "approved" }).eq("id", ep.id);
+    setReviewEpisodes(prev => prev.filter(e => e.id !== ep.id));
+    setPendingCount(c => Math.max(0, c - 1));
+    showToast("Episode approved — it's now live");
+    const token = await getAdminToken();
+    fetch(`${SUPABASE_URL}/functions/v1/notify-episode-status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ type: "approved", episode_id: ep.id }),
+    });
+  }
+
+  async function rejectEpisode(ep, note) {
+    await supabase.from("episodes").update({ status: "rejected", rejection_note: note || null }).eq("id", ep.id);
+    setReviewEpisodes(prev => prev.filter(e => e.id !== ep.id));
+    setPendingCount(c => Math.max(0, c - 1));
+    setRejectModal(null);
+    setRejectNote("");
+    showToast("Episode rejected — creator notified");
+    const token = await getAdminToken();
+    fetch(`${SUPABASE_URL}/functions/v1/notify-episode-status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ type: "rejected", episode_id: ep.id, rejection_note: note || null }),
+    });
+  }
+
+  async function saveCreator() {
+    if (!creatorForm.name.trim() || !creatorForm.email.trim()) return;
+    setCreatorSaving(true);
+    try {
+      const { agreement_signed_at, notes, ...rest } = creatorForm;
+      const payload = { ...rest, email: creatorForm.email.trim().toLowerCase(), notes: buildNotesWithAgreement(notes, agreement_signed_at) };
+      if (editingCreator) {
+        const { error } = await supabase.from("creators").update(payload).eq("id", editingCreator.id);
+        if (error) { showToast(error.message, "error"); return; }
+        showToast("Partner updated"); setCreatorModal(false); loadCreators();
+      } else {
+        const { error } = await supabase.from("creators").insert(payload);
+        if (error) { showToast(error.message, "error"); return; }
+        loadCreators();
+        // Send invite
+        try {
+          const token = await getAdminToken();
+          const invRes = await fetch(`${SUPABASE_URL}/functions/v1/invite-creator`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+            body: JSON.stringify({ name: creatorForm.name.trim(), email: creatorForm.email.trim().toLowerCase() }),
+          });
+          const invData = await invRes.json();
+          if (invData.error) showToast(`Creator added but invite failed: ${invData.error}`, "error");
+          else showToast("Partner added — invite email sent");
+        } catch (invErr) {
+          showToast(`Creator added but invite failed: ${invErr.message}`, "error");
+        }
+        setCreatorModal(false);
+      }
+    } finally {
+      setCreatorSaving(false);
+    }
+  }
+
+  async function resendInvite(creator) {
+    setResendingInvite(true);
+    try {
+      const token = await getAdminToken();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/invite-creator`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ name: creator.name, email: creator.email }),
+      });
+      const data = await res.json();
+      if (data.error) showToast(`Failed: ${data.error}`, "error");
+      else showToast("Invite resent successfully");
+    } catch (err) {
+      showToast(err.message, "error");
+    }
+    setResendingInvite(false);
+  }
+
+  async function deleteCreator(id) {
+    await supabase.from("creators").delete().eq("id", id);
+    setCreatorsList(c => c.filter(x => x.id !== id));
+    setDeleteCreatorConfirm(null);
+    showToast("Partner removed");
+  }
+
+  // ──── CONTENT-CREATOR LINKS ────
+
+  async function loadContentCreators() {
+    setContentCreatorsLoading(true);
+    const { data } = await supabase.from("content_creators").select("*");
+    setContentCreators(data || []);
+    setContentCreatorsLoading(false);
+  }
+
+  async function linkCreatorContent(creatorId, contentId, contentType) {
+    const { error } = await supabase.from("content_creators").insert([{ creator_id: creatorId, content_id: String(contentId), content_type: contentType }]);
+    if (error) { showToast("Failed to link content: " + error.message, "error"); return; }
+    await loadContentCreators();
+  }
+
+  async function unlinkCreatorContent(id) {
+    const { error } = await supabase.from("content_creators").delete().eq("id", id);
+    if (error) { showToast("Failed to unlink: " + error.message, "error"); return; }
+    await loadContentCreators();
+  }
+
+  // ──── PAYOUTS ────
+
+  async function loadPayouts() {
+    setPayoutLoading(true);
+    const { data: creators } = await supabase.from("creators").select("*");
+    if (!creators?.length) { setPayoutData([]); setPayoutLoading(false); return; }
+
+    const monthStart = `${payoutMonth}-01T00:00:00.000Z`;
+    const _ms = new Date(monthStart);
+    const monthEnd = new Date(Date.UTC(_ms.getUTCFullYear(), _ms.getUTCMonth() + 1, 1)).toISOString();
+
+    const [
+      { data: links },
+      { data: watchData },
+      { data: episodes },
+      { data: podEps },
+      { data: existingPayouts },
+    ] = await Promise.all([
+      supabase.from("content_creators").select("*"),
+      supabase.from("watch_progress").select("content_id, content_type, progress_seconds, duration_seconds, user_id").gte("first_watched_at", monthStart).lt("first_watched_at", monthEnd),
+      supabase.from("episodes").select("id, show_id"),
+      supabase.from("podcast_episodes").select("id, podcast_id"),
+      supabase.from("creator_payouts").select("*").eq("month", payoutMonth),
+    ]);
+
+    // Build map: "content_type:content_id" → creator_id
+    const contentToCreator = {};
+    (links || []).forEach(l => { contentToCreator[`${l.content_type}:${l.content_id}`] = l.creator_id; });
+
+    // Deduplicate: keep best (highest progress) session per user per content
+    const userContentBest = {};
+    (watchData || []).forEach(w => {
+      const key = `${w.user_id}:${w.content_type}:${w.content_id}`;
+      if (!userContentBest[key] || w.progress_seconds > userContentBest[key].progress_seconds) {
+        userContentBest[key] = w;
+      }
+    });
+
+    // 25% threshold: must have watched at least 25% of content to count
+    const qualifyingWatches = Object.values(userContentBest).filter(w => {
+      if (w.duration_seconds > 0) return w.progress_seconds >= w.duration_seconds * 0.25;
+      return w.progress_seconds >= 60; // fallback: at least 1 min if duration unknown
+    });
+
+    // Sum watch seconds per creator, track per-user for fraud detection
+    const creatorSeconds = {};
+    const creatorUserSeconds = {};
+    let totalSeconds = 0;
+    qualifyingWatches.forEach(w => {
+      let creatorId = contentToCreator[`${w.content_type}:${w.content_id}`];
+      if (!creatorId && w.content_type === "episode") {
+        const ep = (episodes || []).find(e => String(e.id) === String(w.content_id));
+        if (ep) creatorId = contentToCreator[`show:${ep.show_id}`];
+      }
+      if (!creatorId && w.content_type === "podcast_episode") {
+        const ep = (podEps || []).find(e => String(e.id) === String(w.content_id));
+        if (ep) creatorId = contentToCreator[`podcast:${ep.podcast_id}`];
+      }
+      if (creatorId) {
+        creatorSeconds[creatorId] = (creatorSeconds[creatorId] || 0) + (w.progress_seconds || 0);
+        totalSeconds += (w.progress_seconds || 0);
+        if (!creatorUserSeconds[creatorId]) creatorUserSeconds[creatorId] = {};
+        const uid = w.user_id || "unknown";
+        creatorUserSeconds[creatorId][uid] = (creatorUserSeconds[creatorId][uid] || 0) + (w.progress_seconds || 0);
+      }
+    });
+
+    // Fraud flag: one user accounts for >40% of a creator's watch time
+    const fraudFlags = {};
+    Object.entries(creatorUserSeconds).forEach(([cId, userMap]) => {
+      const total = creatorSeconds[cId] || 0;
+      if (total === 0) return;
+      const maxUserSecs = Math.max(...Object.values(userMap));
+      if (maxUserSecs / total > 0.4) fraudFlags[cId] = Math.round(maxUserSecs / total * 100);
+    });
+
+    const creatorPool = +(totalRevenue * 0.5).toFixed(2);
+
+    // Load rollover: previous below-min unpaid months not yet rolled into another payout
+    const { data: allPriorPayouts } = await supabase
+      .from("creator_payouts")
+      .select("id, creator_id, payout_amount, month")
+      .lt("month", payoutMonth)
+      .is("rolled_into_month", null)
+      .neq("status", "paid");
+
+    const rows = creators.map(c => {
+      const secs = creatorSeconds[c.id] || 0;
+      const watchMins = Math.round(secs / 60);
+      const share = totalSeconds > 0 ? secs / totalSeconds : 0;
+      const basePayout = +(creatorPool * share).toFixed(2);
+
+      // Accumulate rolled-over below-min amounts
+      const rolloverSources = (allPriorPayouts || []).filter(p => p.creator_id === c.id && p.payout_amount < 10);
+      const rolloverAmount = +(rolloverSources.reduce((s, p) => s + (p.payout_amount || 0), 0)).toFixed(2);
+      const rolloverIds = rolloverSources.map(p => p.id);
+      const payout = +(basePayout + rolloverAmount).toFixed(2);
+
+      const saved = (existingPayouts || []).find(p => p.creator_id === c.id);
+      return {
+        creator: c, watchMins, share: +(share * 100).toFixed(1),
+        basePayout, rolloverAmount, rolloverIds, payout,
+        status: saved?.status || "unpaid", paid_at: saved?.paid_at || null,
+        payout_id: saved?.id || null, fraudFlag: fraudFlags[c.id] || null,
+      };
+    });
+
+    setPayoutData(rows);
+    setPayoutLoading(false);
+  }
+
+  async function loadPayoutHistory() {
+    setPayoutHistoryLoading(true);
+    const { data } = await supabase.from("creator_payouts").select("*").eq("status", "paid").order("month", { ascending: false });
+    setPayoutHistory(data || []);
+    setPayoutHistoryLoading(false);
+  }
+
+  async function togglePayoutStatus(row) {
+    const newStatus = row.status === "paid" ? "unpaid" : "paid";
+
+    // Require confirmation before marking unpaid (prevents accidental reversal)
+    if (newStatus === "unpaid") {
+      if (!window.confirm(`Mark ${row.creator.name}'s ${payoutMonth} payout as UNPAID?\n\nThis reverses a payment already recorded as sent.`)) return;
+    }
+
+    const now = new Date().toISOString();
+    const payload = {
+      creator_id: row.creator.id, creator_name: row.creator.name,
+      month: payoutMonth, watch_minutes: row.watchMins, lifetime_subscribers: 0,
+      revenue: totalRevenue, platform_cut: +(totalRevenue * 0.5).toFixed(2),
+      payout_amount: row.payout,
+      rollover_amount: row.rolloverAmount || 0,
+      status: newStatus, paid_at: newStatus === "paid" ? now : null,
+    };
+
+    let payoutId = row.payout_id;
+    if (payoutId) {
+      await supabase.from("creator_payouts").update({ status: newStatus, paid_at: payload.paid_at }).eq("id", payoutId);
+    } else {
+      const { data: inserted } = await supabase.from("creator_payouts").insert(payload).select("id").single();
+      payoutId = inserted?.id;
+    }
+
+    // Write audit log
+    if (payoutId) {
+      await supabase.from("payout_audit_log").insert({
+        payout_id: payoutId,
+        creator_name: row.creator.name,
+        month: payoutMonth,
+        old_status: row.status,
+        new_status: newStatus,
+      });
+    }
+
+    // When marking paid: mark any rolled-over source months as consumed
+    if (newStatus === "paid" && row.rolloverIds?.length) {
+      await supabase.from("creator_payouts").update({ rolled_into_month: payoutMonth }).in("id", row.rolloverIds);
+    }
+
+    loadPayouts();
+    if (newStatus === "paid") loadPayoutHistory();
+  }
+
+  function exportPayoutsCSV() {
+    const headers = ["Partner", "Email", "Watch Time (mins)", "Watch Share %", "Total Revenue", "Partner Payout", "Status", "Paid Date"];
+    const csvRows = payoutData.map(r => [r.creator.name, r.creator.email, r.watchMins, r.share + "%", totalRevenue.toFixed(2), r.payout.toFixed(2), r.status, r.paid_at ? new Date(r.paid_at).toLocaleDateString() : ""].map(v => `"${v}"`));
+    const csv = [headers, ...csvRows].map(r => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `peep-payouts-${payoutMonth}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  }
 
   async function loadReports() {
     setReportLoading(true);
+    try {
     const [
       { count: userCount },
       { count: videoCount },
@@ -304,37 +1331,46 @@ export function CMS({ onExit }) {
       watchTimeMap[key] = (watchTimeMap[key] || 0) + secs;
       totalWatchSeconds += secs;
     });
+    const parseId = (type, id) => type === "movie" ? id : parseInt(id);
     const topWatchedRaw = Object.entries(watchMap)
       .sort((a, b) => b[1] - a[1]).slice(0, 10)
-      .map(([key, count]) => { const [type, id] = key.split(":"); return { type, id: parseInt(id), count }; });
+      .map(([key, count]) => { const [type, ...rest] = key.split(":"); const id = rest.join(":"); return { type, id: parseId(type, id), count }; });
     const topByTimeRaw = Object.entries(watchTimeMap)
       .sort((a, b) => b[1] - a[1]).slice(0, 10)
-      .map(([key, secs]) => { const [type, id] = key.split(":"); return { type, id: parseInt(id), secs }; });
+      .map(([key, secs]) => { const [type, ...rest] = key.split(":"); const id = rest.join(":"); return { type, id: parseId(type, id), secs }; });
 
     // Build raw rated + saved before title fetch so all IDs are included
+    // Cross-reference content_type from watch_progress since ratings table may not have it
+    const watchTypeMap = {};
+    (watchData || []).forEach(w => { if (w.content_id && w.content_type) watchTypeMap[w.content_id] = w.content_type; });
     const ratingMap = {};
     (ratingsData || []).forEach(r => {
-      if (r.rating === 1) { const key = `${r.content_type}:${r.content_id}`; ratingMap[key] = (ratingMap[key] || 0) + 1; }
+      if (r.rating >= 4) {
+        const ctype = r.content_type || watchTypeMap[r.content_id] || null;
+        if (!ctype) return;
+        const key = `${ctype}:${r.content_id}`;
+        ratingMap[key] = (ratingMap[key] || 0) + 1;
+      }
     });
     const topRatedRaw = Object.entries(ratingMap)
       .sort((a, b) => b[1] - a[1]).slice(0, 10)
-      .map(([key, count]) => { const [type, id] = key.split(":"); return { type, id: parseInt(id), count }; });
+      .map(([key, count]) => { const [type, ...rest] = key.split(":"); const id = rest.join(":"); return { type, id: parseId(type, id), count }; });
 
     const saveMap = {};
     (listData || []).forEach(s => { const key = `${s.content_type}:${s.content_id}`; saveMap[key] = (saveMap[key] || 0) + 1; });
     const topSavedRaw = Object.entries(saveMap).sort((a, b) => b[1] - a[1]).slice(0, 10)
-      .map(([key, count]) => { const [type, id] = key.split(":"); return { type, id: parseInt(id), count }; });
+      .map(([key, count]) => { const [type, ...rest] = key.split(":"); const id = rest.join(":"); return { type, id: parseId(type, id), count }; });
 
     // Unified title fetch — covers all four panels and all content types
     const allItems = [...topWatchedRaw, ...topByTimeRaw, ...topRatedRaw, ...topSavedRaw];
-    const allKeys = [...new Set(allItems.map(t => `${t.type}:${t.id}`))];
-    const idsFor = (prefix) => allKeys.filter(k => k.startsWith(prefix + ":")).map(k => parseInt(k.split(":")[1]));
-    const allEpIds = [...new Set((watchData || []).filter(w => w.content_type === "episode").map(w => w.content_id))];
+    // movies use UUID strings; episodes/shows/podcasts use bigint
+    const idsForStr = (prefix) => [...new Set(allItems.filter(t => t.type === prefix).map(t => t.id))];
+    const allEpIds = [...new Set((watchData || []).filter(w => w.content_type === "episode").map(w => parseInt(w.content_id)))].filter(Boolean);
     const [movTitles, epTitles, podEpTitles, showTitles, epShowRes] = await Promise.all([
-      idsFor("movie").length ? supabase.from("videos").select("id, title").in("id", idsFor("movie")) : { data: [] },
-      idsFor("episode").length ? supabase.from("episodes").select("id, title").in("id", idsFor("episode")) : { data: [] },
-      idsFor("podcast_episode").length ? supabase.from("podcast_episodes").select("id, title").in("id", idsFor("podcast_episode")) : { data: [] },
-      idsFor("show").length ? supabase.from("shows").select("id, title").in("id", idsFor("show")) : { data: [] },
+      idsForStr("movie").length ? supabase.from("videos").select("id, title").in("id", idsForStr("movie")) : { data: [] },
+      idsForStr("episode").length ? supabase.from("episodes").select("id, title").in("id", idsForStr("episode")) : { data: [] },
+      idsForStr("podcast_episode").length ? supabase.from("podcast_episodes").select("id, title").in("id", idsForStr("podcast_episode")) : { data: [] },
+      idsForStr("show").length ? supabase.from("shows").select("id, title").in("id", idsForStr("show")) : { data: [] },
       allEpIds.length ? supabase.from("episodes").select("id, show_id").in("id", allEpIds) : { data: [] },
     ]);
     const titleMap = {};
@@ -539,7 +1575,13 @@ export function CMS({ onExit }) {
       hoursTrend, contentTypeStats, dowStats,
       categoryStats, subscriberFunnel, depthBuckets, hourStats,
     });
-    setReportLoading(false);
+    setReportLastFetched(new Date());
+    } catch (err) {
+      console.error("loadReports error:", err);
+      showToast("Failed to load reports: " + err.message, "error");
+    } finally {
+      setReportLoading(false);
+    }
   }
 
   // ──── VIDEOS ────
@@ -599,7 +1641,18 @@ export function CMS({ onExit }) {
       url: row.url ?? "",
       trailer_url: row.trailer_url ?? "",
       description: row.description ?? "",
-      tags: Array.isArray(row.tags) ? row.tags.join(", ") : (row.tags ?? ""),
+      tags: (() => {
+        if (!row.tags) return "";
+        if (Array.isArray(row.tags)) {
+          // Filter out any elements that are themselves arrays/objects (corrupted)
+          const clean = row.tags.filter(t => typeof t === "string" && !t.startsWith("[") && !t.startsWith("{"));
+          return clean.join(", ");
+        }
+        if (typeof row.tags === "string") {
+          try { const p = JSON.parse(row.tags); if (Array.isArray(p)) return p.filter(t => typeof t === "string" && !t.startsWith("[")).join(", "); } catch {}
+        }
+        return "";
+      })(),
     });
   }
 
@@ -615,9 +1668,18 @@ export function CMS({ onExit }) {
       score: form.score !== "" ? Number(form.score) : null,
       year: form.year !== "" ? Number(form.year) : null,
       trailer_url: form.trailer_url.trim() || null,
-      tags: form.tags
-        ? form.tags.split(",").map(t => t.trim()).filter(Boolean)
-        : [],
+      tags: (() => {
+        const raw = form.tags.trim();
+        if (!raw) return [];
+        // If it looks like JSON, try to parse it rather than splitting blindly
+        if (raw.startsWith("[")) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) return parsed.filter(t => typeof t === "string" && t.trim()).map(t => t.trim());
+          } catch {}
+        }
+        return raw.split(",").map(t => t.trim()).filter(Boolean);
+      })(),
     };
   }
 
@@ -729,11 +1791,30 @@ export function CMS({ onExit }) {
       position: carousel.position ?? 0,
       pages: carousel.pages ?? "home",
     });
+    if (carousel.type === "handpicked") {
+      try {
+        const stored = JSON.parse(carousel.filter_value || "[]");
+        const pool = [
+          ...rows.map(v => ({ id: v.id, type: "movie", title: v.title, subtitle: v.category, thumbnail: v.poster || v.thumbnail })),
+          ...showsList.map(s => ({ id: s.id, type: "show", title: s.title, subtitle: "Series", thumbnail: s.poster || s.thumbnail })),
+        ];
+        const enriched = stored.map(({ id, type }) => {
+          const found = pool.find(p => p.id === id && p.type === type);
+          return found ?? { id, type, title: "", thumbnail: null };
+        });
+        setHandpickedSelected(enriched);
+      } catch { setHandpickedSelected([]); }
+    } else {
+      setHandpickedSelected([]);
+    }
+    setHandpickedSearch("");
   }
 
   function cancelCarouselEdit() {
     setEditingCarouselId(null);
     setCarouselForm(EMPTY_CAROUSEL);
+    setHandpickedSelected([]);
+    setHandpickedSearch("");
     setDrawerOpen(false);
   }
 
@@ -746,9 +1827,16 @@ export function CMS({ onExit }) {
       showToast("Category is required for category type.", "error");
       return;
     }
+    if (carouselForm.type === "handpicked" && handpickedSelected.length === 0) {
+      showToast("Pick at least one title.", "error");
+      return;
+    }
 
     setCarouselSaving(true);
-    const payload = { ...carouselForm, position: editingCarouselId ? carouselForm.position : carousels.length };
+    const serializedForm = carouselForm.type === "handpicked"
+      ? { ...carouselForm, filter_value: JSON.stringify(handpickedSelected.map(({ id, type }) => ({ id, type }))) }
+      : carouselForm;
+    const payload = { ...serializedForm, position: editingCarouselId ? carouselForm.position : carousels.length };
 
     try {
       if (editingCarouselId) {
@@ -1022,6 +2110,8 @@ export function CMS({ onExit }) {
     else { showToast("Episode deleted"); setDeletePodEpConfirm(null); await loadPodEpisodes(selectedPodcastForEp.id); }
   }
 
+  // ──── MUSIC VIDEOS ────
+
   // ──── ADS / VAST TAGS ────
 
   async function loadAds() {
@@ -1118,9 +2208,59 @@ export function CMS({ onExit }) {
     });
 
     setAdAnalytics({ impressions, completionRate, fillRate, skips, uniqueViewers, dailyData, tagStats });
+    setAdLastFetched(new Date());
   }
 
   // ──── LIVE STREAMS ────
+
+  async function loadApplications() {
+    setAppsLoading(true);
+    const { data, error } = await supabase.from("streamer_applications").select("*").order("created_at", { ascending: false });
+    if (!error) setApplications(data || []);
+    setAppsLoading(false);
+  }
+
+  async function approveApplication(app) {
+    setApprovingId(app.id);
+    try {
+      const token = await getAdminToken();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/approve-streamer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ application_id: app.id }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      showToast(`${app.name} approved — stream key sent to ${app.email}`);
+      await loadApplications();
+      await loadLiveStreams();
+    } catch (err) {
+      showToast(`Error: ${err.message}`, "error");
+    }
+    setApprovingId(null);
+  }
+
+  async function rejectApplication() {
+    if (!rejectTarget) return;
+    setRejectingId(rejectTarget.id);
+    try {
+      const token = await getAdminToken();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/reject-streamer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ application_id: rejectTarget.id, note: appRejectNote }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      showToast(`${rejectTarget.name} rejected`);
+      setRejectTarget(null);
+      setAppRejectNote("");
+      await loadApplications();
+    } catch (err) {
+      showToast(`Error: ${err.message}`, "error");
+    }
+    setRejectingId(null);
+  }
 
   async function loadLiveStreams() {
     setLiveLoading(true);
@@ -1141,7 +2281,7 @@ export function CMS({ onExit }) {
   function startLiveEdit(s) {
     setEditingLiveId(s.id);
     setDrawerOpen(true);
-    setLiveForm({ title: s.title ?? "", description: s.description ?? "", stream_url: s.stream_url ?? "", thumbnail: s.thumbnail ?? "", is_live: s.is_live ?? true, badge_text: s.badge_text ?? "LIVE", channel_number: s.channel_number ?? "", now_airing: s.now_airing ?? "", up_next: s.up_next ?? "" });
+    setLiveForm({ title: s.title ?? "", description: s.description ?? "", stream_url: s.stream_url ?? "", thumbnail: s.thumbnail ?? "", hero_image: s.hero_image ?? "", is_live: s.is_live ?? true, is_hero: s.is_hero ?? false });
   }
 
   function cancelLiveEdit() { setEditingLiveId(null); setLiveForm(EMPTY_LIVE_STREAM); setDrawerOpen(false); }
@@ -1162,6 +2302,13 @@ export function CMS({ onExit }) {
       await loadLiveStreams();
     } catch (error) { showToast("Save failed: " + error.message, "error"); }
     setLiveSaving(false);
+  }
+
+  async function setHero(s) {
+    await supabase.from("live_streams").update({ is_hero: false }).neq("id", s.id);
+    const { error } = await supabase.from("live_streams").update({ is_hero: !s.is_hero }).eq("id", s.id);
+    if (error) showToast("Failed to update hero: " + error.message, "error");
+    else { showToast(s.is_hero ? "Hero cleared" : `${s.title} set as hero`); await loadLiveStreams(); }
   }
 
   async function toggleLive(s) {
@@ -1592,6 +2739,101 @@ export function CMS({ onExit }) {
     else { showToast("Stream deleted"); setDeleteLiveConfirm(null); await loadLiveStreams(); }
   }
 
+  async function deletePlaylistSource(source) {
+    setDeletingPlaylist(true);
+    const { error } = await supabase.from("live_streams").delete().eq("playlist_source", source);
+    if (error) showToast("Delete failed: " + error.message, "error");
+    else { showToast("Playlist removed"); setDeletePlaylistConfirm(null); await loadLiveStreams(); }
+    setDeletingPlaylist(false);
+  }
+
+  async function testAllChannels() {
+    const streams = liveList.filter(s => s.stream_url);
+    if (!streams.length) return;
+    setTestingChannels(true);
+    setChannelStatuses({});
+    setTestProgress({ done: 0, total: streams.length });
+    const BATCH = 5;
+    for (let i = 0; i < streams.length; i += BATCH) {
+      const batch = streams.slice(i, i + BATCH);
+      await Promise.all(batch.map(async s => {
+        setChannelStatuses(prev => ({ ...prev, [s.id]: "testing" }));
+        try {
+          const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(s.stream_url)}`, { signal: AbortSignal.timeout(12000) });
+          const json = await res.json();
+          const ok = json.contents && json.contents.length > 10;
+          setChannelStatuses(prev => ({ ...prev, [s.id]: ok ? "ok" : "error" }));
+        } catch {
+          setChannelStatuses(prev => ({ ...prev, [s.id]: "error" }));
+        }
+      }));
+      setTestProgress({ done: Math.min(i + BATCH, streams.length), total: streams.length });
+    }
+    setTestingChannels(false);
+  }
+
+  function parseM3U(text) {
+    const lines = text.split("\n").map(l => l.trim());
+    const channels = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (!lines[i].startsWith("#EXTINF")) continue;
+      const extinf = lines[i];
+      let url = "";
+      for (let j = i + 1; j < Math.min(i + 6, lines.length); j++) {
+        if (lines[j] && !lines[j].startsWith("#")) { url = lines[j]; break; }
+      }
+      if (!url) continue;
+      const commaIdx = extinf.lastIndexOf(",");
+      const name = commaIdx >= 0 ? extinf.slice(commaIdx + 1).trim() : "Unknown Channel";
+      const logoMatch = extinf.match(/tvg-logo="([^"]*)"/i);
+      const groupMatch = extinf.match(/group-title="([^"]*)"/i);
+      channels.push({ name: name || "Unknown Channel", url, logo: logoMatch?.[1] || "", group: groupMatch?.[1] || "" });
+    }
+    return channels;
+  }
+
+  async function fetchM3UPlaylist() {
+    if (!m3uUrl.trim()) return;
+    setM3uFetching(true); setM3uError(""); setM3uChannels([]); setM3uSelected(new Set()); setM3uPage(0); setM3uImportDone(null);
+    let text = "";
+    try {
+      const res = await fetch(m3uUrl.trim(), { signal: AbortSignal.timeout(15000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      text = await res.text();
+    } catch {
+      try {
+        const proxy = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(m3uUrl.trim())}`, { signal: AbortSignal.timeout(20000) });
+        const json = await proxy.json();
+        text = json.contents || "";
+      } catch {
+        setM3uError("Could not fetch the playlist. The URL may be invalid or blocked by CORS.");
+        setM3uFetching(false); return;
+      }
+    }
+    if (!text.includes("#EXTINF") && !text.includes("#EXTM3U")) {
+      setM3uError("This does not appear to be a valid M3U playlist."); setM3uFetching(false); return;
+    }
+    const channels = parseM3U(text);
+    if (channels.length === 0) { setM3uError("No channels found in this playlist."); setM3uFetching(false); return; }
+    const existingUrls = new Set(liveList.map(s => s.stream_url).filter(Boolean));
+    const tagged = channels.map(ch => ({ ...ch, duplicate: existingUrls.has(ch.url) }));
+    setM3uChannels(tagged);
+    setM3uSelected(new Set());
+    setM3uFetching(false);
+  }
+
+  async function importM3USelected() {
+    const toImport = m3uChannels.filter((ch, i) => m3uSelected.has(i) && !ch.duplicate);
+    if (toImport.length === 0) { showToast("No new channels selected", "error"); return; }
+    setM3uImporting(true);
+    const { error } = await supabase.from("live_streams").insert(
+      toImport.map(ch => ({ title: ch.name, description: ch.group || "", stream_url: ch.url, thumbnail: ch.logo || "", is_live: false, is_hero: false, badge_text: "LIVE", playlist_source: m3uUrl.trim() }))
+    );
+    if (error) { showToast("Import failed: " + error.message, "error"); }
+    else { setM3uImportDone(toImport.length); showToast(`Imported ${toImport.length} channel${toImport.length !== 1 ? "s" : ""}`); await loadLiveStreams(); }
+    setM3uImporting(false);
+  }
+
   // Filter rows
   const filteredRows = rows.filter(row => {
     const matchesSearch =
@@ -1605,7 +2847,6 @@ export function CMS({ onExit }) {
 
   return (
     <div style={{ background: "#f8fafc", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#0f172a" }}>
-      <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
 
       {/* Toast */}
       {toast && (
@@ -1680,60 +2921,76 @@ export function CMS({ onExit }) {
             <span style={{ color: "#facc15" }}>peep.</span><span style={{ color: "#4f46e5", fontSize: 13, fontFamily: "sans-serif", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginLeft: 6 }}>admin</span>
           </span>
         </div>
-        <button
-          onClick={onExit}
-          style={{
-            background: "#f1f5f9",
-            border: "1px solid #e2e8f0",
-            borderRadius: 8,
-            padding: "7px 16px",
-            color: "#374151",
-            fontSize: 13,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-          }}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-          Exit CMS
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => window.location.reload(true)}
+            title="Hard refresh"
+            style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "7px 12px", color: "#374151", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+              <path d="M3 3v5h5"/>
+            </svg>
+            Refresh
+          </button>
+          <button
+            onClick={() => onExit()}
+            style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "7px 16px", color: "#dc2626", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+            Log Out
+          </button>
+          <button
+            onClick={onExit}
+            style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "7px 16px", color: "#374151", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+            Exit CMS
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
-      <div style={{ borderBottom: "1px solid #e2e8f0", padding: `0 ${PAD}`, display: "flex", gap: 24, background: "#ffffff" }}>
-        <button
-          onClick={() => setTab("videos")}
-          style={{ background: "transparent", border: "none", borderBottom: tab === "videos" ? "2px solid #4f46e5" : "none", color: tab === "videos" ? "#0f172a" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "videos" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}
-        >
-          Content ({rows.length + showsList.length + podcastsList.length})
-        </button>
-        <button onClick={() => setTab("carousels")} style={{ background: "transparent", border: "none", borderBottom: tab === "carousels" ? "2px solid #4f46e5" : "none", color: tab === "carousels" ? "#0f172a" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "carousels" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
-          Carousels ({carousels.length})
-        </button>
-        <button onClick={() => { setTab("live"); setLivePasscodeInput(""); setLivePasscodeEntered(false); }} style={{ background: "transparent", border: "none", borderBottom: tab === "live" ? "2px solid #ef4444" : "none", color: tab === "live" ? "#ef4444" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "live" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
-          Live ({liveList.length})
-        </button>
-        <button onClick={() => setTab("reports")} style={{ background: "transparent", border: "none", borderBottom: tab === "reports" ? "2px solid #34d399" : "none", color: tab === "reports" ? "#34d399" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "reports" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
-          Reports
-        </button>
-        <button onClick={() => setTab("ads")} style={{ background: "transparent", border: "none", borderBottom: tab === "ads" ? "2px solid #f59e0b" : "none", color: tab === "ads" ? "#f59e0b" : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === "ads" ? 600 : 400, cursor: "pointer", transition: "color 0.2s" }}>
-          Ads {adList.length > 0 && `(${adList.length})`}
-        </button>
+      <div style={{ borderBottom: "1px solid #e2e8f0", padding: `0 ${PAD}`, display: "flex", gap: 24, background: "#ffffff", overflowX: "auto" }}>
+        {[
+          { key: "content",   label: `Content (${rows.length + showsList.length + podcastsList.length})`, color: "#4f46e5" },
+          { key: "live",      label: `Live (${liveList.length})`,   color: "#ef4444" },
+          { key: "creators",  label: `Partners`,                    color: "#f97316" },
+          { key: "members",   label: `Members`,                     color: "#818cf8" },
+          { key: "analytics", label: `Analytics`,                   color: "#34d399" },
+          { key: "storage",   label: `Storage`,                     color: "#22d3ee" },
+          { key: "settings",  label: `Settings`,                    color: "#facc15" },
+          { key: "security",  label: `Security`,                    color: "#f87171" },
+          { key: "moderation", label: `Moderation${contentReports.filter(r => r.status === "pending").length > 0 ? ` (${contentReports.filter(r => r.status === "pending").length})` : ""}`, color: "#fb923c" },
+        ].map(({ key, label, color }) => (
+          <button key={key}
+            onClick={() => {
+              setTab(key);
+              if (key === "live") { setLivePasscodeInput(""); setLivePasscodeEntered(false); }
+              if (key === "members") { setSupportUser(null); setSupportResults([]); setSupportSearch(""); setSupportActionMsg(null); }
+            }}
+            style={{ background: "transparent", border: "none", borderBottom: tab === key ? `2px solid ${color}` : "none", color: tab === key ? color : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === key ? 600 : 400, cursor: "pointer", transition: "color 0.2s", whiteSpace: "nowrap", flexShrink: 0 }}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       <div style={{ maxWidth: 1600, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
 
-        {/* ────── VIDEOS SUB-TAB BAR ────── */}
-        {tab === "videos" && (
+        {/* ────── CONTENT SUB-TAB BAR ────── */}
+        {tab === "content" && (
           <div style={{ display: "flex", gap: 6, marginBottom: 8, paddingBottom: 20, borderBottom: "1px solid #e2e8f0" }}>
             {[
-              { key: "movies", label: "Movies", count: rows.length },
-              { key: "series", label: "Series", count: showsList.length },
-              { key: "episodes", label: "Episodes", count: null },
-              { key: "podcasts", label: "Podcasts", count: podcastsList.length },
+              { key: "shorts",    label: "Movies",    count: rows.length },
+              { key: "series",    label: "Series",    count: showsList.length },
+              { key: "episodes",  label: "Episodes",  count: null },
+              { key: "podcasts",  label: "Podcasts",  count: podcastsList.length },
+              { key: "carousels", label: "Carousels", count: carousels.length },
             ].map(({ key, label, count }) => (
               <button key={key} onClick={() => setVideoSubTab(key)} style={{ background: videoSubTab === key ? "rgba(79,70,229,0.08)" : "transparent", border: `1px solid ${videoSubTab === key ? "rgba(79,70,229,0.3)" : "#e2e8f0"}`, borderRadius: 8, padding: "7px 16px", color: videoSubTab === key ? "#4f46e5" : "#6b7280", fontSize: 13, fontWeight: videoSubTab === key ? 600 : 400, cursor: "pointer", transition: "all 0.15s" }}>
                 {label}{count !== null ? ` (${count})` : ""}
@@ -1743,18 +3000,13 @@ export function CMS({ onExit }) {
         )}
 
         {/* ────── VIDEOS TAB — MOVIES ────── */}
-        {tab === "videos" && videoSubTab === "movies" && (
+        {tab === "content" && videoSubTab === "shorts" && (
           <>
             <div>
               {/* Header row with Add button */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Movies ({rows.length})</h2>
-                <button
-                  onClick={() => { setForm(EMPTY_ROW); setEditingId(null); setDrawerOpen(true); }}
-                  style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
-                >
-                  + Add Movie
-                </button>
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Shorts ({rows.length})</h2>
+                <span style={{ fontSize: 12, color: "#9ca3af" }}>Add content via Storage →</span>
               </div>
 
           {/* Controls */}
@@ -1941,7 +3193,7 @@ export function CMS({ onExit }) {
         )}
 
         {/* ────── VIDEOS TAB — SERIES ────── */}
-        {tab === "videos" && videoSubTab === "series" && (
+        {tab === "content" && videoSubTab === "series" && (
           <>
             <div>
               {/* Header row with Add button */}
@@ -1991,7 +3243,7 @@ export function CMS({ onExit }) {
         )}
 
         {/* ────── VIDEOS TAB — EPISODES ────── */}
-        {tab === "videos" && videoSubTab === "episodes" && (
+        {tab === "content" && videoSubTab === "episodes" && (
           <>
             <div>
               {/* Header row with show selector and Add button */}
@@ -2056,7 +3308,7 @@ export function CMS({ onExit }) {
         )}
 
         {/* ────── CAROUSELS TAB ────── */}
-        {tab === "carousels" && (
+        {tab === "content" && videoSubTab === "carousels" && (
           <div>
             {/* Header row with Add button */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
@@ -2082,10 +3334,12 @@ export function CMS({ onExit }) {
                   const t = carousel.type;
                   const ct = carousel.content_type;
                   const rowPages = (carousel.pages || "home").split(",").map(p => p.trim()).filter(Boolean);
-                  const contentLabel = t === "podcast" ? "Podcasts" : ct === "movies" ? "Movies only" : ct === "shows" ? "Series only" : "All content";
-                  const orderLabel = t === "trending" ? "Trending" : t === "category" ? `Genre: ${carousel.filter_value || "?"}` : t === "podcast" ? (carousel.filter_value ? `Tag: ${carousel.filter_value}` : "All podcasts") : "Default order";
-                  const contentColor = t === "podcast" ? "#a78bfa" : ct === "movies" ? "#60a5fa" : ct === "shows" ? "#34d399" : "#f59e0b";
-                  const pageLabels = { home: "Home", movies: "Movies", series: "Series" };
+                  const contentLabel = t === "podcast" ? "Podcasts" : ct === "shorts" ? "Movies only" : ct === "shows" ? "Series only" : "All content";
+                  const handpickedCount = t === "handpicked" ? (() => { try { return JSON.parse(carousel.filter_value || "[]").length; } catch { return 0; } })() : 0;
+                  const orderLabel = t === "trending" ? "Trending" : t === "handpicked" ? `${handpickedCount} hand-picked` : t === "category" ? `Genre: ${carousel.filter_value || "?"}` : t === "podcast" ? (carousel.filter_value ? `Tag: ${carousel.filter_value}` : "All podcasts") : "Default order";
+                  const contentColor = t === "podcast" ? "#a78bfa" : ct === "shorts" ? "#facc15" : ct === "shows" ? "#34d399" : "#f59e0b";
+                  const pageLabels = { home: "Home", shorts: "Movies", series: "Series" };
+
                   return (
                     <div key={carousel.id} style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
                       <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
@@ -2128,16 +3382,18 @@ export function CMS({ onExit }) {
               <h2 style={{ margin: "0 0 6px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Live TV</h2>
               <p style={{ margin: "0 0 24px", fontSize: 13, color: "#6b7280" }}>Enter the passcode to access Live settings</p>
               <input
-                type="password"
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
                 value={livePasscodeInput}
                 onChange={e => setLivePasscodeInput(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter") { if (livePasscodeInput === "1234") { setLivePasscodeEntered(true); } else { setLivePasscodeInput(""); showToast("Incorrect passcode", "error"); } } }}
-                placeholder="Passcode"
+                onKeyDown={e => { if (e.key === "Enter") { if (livePasscodeInput === "1234") { setLivePasscodeEntered(true); sessionStorage.setItem("cms_live_unlocked", "1"); } else { setLivePasscodeInput(""); showToast("Incorrect passcode", "error"); } } }}
+                placeholder="····"
                 autoFocus
-                style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 14px", fontSize: 16, textAlign: "center", letterSpacing: 4, outline: "none", marginBottom: 12, boxSizing: "border-box" }}
+                style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 14px", fontSize: 24, textAlign: "center", letterSpacing: 8, outline: "none", marginBottom: 12, boxSizing: "border-box" }}
               />
               <button
-                onClick={() => { if (livePasscodeInput === "1234") { setLivePasscodeEntered(true); } else { setLivePasscodeInput(""); showToast("Incorrect passcode", "error"); } }}
+                onClick={() => { if (livePasscodeInput === "1234") { setLivePasscodeEntered(true); sessionStorage.setItem("cms_live_unlocked", "1"); } else { setLivePasscodeInput(""); showToast("Incorrect passcode", "error"); } }}
                 style={{ width: "100%", background: "#0f172a", color: "#fff", border: "none", borderRadius: 8, padding: "12px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
                 Unlock
               </button>
@@ -2146,11 +3402,98 @@ export function CMS({ onExit }) {
         )}
         {tab === "live" && livePasscodeEntered && (
           <div>
+            {/* Sub-tab nav */}
+            <div style={{ display: "flex", gap: 4, marginBottom: 24, background: "#f1f5f9", borderRadius: 10, padding: 4, width: "fit-content" }}>
+              {[
+                { key: "streams", label: "Streams" },
+                { key: "applications", label: `Applications${applications.filter(a => a.status === "pending").length > 0 ? ` (${applications.filter(a => a.status === "pending").length})` : ""}` },
+              ].map(t => (
+                <button key={t.key} onClick={() => setLiveSubTab(t.key)}
+                  style={{ padding: "7px 16px", borderRadius: 7, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: liveSubTab === t.key ? "#fff" : "transparent", color: liveSubTab === t.key ? "#0f172a" : "#6b7280", boxShadow: liveSubTab === t.key ? "0 1px 4px rgba(0,0,0,0.08)" : "none", transition: "all 0.15s" }}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Applications sub-tab */}
+            {liveSubTab === "applications" && (
+              <div>
+                <div style={{ marginBottom: 20, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                  <div>
+                    <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Streamer Applications</h2>
+                    <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Approve to create a Cloudflare live input and send stream key. Reject to notify the applicant.</p>
+                  </div>
+                  <button onClick={loadApplications} disabled={appsLoading}
+                    style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, color: "#374151", cursor: appsLoading ? "wait" : "pointer", opacity: appsLoading ? 0.6 : 1, flexShrink: 0 }}>
+                    {appsLoading ? "Refreshing…" : "↻ Refresh"}
+                  </button>
+                </div>
+                {appsLoading ? (
+                  <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>Loading…</div>
+                ) : applications.length === 0 ? (
+                  <div style={{ color: "#6b7280", padding: 40, textAlign: "center", border: "1px dashed #e2e8f0", borderRadius: 10 }}>No applications yet.</div>
+                ) : applications.map(app => (
+                  <div key={app.id} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "16px 20px", marginBottom: 12 }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>{app.name}</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 20, letterSpacing: 0.5,
+                            background: app.status === "pending" ? "rgba(234,179,8,0.1)" : app.status === "approved" ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)",
+                            color: app.status === "pending" ? "#a16207" : app.status === "approved" ? "#15803d" : "#dc2626",
+                            border: `1px solid ${app.status === "pending" ? "rgba(234,179,8,0.3)" : app.status === "approved" ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`,
+                          }}>{app.status.toUpperCase()}</span>
+                        </div>
+                        <p style={{ margin: "0 0 8px", fontSize: 13, color: "#6b7280" }}>{app.email}</p>
+                        <p style={{ margin: "0 0 6px", fontSize: 13, color: "#374151", lineHeight: 1.5 }}><strong>Why:</strong> {app.why_they_want_to_stream}</p>
+                        {app.social_links && <p style={{ margin: "0 0 6px", fontSize: 12, color: "#6b7280" }}><strong>Links:</strong> {app.social_links}</p>}
+                        {app.notes && <p style={{ margin: 0, fontSize: 12, color: "#dc2626" }}><strong>Note:</strong> {app.notes}</p>}
+                        <p style={{ margin: "6px 0 0", fontSize: 11, color: "#9ca3af" }}>{new Date(app.created_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
+                      </div>
+                      {app.status === "pending" && (
+                        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                          <button onClick={() => approveApplication(app)} disabled={approvingId === app.id}
+                            style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: 7, padding: "8px 16px", color: "#15803d", fontSize: 13, fontWeight: 600, cursor: approvingId === app.id ? "wait" : "pointer", opacity: approvingId === app.id ? 0.6 : 1 }}>
+                            {approvingId === app.id ? "Approving…" : "✓ Approve"}
+                          </button>
+                          <button onClick={() => { setRejectTarget(app); setAppRejectNote(""); }}
+                            style={{ background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 7, padding: "8px 16px", color: "#dc2626", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                            ✕ Reject
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Reject modal */}
+                {rejectTarget && (
+                  <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+                    <div style={{ background: "#fff", borderRadius: 14, padding: "32px 28px", width: "min(420px,100%)", boxShadow: "0 24px 64px rgba(0,0,0,0.15)" }}>
+                      <h3 style={{ margin: "0 0 6px", fontSize: 17, fontWeight: 700, color: "#0f172a" }}>Reject {rejectTarget.name}?</h3>
+                      <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>Optionally add a note — it'll be included in the rejection email.</p>
+                      <textarea value={appRejectNote} onChange={e => setAppRejectNote(e.target.value)} placeholder="Optional note to applicant…" rows={3}
+                        style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 13, outline: "none", boxSizing: "border-box", resize: "vertical", fontFamily: "inherit", marginBottom: 16 }} />
+                      <div style={{ display: "flex", gap: 10 }}>
+                        <button onClick={() => setRejectTarget(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                        <button onClick={rejectApplication} disabled={!!rejectingId}
+                          style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 8, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: rejectingId ? "wait" : "pointer", opacity: rejectingId ? 0.6 : 1 }}>
+                          {rejectingId ? "Rejecting…" : "Confirm Reject"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Streams sub-tab */}
+            {liveSubTab === "streams" && <div>
             {/* Header row with Add button */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div>
                 <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 600, color: "#0f172a" }}>All Streams ({liveList.length})</h2>
-                <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Toggle a stream to Live to show it on the homepage "Live Now" section.</p>
+                <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Live status is set automatically when a streamer connects via RTMP.</p>
               </div>
               <button
                 onClick={() => { setLiveForm(EMPTY_LIVE_STREAM); setEditingLiveId(null); setDrawerOpen(true); }}
@@ -2160,37 +3503,191 @@ export function CMS({ onExit }) {
               </button>
             </div>
 
+
             {liveLoading ? (
               <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>Loading...</div>
             ) : liveList.length === 0 ? (
               <div style={{ color: "#6b7280", padding: 40, textAlign: "center", border: "1px dashed #e2e8f0", borderRadius: 10 }}>No streams yet.</div>
             ) : liveList.map(s => (
-              <div key={s.id} style={{ background: "#ffffff", border: `1px solid ${s.is_live ? "rgba(239,68,68,0.3)" : "#e2e8f0"}`, borderRadius: 10, padding: "16px 20px", marginBottom: 12, display: "flex", gap: 14, alignItems: "center" }}>
-                {s.channel_number != null && s.channel_number !== "" && (
-                  <div style={{ flexShrink: 0, width: 40, height: 40, borderRadius: 8, background: "#f1f5f9", border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                    <span style={{ fontSize: 9, color: "#94a3b8", fontWeight: 600, letterSpacing: 0.5, textTransform: "uppercase" }}>CH</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "#374151", lineHeight: 1 }}>{s.channel_number}</span>
-                  </div>
-                )}
+              <div key={s.id} style={{ background: "#ffffff", border: `1px solid ${s.is_live ? "rgba(239,68,68,0.3)" : "#e2e8f0"}`, borderRadius: 10, padding: "12px 16px", marginBottom: 12, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
                 {s.thumbnail && <img src={s.thumbnail} alt={s.title} style={{ width: 80, height: 45, objectFit: "cover", borderRadius: 6, flexShrink: 0 }} onError={e => { e.target.style.display = "none"; }} />}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ margin: "0 0 3px", fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{s.title}</p>
+                  <p style={{ margin: "0 0 3px", fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{s.channel_name || s.title}</p>
                   <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>
                     <span style={{ color: s.is_live ? "#ef4444" : "#9ca3af", fontWeight: s.is_live ? 600 : 400 }}>{s.is_live ? "🔴 LIVE" : "○ Offline"}</span>
-                    {s.now_airing && <span style={{ color: "#6b7280" }}> · {s.now_airing}</span>}
+                    {s.stream_title && <span style={{ color: "#6b7280" }}> · {s.stream_title}</span>}
                   </p>
-                  {s.up_next && <p style={{ margin: "2px 0 0", fontSize: 11, color: "#9ca3af" }}>Up next: {s.up_next}</p>}
+                  {s.stream_key && (
+                    <div style={{ marginTop: 4, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 10, color: "#9ca3af", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Stream Key:</span>
+                      <code style={{ fontSize: 10, color: "#4f46e5", background: "rgba(79,70,229,0.07)", padding: "1px 6px", borderRadius: 3, letterSpacing: "0.05em" }}>
+                        {revealedKeys[s.id] ? s.stream_key : "••••••••••••"}
+                      </code>
+                      <button onClick={() => setRevealedKeys(k => ({ ...k, [s.id]: !k[s.id] }))}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: "#6366f1", fontSize: 10, padding: 0, fontWeight: 600 }}>
+                        {revealedKeys[s.id] ? "Hide" : "Reveal"}
+                      </button>
+                      <button onClick={() => { navigator.clipboard.writeText(s.stream_key); showToast("Stream key copied!"); }}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 10, padding: 0 }}>
+                        Copy
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                  <button onClick={() => toggleLive(s)}
-                    style={{ background: s.is_live ? "rgba(107,114,128,0.1)" : "rgba(34,197,94,0.1)", border: `1px solid ${s.is_live ? "rgba(107,114,128,0.2)" : "rgba(34,197,94,0.3)"}`, borderRadius: 5, padding: "5px 10px", color: s.is_live ? "#9ca3af" : "#22c55e", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
-                    {s.is_live ? "Go Offline" : "Go Live"}
-                  </button>
+                <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center", flexWrap: "wrap" }}>
                   <button onClick={() => startLiveEdit(s)} style={{ background: "rgba(79,70,229,0.08)", border: "1px solid rgba(79,70,229,0.2)", borderRadius: 5, padding: "5px 10px", color: "#4f46e5", fontSize: 11, cursor: "pointer" }}>Edit</button>
                   <button onClick={() => setDeleteLiveConfirm(s)} style={{ background: "rgba(220,38,38,0.07)", border: "1px solid rgba(220,38,38,0.15)", borderRadius: 5, padding: "5px 10px", color: "#dc2626", fontSize: 11, cursor: "pointer" }}>Delete</button>
                 </div>
               </div>
             ))}
+
+            {false && m3uOpen && (
+              <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+                <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 780, maxHeight: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 80px rgba(0,0,0,0.2)", overflow: "hidden" }}>
+
+                  {/* Header */}
+                  <div style={{ padding: "20px 24px", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", gap: 12 }}>
+                    <span style={{ fontSize: 20 }}>📋</span>
+                    <div>
+                      <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#0f172a" }}>Import from Playlist</h2>
+                      <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Paste an .m3u or .m3u8 playlist URL to bulk-import channels</p>
+                    </div>
+                    <button onClick={() => setM3uOpen(false)} style={{ marginLeft: "auto", background: "transparent", border: "none", fontSize: 20, color: "#9ca3af", cursor: "pointer", lineHeight: 1 }}>✕</button>
+                  </div>
+
+                  {/* URL input */}
+                  <div style={{ padding: "16px 24px", borderBottom: "1px solid #f1f5f9", display: "flex", gap: 10 }}>
+                    <input
+                      value={m3uUrl} onChange={e => setM3uUrl(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && !m3uFetching && fetchM3UPlaylist()}
+                      placeholder="https://example.com/playlist.m3u"
+                      style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#0f172a", outline: "none" }}
+                    />
+                    <button onClick={fetchM3UPlaylist} disabled={m3uFetching || !m3uUrl.trim()}
+                      style={{ background: "#0f172a", border: "none", borderRadius: 8, padding: "10px 20px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: m3uFetching ? "wait" : "pointer", opacity: !m3uUrl.trim() ? 0.5 : 1 }}>
+                      {m3uFetching ? "Fetching…" : "Fetch"}
+                    </button>
+                  </div>
+
+                  {/* Error */}
+                  {m3uError && <div style={{ padding: "12px 24px", background: "#fef2f2", borderBottom: "1px solid #fecaca", color: "#dc2626", fontSize: 13 }}>{m3uError}</div>}
+
+                  {/* Channel list */}
+                  {m3uChannels.length > 0 && (() => {
+                    const PAGE_SIZE = 50;
+                    const filtered = m3uChannels.filter(ch => !m3uSearch || ch.name.toLowerCase().includes(m3uSearch.toLowerCase()) || ch.group.toLowerCase().includes(m3uSearch.toLowerCase()));
+                    const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+                    const paginated = filtered.slice(m3uPage * PAGE_SIZE, (m3uPage + 1) * PAGE_SIZE);
+                    const selectedCount = [...m3uSelected].filter(i => !m3uChannels[i]?.duplicate).length;
+                    const allOnPageSelected = paginated.every(ch => {
+                      const idx = m3uChannels.indexOf(ch);
+                      return ch.duplicate || m3uSelected.has(idx);
+                    });
+                    return (
+                      <>
+                        {/* Toolbar */}
+                        <div style={{ padding: "10px 24px", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", gap: 10, background: "#f8fafc" }}>
+                          <input value={m3uSearch} onChange={e => { setM3uSearch(e.target.value); setM3uPage(0); }}
+                            placeholder="Search channels…"
+                            style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 7, padding: "7px 12px", fontSize: 12, outline: "none" }} />
+                          <span style={{ fontSize: 12, color: "#6b7280", whiteSpace: "nowrap" }}>{filtered.length} channel{filtered.length !== 1 ? "s" : ""}</span>
+                          <button onClick={() => {
+                            const newSel = new Set(m3uSelected);
+                            paginated.forEach(ch => { const idx = m3uChannels.indexOf(ch); if (!ch.duplicate) { if (allOnPageSelected) newSel.delete(idx); else newSel.add(idx); } });
+                            setM3uSelected(newSel);
+                          }} style={{ background: "transparent", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 12px", fontSize: 12, color: "#374151", cursor: "pointer", whiteSpace: "nowrap" }}>
+                            {allOnPageSelected ? "Deselect page" : "Select page"}
+                          </button>
+                          <button onClick={() => {
+                            const allNonDupe = new Set(m3uChannels.map((ch, i) => ch.duplicate ? null : i).filter(i => i !== null));
+                            const allSelected = allNonDupe.size === m3uSelected.size;
+                            setM3uSelected(allSelected ? new Set() : allNonDupe);
+                          }} style={{ background: "transparent", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 12px", fontSize: 12, color: "#374151", cursor: "pointer", whiteSpace: "nowrap" }}>
+                            Select all ({m3uChannels.filter(ch => !ch.duplicate).length})
+                          </button>
+                        </div>
+
+                        {/* Rows */}
+                        <div style={{ flex: 1, overflowY: "auto" }}>
+                          {paginated.map((ch) => {
+                            const idx = m3uChannels.indexOf(ch);
+                            const checked = m3uSelected.has(idx);
+                            return (
+                              <div key={idx} onClick={() => { if (ch.duplicate) return; const s = new Set(m3uSelected); checked ? s.delete(idx) : s.add(idx); setM3uSelected(s); }}
+                                style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 24px", borderBottom: "1px solid #f8fafc", background: ch.duplicate ? "#f8fafc" : checked ? "#f0fdf4" : "#fff", cursor: ch.duplicate ? "default" : "pointer" }}>
+                                <input type="checkbox" checked={checked} readOnly disabled={ch.duplicate} style={{ width: 15, height: 15, flexShrink: 0, accentColor: "#22c55e" }} />
+                                {ch.logo ? (
+                                  <img src={ch.logo} alt="" style={{ width: 36, height: 24, objectFit: "contain", borderRadius: 3, flexShrink: 0, background: "#f1f5f9" }} onError={e => { e.target.style.display = "none"; }} />
+                                ) : (
+                                  <div style={{ width: 36, height: 24, background: "#e2e8f0", borderRadius: 3, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#94a3b8" }}>CH</div>
+                                )}
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: 13, fontWeight: 600, color: ch.duplicate ? "#9ca3af" : "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch.name}</div>
+                                  <div style={{ fontSize: 11, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch.url}</div>
+                                </div>
+                                {ch.group && <span style={{ fontSize: 11, color: "#6366f1", background: "#eef2ff", borderRadius: 4, padding: "2px 7px", whiteSpace: "nowrap", flexShrink: 0 }}>{ch.group}</span>}
+                                {ch.duplicate && <span style={{ fontSize: 11, color: "#f59e0b", background: "#fefce8", border: "1px solid #fde68a", borderRadius: 4, padding: "2px 7px", whiteSpace: "nowrap", flexShrink: 0 }}>Already exists</span>}
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Pagination */}
+                        {totalPages > 1 && (
+                          <div style={{ padding: "10px 24px", borderTop: "1px solid #f1f5f9", display: "flex", alignItems: "center", gap: 8, background: "#f8fafc" }}>
+                            <button onClick={() => setM3uPage(p => Math.max(0, p - 1))} disabled={m3uPage === 0} style={{ background: "transparent", border: "1px solid #e2e8f0", borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", opacity: m3uPage === 0 ? 0.4 : 1 }}>← Prev</button>
+                            <span style={{ fontSize: 12, color: "#6b7280" }}>Page {m3uPage + 1} of {totalPages}</span>
+                            <button onClick={() => setM3uPage(p => Math.min(totalPages - 1, p + 1))} disabled={m3uPage === totalPages - 1} style={{ background: "transparent", border: "1px solid #e2e8f0", borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", opacity: m3uPage === totalPages - 1 ? 0.4 : 1 }}>Next →</button>
+                            <span style={{ marginLeft: "auto", fontSize: 12, color: "#6b7280" }}>Showing {m3uPage * PAGE_SIZE + 1}–{Math.min((m3uPage + 1) * PAGE_SIZE, filtered.length)} of {filtered.length}</span>
+                          </div>
+                        )}
+
+                        {/* Footer */}
+                        <div style={{ padding: "14px 24px", borderTop: "1px solid #e2e8f0", display: "flex", alignItems: "center", gap: 12, background: "#fff" }}>
+                          {m3uImportDone != null
+                            ? <span style={{ fontSize: 13, color: "#16a34a", fontWeight: 600 }}>✓ Imported {m3uImportDone} channel{m3uImportDone !== 1 ? "s" : ""} successfully</span>
+                            : <span style={{ fontSize: 13, color: "#6b7280" }}>{selectedCount} channel{selectedCount !== 1 ? "s" : ""} selected</span>}
+                          <div style={{ marginLeft: "auto", display: "flex", gap: 10 }}>
+                            <button onClick={() => setM3uOpen(false)} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 18px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Close</button>
+                            <button onClick={importM3USelected} disabled={m3uImporting || selectedCount === 0}
+                              style={{ background: "#22c55e", border: "none", borderRadius: 8, padding: "10px 22px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: selectedCount === 0 ? "not-allowed" : "pointer", opacity: selectedCount === 0 ? 0.5 : 1 }}>
+                              {m3uImporting ? "Importing…" : `Import ${selectedCount > 0 ? selectedCount : ""} Selected`}
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
+
+                  {/* Empty state before fetch */}
+                  {!m3uFetching && m3uChannels.length === 0 && !m3uError && (
+                    <div style={{ padding: 48, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>
+                      Paste a playlist URL above and click Fetch to preview channels
+                    </div>
+                  )}
+                  {m3uFetching && (
+                    <div style={{ padding: 48, textAlign: "center", color: "#6b7280", fontSize: 13 }}>Fetching playlist…</div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {false && deletePlaylistConfirm && (
+              <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "36px 40px", width: 460, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+                  <p style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, color: "#0f172a" }}>Delete entire playlist?</p>
+                  <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>This will permanently delete all <strong>{deletePlaylistConfirm.count} channels</strong> imported from:</p>
+                  <p style={{ fontSize: 11, color: "#6366f1", background: "#eef2ff", borderRadius: 6, padding: "8px 12px", marginBottom: 20, wordBreak: "break-all" }}>{deletePlaylistConfirm.src}</p>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button onClick={() => setDeletePlaylistConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    <button onClick={() => deletePlaylistSource(deletePlaylistConfirm.src)} disabled={deletingPlaylist}
+                      style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                      {deletingPlaylist ? "Deleting…" : `Delete all ${deletePlaylistConfirm.count}`}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {deleteLiveConfirm && (
               <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -2204,8 +3701,7 @@ export function CMS({ onExit }) {
               </div>
             )}
 
-            {/* ── EPG SCHEDULE SECTION ── */}
-            {liveList.length > 0 && (
+            {false && liveList.length > 0 && (
               <div style={{ marginTop: 40, paddingTop: 32, borderTop: "2px solid #e2e8f0" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
                   <div>
@@ -2393,11 +3889,12 @@ export function CMS({ onExit }) {
                 )}
               </div>
             )}
+            </div>}
           </div>
         )}
 
         {/* ────── PODCASTS SUB-TAB ────── */}
-        {tab === "videos" && videoSubTab === "podcasts" && (
+        {tab === "content" && videoSubTab === "podcasts" && (
           <>
             <div>
               {/* Header row with Add button */}
@@ -2554,14 +4051,52 @@ export function CMS({ onExit }) {
           </>
         )}
 
+        {/* ────── ANALYTICS SUB-TAB BAR ────── */}
+        {tab === "analytics" && (
+          <div style={{ display: "flex", gap: 6, marginBottom: 28, paddingBottom: 20, borderBottom: "1px solid #e2e8f0" }}>
+            {[{ key: "reports", label: "Reports" }, { key: "ads", label: `Ads${adList.length > 0 ? ` (${adList.length})` : ""}` }].map(({ key, label }) => (
+              <button key={key} onClick={() => setAnalyticsTab(key)} style={{ background: analyticsTab === key ? "rgba(52,211,153,0.08)" : "transparent", border: `1px solid ${analyticsTab === key ? "rgba(52,211,153,0.3)" : "#e2e8f0"}`, borderRadius: 8, padding: "7px 16px", color: analyticsTab === key ? "#059669" : "#6b7280", fontSize: 13, fontWeight: analyticsTab === key ? 600 : 400, cursor: "pointer" }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* ────── ADS TAB ────── */}
-        {tab === "ads" && (
+        {tab === "analytics" && analyticsTab === "ads" && (
           <div>
 
             {/* ── Ad Performance ── */}
             {adAnalytics && (
               <div style={{ marginBottom: 36 }}>
-                <h2 style={{ margin: "0 0 18px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Ad Performance <span style={{ fontSize: 12, fontWeight: 400, color: "#9ca3af" }}>last 30 days</span></h2>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 18 }}>
+                  <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Ad Performance <span style={{ fontSize: 12, fontWeight: 400, color: "#9ca3af" }}>last 30 days</span></h2>
+                  {adLastFetched && <span style={{ fontSize: 11, color: "#9ca3af", marginLeft: "auto" }}>Updated {adLastFetched.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>}
+                  <button onClick={loadAdAnalytics} style={{ background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)", borderRadius: 6, padding: "5px 12px", color: "#6366f1", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Refresh</button>
+                  <button onClick={async () => { if (!window.confirm("Clear all ad impression history?")) return; const { error, count } = await supabase.from("ad_impressions").delete({ count: "exact" }).lte("created_at", new Date().toISOString()); if (error) { showToast("Delete failed: " + error.message, "error"); return; } showToast(`Cleared ${count ?? "all"} ad impression records`, "success"); setAdAnalytics(null); loadAdAnalytics(); }} style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 6, padding: "5px 12px", color: "#ef4444", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Clear History</button>
+                </div>
+
+                {/* Today row */}
+                {todayStats && (
+                  <div style={{ background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)", borderRadius: 12, padding: "16px 20px", marginBottom: 24, display: "flex", alignItems: "center", gap: 32, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#a5f3fc", display: "inline-block", animation: "adpulse 1.5s ease-in-out infinite" }} />
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "#c7d2fe", textTransform: "uppercase", letterSpacing: 0.8 }}>Today</span>
+                      <span style={{ fontSize: 11, color: "#6366f1" }}>{new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                    </div>
+                    {[
+                      { label: "Impressions", value: todayStats.adImpressionsToday },
+                      { label: "Skips", value: todayStats.adSkipsToday },
+                      { label: "Completion", value: todayStats.adImpressionsToday > 0 ? Math.round(((todayStats.adImpressionsToday - todayStats.adSkipsToday) / todayStats.adImpressionsToday) * 100) + "%" : "—" },
+                    ].map(({ label, value }) => (
+                      <div key={label}>
+                        <div style={{ fontSize: 10, color: "#818cf8", textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 2 }}>{label}</div>
+                        <div style={{ fontSize: 22, fontWeight: 700, color: "#fff" }}>{value}</div>
+                      </div>
+                    ))}
+                    <style>{`@keyframes adpulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.4;transform:scale(1.3);}}`}</style>
+                  </div>
+                )}
 
                 {/* Summary cards */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 16, marginBottom: 28 }}>
@@ -2743,7 +4278,7 @@ export function CMS({ onExit }) {
         )}
 
         {/* ────── REPORTS TAB ────── */}
-        {tab === "reports" && (
+        {tab === "analytics" && analyticsTab === "reports" && (
           <div>
             {/* Header row */}
             <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28, flexWrap: "wrap" }}>
@@ -2757,10 +4292,237 @@ export function CMS({ onExit }) {
                 <option value="content">Content Performance</option>
                 <option value="users">User Engagement</option>
               </select>
-              <button onClick={loadReports} style={{ marginLeft: "auto", background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)", borderRadius: 7, padding: "8px 16px", color: "#34d399", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              {reportLastFetched && <span style={{ fontSize: 11, color: "#9ca3af", marginLeft: "auto" }}>Updated {reportLastFetched.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>}
+              <button onClick={() => { loadReports(); loadTodayStats(); loadOnlineUsers(); }} style={{ background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)", borderRadius: 7, padding: "8px 16px", color: "#34d399", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                 Refresh
               </button>
             </div>
+
+            {/* ── User Search ── */}
+            <div style={{ marginBottom: 28, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, overflow: "hidden" }}>
+              <div style={{ padding: "16px 20px", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", gap: 12 }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                <input
+                  type="text"
+                  placeholder="Search users by email or username…"
+                  value={userSearch}
+                  onChange={e => { setUserSearch(e.target.value); searchUsers(e.target.value); }}
+                  style={{ flex: 1, border: "none", outline: "none", fontSize: 14, color: "#0f172a", background: "transparent" }}
+                />
+                {userSearch && <button onClick={() => { setUserSearch(""); setUserSearchResults([]); setSelectedUserStats(null); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 18, lineHeight: 1 }}>×</button>}
+              </div>
+
+              {userSearchResults.length > 0 && !selectedUserStats && (
+                <div>
+                  {userSearchResults.map(p => (
+                    <div key={p.id} onClick={() => { loadSelectedUserStats(p); setUserSearchResults([]); }}
+                      style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 20px", cursor: "pointer", borderBottom: "1px solid #f8fafc" }}
+                      onMouseEnter={e => e.currentTarget.style.background = "#f8fafc"}
+                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                      <div style={{ width: 34, height: 34, borderRadius: "50%", background: "#e0e7ff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "#4f46e5", flexShrink: 0 }}>
+                        {(p.email || p.username || "?")[0].toUpperCase()}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{p.email || p.username}</div>
+                        {p.username && p.email && <div style={{ fontSize: 11, color: "#9ca3af" }}>@{p.username}</div>}
+                      </div>
+                      {(p.role === "admin" || p.is_admin) && <span style={{ fontSize: 10, background: "#ede9fe", color: "#7c3aed", borderRadius: 4, padding: "2px 7px", fontWeight: 700 }}>Admin</span>}
+                      <span style={{ fontSize: 11, color: "#9ca3af" }}>joined {new Date(p.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {userSearch && userSearchResults.length === 0 && !selectedUserStats && !userStatsLoading && (
+                <div style={{ padding: "20px", fontSize: 13, color: "#9ca3af", textAlign: "center" }}>No users found</div>
+              )}
+
+              {userStatsLoading && (
+                <div style={{ padding: 32, display: "flex", justifyContent: "center" }}><Spinner /></div>
+              )}
+
+              {selectedUserStats && (() => {
+                const { profile, watchHistory, adHistory, myList, ratingRows, sessionTimeline } = selectedUserStats;
+                const totalHours = +(watchHistory.reduce((s, w) => s + (w.progress_seconds || 0), 0) / 3600).toFixed(1);
+                const completed = watchHistory.filter(w => w.completed).length;
+                return (
+                  <div>
+                    <div style={{ background: "linear-gradient(135deg, #064e3b, #065f46)", padding: "16px 20px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                      <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(167,243,208,0.2)", border: "2px solid rgba(167,243,208,0.4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: "#6ee7b7" }}>
+                        {(profile.email || profile.username || "?")[0].toUpperCase()}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{profile.email || profile.username}</div>
+                        <div style={{ fontSize: 11, color: "#6ee7b7" }}>Joined {new Date(profile.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
+                      </div>
+                      <div style={{ marginLeft: "auto", display: "flex", gap: 20, flexWrap: "wrap" }}>
+                        {[
+                          { label: "Sessions", value: watchHistory.length },
+                          { label: "Completed", value: completed },
+                          { label: "Hours", value: totalHours + "h" },
+                          { label: "Ratings", value: ratingRows.length },
+                          { label: "My List", value: myList.length },
+                          { label: "Ad Views", value: adHistory.filter(r => r.event === "impression").length },
+                        ].map(({ label, value }) => (
+                          <div key={label} style={{ textAlign: "center" }}>
+                            <div style={{ fontSize: 17, fontWeight: 700, color: "#fff" }}>{value}</div>
+                            <div style={{ fontSize: 10, color: "#6ee7b7", textTransform: "uppercase", letterSpacing: 0.6 }}>{label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: 20 }}>
+                      {sessionTimeline.length > 0 && (
+                        <div>
+                          <p style={{ margin: "0 0 8px", fontSize: 11, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: 0.7 }}>Activity — Last 30 Days</p>
+                          <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 40 }}>
+                            {(() => { const max = Math.max(...sessionTimeline.map(([, c]) => c), 1); return sessionTimeline.map(([day, count]) => (
+                              <div key={day} title={`${day}: ${count}`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                                <div style={{ width: "100%", background: "rgba(16,185,129,0.5)", borderRadius: "2px 2px 0 0", height: `${Math.round((count / max) * 30) + 3}px` }} />
+                                <span style={{ fontSize: 7, color: "#9ca3af" }}>{day.slice(5)}</span>
+                              </div>
+                            )); })()}
+                          </div>
+                        </div>
+                      )}
+
+                      {watchHistory.length > 0 && (
+                        <div>
+                          <p style={{ margin: "0 0 8px", fontSize: 11, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: 0.7 }}>Watch History ({watchHistory.length})</p>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 1, borderRadius: 8, overflow: "hidden", border: "1px solid #e2e8f0" }}>
+                            {watchHistory.slice(0, 15).map((w, i) => (
+                              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: i % 2 === 0 ? "#f8fafc" : "#fff" }}>
+                                <span style={{ fontSize: 10, color: "#9ca3af", width: 55, flexShrink: 0 }}>{typeLabel(w.content_type)}</span>
+                                <span style={{ flex: 1, fontSize: 12, color: "#0f172a", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.title}</span>
+                                {w.pct !== null && <div style={{ width: 70, height: 3, background: "#e2e8f0", borderRadius: 2, flexShrink: 0 }}><div style={{ height: "100%", width: `${Math.min(w.pct, 100)}%`, background: w.completed ? "#22c55e" : "#6366f1", borderRadius: 2 }} /></div>}
+                                <span style={{ fontSize: 11, color: w.completed ? "#22c55e" : "#6b7280", width: 32, textAlign: "right", flexShrink: 0 }}>{w.pct !== null ? w.pct + "%" : "—"}</span>
+                                <span style={{ fontSize: 10, color: "#9ca3af", width: 65, textAlign: "right", flexShrink: 0 }}>{w.last_watched_at ? new Date(w.last_watched_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : ""}</span>
+                              </div>
+                            ))}
+                            {watchHistory.length > 15 && <div style={{ padding: "6px 12px", fontSize: 11, color: "#9ca3af", background: "#f8fafc" }}>+{watchHistory.length - 15} more</div>}
+                          </div>
+                        </div>
+                      )}
+
+                      {watchHistory.length === 0 && <p style={{ margin: 0, fontSize: 13, color: "#9ca3af", textAlign: "center", padding: "20px 0" }}>No watch activity yet</p>}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* ── Today at a Glance ── */}
+            {todayStats && (() => {
+              const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+              const stats = [
+                { label: "Sessions Today", value: todayStats.sessionsToday.toLocaleString(), color: "#6366f1", hint: "Content plays recorded since midnight" },
+                { label: "Hours Watched", value: todayStats.hoursToday > 0 ? todayStats.hoursToday + "h" : "<1h", color: "#f472b6", hint: "Sum of all watch progress saved today" },
+                { label: "Ad Impressions", value: todayStats.adImpressionsToday.toLocaleString(), color: "#f59e0b", hint: "Ads that started playing today" },
+                { label: "Ad Skips", value: todayStats.adSkipsToday.toLocaleString(), color: "#94a3b8", hint: "Ads that were skipped before completing" },
+                { label: "New Signups", value: todayStats.newUsers.toLocaleString(), color: "#22c55e", hint: "New accounts created today" },
+                { label: "Watching Live Now", value: todayStats.liveNow.toLocaleString(), color: "#ef4444", hint: "Active live viewers (last 90 sec heartbeat)", pulse: todayStats.liveNow > 0 },
+                { label: "Users Online Now", value: onlineUsers.length.toLocaleString(), color: "#10b981", hint: "Browsing the app in the last 3 minutes", pulse: onlineUsers.length > 0 },
+              ];
+              return (
+                <div style={{ marginBottom: 32 }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 14 }}>
+                    <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#0f172a" }}>Today at a Glance</h3>
+                    <span style={{ fontSize: 12, color: "#9ca3af" }}>{today}</span>
+                    <span style={{ fontSize: 10, color: "#d1fae5", background: "#065f46", borderRadius: 4, padding: "2px 7px", fontWeight: 600, marginLeft: 4 }}>LIVE · updates every min</span>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
+                    {stats.map(({ label, value, color, icon, hint, pulse }) => (
+                      <div key={label} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "16px 18px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+                        <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8, display: "flex", alignItems: "center", gap: 5 }}>
+                          {pulse && <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", display: "inline-block", animation: "adpulse 1.5s ease-in-out infinite" }} />}
+                          {label}
+                        </div>
+                        <div style={{ fontSize: 26, fontWeight: 700, color, marginBottom: 5 }}>{value}</div>
+                        <div style={{ fontSize: 11, color: "#9ca3af", lineHeight: 1.3 }}>{hint}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <style>{`@keyframes adpulse { 0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.4;transform:scale(1.3);} }`}</style>
+                </div>
+              );
+            })()}
+
+            {/* ── Online Now ── */}
+            {(() => {
+              const viewers = onlineUsers.filter(u => u.current_page !== "admin");
+              const admins = onlineUsers.filter(u => u.current_page === "admin");
+              const pageLabels = { home: "Home", shorts: "Movies", series: "Series", podcasts: "Podcasts", live: "Live TV", "new-popular": "New & Popular", mylist: "My List", profile: "Profile", settings: "Settings" };
+              const renderRow = (u, i, arr) => {
+                const email = u.profile?.email || u.user_id;
+                const username = u.profile?.username;
+                const pageLabel = pageLabels[u.current_page] || u.current_page || "—";
+                const secsAgo = Math.floor((Date.now() - new Date(u.last_seen).getTime()) / 1000);
+                const agoLabel = secsAgo < 60 ? "just now" : `${Math.floor(secsAgo / 60)}m ago`;
+                return (
+                  <div key={u.user_id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 20px", borderBottom: i < arr.length - 1 ? "1px solid #f8fafc" : "none", background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                    <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "#fff", fontWeight: 700, flexShrink: 0 }}>
+                      {(username || email || "?")[0].toUpperCase()}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{username || email}</div>
+                      {username && <div style={{ fontSize: 11, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{email}</div>}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#6366f1", background: "#eef2ff", borderRadius: 5, padding: "2px 8px", whiteSpace: "nowrap" }}>{pageLabel}</div>
+                    <div style={{ fontSize: 11, color: "#9ca3af", whiteSpace: "nowrap" }}>{agoLabel}</div>
+                    <div style={{ width: 7, height: 7, borderRadius: "50%", background: secsAgo < 90 ? "#10b981" : "#fbbf24", flexShrink: 0 }} title={secsAgo < 90 ? "Active" : "Idle"} />
+                  </div>
+                );
+              };
+              return (
+                <div style={{ marginBottom: 32, display: "flex", flexDirection: "column", gap: 16 }}>
+                  {/* Viewers */}
+                  <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden" }}>
+                    <div style={{ padding: "14px 20px", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#10b981", display: "inline-block", animation: viewers.length > 0 ? "adpulse 2s ease-in-out infinite" : "none" }} />
+                      <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#0f172a" }}>Viewers Online</h3>
+                      <span style={{ fontSize: 12, color: "#6b7280", marginLeft: 2 }}>{viewers.length} user{viewers.length !== 1 ? "s" : ""} browsing the app</span>
+                      <button onClick={loadOnlineUsers} style={{ marginLeft: "auto", background: "transparent", border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 10px", fontSize: 11, color: "#6b7280", cursor: "pointer" }}>Refresh</button>
+                    </div>
+                    {viewers.length === 0
+                      ? <div style={{ padding: "20px", color: "#9ca3af", fontSize: 13, textAlign: "center" }}>No viewers active in the last 3 minutes</div>
+                      : <div>{viewers.map((u, i) => renderRow(u, i, viewers))}</div>}
+                  </div>
+
+                  {/* Admin sessions */}
+                  <div style={{ background: "#fff", border: "1px solid #e0e7ff", borderRadius: 12, overflow: "hidden" }}>
+                    <div style={{ padding: "14px 20px", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#6366f1", display: "inline-block", animation: admins.length > 0 ? "adpulse 2s ease-in-out infinite" : "none" }} />
+                      <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#0f172a" }}>Admin Sessions</h3>
+                      <span style={{ fontSize: 12, color: "#6b7280", marginLeft: 2 }}>{admins.length} admin{admins.length !== 1 ? "s" : ""} in the CMS</span>
+                    </div>
+                    {admins.length === 0
+                      ? <div style={{ padding: "20px", color: "#9ca3af", fontSize: 13, textAlign: "center" }}>No admins currently in the CMS</div>
+                      : <div>{admins.map((u, i) => {
+                          const email = u.profile?.email || u.user_id;
+                          const username = u.profile?.full_name || u.profile?.username;
+                          const secsAgo = Math.floor((Date.now() - new Date(u.last_seen).getTime()) / 1000);
+                          const agoLabel = secsAgo < 60 ? "just now" : `${Math.floor(secsAgo / 60)}m ago`;
+                          return (
+                            <div key={u.user_id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 20px", borderBottom: i < admins.length - 1 ? "1px solid #f8fafc" : "none", background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                              <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg,#4f46e5,#7c3aed)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "#fff", fontWeight: 700, flexShrink: 0 }}>
+                                {(username || email || "?")[0].toUpperCase()}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{username || email}</div>
+                                {username && <div style={{ fontSize: 11, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{email}</div>}
+                              </div>
+                              <div style={{ fontSize: 12, color: "#4f46e5", background: "#eef2ff", borderRadius: 5, padding: "2px 8px" }}>Admin CMS</div>
+                              <div style={{ fontSize: 11, color: "#9ca3af", whiteSpace: "nowrap" }}>{agoLabel}</div>
+                              <div style={{ width: 7, height: 7, borderRadius: "50%", background: secsAgo < 90 ? "#10b981" : "#fbbf24", flexShrink: 0 }} />
+                            </div>
+                          );
+                        })}</div>}
+                  </div>
+                </div>
+              );
+            })()}
+
 
             {reportLoading && (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 80 }}>
@@ -2773,10 +4535,15 @@ export function CMS({ onExit }) {
                 {/* ── OVERVIEW ── */}
                 {reportSection === "overview" && (
                   <>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+                      <div style={{ height: 1, flex: 1, background: "#e2e8f0" }} />
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 1, whiteSpace: "nowrap" }}>All-Time Platform Stats</span>
+                      <div style={{ height: 1, flex: 1, background: "#e2e8f0" }} />
+                    </div>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 24 }}>
                       {[
                         { label: "Total Users", value: reportData.userCount, color: "#34d399", desc: "Registered accounts across all profiles" },
-                        { label: "Videos", value: reportData.videoCount, color: "#4f46e5", desc: "Movies uploaded to the library" },
+                        { label: "Videos", value: reportData.videoCount, color: "#4f46e5", desc: "Movies published on Peep" },
                         { label: "Shows", value: reportData.showCount, color: "#4f46e5", desc: "Series with one or more episodes" },
                         { label: "Episodes", value: reportData.episodeCount, color: "#4f46e5", desc: "Individual episode entries across all shows" },
                         { label: "Watch Sessions", value: reportData.watchSessions, color: "#60a5fa", desc: "Total times any content was played" },
@@ -2825,21 +4592,38 @@ export function CMS({ onExit }) {
                               <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>total signups</p>
                             </div>
                           </div>
-                          <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 120, borderBottom: "1px solid #f1f5f9", paddingBottom: 8, marginBottom: 8 }}>
-                            {reportData.userGrowth.map(([month, count]) => (
-                              <div key={month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 4, height: "100%" }}>
-                                <span style={{ fontSize: 11, fontWeight: 700, color: count === max ? "#0f172a" : "#6b7280" }}>{count}</span>
-                                <div style={{ width: "100%", background: count === max ? "#6366f1" : "rgba(99,102,241,0.15)", borderRadius: "4px 4px 0 0", height: `${Math.round((count / max) * 90)}px`, minHeight: 4, transition: "height 0.4s ease" }} />
-                              </div>
-                            ))}
-                          </div>
-                          <div style={{ display: "flex", gap: 6 }}>
-                            {reportData.userGrowth.map(([month]) => (
-                              <div key={month} style={{ flex: 1, textAlign: "center", fontSize: 11, color: "#9ca3af", fontWeight: 500 }}>
-                                {MONTH_NAMES[month.slice(5)] || month.slice(5)}
-                              </div>
-                            ))}
-                          </div>
+                          {(() => {
+                            const svgW = 600, svgH = 100;
+                            const pL = 24, pR = 24, pT = 20, pB = 24;
+                            const cW = svgW - pL - pR, cH = svgH - pT - pB;
+                            const n = reportData.userGrowth.length;
+                            const pts = reportData.userGrowth.map(([month, count], i) => ({
+                              x: n === 1 ? pL + cW / 2 : pL + (i / (n - 1)) * cW,
+                              y: n === 1 ? pT + cH / 2 : pT + (max === 0 ? cH : (1 - count / max) * cH),
+                              month, count,
+                            }));
+                            const line = pts.map(p => `${p.x},${p.y}`).join(" ");
+                            const area = [`${pts[0].x},${pT + cH}`, ...pts.map(p => `${p.x},${p.y}`), `${pts[pts.length - 1].x},${pT + cH}`].join(" ");
+                            return (
+                              <svg viewBox={`0 0 ${svgW} ${svgH}`} style={{ width: "100%", height: "auto", overflow: "visible" }}>
+                                <defs>
+                                  <linearGradient id="signupFill" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor="#6366f1" stopOpacity="0.15" />
+                                    <stop offset="100%" stopColor="#6366f1" stopOpacity="0" />
+                                  </linearGradient>
+                                </defs>
+                                <polygon points={area} fill="url(#signupFill)" />
+                                {n > 1 && <polyline points={line} fill="none" stroke="#6366f1" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />}
+                                {pts.map(p => (
+                                  <g key={p.month}>
+                                    <circle cx={p.x} cy={p.y} r="5" fill="#fff" stroke="#6366f1" strokeWidth="2.5" />
+                                    <text x={p.x} y={p.y - 10} textAnchor="middle" fontSize="11" fontWeight="700" fill="#0f172a">{p.count}</text>
+                                    <text x={p.x} y={pT + cH + 18} textAnchor="middle" fontSize="11" fill="#9ca3af">{MONTH_NAMES[p.month.slice(5)] || p.month.slice(5)}</text>
+                                  </g>
+                                ))}
+                              </svg>
+                            );
+                          })()}
                         </div>
                       );
                     })()}
@@ -2987,7 +4771,7 @@ export function CMS({ onExit }) {
                         <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>Sessions by Content Type</p>
                         {(() => {
                           const maxSessions = Math.max(...reportData.contentTypeStats.map(t => t.sessions), 1);
-                          const TYPE_COLORS = { Movies: "#60a5fa", "TV Episodes": "#34d399", Podcasts: "#f472b6", Shows: "#a78bfa" };
+                          const TYPE_COLORS = { Shorts: "#60a5fa", "TV Episodes": "#34d399", Podcasts: "#f472b6", Shows: "#a78bfa" };
                           return reportData.contentTypeStats.map(t => {
                             const barColor = TYPE_COLORS[t.label] || "#94a3b8";
                             const barW = Math.max(Math.round((t.sessions / maxSessions) * 100), 2);
@@ -3053,43 +4837,31 @@ export function CMS({ onExit }) {
                       </div>
                     )}
 
-                    {/* Sessions + hours trend (last 30 days, side by side) */}
+                    {/* Sessions + hours trend (last 30 days, stacked full-width) */}
                     {(reportData.sessionTrend.length > 0 || reportData.hoursTrend.length > 0) && (
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
-                        {reportData.sessionTrend.length > 0 && (
-                          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-                            <p style={{ margin: "0 0 20px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>Sessions — Last 30 Days</p>
-                            <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 72 }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 24 }}>
+                        {[
+                          { data: reportData.sessionTrend, label: "Sessions — Last 30 Days", color: "rgba(96,165,250,0.5)", suffix: " sessions", statLabel: "active days" },
+                          { data: reportData.hoursTrend, label: "Hours Watched — Last 30 Days", color: "rgba(244,114,182,0.5)", suffix: "h", statLabel: "active days" },
+                        ].map(({ data, label, color, suffix, statLabel }) => data.length > 0 && (
+                          <div key={label} style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 16 }}>
+                              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{label}</p>
+                              <span style={{ fontSize: 11, color: "#9ca3af" }}>{data.length} {statLabel}</span>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 96 }}>
                               {(() => {
-                                const max = Math.max(...reportData.sessionTrend.map(([, c]) => c), 1);
-                                return reportData.sessionTrend.map(([day, count]) => (
-                                  <div key={day} title={`${day}: ${count} sessions`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "default" }}>
-                                    <div style={{ width: "100%", background: "rgba(96,165,250,0.3)", borderRadius: 3, height: `${Math.round((count / max) * 52) + 4}px`, minHeight: 4 }} />
-                                    {reportData.sessionTrend.length <= 14 && <span style={{ fontSize: 9, color: "#9ca3af" }}>{day.slice(8)}</span>}
+                                const max = Math.max(...data.map(([, v]) => v), 1);
+                                return data.map(([day, val]) => (
+                                  <div key={day} title={`${day}: ${val}${suffix}`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, cursor: "default", minWidth: 0 }}>
+                                    <div style={{ width: "100%", background: color, borderRadius: "3px 3px 0 0", height: `${Math.round((val / max) * 80) + 4}px`, minHeight: 4, transition: "height 0.3s" }} />
+                                    <span style={{ fontSize: 9, color: "#9ca3af", whiteSpace: "nowrap" }}>{day.slice(5)}</span>
                                   </div>
                                 ));
                               })()}
                             </div>
-                            <p style={{ margin: "10px 0 0", fontSize: 11, color: "#9ca3af" }}>{reportData.sessionTrend.length} active days</p>
                           </div>
-                        )}
-                        {reportData.hoursTrend.length > 0 && (
-                          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-                            <p style={{ margin: "0 0 20px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>Hours Watched — Last 30 Days</p>
-                            <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 72 }}>
-                              {(() => {
-                                const max = Math.max(...reportData.hoursTrend.map(([, h]) => h), 1);
-                                return reportData.hoursTrend.map(([day, hours]) => (
-                                  <div key={day} title={`${day}: ${hours}h`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "default" }}>
-                                    <div style={{ width: "100%", background: "rgba(244,114,182,0.3)", borderRadius: 3, height: `${Math.round((hours / max) * 52) + 4}px`, minHeight: 4 }} />
-                                    {reportData.hoursTrend.length <= 14 && <span style={{ fontSize: 9, color: "#9ca3af" }}>{day.slice(8)}</span>}
-                                  </div>
-                                ));
-                              })()}
-                            </div>
-                            <p style={{ margin: "10px 0 0", fontSize: 11, color: "#9ca3af" }}>{reportData.hoursTrend.length} active days</p>
-                          </div>
-                        )}
+                        ))}
                       </div>
                     )}
 
@@ -3162,6 +4934,951 @@ export function CMS({ onExit }) {
           </div>
         )}
 
+        {/* ────── MEMBERS SUB-TAB BAR ────── */}
+        {tab === "members" && (
+          <div style={{ display: "flex", gap: 6, marginBottom: 28, paddingBottom: 20, borderBottom: "1px solid #e2e8f0" }}>
+            {[{ key: "users", label: `Users${users.length > 0 ? ` (${users.length})` : ""}` }, { key: "subscriptions", label: `Subscriptions${subs.length > 0 ? ` (${subs.length})` : ""}` }, { key: "support", label: "Support" }].map(({ key, label }) => (
+              <button key={key} onClick={() => { setMembersTab(key); if (key === "support") { setSupportUser(null); setSupportResults([]); setSupportSearch(""); setSupportActionMsg(null); } }} style={{ background: membersTab === key ? "rgba(129,140,248,0.08)" : "transparent", border: `1px solid ${membersTab === key ? "rgba(129,140,248,0.3)" : "#e2e8f0"}`, borderRadius: 8, padding: "7px 16px", color: membersTab === key ? "#4f46e5" : "#6b7280", fontSize: 13, fontWeight: membersTab === key ? 600 : 400, cursor: "pointer" }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* ────── SUPPORT TAB ────── */}
+        {tab === "members" && membersTab === "support" && (
+          <div style={{ display: "flex", gap: 28, alignItems: "flex-start" }}>
+            {/* Left: search panel */}
+            <div style={{ width: 320, flexShrink: 0 }}>
+              <h2 style={{ margin: "0 0 20px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Account Support</h2>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "10px 14px", marginBottom: 12 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                <input
+                  value={supportSearch}
+                  onChange={e => { setSupportSearch(e.target.value); searchSupportUsers(e.target.value); }}
+                  placeholder="Search by email, name, or user ID…"
+                  style={{ border: "none", outline: "none", fontSize: 14, color: "#0f172a", background: "transparent", flex: 1 }}
+                />
+                {supportSearching && <span style={{ color: "#9ca3af", fontSize: 12 }}>⋯</span>}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {supportResults.map(u => (
+                  <button key={u.id} onClick={() => loadSupportUser(u)}
+                    style={{ background: supportUser?.id === u.id ? "rgba(34,211,238,0.08)" : "#fff", border: `1px solid ${supportUser?.id === u.id ? "rgba(34,211,238,0.4)" : "#e2e8f0"}`, borderRadius: 10, padding: "12px 14px", textAlign: "left", cursor: "pointer", transition: "all 0.15s" }}>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: u._ghost ? "#9ca3af" : "#0f172a" }}>{u.full_name || u.username || (u._ghost ? "Ghost Account" : "—")}</p>
+                    <p style={{ margin: "2px 0 0", fontSize: 12, color: "#6b7280" }}>{u.email || <span style={{ fontFamily: "monospace", fontSize: 11 }}>{u.id.slice(0, 20)}…</span>}</p>
+                  </button>
+                ))}
+                {supportSearch && !supportSearching && supportResults.length === 0 && (
+                  <p style={{ fontSize: 13, color: "#9ca3af", textAlign: "center", padding: "20px 0" }}>No users found</p>
+                )}
+              </div>
+            </div>
+
+            {/* Right: user detail */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {!supportUser && !supportLoading && (
+                <div style={{ textAlign: "center", padding: "80px 0", color: "#9ca3af" }}>
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#e2e8f0" strokeWidth="1.5" style={{ marginBottom: 12 }}><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                  <p style={{ margin: 0, fontSize: 14 }}>Search and select a user</p>
+                </div>
+              )}
+              {supportLoading && <div style={{ textAlign: "center", padding: "80px 0", color: "#9ca3af" }}>Loading…</div>}
+              {supportUser && !supportLoading && (() => {
+                const sub = supportUser.subscription;
+                const lastSeen = supportUser.presence?.last_seen ? new Date(supportUser.presence.last_seen) : null;
+                const daysSince = lastSeen ? Math.floor((Date.now() - lastSeen) / 86400000) : null;
+                return (
+                  <div>
+                    {/* Header */}
+                    <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "24px", marginBottom: 16 }}>
+                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                        <div>
+                          <p style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>{supportUser.full_name || supportUser.username || "—"}</p>
+                          <p style={{ margin: "0 0 4px", fontSize: 14, color: "#6b7280" }}>{supportUser.email}</p>
+                          <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>Member since {supportUser.created_at ? new Date(supportUser.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : "—"}</p>
+                        </div>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          {sub ? (
+                            <span style={{ background: sub.status === "active" ? "rgba(52,211,153,0.1)" : "rgba(248,113,113,0.1)", color: sub.status === "active" ? "#059669" : "#dc2626", border: `1px solid ${sub.status === "active" ? "rgba(52,211,153,0.3)" : "rgba(248,113,113,0.3)"}`, borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 600 }}>
+                              {sub.plan === "comp" ? "COMP" : sub.status}
+                            </span>
+                          ) : (
+                            <span style={{ background: "rgba(156,163,175,0.1)", color: "#9ca3af", border: "1px solid #e2e8f0", borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 600 }}>No Subscription</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Stats row */}
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginTop: 20, paddingTop: 20, borderTop: "1px solid #f1f5f9" }}>
+                        {[
+                          { label: "Profiles", value: supportUser.viewer_profiles.length },
+                          { label: "Watch Sessions", value: supportUser.watch_count },
+                          { label: "Last Seen", value: daysSince === null ? "Never" : daysSince === 0 ? "Today" : `${daysSince}d ago` },
+                          { label: "Current Page", value: supportUser.presence?.current_page || "—" },
+                        ].map(({ label, value }) => (
+                          <div key={label} style={{ textAlign: "center" }}>
+                            <p style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>{value}</p>
+                            <p style={{ margin: 0, fontSize: 11, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Subscription detail */}
+                    {sub && (
+                      <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "20px", marginBottom: 16 }}>
+                        <p style={{ margin: "0 0 14px", fontSize: 13, fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: 0.5 }}>Subscription</p>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, fontSize: 13 }}>
+                          <div><span style={{ color: "#9ca3af" }}>Started: </span><span style={{ color: "#0f172a" }}>{sub.created_at ? new Date(sub.created_at).toLocaleDateString() : "—"}</span></div>
+                          <div><span style={{ color: "#9ca3af" }}>Renews: </span><span style={{ color: "#0f172a" }}>{sub.current_period_end ? new Date(sub.current_period_end).toLocaleDateString() : "—"}</span></div>
+                          {sub.stripe_customer_id && <div style={{ gridColumn: "span 2" }}><span style={{ color: "#9ca3af" }}>Stripe Customer: </span><a href={`https://dashboard.stripe.com/customers/${sub.stripe_customer_id}`} target="_blank" rel="noreferrer" style={{ color: "#4f46e5", fontFamily: "monospace", fontSize: 12 }}>{sub.stripe_customer_id}</a></div>}
+                          {sub.stripe_subscription_id && <div style={{ gridColumn: "span 2" }}><span style={{ color: "#9ca3af" }}>Stripe Sub: </span><a href={`https://dashboard.stripe.com/subscriptions/${sub.stripe_subscription_id}`} target="_blank" rel="noreferrer" style={{ color: "#4f46e5", fontFamily: "monospace", fontSize: 12 }}>{sub.stripe_subscription_id}</a></div>}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Viewer profiles */}
+                    {supportUser.viewer_profiles.length > 0 && (
+                      <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "20px", marginBottom: 16 }}>
+                        <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: 0.5 }}>Profiles</p>
+                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                          {supportUser.viewer_profiles.map(vp => (
+                            <span key={vp.id} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "6px 14px", fontSize: 13, color: "#374151" }}>{vp.name}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Actions */}
+                    <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "20px" }}>
+                      <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: 0.5 }}>Actions</p>
+                      {supportActionMsg && (
+                        <div style={{ background: supportActionMsg.ok ? "rgba(52,211,153,0.08)" : "rgba(248,113,113,0.08)", border: `1px solid ${supportActionMsg.ok ? "rgba(52,211,153,0.3)" : "rgba(248,113,113,0.3)"}`, borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 13, color: supportActionMsg.ok ? "#059669" : "#dc2626" }}>
+                          {supportActionMsg.text}
+                        </div>
+                      )}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                        <button onClick={supportGrantAccess} disabled={supportActionLoading}
+                          style={{ background: "rgba(52,211,153,0.08)", border: "1px solid rgba(52,211,153,0.3)", borderRadius: 9, padding: "12px", color: "#059669", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                          Grant Free Access
+                        </button>
+                        <button onClick={supportRevokeAccess} disabled={supportActionLoading || !sub}
+                          style={{ background: sub ? "rgba(245,158,11,0.08)" : "#f8fafc", border: `1px solid ${sub ? "rgba(245,158,11,0.3)" : "#e2e8f0"}`, borderRadius: 9, padding: "12px", color: sub ? "#b45309" : "#9ca3af", fontSize: 13, fontWeight: 600, cursor: sub ? "pointer" : "not-allowed" }}>
+                          Revoke Access
+                        </button>
+                        <button onClick={supportSendPasswordReset} disabled={supportActionLoading}
+                          style={{ background: "rgba(79,70,229,0.08)", border: "1px solid rgba(79,70,229,0.3)", borderRadius: 9, padding: "12px", color: "#4f46e5", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                          Send Password Reset
+                        </button>
+                        {sub?.stripe_customer_id && (
+                          <a href={`https://dashboard.stripe.com/customers/${sub.stripe_customer_id}`} target="_blank" rel="noreferrer"
+                            style={{ background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.3)", borderRadius: 9, padding: "12px", color: "#6366f1", fontSize: 13, fontWeight: 600, cursor: "pointer", textDecoration: "none", textAlign: "center" }}>
+                            Open in Stripe ↗
+                          </a>
+                        )}
+                        {!supportDeleteConfirm ? (
+                          <button onClick={() => setSupportDeleteConfirm(true)} disabled={supportActionLoading}
+                            style={{ background: "rgba(220,38,38,0.06)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 9, padding: "12px", color: "#dc2626", fontSize: 13, fontWeight: 600, cursor: "pointer", gridColumn: sub?.stripe_customer_id ? "span 1" : "span 2" }}>
+                            Delete Account
+                          </button>
+                        ) : (
+                          <div style={{ gridColumn: "span 2", background: "rgba(220,38,38,0.05)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 9, padding: "14px" }}>
+                            <p style={{ margin: "0 0 12px", fontSize: 13, color: "#dc2626", fontWeight: 600 }}>Permanently delete {supportUser.full_name || supportUser.email}?</p>
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <button onClick={() => setSupportDeleteConfirm(false)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "9px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                              <button onClick={supportDeleteUser} disabled={supportActionLoading}
+                                style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "9px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                                {supportActionLoading ? "Deleting…" : "Delete Forever"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+
+        {/* ────── USERS TAB ────── */}
+        {tab === "members" && membersTab === "users" && (
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Users</h2>
+              <div style={{ marginLeft: "auto", display: "flex", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 14px" }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                  <input value={usersSearch} onChange={e => setUsersSearch(e.target.value)} placeholder="Search by name or email…" style={{ border: "none", outline: "none", fontSize: 13, color: "#0f172a", background: "transparent", width: 220 }} />
+                </div>
+                <button onClick={loadUsers} style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.2)", borderRadius: 7, padding: "8px 16px", color: "#f87171", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Refresh</button>
+              </div>
+            </div>
+
+            {usersLoading ? (
+              <div style={{ textAlign: "center", padding: 60, color: "#9ca3af" }}>Loading…</div>
+            ) : (
+              <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, overflow: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                      {["Name", "Email", "Type", "Subscription", "Joined", ""].map(h => (
+                        <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.filter(u => !usersSearch || (u.email || "").toLowerCase().includes(usersSearch.toLowerCase()) || (u.full_name || "").toLowerCase().includes(usersSearch.toLowerCase())).map((u, i, arr) => (
+                      <tr key={u.id} style={{ borderBottom: i < arr.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                        <td style={{ padding: "14px 16px", fontWeight: 600, color: "#0f172a" }}>{u.full_name || u.username || "—"}</td>
+                        <td style={{ padding: "14px 16px", color: "#6b7280" }}>{u.email}</td>
+                        <td style={{ padding: "14px 16px" }}>
+                          {u.isStreamer
+                            ? <span style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 600, color: "#dc2626" }}>User + Streamer</span>
+                            : <span style={{ background: "rgba(79,70,229,0.08)", border: "1px solid rgba(79,70,229,0.2)", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 600, color: "#4f46e5" }}>User</span>
+                          }
+                        </td>
+                        <td style={{ padding: "14px 16px" }}>
+                          {u.subscription ? (
+                            <span style={{ background: u.subscription.status === "active" ? "rgba(52,211,153,0.1)" : "rgba(248,113,113,0.1)", color: u.subscription.status === "active" ? "#059669" : "#dc2626", border: `1px solid ${u.subscription.status === "active" ? "rgba(52,211,153,0.3)" : "rgba(248,113,113,0.3)"}`, borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 600 }}>
+                              {u.subscription.plan === "comp" ? "COMP" : u.subscription.status}
+                            </span>
+                          ) : (
+                            <span style={{ color: "#9ca3af", fontSize: 12 }}>None</span>
+                          )}
+                        </td>
+                        <td style={{ padding: "14px 16px", color: "#6b7280", whiteSpace: "nowrap" }}>{u.created_at ? new Date(u.created_at).toLocaleDateString() : "—"}</td>
+                        <td style={{ padding: "14px 16px" }}>
+                          <button onClick={() => setDeleteUserConfirm(u)} style={{ background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 6, padding: "5px 12px", color: "#dc2626", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {deleteUserConfirm && (
+              <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ background: "#fff", borderRadius: 16, padding: "32px 36px", maxWidth: 400, width: "90%", textAlign: "center" }}>
+                  <p style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, color: "#0f172a" }}>Delete user?</p>
+                  <p style={{ fontSize: 14, color: "#374151", marginBottom: 4 }}>{deleteUserConfirm.full_name}</p>
+                  <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>{deleteUserConfirm.email}</p>
+                  <p style={{ fontSize: 12, color: "#9ca3af", marginBottom: 28 }}>This permanently deletes their account, profiles, subscription, and all watch data. Cannot be undone.</p>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button onClick={() => setDeleteUserConfirm(null)} disabled={deletingUser} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    <button onClick={() => deleteUser(deleteUserConfirm.id)} disabled={deletingUser} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: deletingUser ? "not-allowed" : "pointer", opacity: deletingUser ? 0.7 : 1 }}>
+                      {deletingUser ? "Deleting…" : "Delete Forever"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === "members" && membersTab === "subscriptions" && (() => {
+          const active = subs.filter(s => s.status === "active");
+          const activePaid = active.filter(s => s.plan !== "comp");
+          const activeComp = active.filter(s => s.plan === "comp");
+          const inactive = subs.filter(s => s.status !== "active");
+          const mrr = activePaid.length * 10;
+          const arr = mrr * 12;
+          const now = new Date();
+          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+          const netNewThisMonth = subs.filter(s => s.plan !== "comp" && s.created_at && new Date(s.created_at) >= startOfMonth).length;
+          const paidTotal = subs.filter(s => s.plan !== "comp").length;
+          const churnRate = paidTotal > 0 ? (((paidTotal - activePaid.length) / paidTotal) * 100).toFixed(1) : "0.0";
+          const atRisk = activePaid.filter(s => !s.last_seen || (now - new Date(s.last_seen)) > 14 * 24 * 60 * 60 * 1000);
+
+          const filtered = subs
+            .filter(s => subStatusFilter === "all" || s.status === subStatusFilter)
+            .filter(s => !subSearch || (s.email || "").toLowerCase().includes(subSearch.toLowerCase()))
+            .sort((a, b) => {
+              const av = a[subSort.col] ?? "";
+              const bv = b[subSort.col] ?? "";
+              return subSort.dir === "asc" ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
+            });
+
+          const SortTh = ({ col, label }) => (
+            <th onClick={() => setSubSort(s => ({ col, dir: s.col === col && s.dir === "asc" ? "desc" : "asc" }))}
+              style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 600, color: subSort.col === col ? "#4f46e5" : "#6b7280", textTransform: "uppercase", letterSpacing: 0.5, cursor: "pointer", whiteSpace: "nowrap", userSelect: "none" }}>
+              {label} {subSort.col === col ? (subSort.dir === "asc" ? "↑" : "↓") : ""}
+            </th>
+          );
+
+          return (
+            <div>
+              {/* Header */}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28, flexWrap: "wrap" }}>
+                <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Subscriptions</h2>
+                <div style={{ marginLeft: "auto", display: "flex", gap: 10 }}>
+                  <button onClick={exportSubsCSV} disabled={subs.length === 0} style={{ background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)", borderRadius: 7, padding: "8px 16px", color: "#34d399", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                    Export CSV
+                  </button>
+                  <button onClick={loadSubscriptions} style={{ background: "rgba(129,140,248,0.1)", border: "1px solid rgba(129,140,248,0.2)", borderRadius: 7, padding: "8px 16px", color: "#818cf8", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                    Refresh
+                  </button>
+                </div>
+              </div>
+
+              {/* Stats */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 16, marginBottom: 32 }}>
+                {[
+                  { label: "MRR", value: `$${mrr}`, sub: "Paid only", color: "#facc15" },
+                  { label: "ARR", value: `$${arr}`, sub: "Paid only", color: "#f59e0b" },
+                  { label: "Active Paid", value: activePaid.length, color: "#34d399" },
+                  { label: "Comped", value: activeComp.length, sub: "Free access granted", color: "#818cf8" },
+                  { label: "Churned", value: inactive.length, color: "#f87171" },
+                  { label: "Churn Rate", value: `${churnRate}%`, sub: "Paid subs only", color: inactive.length > 0 ? "#f87171" : "#34d399" },
+                  { label: "New This Month", value: netNewThisMonth, color: "#a78bfa" },
+                  { label: "At Risk", value: atRisk.length, sub: "Paid, no activity 14d+", color: atRisk.length > 0 ? "#f59e0b" : "#34d399" },
+                ].map(({ label, value, color, sub }) => (
+                  <div key={label} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "18px 20px" }}>
+                    <p style={{ margin: "0 0 4px", fontSize: 11, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6 }}>{label}</p>
+                    <p style={{ margin: 0, fontSize: 26, fontWeight: 700, color }}>{value}</p>
+                    {sub && <p style={{ margin: "4px 0 0", fontSize: 10, color: "#9ca3af" }}>{sub}</p>}
+                  </div>
+                ))}
+              </div>
+
+              {/* Filters */}
+              <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 14px", flex: 1, minWidth: 200 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                  <input value={subSearch} onChange={e => setSubSearch(e.target.value)} placeholder="Search by email…" style={{ border: "none", outline: "none", fontSize: 13, color: "#0f172a", background: "transparent", flex: 1 }} />
+                </div>
+                <select value={subStatusFilter} onChange={e => setSubStatusFilter(e.target.value)} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 14px", fontSize: 13, color: "#0f172a", cursor: "pointer", outline: "none" }}>
+                  <option value="all">All statuses</option>
+                  <option value="active">Active</option>
+                  <option value="canceled">Cancelled</option>
+                  <option value="past_due">Past Due</option>
+                </select>
+              </div>
+
+              {/* Table */}
+              {subsLoading ? (
+                <div style={{ textAlign: "center", padding: 60, color: "#9ca3af" }}>Loading…</div>
+              ) : filtered.length === 0 ? (
+                <div style={{ textAlign: "center", padding: 60, color: "#9ca3af" }}>{subs.length === 0 ? "No subscribers yet" : "No results"}</div>
+              ) : (
+                <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, overflow: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                        <SortTh col="email" label="Email" />
+                        <SortTh col="status" label="Status" />
+                        <SortTh col="created_at" label="Started" />
+                        <SortTh col="current_period_end" label="Renews" />
+                        <SortTh col="last_seen" label="Last Seen" />
+                        <SortTh col="watch_sessions" label="Sessions" />
+                        <SortTh col="profile_count" label="Profiles" />
+                        <th style={{ padding: "12px 16px" }} />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map((s, i) => {
+                        const daysSinceActive = s.last_seen ? Math.floor((now - new Date(s.last_seen)) / 86400000) : null;
+                        const isAtRisk = s.status === "active" && (daysSinceActive === null || daysSinceActive > 14);
+                        return (
+                          <tr key={s.id} style={{ borderBottom: i < filtered.length - 1 ? "1px solid #f1f5f9" : "none", background: isAtRisk ? "rgba(245,158,11,0.03)" : "transparent" }}>
+                            <td style={{ padding: "14px 16px", color: "#0f172a", fontWeight: 500, maxWidth: 220 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                {isAtRisk && <span title="No activity in 14+ days" style={{ fontSize: 10, background: "rgba(245,158,11,0.15)", color: "#b45309", border: "1px solid rgba(245,158,11,0.3)", borderRadius: 4, padding: "1px 6px", whiteSpace: "nowrap" }}>at risk</span>}
+                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.email || <span style={{ color: "#9ca3af", fontFamily: "monospace", fontSize: 11 }}>{s.user_id?.slice(0, 16)}…</span>}</span>
+                              </div>
+                            </td>
+                            <td style={{ padding: "14px 16px" }}>
+                              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                <span style={{ background: s.status === "active" ? "rgba(52,211,153,0.1)" : "rgba(248,113,113,0.1)", color: s.status === "active" ? "#059669" : "#dc2626", border: `1px solid ${s.status === "active" ? "rgba(52,211,153,0.3)" : "rgba(248,113,113,0.3)"}`, borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 600 }}>
+                                  {s.status}
+                                </span>
+                                {s.plan === "comp" && (
+                                  <span style={{ background: "rgba(129,140,248,0.12)", color: "#818cf8", border: "1px solid rgba(129,140,248,0.3)", borderRadius: 20, padding: "3px 8px", fontSize: 10, fontWeight: 700 }}>COMP</span>
+                                )}
+                              </div>
+                            </td>
+                            <td style={{ padding: "14px 16px", color: "#6b7280", whiteSpace: "nowrap" }}>{s.created_at ? new Date(s.created_at).toLocaleDateString() : "—"}</td>
+                            <td style={{ padding: "14px 16px", color: "#6b7280", whiteSpace: "nowrap" }}>{s.current_period_end ? new Date(s.current_period_end).toLocaleDateString() : "—"}</td>
+                            <td style={{ padding: "14px 16px", color: daysSinceActive !== null && daysSinceActive > 14 ? "#f59e0b" : "#6b7280", whiteSpace: "nowrap" }}>
+                              {daysSinceActive === null ? <span style={{ color: "#9ca3af" }}>Never</span> : daysSinceActive === 0 ? "Today" : `${daysSinceActive}d ago`}
+                            </td>
+                            <td style={{ padding: "14px 16px", color: "#0f172a", fontWeight: 500, textAlign: "center" }}>{s.watch_sessions}</td>
+                            <td style={{ padding: "14px 16px", color: "#0f172a", textAlign: "center" }}>{s.profile_count}</td>
+                            <td style={{ padding: "14px 16px" }}>
+                              <button onClick={() => setRevokeConfirm(s)} style={{ background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 6, padding: "5px 12px", color: "#dc2626", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                                Revoke
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Revoke confirm modal */}
+              {revokeConfirm && (
+                <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ background: "#fff", borderRadius: 16, padding: "32px 36px", maxWidth: 380, width: "90%", textAlign: "center" }}>
+                    <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "#0f172a" }}>Revoke subscription?</p>
+                    <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>{revokeConfirm.email || revokeConfirm.user_id}</p>
+                    <p style={{ fontSize: 12, color: "#9ca3af", marginBottom: 28 }}>This removes access immediately. It does not cancel billing in Stripe — do that separately.</p>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <button onClick={() => setRevokeConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                      <button onClick={() => revokeSubscription(revokeConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Revoke Access</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* ────── THE BOSS TAB ────── */}
+        {tab === "security" && (() => {
+          const now = new Date();
+          return (
+            <div style={{ maxWidth: 760 }}>
+              {/* Header */}
+              <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 32 }}>
+                <button onClick={() => setCreatorsTab("list")} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 14px", fontSize: 13, color: "#374151", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                  ← Back
+                </button>
+                <div>
+                  <h2 style={{ margin: "0 0 2px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Security</h2>
+                  <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>Access control, blocked accounts, session monitoring</p>
+                </div>
+                <button onClick={loadSecurityData} style={{ marginLeft: "auto", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: 7, padding: "8px 16px", color: "#ef4444", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                  Refresh
+                </button>
+              </div>
+
+              {/* Lockout Settings */}
+              <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
+                <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Admin Lockout</p>
+                <p style={{ margin: "0 0 18px", fontSize: 13, color: "#9ca3af" }}>Lock the admin login after too many wrong PINs.</p>
+                <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Max Attempts</label>
+                    <input type="number" min="1" max="20"
+                      value={lockoutSettings.lockout_max_attempts}
+                      onChange={e => setLockoutSettings(p => ({ ...p, lockout_max_attempts: e.target.value }))}
+                      onBlur={e => saveSetting("lockout_max_attempts", e.target.value)}
+                      style={{ width: 80, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 14, color: "#0f172a", outline: "none", textAlign: "center" }} />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Lockout Duration (mins)</label>
+                    <input type="number" min="1" max="1440"
+                      value={lockoutSettings.lockout_duration_mins}
+                      onChange={e => setLockoutSettings(p => ({ ...p, lockout_duration_mins: e.target.value }))}
+                      onBlur={e => saveSetting("lockout_duration_mins", e.target.value)}
+                      style={{ width: 100, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 14, color: "#0f172a", outline: "none", textAlign: "center" }} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Failed Login Attempts */}
+              <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                  <div>
+                    <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Failed Login Attempts</p>
+                    <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Wrong PINs entered on the admin login screen.</p>
+                  </div>
+                  {loginAttempts.length > 0 && (
+                    <button onClick={async () => { await supabase.from("admin_login_attempts").delete().neq("id", "00000000-0000-0000-0000-000000000000"); loadLoginAttempts(); showToast("Cleared"); }}
+                      style={{ background: "none", border: "none", fontSize: 12, color: "#9ca3af", cursor: "pointer", textDecoration: "underline" }}>Clear all</button>
+                  )}
+                </div>
+                {loginAttempts.length === 0 ? (
+                  <p style={{ margin: 0, fontSize: 13, color: "#9ca3af", textAlign: "center", padding: "16px 0" }}>No failed attempts — all clear</p>
+                ) : (
+                  <div style={{ borderRadius: 10, overflow: "hidden", border: "1px solid #f1f5f9" }}>
+                    {loginAttempts.map((a, i) => {
+                      const date = new Date(a.attempted_at);
+                      const masked = a.pin_entered ? a.pin_entered.slice(0, 1) + "*".repeat(Math.max(0, a.pin_entered.length - 1)) : "?";
+                      return (
+                        <div key={a.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 16px", background: i % 2 === 0 ? "#fafafa" : "#fff", borderBottom: i < loginAttempts.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <span style={{ fontSize: 16 }}>🚨</span>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: "#0f172a" }}>Tried <code style={{ background: "rgba(239,68,68,0.08)", color: "#dc2626", padding: "1px 6px", borderRadius: 4, letterSpacing: "0.1em" }}>{masked}</code></span>
+                          </div>
+                          <span style={{ fontSize: 11, color: "#9ca3af" }}>{date.toLocaleDateString()} {date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Block User */}
+              <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
+                <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Block User</p>
+                <p style={{ margin: "0 0 16px", fontSize: 13, color: "#9ca3af" }}>Blocked users are signed out immediately and can't log back in.</p>
+                <div style={{ display: "flex", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+                  <input value={blockEmail} onChange={e => setBlockEmail(e.target.value)} placeholder="user@email.com" type="email"
+                    style={{ flex: 2, minWidth: 180, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px", fontSize: 14, color: "#0f172a", outline: "none" }} />
+                  <input value={blockReason} onChange={e => setBlockReason(e.target.value)} placeholder="Reason (optional)"
+                    style={{ flex: 2, minWidth: 140, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px", fontSize: 14, color: "#0f172a", outline: "none" }} />
+                  <button onClick={blockUser} disabled={blockLoading || !blockEmail.trim()}
+                    style={{ background: "#dc2626", border: "none", borderRadius: 8, padding: "10px 20px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: blockLoading ? 0.6 : 1, whiteSpace: "nowrap" }}>
+                    {blockLoading ? "…" : "Block"}
+                  </button>
+                </div>
+                {blockedUsers.length > 0 && (
+                  <div style={{ borderRadius: 10, overflow: "hidden", border: "1px solid #f1f5f9" }}>
+                    {blockedUsers.map((u, i) => (
+                      <div key={u.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 16px", background: i % 2 === 0 ? "#fafafa" : "#fff", borderBottom: i < blockedUsers.length - 1 ? "1px solid #f1f5f9" : "none", gap: 12 }}>
+                        <div>
+                          <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{u.email}</p>
+                          {u.reason && <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>{u.reason}</p>}
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                          <span style={{ fontSize: 11, color: "#9ca3af" }}>{new Date(u.blocked_at).toLocaleDateString()}</span>
+                          <button onClick={() => unblockUser(u.id)} style={{ background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)", borderRadius: 6, padding: "4px 12px", color: "#059669", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Unblock</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {blockedUsers.length === 0 && <p style={{ margin: "8px 0 0", fontSize: 12, color: "#9ca3af" }}>No blocked users</p>}
+              </div>
+
+              {/* Active Sessions */}
+              <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
+                <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Active Sessions</p>
+                <p style={{ margin: "0 0 16px", fontSize: 13, color: "#9ca3af" }}>Users seen in the last 5 minutes.</p>
+                {activeSessions.filter(s => (now - new Date(s.last_seen)) < 5 * 60 * 1000).length === 0 ? (
+                  <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>No active sessions right now</p>
+                ) : (
+                  <div style={{ borderRadius: 10, overflow: "hidden", border: "1px solid #f1f5f9" }}>
+                    {activeSessions.filter(s => (now - new Date(s.last_seen)) < 5 * 60 * 1000).map((s, i, arr) => (
+                      <div key={s.user_id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 16px", background: i % 2 === 0 ? "#fafafa" : "#fff", borderBottom: i < arr.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#22c55e", flexShrink: 0, display: "inline-block" }} />
+                          <div>
+                            <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: "#0f172a" }}>{s.email || <span style={{ color: "#9ca3af", fontFamily: "monospace", fontSize: 11 }}>{s.user_id?.slice(0, 16)}…</span>}</p>
+                            {s.profileName && <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>Profile: {s.profileName}</p>}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                          {s.current_page && <span style={{ fontSize: 11, background: "#f1f5f9", padding: "2px 8px", borderRadius: 4, color: "#6b7280" }}>{s.current_page}</span>}
+                          <span style={{ fontSize: 11, color: "#9ca3af" }}>{Math.floor((now - new Date(s.last_seen)) / 1000)}s ago</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
+        {tab === "settings" && (
+          <div style={{ maxWidth: 700 }}>
+            <div style={{ marginBottom: 32 }}>
+              <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Settings</h2>
+              <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Platform controls and admin access.</p>
+            </div>
+
+            {/* ── Admin Access (owner only) ── */}
+            {currentUser?.email?.toLowerCase() === "jacob.furlow@outlook.com" && (
+              <AdminAccessCard supabaseUrl={SUPABASE_URL} currentUser={currentUser} />
+            )}
+
+            {/* ── Boss Goals + TODO ── */}
+            {(() => {
+              const goals = bossTodos.filter(t => t.section === "goal");
+              const todos = bossTodos.filter(t => t.section === "todo");
+              const totalDone = bossTodos.filter(t => t.done).length;
+              const renderItem = t => {
+                const labelMeta = TODO_LABELS.find(l => l.name === t.label);
+                return (
+                  <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: t.done ? "#f8fafc" : "#fff", border: "1px solid #f1f5f9", borderRadius: 8 }}>
+                    <button onClick={() => toggleTodo(t.id)} style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${t.done ? "#7c3aed" : "#d1d5db"}`, background: t.done ? "#7c3aed" : "#fff", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>
+                      {t.done && <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1.5 5L4 7.5L8.5 2.5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                    </button>
+                    <span style={{ flex: 1, fontSize: 13, color: t.done ? "#9ca3af" : "#0f172a", textDecoration: t.done ? "line-through" : "none" }}>{t.text}</span>
+                    {labelMeta && <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 99, background: labelMeta.color + "18", color: labelMeta.color, whiteSpace: "nowrap" }}>{labelMeta.name}</span>}
+                    <button onClick={() => deleteTodo(t.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#d1d5db", fontSize: 16, lineHeight: 1, padding: "0 2px" }}>×</button>
+                  </div>
+                );
+              };
+              const renderAddRow = (val, setVal, labelVal, setLabelVal, onAdd, placeholder) => (
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  <select value={labelVal} onChange={e => setLabelVal(e.target.value)} style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 10px", fontSize: 12, color: labelVal ? "#0f172a" : "#9ca3af", outline: "none", background: "#fff", flexShrink: 0 }}>
+                    <option value="">Label</option>
+                    {TODO_LABELS.map(l => <option key={l.name} value={l.name}>{l.name}</option>)}
+                  </select>
+                  <input value={val} onChange={e => setVal(e.target.value)} onKeyDown={e => e.key === "Enter" && onAdd()} placeholder={placeholder} style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 12px", fontSize: 13, color: "#0f172a", outline: "none" }} />
+                  <button onClick={onAdd} style={{ background: "#facc15", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 700, color: "#0a0a0a", cursor: "pointer", whiteSpace: "nowrap" }}>Add</button>
+                </div>
+              );
+              return (
+                <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+                    <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#0f172a" }}>Boss Board</p>
+                    <span style={{ fontSize: 12, color: "#9ca3af" }}>{totalDone} of {bossTodos.length} done</span>
+                  </div>
+
+                  {/* Goals */}
+                  <div style={{ marginBottom: 24 }}>
+                    <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6 }}>Goals — {goals.filter(t => t.done).length}/{goals.length}</p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {goals.length === 0 && <p style={{ margin: 0, fontSize: 13, color: "#d1d5db", padding: "8px 0" }}>No goals yet</p>}
+                      {goals.map(renderItem)}
+                    </div>
+                    {renderAddRow(newGoal, setNewGoal, newGoalLabel, setNewGoalLabel, addGoal, "Add a goal...")}
+                  </div>
+
+                  <div style={{ height: 1, background: "#f1f5f9", marginBottom: 20 }} />
+
+                  {/* To-Do */}
+                  <div>
+                    <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6 }}>To-Do — {todos.filter(t => t.done).length}/{todos.length}</p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {todos.length === 0 && <p style={{ margin: 0, fontSize: 13, color: "#d1d5db", padding: "8px 0" }}>No tasks yet</p>}
+                      {todos.map(renderItem)}
+                    </div>
+                    {renderAddRow(newTodo, setNewTodo, newTodoLabel, setNewTodoLabel, addTodo, "Add a task...")}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ── Maintenance Mode ── */}
+            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+                <div>
+                  <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Maintenance Mode</p>
+                  <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Shows a "Be right back" screen to all users. Admin still works at /admin.</p>
+                </div>
+                <button
+                  onClick={() => { const next = bossSettings.maintenance_mode !== "true"; saveSetting("maintenance_mode", String(next)); showToast(next ? "Maintenance mode ON" : "Maintenance mode OFF"); }}
+                  style={{ width: 52, height: 28, borderRadius: 14, border: "none", cursor: "pointer", background: bossSettings.maintenance_mode === "true" ? "#ef4444" : "#d1d5db", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                  <span style={{ position: "absolute", top: 4, left: bossSettings.maintenance_mode === "true" ? 26 : 4, width: 20, height: 20, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.15)", transition: "left 0.2s" }} />
+                </button>
+              </div>
+              {bossSettings.maintenance_mode === "true" && (
+                <div style={{ marginTop: 12, background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#ef4444", fontWeight: 600 }}>
+                  ⚠ Maintenance mode is ON — users cannot access the app right now
+                </div>
+              )}
+            </div>
+
+
+            {/* ── Grant Access ── */}
+            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
+              <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Grant Access by Email</p>
+              <p style={{ margin: "0 0 16px", fontSize: 13, color: "#9ca3af" }}>Give any existing account free access instantly. Shows as COMP in subscriptions.</p>
+              <div style={{ display: "flex", gap: 10 }}>
+                <input
+                  value={grantEmail}
+                  onChange={e => { setGrantEmail(e.target.value); setGrantResult(null); }}
+                  onKeyDown={e => e.key === "Enter" && grantAccessByEmail()}
+                  placeholder="user@email.com"
+                  type="email"
+                  style={{ flex: 1, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px", fontSize: 14, color: "#0f172a", outline: "none" }}
+                />
+                <button onClick={grantAccessByEmail} disabled={grantLoading || !grantEmail.trim()}
+                  style={{ background: "#facc15", border: "none", borderRadius: 8, padding: "10px 24px", color: "#0a0a0a", fontSize: 14, fontWeight: 700, cursor: "pointer", opacity: grantLoading ? 0.6 : 1, whiteSpace: "nowrap" }}>
+                  {grantLoading ? "…" : "Grant Access"}
+                </button>
+              </div>
+              {grantResult && (
+                <p style={{ margin: "10px 0 0", fontSize: 13, color: grantResult.success ? "#059669" : "#dc2626", fontWeight: 500 }}>
+                  {grantResult.success ? "✓ " : "✗ "}{grantResult.msg}
+                </p>
+              )}
+            </div>
+
+            {/* ── Fraud Detection Toggle ── */}
+            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+                <div>
+                  <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Payout Fraud Detection</p>
+                  <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Flags creators where one account drives over 40% of their watch time. Turn on once you have enough real viewers.</p>
+                </div>
+                <button
+                  onClick={() => { const next = bossSettings.fraud_detection_enabled !== "true"; saveSetting("fraud_detection_enabled", String(next)); showToast(next ? "Fraud detection ON" : "Fraud detection OFF"); }}
+                  style={{ width: 52, height: 28, borderRadius: 14, border: "none", cursor: "pointer", background: bossSettings.fraud_detection_enabled === "true" ? "#7c3aed" : "#d1d5db", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                  <span style={{ position: "absolute", top: 4, left: bossSettings.fraud_detection_enabled === "true" ? 26 : 4, width: 20, height: 20, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.15)", transition: "left 0.2s" }} />
+                </button>
+              </div>
+            </div>
+
+            {/* ── Beta Access Code ── */}
+            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
+              <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Beta Access Code</p>
+              <p style={{ margin: "0 0 16px", fontSize: 13, color: "#9ca3af" }}>Visitors must enter this code to access the site. Leave blank to disable the gate.</p>
+              <div style={{ display: "flex", gap: 10 }}>
+                <input
+                  defaultValue={bossSettings.beta_code || ""}
+                  id="beta-code-input"
+                  placeholder="e.g. PEEP2026"
+                  style={{ flex: 1, padding: "10px 14px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14, color: "#0f172a", outline: "none" }}
+                />
+                <button
+                  onClick={() => {
+                    const val = document.getElementById("beta-code-input").value.trim();
+                    saveSetting("beta_code", val);
+                    showToast(val ? `Access code set to "${val}"` : "Beta gate disabled");
+                  }}
+                  style={{ padding: "10px 20px", borderRadius: 8, border: "none", background: "#0f172a", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+                >Save</button>
+              </div>
+            </div>
+
+            {/* ── Creators Card ── */}
+            <div onClick={() => { setTab("creators"); setCreatorsTab("list"); }}
+              style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "22px 28px", marginBottom: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "box-shadow 0.15s" }}
+              onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"}
+              onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(251,146,60,0.08)", border: "1px solid rgba(251,146,60,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fb923c" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                </div>
+                <div>
+                  <p style={{ margin: "0 0 3px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Content Partners</p>
+                  <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Manage content partner agreements and revenue share</p>
+                </div>
+              </div>
+              <span style={{ fontSize: 18, color: "#d1d5db" }}>→</span>
+            </div>
+
+            {/* ── Review Queue Card ── */}
+            <div onClick={() => { setTab("creators"); setCreatorsTab("review"); }}
+              style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "22px 28px", marginBottom: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "box-shadow 0.15s" }}
+              onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"}
+              onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, position: "relative" }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#facc15" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="12" y2="17"/></svg>
+                  {pendingCount > 0 && (
+                    <span style={{ position: "absolute", top: -6, right: -6, background: "#ef4444", color: "#fff", fontSize: 10, fontWeight: 700, borderRadius: 99, minWidth: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>{pendingCount}</span>
+                  )}
+                </div>
+                <div>
+                  <p style={{ margin: "0 0 3px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Review Queue</p>
+                  <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>{pendingCount > 0 ? `${pendingCount} episode${pendingCount !== 1 ? "s" : ""} waiting for review` : "No pending uploads"}</p>
+                </div>
+              </div>
+              <span style={{ fontSize: 18, color: "#d1d5db" }}>→</span>
+            </div>
+
+            {/* ── Payouts Card ── */}
+            <div onClick={() => { setTab("creators"); setCreatorsTab("payouts"); setPayoutView("current"); }}
+              style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "22px 28px", marginBottom: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "box-shadow 0.15s" }}
+              onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"}
+              onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-4 0v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
+                </div>
+                <div>
+                  <p style={{ margin: "0 0 3px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Payouts</p>
+                  <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Calculate and track monthly partner revenue share</p>
+                </div>
+              </div>
+              <span style={{ fontSize: 18, color: "#d1d5db" }}>→</span>
+            </div>
+
+            {/* ── Security Card ── */}
+            <div onClick={() => { setTab("security"); loadSecurityData(); }}
+              style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "22px 28px", marginBottom: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "box-shadow 0.15s" }}
+              onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"}
+              onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                </div>
+                <div>
+                  <p style={{ margin: "0 0 3px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Security</p>
+                  <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Login attempts, blocked users, lockout settings, active sessions</p>
+                </div>
+              </div>
+              <span style={{ fontSize: 18, color: "#d1d5db" }}>→</span>
+            </div>
+
+            {/* Create new code */}
+            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "28px 28px", marginBottom: 28 }}>
+              <h3 style={{ margin: "0 0 20px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Create Promo Code</h3>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Name</label>
+                  <input
+                    value={promoForm.name}
+                    onChange={e => setPromoForm(f => ({ ...f, name: e.target.value }))}
+                    placeholder="e.g. Friends & Family"
+                    onKeyDown={e => e.key === "Enter" && savePromo()}
+                    style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px", fontSize: 14, color: "#0f172a", outline: "none", boxSizing: "border-box" }}
+                  />
+                </div>
+                <div style={{ flex: 1, minWidth: 140 }}>
+                  <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Code</label>
+                  <input
+                    value={promoForm.code}
+                    onChange={e => setPromoForm(f => ({ ...f, code: e.target.value.toUpperCase() }))}
+                    placeholder="e.g. FAMILY50"
+                    onKeyDown={e => e.key === "Enter" && savePromo()}
+                    style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px", fontSize: 14, color: "#0f172a", outline: "none", fontFamily: "monospace", letterSpacing: "0.08em", boxSizing: "border-box" }}
+                  />
+                </div>
+                <div style={{ display: "flex", alignItems: "flex-end" }}>
+                  <button onClick={savePromo} disabled={promoSaving || !promoForm.name.trim() || !promoForm.code.trim()}
+                    style={{ background: "#facc15", border: "none", borderRadius: 8, padding: "10px 24px", color: "#0a0a0a", fontSize: 14, fontWeight: 700, cursor: "pointer", opacity: promoSaving ? 0.6 : 1, whiteSpace: "nowrap" }}>
+                    {promoSaving ? "Saving…" : "Add Code"}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Code list */}
+            {promosLoading ? (
+              <div style={{ textAlign: "center", padding: 40, color: "#9ca3af" }}>Loading…</div>
+            ) : promos.length === 0 ? (
+              <div style={{ textAlign: "center", padding: 40, color: "#9ca3af", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16 }}>No promo codes yet</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {promos.map(p => (
+                  <div key={p.id} style={{ background: "#fff", border: `1px solid ${p.active ? "#e2e8f0" : "#f1f5f9"}`, borderRadius: 14, padding: "20px 24px", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", opacity: p.active ? 1 : 0.6 }}>
+                    {/* Info */}
+                    <div style={{ flex: 1, minWidth: 120 }}>
+                      <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>{p.name}</p>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <code style={{ fontSize: 13, color: "#4f46e5", background: "rgba(79,70,229,0.07)", padding: "2px 8px", borderRadius: 5, letterSpacing: "0.08em" }}>{p.code}</code>
+                        <button onClick={() => { navigator.clipboard.writeText(p.code); showToast("Copied!"); }}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 11, padding: 0 }}>
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Uses */}
+                    <div style={{ textAlign: "center", minWidth: 60 }}>
+                      <p style={{ margin: "0 0 2px", fontSize: 22, fontWeight: 700, color: "#0f172a" }}>{p.uses}</p>
+                      <p style={{ margin: 0, fontSize: 11, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.5 }}>Uses</p>
+                    </div>
+
+                    {/* Toggle */}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                      <button onClick={() => togglePromo(p.id, !p.active)}
+                        style={{ width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer", background: p.active ? "#22c55e" : "#d1d5db", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                        <span style={{ position: "absolute", top: 3, left: p.active ? 22 : 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.15)", transition: "left 0.2s" }} />
+                      </button>
+                      <span style={{ fontSize: 10, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.5 }}>{p.active ? "On" : "Off"}</span>
+                    </div>
+
+                    {/* Delete */}
+                    <button onClick={() => deletePromo(p.id)}
+                      style={{ background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 7, padding: "7px 14px", color: "#dc2626", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                      Delete
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ────── MODERATION TAB ────── */}
+        {tab === "moderation" && (
+          <div style={{ maxWidth: 900 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, gap: 16, flexWrap: "wrap" }}>
+              <div>
+                <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Moderation</h2>
+                <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Content reports and global word filter.</p>
+              </div>
+              <button onClick={loadContentReports} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 16px", fontSize: 13, color: "#374151", cursor: "pointer", fontWeight: 500 }}>Refresh</button>
+            </div>
+
+            {/* Global banned words */}
+            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: 24, marginBottom: 24 }}>
+              <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: "#0f172a" }}>Global Word Filter</h3>
+              <p style={{ margin: "0 0 16px", fontSize: 13, color: "#6b7280" }}>Blocked in all live chat, site-wide. Applies on top of each channel's own banned words.</p>
+              <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                <input value={bannedWordInput} onChange={e => setBannedWordInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && bannedWordInput.trim()) { const w = bannedWordInput.trim().toLowerCase(); if (!globalBannedWords.includes(w)) saveGlobalBannedWords([...globalBannedWords, w]); setBannedWordInput(""); }}} placeholder="Add a word or phrase…" style={{ flex: 1, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 12px", fontSize: 13, color: "#0f172a", outline: "none" }} />
+                <button onClick={() => { const w = bannedWordInput.trim().toLowerCase(); if (w && !globalBannedWords.includes(w)) { saveGlobalBannedWords([...globalBannedWords, w]); setBannedWordInput(""); }}} style={{ background: "#0f172a", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add</button>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {globalBannedWords.length === 0 && <span style={{ fontSize: 13, color: "#9ca3af" }}>No words added yet.</span>}
+                {globalBannedWords.map(w => (
+                  <span key={w} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "4px 10px", fontSize: 13, color: "#dc2626", fontWeight: 500 }}>
+                    {w}
+                    <button onClick={() => saveGlobalBannedWords(globalBannedWords.filter(x => x !== w))} style={{ background: "none", border: "none", cursor: "pointer", color: "#dc2626", fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Reports queue */}
+            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden" }}>
+              <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #e2e8f0" }}>
+                {["pending", "actioned", "dismissed", "all"].map(f => {
+                  const count = f === "all" ? contentReports.length : contentReports.filter(r => r.status === f).length;
+                  return (
+                    <button key={f} onClick={() => setReportsFilter(f)} style={{ flex: 1, background: reportsFilter === f ? "#f8fafc" : "transparent", border: "none", borderBottom: reportsFilter === f ? "2px solid #fb923c" : "none", padding: "12px 8px", fontSize: 13, fontWeight: reportsFilter === f ? 600 : 400, color: reportsFilter === f ? "#0f172a" : "#6b7280", cursor: "pointer", textTransform: "capitalize" }}>
+                      {f} {count > 0 && <span style={{ background: f === "pending" ? "#fef2f2" : "#f1f5f9", color: f === "pending" ? "#dc2626" : "#6b7280", borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 700 }}>{count}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {reportsLoading ? (
+                <div style={{ padding: 40, textAlign: "center", color: "#9ca3af", fontSize: 14 }}>Loading…</div>
+              ) : (() => {
+                const visible = reportsFilter === "all" ? contentReports : contentReports.filter(r => r.status === reportsFilter);
+                if (visible.length === 0) return <div style={{ padding: 40, textAlign: "center", color: "#9ca3af", fontSize: 14 }}>No {reportsFilter} reports.</div>;
+                return (
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                        {["Channel", "Reason", "Status", "Reported", "Actions"].map(h => (
+                          <th key={h} style={{ padding: "10px 16px", fontSize: 11, fontWeight: 700, color: "#6b7280", textAlign: "left", textTransform: "uppercase", letterSpacing: 0.5 }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visible.map(r => (
+                        <tr key={r.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                          <td style={{ padding: "12px 16px", fontSize: 13, color: "#0f172a", fontWeight: 600 }}>
+                            <a href={`/stream/${r.content_id}`} target="_blank" rel="noopener noreferrer" style={{ color: "#0f172a", textDecoration: "none" }}>
+                              {r.channel_name || r.content_id}
+                            </a>
+                          </td>
+                          <td style={{ padding: "12px 16px", fontSize: 13, color: "#374151" }}>{r.reason}</td>
+                          <td style={{ padding: "12px 16px" }}>
+                            <span style={{ display: "inline-block", background: r.status === "pending" ? "#fef2f2" : r.status === "actioned" ? "#f0fdf4" : "#f1f5f9", color: r.status === "pending" ? "#dc2626" : r.status === "actioned" ? "#16a34a" : "#6b7280", borderRadius: 6, padding: "2px 9px", fontSize: 12, fontWeight: 600, textTransform: "capitalize" }}>{r.status}</span>
+                          </td>
+                          <td style={{ padding: "12px 16px", fontSize: 12, color: "#9ca3af" }}>{new Date(r.created_at).toLocaleDateString()}</td>
+                          <td style={{ padding: "12px 16px" }}>
+                            <div style={{ display: "flex", gap: 6 }}>
+                              {r.status !== "actioned" && (
+                                <button onClick={() => updateReportStatus(r.id, "actioned")} style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "5px 10px", fontSize: 12, color: "#16a34a", fontWeight: 600, cursor: "pointer" }}>Action</button>
+                              )}
+                              {r.status !== "dismissed" && (
+                                <button onClick={() => updateReportStatus(r.id, "dismissed")} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "5px 10px", fontSize: 12, color: "#6b7280", fontWeight: 600, cursor: "pointer" }}>Dismiss</button>
+                              )}
+                              {r.status !== "pending" && (
+                                <button onClick={() => updateReportStatus(r.id, "pending")} style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 6, padding: "5px 10px", fontSize: 12, color: "#ea580c", fontWeight: 600, cursor: "pointer" }}>Reopen</button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+
       </div>
 
       {/* ── Slide-over Drawer ── */}
@@ -3213,15 +5930,15 @@ export function CMS({ onExit }) {
               {/* Drawer header */}
               <div style={{ padding: "20px 24px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
                 <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "#0f172a" }}>
-                  {tab === "videos" && videoSubTab === "movies" && (editingId ? "Edit Movie" : "Add Movie")}
-                  {tab === "videos" && videoSubTab === "series" && (editingShowId ? "Edit Series" : "Add Series")}
-                  {tab === "videos" && videoSubTab === "episodes" && (editingEpisodeId ? "Edit Episode" : "Add Episode")}
-                  {tab === "videos" && videoSubTab === "podcasts" && (editingPodcastId ? "Edit Podcast" : "Add Podcast")}
-                  {tab === "carousels" && (editingCarouselId ? "Edit Carousel" : "Add Carousel")}
+                  {tab === "content" && videoSubTab === "shorts" && (editingId ? "Edit Movie" : "Add Movie")}
+                  {tab === "content" && videoSubTab === "series" && (editingShowId ? "Edit Series" : "Add Series")}
+                  {tab === "content" && videoSubTab === "episodes" && (editingEpisodeId ? "Edit Episode" : "Add Episode")}
+                  {tab === "content" && videoSubTab === "podcasts" && (editingPodcastId ? "Edit Podcast" : "Add Podcast")}
+                  {tab === "content" && videoSubTab === "carousels" && (editingCarouselId ? "Edit Carousel" : "Add Carousel")}
                   {tab === "live" && drawerFormType !== "epg" && drawerFormType !== "bulk" && (editingLiveId ? "Edit Stream" : "Add Stream")}
                   {tab === "live" && drawerFormType === "epg" && (editingEpgId ? "Edit Program" : "Add Program")}
                   {tab === "live" && drawerFormType === "bulk" && "Auto-Schedule Block"}
-                  {tab === "ads" && (editingAdId ? "Edit Ad Tag" : "Add Ad Tag")}
+                  {tab === "analytics" && analyticsTab === "ads" && (editingAdId ? "Edit Ad Tag" : "Add Ad Tag")}
                 </h2>
                 <button
                   onClick={closeDrawer}
@@ -3235,11 +5952,11 @@ export function CMS({ onExit }) {
               <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
 
                 {/* ── MOVIES FORM ── */}
-                {tab === "videos" && videoSubTab === "movies" && (
+                {tab === "content" && videoSubTab === "shorts" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <FieldInput label="Title *" value={form.title} onChange={v => setForm(f => ({ ...f, title: v }))} placeholder="e.g. Metropolis" />
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                      <FieldSelect label="Category" value={form.category} onChange={v => setForm(f => ({ ...f, category: v }))} options={categories} />
+                      <FieldCombo label="Category" value={form.category} onChange={v => setForm(f => ({ ...f, category: v }))} options={categories} />
                       <FieldSelect label="Rating" value={form.rating} onChange={v => setForm(f => ({ ...f, rating: v }))} options={["NR", "G", "PG", "PG-13", "R"]} />
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
@@ -3279,7 +5996,7 @@ export function CMS({ onExit }) {
                         </div>
                       )}
                     </div>
-                    <FieldInput label="Video URL *" value={form.url} onChange={v => setForm(f => ({ ...f, url: v }))} placeholder="https://archive.org/..." />
+                    <FieldInput label="Video URL *" value={form.url} onChange={v => setForm(f => ({ ...f, url: v }))} placeholder="https://..." />
                     <FieldInput label="Trailer URL" value={form.trailer_url} onChange={v => setForm(f => ({ ...f, trailer_url: v }))} placeholder="https://youtube.com/watch?v=... (optional)" />
                     <FieldInput label="Tags (comma-separated)" value={form.tags} onChange={v => setForm(f => ({ ...f, tags: v }))} placeholder="Silent, Epic, Classic" />
                     <div>
@@ -3296,11 +6013,11 @@ export function CMS({ onExit }) {
                 )}
 
                 {/* ── SERIES FORM ── */}
-                {tab === "videos" && videoSubTab === "series" && (
+                {tab === "content" && videoSubTab === "series" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <FieldInput label="Title *" value={showForm.title} onChange={v => setShowForm(f => ({ ...f, title: v }))} placeholder="e.g. The Twilight Zone" />
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                      <FieldSelect label="Category" value={showForm.category} onChange={v => setShowForm(f => ({ ...f, category: v }))} options={["Horror", "Sci-Fi", "Comedy", "Drama", "Action", "Documentary"]} />
+                      <FieldCombo label="Category" value={showForm.category} onChange={v => setShowForm(f => ({ ...f, category: v }))} options={categories} />
                       <FieldSelect label="Rating" value={showForm.rating} onChange={v => setShowForm(f => ({ ...f, rating: v }))} options={["NR", "G", "PG", "PG-13", "R"]} />
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -3337,7 +6054,7 @@ export function CMS({ onExit }) {
                 )}
 
                 {/* ── EPISODES FORM ── */}
-                {tab === "videos" && videoSubTab === "episodes" && (
+                {tab === "content" && videoSubTab === "episodes" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <div>
                       <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Show *</label>
@@ -3374,7 +6091,7 @@ export function CMS({ onExit }) {
                 )}
 
                 {/* ── PODCASTS FORM ── */}
-                {tab === "videos" && videoSubTab === "podcasts" && (
+                {tab === "content" && videoSubTab === "podcasts" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <FieldInput label="Title *" value={podcastForm.title} onChange={v => setPodcastForm(f => ({ ...f, title: v }))} placeholder="e.g. The Daily" />
                     <FieldInput label="Host" value={podcastForm.host} onChange={v => setPodcastForm(f => ({ ...f, host: v }))} placeholder="e.g. Michael Barbaro" />
@@ -3420,13 +6137,21 @@ export function CMS({ onExit }) {
                 )}
 
                 {/* ── CAROUSELS FORM ── */}
-                {tab === "carousels" && (
+                {tab === "content" && videoSubTab === "carousels" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
                     <p style={{ margin: "0 0 4px", fontSize: 12, color: "#6b7280" }}>A horizontal scrolling row shown on selected pages.</p>
 
                     <div>
                       <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>1 · Row Title</label>
-                      <FieldInput value={carouselForm.title} onChange={v => setCarouselForm(f => ({ ...f, title: v }))} placeholder="e.g. Top Horror Picks, New This Week…" />
+                      <FieldInput value={carouselForm.title} onChange={v => setCarouselForm(f => ({ ...f, title: v }))} placeholder="e.g. Too Weird For TV, Watch At 2AM, New Drops…" />
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                        {["Too Weird For TV", "Certified Unhinged", "Watch At 2AM", "Your Parents Won't Get It", "Underground Classics", "New Drops", "Currently Obsessed With", "Just Added", "Live Now"].map(name => (
+                          <button key={name} type="button" onClick={() => setCarouselForm(f => ({ ...f, title: name }))}
+                            style={{ background: carouselForm.title === name ? "#4f46e5" : "#f1f5f9", border: "none", borderRadius: 20, padding: "4px 12px", fontSize: 11, fontWeight: 600, color: carouselForm.title === name ? "#fff" : "#475569", cursor: "pointer", transition: "all 0.15s" }}>
+                            {name}
+                          </button>
+                        ))}
+                      </div>
                     </div>
 
                     <div style={{ height: 1, background: "#e2e8f0" }} />
@@ -3436,9 +6161,9 @@ export function CMS({ onExit }) {
                       <p style={{ margin: "0 0 12px", fontSize: 11, color: "#6b7280" }}>Pick every page this row should appear on.</p>
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                         {[
-                          { val: "home",   icon: "🏠", label: "Home",        desc: "The main landing page" },
-                          { val: "movies", icon: "🎬", label: "Movies tab",  desc: "The dedicated Movies browse page" },
-                          { val: "series", icon: "📺", label: "Series tab",  desc: "The dedicated Series browse page" },
+                          { val: "home",         icon: "🏠", label: "Home",             desc: "The main landing page" },
+                          { val: "shorts",       icon: "🎬", label: "Movies tab",       desc: "The dedicated Shorts browse page" },
+                          { val: "series",       icon: "📺", label: "Series tab",       desc: "The dedicated Series browse page" },
                         ].map(({ val, icon, label, desc }) => {
                           const on = pagesArr.includes(val);
                           return (
@@ -3468,10 +6193,10 @@ export function CMS({ onExit }) {
                       <p style={{ margin: "0 0 10px", fontSize: 11, color: "#6b7280" }}>What kind of content fills this row.</p>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                         {[
-                          { ct: "movies", t: null,      icon: "🎬", label: "Movies only",   desc: "Only movies" },
-                          { ct: "shows",  t: null,      icon: "📺", label: "Series only",   desc: "Only TV shows & series" },
-                          { ct: "all",    t: null,      icon: "⭐", label: "Everything",    desc: "Movies + series mixed" },
-                          { ct: "all",    t: "podcast", icon: "🎙️", label: "Podcasts",      desc: "Podcast episodes" },
+                          { ct: "shorts",       t: null,      icon: "🎬", label: "Movies only",    desc: "Only shorts" },
+                          { ct: "shows",        t: null,      icon: "📺", label: "Series only",   desc: "Only TV shows & series" },
+                          { ct: "all",          t: null,      icon: "⭐", label: "Everything",    desc: "Shorts + series mixed" },
+                          { ct: "all",          t: "podcast", icon: "🎙️", label: "Podcasts",      desc: "Podcast episodes" },
                         ].map(({ ct, t, icon, label, desc }) => {
                           const isPodcast = t === "podcast";
                           const isActive = isPodcast
@@ -3480,7 +6205,7 @@ export function CMS({ onExit }) {
                           return (
                             <button key={label} onClick={() => {
                               if (isPodcast) setCarouselForm(f => ({ ...f, type: "podcast", content_type: "all" }));
-                              else setCarouselForm(f => ({ ...f, content_type: ct, type: f.type === "podcast" ? "custom" : f.type }));
+                              else setCarouselForm(f => ({ ...f, content_type: ct, type: f.type === "podcast" ? "custom" : f.type, filter_value: f.filter_value }));
                             }}
                               style={{ background: isActive ? "rgba(79,70,229,0.08)" : "#f8fafc", border: `1.5px solid ${isActive ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 10, padding: "13px 12px", cursor: "pointer", textAlign: "left", transition: "border-color 0.15s, background 0.15s" }}>
                               <div style={{ fontSize: 20, marginBottom: 5 }}>{icon}</div>
@@ -3500,9 +6225,10 @@ export function CMS({ onExit }) {
                         <p style={{ margin: "0 0 10px", fontSize: 11, color: "#6b7280" }}>How content is sorted inside this row.</p>
                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                           {[
-                            { val: "custom",   icon: "📋", label: "Show all",       desc: "All matching content, default order" },
-                            { val: "trending", icon: "🔥", label: "Trending / New", desc: "Newest added first" },
-                            { val: "category", icon: "🏷️", label: "By category",    desc: "Filter to a specific genre" },
+                            { val: "custom",      icon: "📋", label: "Show all",        desc: "All matching content, default order" },
+                            { val: "trending",    icon: "🔥", label: "Trending / New", desc: "Newest added first" },
+                            { val: "category",    icon: "🏷️", label: "By category",    desc: "Filter to a specific genre" },
+                            { val: "handpicked",  icon: "🎯", label: "Hand-pick",       desc: "Choose specific titles" },
                           ].map(({ val, icon, label, desc }) => {
                             const isActive = carouselForm.type === val;
                             return (
@@ -3520,14 +6246,125 @@ export function CMS({ onExit }) {
                         </div>
                         {carouselForm.type === "category" && (
                           <div style={{ marginTop: 10, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "14px" }}>
-                            <label style={{ display: "block", fontSize: 11, color: "#6b7280", marginBottom: 6, fontWeight: 600 }}>Category name</label>
+                            <label style={{ display: "block", fontSize: 11, color: "#6b7280", marginBottom: 6, fontWeight: 600 }}>
+                              Category name
+                            </label>
                             <input value={carouselForm.filter_value} onChange={e => setCarouselForm(f => ({ ...f, filter_value: e.target.value }))}
                               placeholder="e.g. Horror, Comedy, Sci-Fi…"
                               style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 6, padding: "9px 12px", color: "#0f172a", fontSize: 13, outline: "none" }}
                               onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
-                            <p style={{ margin: "6px 0 0", fontSize: 11, color: "#9ca3af" }}>Must match exactly as set on your videos (case-insensitive).</p>
+                            <p style={{ margin: "6px 0 0", fontSize: 11, color: "#9ca3af" }}>
+                              Must match exactly as set on your videos (case-insensitive).
+                            </p>
                           </div>
                         )}
+
+                        {carouselForm.type === "handpicked" && (() => {
+                          const pool = [
+                            ...rows.map(v => ({ id: v.id, type: "movie", title: v.title, subtitle: v.category, thumbnail: v.poster || v.thumbnail })),
+                            ...showsList.map(s => ({ id: s.id, type: "show", title: s.title, subtitle: "Series", thumbnail: s.poster || s.thumbnail })),
+                          ];
+                          const q = handpickedSearch.toLowerCase().trim();
+                          const results = q ? pool.filter(item =>
+                            item.title?.toLowerCase().startsWith(q)
+                          ).slice(0, 12) : [];
+                          const selectedKey = item => `${item.type}_${item.id}`;
+                          const selectedKeys = new Set(handpickedSelected.map(selectedKey));
+                          const typeLabel = t => t === "movie" ? "Short" : t === "show" ? "Series" : t;
+                          const typeColor = t => t === "movie" ? "#facc15" : t === "show" ? "#60a5fa" : "#4ade80";
+
+                          return (
+                            <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+                              {/* Search input */}
+                              <input
+                                value={handpickedSearch}
+                                onChange={e => setHandpickedSearch(e.target.value)}
+                                placeholder="Search movies, series, music videos..."
+                                style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                                onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")}
+                              />
+
+                              {/* Search results */}
+                              {results.length > 0 && (
+                                <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden" }}>
+                                  {results.map(item => {
+                                    const key = selectedKey(item);
+                                    const isSelected = selectedKeys.has(key);
+                                    return (
+                                      <div key={key}
+                                        onClick={() => {
+                                          if (isSelected) setHandpickedSelected(prev => prev.filter(s => selectedKey(s) !== key));
+                                          else setHandpickedSelected(prev => [...prev, item]);
+                                        }}
+                                        style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", cursor: "pointer", borderBottom: "1px solid #f1f5f9", background: isSelected ? "rgba(79,70,229,0.06)" : "transparent", transition: "background 0.1s" }}
+                                        onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = "#f1f5f9"; }}
+                                        onMouseLeave={e => { e.currentTarget.style.background = isSelected ? "rgba(79,70,229,0.06)" : "transparent"; }}>
+                                        <div style={{ width: 36, height: 36, borderRadius: 5, overflow: "hidden", flexShrink: 0, background: "#e2e8f0" }}>
+                                          {item.thumbnail && <img src={item.thumbnail} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => { e.target.style.display = "none"; }} />}
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                          <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
+                                          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                            <span style={{ fontSize: 10, fontWeight: 700, color: typeColor(item.type) }}>{typeLabel(item.type)}</span>
+                                            {item.subtitle && <span style={{ fontSize: 11, color: "#9ca3af", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.subtitle}</span>}
+                                          </div>
+                                        </div>
+                                        <div style={{ width: 22, height: 22, borderRadius: 5, border: `2px solid ${isSelected ? "#4f46e5" : "#e2e8f0"}`, background: isSelected ? "#4f46e5" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.15s" }}>
+                                          {isSelected && <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                              {q && results.length === 0 && (
+                                <p style={{ margin: 0, fontSize: 12, color: "#9ca3af", padding: "8px 0" }}>No results for "{handpickedSearch}"</p>
+                              )}
+
+                              {/* Selected items */}
+                              {handpickedSelected.length > 0 && (
+                                <div>
+                                  <p style={{ margin: "0 0 8px", fontSize: 11, color: "#6b7280", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                                    Selected ({handpickedSelected.length}) — drag to reorder
+                                  </p>
+                                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                    {handpickedSelected.map((item, idx) => (
+                                      <div key={selectedKey(item)} style={{ display: "flex", alignItems: "center", gap: 8, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "7px 10px" }}>
+                                        <span style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600, width: 18, textAlign: "center", flexShrink: 0 }}>{idx + 1}</span>
+                                        <div style={{ width: 30, height: 30, borderRadius: 4, overflow: "hidden", flexShrink: 0, background: "#e2e8f0" }}>
+                                          {item.thumbnail && <img src={item.thumbnail} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => { e.target.style.display = "none"; }} />}
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                          <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
+                                          {item.subtitle && <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>{item.subtitle}</p>}
+                                        </div>
+                                        <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                                          <button onClick={() => {
+                                            if (idx === 0) return;
+                                            const next = [...handpickedSelected];
+                                            [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                                            setHandpickedSelected(next);
+                                          }} disabled={idx === 0} style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: 4, width: 24, height: 24, cursor: idx === 0 ? "default" : "pointer", color: idx === 0 ? "#e2e8f0" : "#6b7280", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }}>▲</button>
+                                          <button onClick={() => {
+                                            if (idx === handpickedSelected.length - 1) return;
+                                            const next = [...handpickedSelected];
+                                            [next[idx + 1], next[idx]] = [next[idx], next[idx + 1]];
+                                            setHandpickedSelected(next);
+                                          }} disabled={idx === handpickedSelected.length - 1} style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: 4, width: 24, height: 24, cursor: idx === handpickedSelected.length - 1 ? "default" : "pointer", color: idx === handpickedSelected.length - 1 ? "#e2e8f0" : "#6b7280", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }}>▼</button>
+                                          <button onClick={() => setHandpickedSelected(prev => prev.filter((_, i) => i !== idx))}
+                                            style={{ background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 4, width: 24, height: 24, cursor: "pointer", color: "#f87171", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {handpickedSelected.length === 0 && !q && (
+                                <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>Search above to add titles to this row.</p>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     ) : (
                       <div>
@@ -3565,29 +6402,42 @@ export function CMS({ onExit }) {
 
                 {/* ── LIVE FORM ── */}
                 {tab === "live" && drawerFormType !== "epg" && drawerFormType !== "bulk" && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                    <FieldInput label="Channel Number" value={liveForm.channel_number} onChange={v => setLiveForm(f => ({ ...f, channel_number: v }))} placeholder="e.g. 1" type="number" />
-                    <FieldInput label="Title *" value={liveForm.title} onChange={v => setLiveForm(f => ({ ...f, title: v }))} placeholder="e.g. Peep News Network" />
-                    <FieldInput label="Description" value={liveForm.description} onChange={v => setLiveForm(f => ({ ...f, description: v }))} placeholder="What's on this channel..." />
-                    <FieldInput label="Now Airing" value={liveForm.now_airing} onChange={v => setLiveForm(f => ({ ...f, now_airing: v }))} placeholder="e.g. The Daily Briefing · Ep 3" />
-                    <FieldInput label="Up Next" value={liveForm.up_next} onChange={v => setLiveForm(f => ({ ...f, up_next: v }))} placeholder="e.g. Evening Report · Ep 4" />
-                    <FieldInput label="Stream URL" value={liveForm.stream_url} onChange={v => setLiveForm(f => ({ ...f, stream_url: v }))} placeholder="https://... (.m3u8, YouTube Live, etc.)" />
-                    <FieldInput label="Badge Text" value={liveForm.badge_text} onChange={v => setLiveForm(f => ({ ...f, badge_text: v }))} placeholder="LIVE" />
-                    <div>
-                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Thumbnail</label>
-                      <ImageUploader label="Upload Thumbnail" folder="live" onUploadSuccess={url => setLiveForm(f => ({ ...f, thumbnail: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
-                      <input type="text" value={liveForm.thumbnail} onChange={e => setLiveForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                  <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+
+                    {/* Section: Basics */}
+                    <p style={{ margin: "0 0 10px", fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 1 }}>Basics</p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
+                      <FieldInput label="Title *" value={liveForm.title} onChange={v => setLiveForm(f => ({ ...f, title: v }))} placeholder="Channel name" />
+                      <FieldInput label="Description" value={liveForm.description} onChange={v => setLiveForm(f => ({ ...f, description: v }))} placeholder="About this stream..." />
                     </div>
-                    <div>
-                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.7 }}>Status</label>
-                      <button onClick={() => setLiveForm(f => ({ ...f, is_live: !f.is_live }))}
-                        style={{ width: "100%", background: liveForm.is_live ? "rgba(239,68,68,0.12)" : "rgba(107,114,128,0.1)", border: `1px solid ${liveForm.is_live ? "rgba(239,68,68,0.35)" : "rgba(107,114,128,0.3)"}`, borderRadius: 7, padding: "10px 12px", color: liveForm.is_live ? "#ef4444" : "#888", fontSize: 13, cursor: "pointer", fontWeight: 500 }}>
-                        {liveForm.is_live ? "🔴 Live" : "○ Offline"}
-                      </button>
+
+                    {/* Section: Stream */}
+                    <p style={{ margin: "0 0 10px", fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 1 }}>Stream</p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
+                      <FieldInput label="Stream URL" value={liveForm.stream_url} onChange={v => setLiveForm(f => ({ ...f, stream_url: v }))} placeholder="https://... (.m3u8)" />
+                      <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>Live status is controlled automatically by the RTMP webhook when the streamer connects.</p>
                     </div>
-                    <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+
+                    {/* Section: Media */}
+                    <p style={{ margin: "0 0 10px", fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 1 }}>Media</p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 28 }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Thumbnail</label>
+                        <ImageUploader label="Upload Thumbnail" folder="live" onUploadSuccess={url => setLiveForm(f => ({ ...f, thumbnail: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
+                        <input type="text" value={liveForm.thumbnail} onChange={e => setLiveForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 2, textTransform: "uppercase", letterSpacing: 0.7 }}>Hero Image</label>
+                        <p style={{ margin: "0 0 6px", fontSize: 11, color: "#9ca3af" }}>1920×1080 recommended. Keep subject center-right.</p>
+                        <ImageUploader label="Upload Hero Image" folder="live" onUploadSuccess={url => setLiveForm(f => ({ ...f, hero_image: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
+                        <input type="text" value={liveForm.hero_image} onChange={e => setLiveForm(f => ({ ...f, hero_image: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                        {liveForm.hero_image && <img src={liveForm.hero_image} alt="" style={{ marginTop: 8, width: "100%", height: 80, objectFit: "cover", borderRadius: 6, border: "1px solid #e2e8f0" }} onError={e => { e.target.style.display = "none"; }} />}
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", gap: 10 }}>
                       <button onClick={saveLiveStream} disabled={liveSaving} style={{ flex: 1, background: "#ef4444", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: liveSaving ? "not-allowed" : "pointer", opacity: liveSaving ? 0.7 : 1 }}>
-                        {liveSaving ? "Saving…" : editingLiveId ? "Save Changes" : "Go Live"}
+                        {liveSaving ? "Saving…" : editingLiveId ? "Save Changes" : "Add Stream"}
                       </button>
                       <button onClick={cancelLiveEdit} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
                     </div>
@@ -3603,7 +6453,7 @@ export function CMS({ onExit }) {
                         {["movie", "episode"].map(t => (
                           <button key={t} onClick={() => setEpgForm(f => ({ ...f, content_type: t, content_id: "", title: "" }))}
                             style={{ flex: 1, background: epgForm.content_type === t ? "#4f46e5" : "#f1f5f9", border: `1px solid ${epgForm.content_type === t ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 7, padding: "9px", color: epgForm.content_type === t ? "#fff" : "#374151", fontSize: 13, fontWeight: 500, cursor: "pointer", textTransform: "capitalize" }}>
-                            {t === "movie" ? "Movie" : "Episode"}
+                            {t === "movie" ? "Short" : "Episode"}
                           </button>
                         ))}
                       </div>
@@ -3763,7 +6613,7 @@ export function CMS({ onExit }) {
                         <div>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                             <label style={{ fontSize: 12, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.7 }}>
-                              Movies <span style={{ color: "#4f46e5", fontWeight: 700 }}>{bulkSelectedMovies.size > 0 ? `(${bulkSelectedMovies.size} selected)` : ""}</span>
+                              Shorts <span style={{ color: "#4f46e5", fontWeight: 700 }}>{bulkSelectedMovies.size > 0 ? `(${bulkSelectedMovies.size} selected)` : ""}</span>
                             </label>
                             <button onClick={() => setBulkSelectedMovies(bulkSelectedMovies.size > 0 ? new Set() : new Set(allVideosForEpg.map(v => v.id)))}
                               style={{ background: "none", border: "none", color: "#4f46e5", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}>
@@ -3871,7 +6721,7 @@ export function CMS({ onExit }) {
                 })()}
 
                 {/* ── ADS FORM ── */}
-                {tab === "ads" && (
+                {tab === "analytics" && analyticsTab === "ads" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <div>
                       <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Name *</label>
@@ -3902,7 +6752,7 @@ export function CMS({ onExit }) {
                         style={{ width: "100%", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", cursor: "pointer" }}
                         onFocus={e => (e.target.style.borderColor = "#f59e0b")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")}>
                         <option value="global">All Content</option>
-                        <option value="movie">Movies</option>
+                        <option value="movie">Shorts</option>
                         <option value="show">TV Shows</option>
                         <option value="episode">Episodes</option>
                         <option value="podcast_episode">Podcasts</option>
@@ -4223,6 +7073,739 @@ export function CMS({ onExit }) {
         </div>
       </div>
     )}
+        {/* ────── PARTNERS SUB-TAB BAR ────── */}
+        {tab === "creators" && (
+          <div style={{ display: "flex", gap: 6, padding: `20px ${PAD} 20px`, borderBottom: "1px solid #e2e8f0", background: "#fafafa" }}>
+            {[{ key: "list", label: "Content Partners" }, { key: "review", label: `Review Queue${pendingCount > 0 ? ` (${pendingCount})` : ""}` }, { key: "payouts", label: "Payouts" }].map(({ key, label }) => (
+              <button key={key} onClick={() => setCreatorsTab(key)} style={{ background: creatorsTab === key ? "rgba(249,115,22,0.08)" : "transparent", border: `1px solid ${creatorsTab === key ? "rgba(249,115,22,0.3)" : "#e2e8f0"}`, borderRadius: 8, padding: "7px 16px", color: creatorsTab === key ? "#ea580c" : "#6b7280", fontSize: 13, fontWeight: creatorsTab === key ? 600 : 400, cursor: "pointer" }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* ────── CREATORS LIST ────── */}
+        {tab === "creators" && creatorsTab === "list" && (
+          <div style={{ maxWidth: 1600, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28, flexWrap: "wrap" }}>
+              <div>
+                <h2 style={{ margin: "0 0 2px", fontSize: 22, fontWeight: 700, color: "#0f172a" }}>Content Partners</h2>
+                <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>{creatorsList.length} partner{creatorsList.length !== 1 ? "s" : ""}</p>
+              </div>
+              <button onClick={() => openCreatorModal()} style={{ marginLeft: "auto", background: "#fb923c", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>+ Add Partner</button>
+            </div>
+
+            {creatorsLoading ? (
+              <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Spinner /></div>
+            ) : creatorsList.length === 0 ? (
+              <div style={{ textAlign: "center", padding: 80, color: "#9ca3af" }}>No content partners yet. Add one to get started.</div>
+            ) : (
+              <div style={{ overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: 14 }}>
+                <table style={{ width: "100%", minWidth: 700, borderCollapse: "collapse", fontSize: 13, background: "#fff" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid #f1f5f9", background: "#f8fafc" }}>
+                      {["Name", "Email", "Payment", "Agreement", "Status", "Actions"].map(h => (
+                        <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, whiteSpace: "nowrap" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {creatorsList.map((c, i) => (
+                      <tr key={c.id} style={{ borderBottom: i < creatorsList.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                        <td style={{ padding: "12px 16px", fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap" }}>{c.name}</td>
+                        <td style={{ padding: "12px 16px", color: "#475569" }}>{c.email}</td>
+                        <td style={{ padding: "12px 16px", color: "#475569", whiteSpace: "nowrap" }}>{c.payment_method}{c.payment_handle ? ` — ${c.payment_handle}` : ""}</td>
+                        <td style={{ padding: "12px 16px" }}>
+                          {parseAgreementDate(c.notes) ? (
+                            <span style={{ fontSize: 11, background: "rgba(74,222,128,0.08)", color: "#16a34a", border: "1px solid rgba(74,222,128,0.2)", borderRadius: 20, padding: "2px 10px", fontWeight: 700, whiteSpace: "nowrap" }}>
+                              ✓ {parseAgreementDate(c.notes)}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: 11, color: "#ef4444", fontWeight: 600 }}>Unsigned</span>
+                          )}
+                        </td>
+                        <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99, background: c.status === "active" ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)", color: c.status === "active" ? "#16a34a" : "#dc2626" }}>
+                            {c.status}
+                          </span>
+                        </td>
+                        <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}>
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <button onClick={() => openCreatorModal(c)} style={{ background: "rgba(79,70,229,0.08)", border: "1px solid rgba(79,70,229,0.2)", borderRadius: 6, padding: "5px 12px", color: "#4f46e5", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Edit</button>
+                            <button onClick={() => setDeleteCreatorConfirm(c)} style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 6, padding: "5px 12px", color: "#ef4444", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Add/Edit Creator Modal */}
+            {creatorModal && (
+              <div onClick={() => setCreatorModal(false)} style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 16, padding: "32px 36px", width: "min(520px,94vw)", fontFamily: "'Space Grotesk',sans-serif", maxHeight: "90vh", overflowY: "auto" }}>
+                  <h3 style={{ margin: "0 0 24px", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>{editingCreator ? "Edit Partner" : "Add Partner"}</h3>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                    {[["Name", "name", "text", "e.g. Jarrad Wright"], ["Email", "email", "email", "creator@email.com"]].map(([label, key, type, ph]) => (
+                      <div key={key}>
+                        <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>{label}</label>
+                        <input type={type} value={creatorForm[key]} onChange={e => setCreatorForm(f => ({ ...f, [key]: e.target.value }))} placeholder={ph}
+                          style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#0f172a", outline: "none", boxSizing: "border-box" }} />
+                      </div>
+                    ))}
+                    {creatorForm.payment_method !== "Bank Transfer" ? (
+                      <div>
+                        <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Payment Handle</label>
+                        <input value={creatorForm.payment_handle} onChange={e => setCreatorForm(f => ({ ...f, payment_handle: e.target.value }))} placeholder="e.g. @username or email"
+                          style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#0f172a", outline: "none", boxSizing: "border-box" }} />
+                      </div>
+                    ) : (
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                        <div>
+                          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Account Number</label>
+                          <input value={creatorForm.payment_handle} onChange={e => setCreatorForm(f => ({ ...f, payment_handle: e.target.value }))} placeholder="e.g. 000123456789"
+                            style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#0f172a", outline: "none", boxSizing: "border-box", fontFamily: "monospace" }} />
+                        </div>
+                        <div>
+                          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Routing Number</label>
+                          <input value={creatorForm.routing_number} onChange={e => setCreatorForm(f => ({ ...f, routing_number: e.target.value }))} placeholder="e.g. 021000021"
+                            style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#0f172a", outline: "none", boxSizing: "border-box", fontFamily: "monospace" }} />
+                        </div>
+                      </div>
+                    )}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Payment Method</label>
+                        <select value={creatorForm.payment_method} onChange={e => setCreatorForm(f => ({ ...f, payment_method: e.target.value }))}
+                          style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#0f172a", outline: "none", background: "#fff" }}>
+                          <option>PayPal</option><option>Venmo</option><option>Cash App</option><option>Bank Transfer</option><option>Other</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Status</label>
+                        <select value={creatorForm.status} onChange={e => setCreatorForm(f => ({ ...f, status: e.target.value }))}
+                          style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#0f172a", outline: "none", background: "#fff" }}>
+                          <option value="active">Active</option><option value="inactive">Inactive</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Notes</label>
+                      <textarea value={creatorForm.notes} onChange={e => setCreatorForm(f => ({ ...f, notes: e.target.value }))} rows={2} placeholder="Internal notes…"
+                        style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#0f172a", outline: "none", resize: "vertical", boxSizing: "border-box" }} />
+                    </div>
+                    <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 16 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                        <label style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6 }}>Partner Agreement</label>
+                        {creatorForm.agreement_signed_at && (
+                          <span style={{ fontSize: 11, background: "rgba(74,222,128,0.1)", color: "#4ade80", border: "1px solid rgba(74,222,128,0.2)", borderRadius: 20, padding: "2px 10px", fontWeight: 700 }}>
+                            SIGNED {creatorForm.agreement_signed_at}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "14px 16px", fontSize: 12, color: "#374151", lineHeight: 1.7, marginBottom: 12, maxHeight: 160, overflowY: "auto" }}>
+                        <strong>Peep Creator Revenue Share Agreement</strong><br /><br />
+                        By joining Peep as a creator partner, you agree to the following terms:<br /><br />
+                        <strong>1. Revenue Share.</strong> Each month, 50% of Peep's total subscription revenue is allocated to a Creator Pool. Your share of that pool is determined by your content's proportion of total platform watch time during that calendar month.<br /><br />
+                        <strong>2. Watch Qualification.</strong> A viewing session counts toward your watch total only if the viewer watches at least 25% of the episode or piece of content.<br /><br />
+                        <strong>3. Payment Schedule.</strong> Payments are issued on or around the 15th of each month for the prior month's watch data. Payments below the $10 minimum threshold will roll over to the following month.<br /><br />
+                        <strong>4. Payment Method.</strong> You are responsible for providing accurate payment details (PayPal, Venmo, Cash App, or bank transfer). Peep is not responsible for misdirected payments due to incorrect information.<br /><br />
+                        <strong>5. Content Ownership.</strong> You retain full ownership of your content. Peep is granted a non-exclusive license to distribute your content on the platform for the duration of this agreement.<br /><br />
+                        <strong>6. Termination.</strong> Either party may terminate this agreement with 30 days written notice. Outstanding earned payments will still be issued upon termination.<br /><br />
+                        <strong>7. Fraud.</strong> Any attempt to artificially inflate watch time (bots, repeat loops, etc.) will result in immediate removal and forfeiture of pending payouts.
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <input type="date" value={creatorForm.agreement_signed_at} onChange={e => setCreatorForm(f => ({ ...f, agreement_signed_at: e.target.value }))}
+                          style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 12px", fontSize: 13, color: "#0f172a", outline: "none" }} />
+                        {!creatorForm.agreement_signed_at && (
+                          <button type="button" onClick={() => setCreatorForm(f => ({ ...f, agreement_signed_at: new Date().toISOString().slice(0, 10) }))}
+                            style={{ background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.2)", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, color: "#16a34a", cursor: "pointer", whiteSpace: "nowrap" }}>
+                            Mark Signed Today
+                          </button>
+                        )}
+                        {creatorForm.agreement_signed_at && (
+                          <button type="button" onClick={() => setCreatorForm(f => ({ ...f, agreement_signed_at: "" }))}
+                            style={{ background: "transparent", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#9ca3af", cursor: "pointer" }}>
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  {editingCreator && (
+                    <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 20, marginTop: 4 }}>
+                      <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, color: "#0f172a" }}>Linked Content</p>
+                      <p style={{ margin: "0 0 12px", fontSize: 11, color: "#9ca3af" }}>Watch time from these shows/movies counts toward this creator's payout share.</p>
+
+                      {/* Currently linked */}
+                      {contentCreators.filter(l => l.creator_id === editingCreator.id).length > 0 && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+                          {contentCreators.filter(l => l.creator_id === editingCreator.id).map(link => {
+                            const label = (() => {
+                              if (link.content_type === "show") return showsList.find(s => String(s.id) === link.content_id)?.title || link.content_id;
+                              if (link.content_type === "movie") return rows.find(r => String(r.id) === link.content_id)?.title || link.content_id;
+                              if (link.content_type === "podcast") return podcastsList.find(p => String(p.id) === link.content_id)?.title || link.content_id;
+                              return link.content_id;
+                            })();
+                            return (
+                              <div key={link.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 12px" }}>
+                                <div>
+                                  <span style={{ fontSize: 13, fontWeight: 500, color: "#0f172a" }}>{label}</span>
+                                  <span style={{ fontSize: 11, color: "#9ca3af", marginLeft: 8, textTransform: "capitalize" }}>{link.content_type.replace("_", " ")}</span>
+                                </div>
+                                <button onClick={() => unlinkCreatorContent(link.id)} style={{ background: "none", border: "none", color: "#f87171", fontSize: 18, cursor: "pointer", lineHeight: 1, padding: "0 4px" }}>×</button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Add content dropdown */}
+                      {(() => {
+                        const linked = contentCreators.filter(l => l.creator_id === editingCreator.id).map(l => `${l.content_type}:${l.content_id}`);
+                        const options = [
+                          ...showsList.map(s => ({ label: `${s.title} (Show)`, value: `show:${s.id}` })),
+                          ...rows.map(r => ({ label: `${r.title} (Movie)`, value: `movie:${r.id}` })),
+                          ...podcastsList.map(p => ({ label: `${p.title} (Podcast)`, value: `podcast:${p.id}` })),
+                        ].filter(o => !linked.includes(o.value));
+                        if (!options.length) return <p style={{ fontSize: 12, color: "#9ca3af" }}>All content linked.</p>;
+                        return (
+                          <select defaultValue="" onChange={e => { if (!e.target.value) return; const [type, id] = e.target.value.split(":"); linkCreatorContent(editingCreator.id, id, type); e.target.value = ""; }}
+                            style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 12px", fontSize: 13, color: "#6b7280", outline: "none", background: "#fff" }}>
+                            <option value="">+ Link content…</option>
+                            {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                          </select>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 24, flexWrap: "wrap" }}>
+                    {editingCreator && (
+                      <button onClick={() => resendInvite(editingCreator)} disabled={resendingInvite} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 16px", fontSize: 13, fontWeight: 600, color: "#475569", cursor: resendingInvite ? "not-allowed" : "pointer", opacity: resendingInvite ? 0.7 : 1, marginRight: "auto" }}>
+                        {resendingInvite ? "Sending…" : "↺ Resend Invite"}
+                      </button>
+                    )}
+                    <button onClick={() => setCreatorModal(false)} style={{ background: "#f1f5f9", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 600, color: "#475569", cursor: "pointer" }}>Cancel</button>
+                    <button onClick={saveCreator} disabled={creatorSaving} style={{ background: "#fb923c", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 700, color: "#fff", cursor: "pointer", opacity: creatorSaving ? 0.7 : 1 }}>
+                      {creatorSaving ? "Saving…" : editingCreator ? "Save Changes" : "Add Partner"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Delete confirm */}
+            {deleteCreatorConfirm && (
+              <div onClick={() => setDeleteCreatorConfirm(null)} style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 14, padding: "32px 36px", width: "min(400px,92vw)", textAlign: "center" }}>
+                  <p style={{ fontSize: 16, fontWeight: 600, color: "#0f172a", marginBottom: 8 }}>Delete "{deleteCreatorConfirm.name}"?</p>
+                  <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 24 }}>Their referral code will stop working. Past payout records are preserved.</p>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button onClick={() => setDeleteCreatorConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "none", borderRadius: 8, padding: "10px", fontSize: 13, fontWeight: 600, color: "#475569", cursor: "pointer" }}>Cancel</button>
+                    <button onClick={() => deleteCreator(deleteCreatorConfirm.id)} style={{ flex: 1, background: "#ef4444", border: "none", borderRadius: 8, padding: "10px", fontSize: 13, fontWeight: 600, color: "#fff", cursor: "pointer" }}>Delete</button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ────── REVIEW QUEUE VIEW (inside Boss) ────── */}
+        {tab === "creators" && creatorsTab === "review" && (
+          <div style={{ maxWidth: 1000, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28 }}>
+              <button onClick={() => setCreatorsTab("list")} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 14px", fontSize: 13, color: "#374151", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>← Back</button>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Review Queue</h2>
+              {reviewEpisodes.length > 0 && <span style={{ fontSize: 13, color: "#9ca3af" }}>{reviewEpisodes.length} pending</span>}
+            </div>
+
+            {reviewLoading ? (
+              <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Spinner /></div>
+            ) : reviewEpisodes.length === 0 ? (
+              <div style={{ textAlign: "center", padding: 80, color: "#9ca3af" }}>
+                <p style={{ fontSize: 32, marginBottom: 12 }}>✓</p>
+                <p style={{ fontSize: 16, fontWeight: 600, color: "#374151", marginBottom: 8 }}>All clear</p>
+                <p style={{ fontSize: 13 }}>No episodes waiting for review.</p>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {reviewEpisodes.map(ep => (
+                  <div key={ep.id} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, overflow: "hidden" }}>
+                    {/* Episode header */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "18px 22px", borderBottom: "1px solid #f1f5f9", flexWrap: "wrap" }}>
+                      {ep.showThumb && <img src={ep.showThumb} alt="" style={{ width: 64, height: 42, objectFit: "cover", borderRadius: 6, flexShrink: 0 }} />}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: "0 0 2px", fontSize: 15, fontWeight: 700, color: "#0f172a" }}>{ep.showTitle}</p>
+                        <p style={{ margin: "0 0 2px", fontSize: 13, color: "#475569" }}>S{ep.season}E{ep.episode_number} — {ep.title}</p>
+                        <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>
+                          {ep.creator ? `${ep.creator.name} · ${ep.creator.email}` : "Unknown creator"} · {new Date(ep.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Video preview */}
+                    {ep.url && (
+                      <div style={{ padding: "16px 22px", borderBottom: "1px solid #f1f5f9", background: "#fafafa" }}>
+                        <video controls src={ep.url} style={{ width: "100%", maxHeight: 280, borderRadius: 8, background: "#000" }} />
+                      </div>
+                    )}
+
+                    {/* Description */}
+                    {ep.description && (
+                      <div style={{ padding: "14px 22px", borderBottom: "1px solid #f1f5f9" }}>
+                        <p style={{ margin: 0, fontSize: 13, color: "#475569", lineHeight: 1.6 }}>{ep.description}</p>
+                      </div>
+                    )}
+
+                    {/* Actions */}
+                    <div style={{ display: "flex", gap: 10, padding: "14px 22px" }}>
+                      <button onClick={() => approveEpisode(ep)}
+                        style={{ flex: 1, background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: 10, padding: "11px", color: "#16a34a", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                        ✓ Approve — Go Live
+                      </button>
+                      <button onClick={() => { setRejectModal(ep); setRejectNote(""); }}
+                        style={{ flex: 1, background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 10, padding: "11px", color: "#ef4444", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                        ✕ Reject
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Reject modal */}
+        {rejectModal && (
+          <div onClick={e => { if (e.target === e.currentTarget) { setRejectModal(null); setRejectNote(""); } }} style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 16, padding: "32px 36px", width: "min(480px,94vw)" }}>
+              <h3 style={{ margin: "0 0 6px", fontSize: 17, fontWeight: 700, color: "#0f172a" }}>Reject Episode</h3>
+              <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>
+                S{rejectModal.season}E{rejectModal.episode_number} — {rejectModal.title}
+              </p>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Rejection Note (sent to creator)</label>
+              <textarea value={rejectNote} onChange={e => setRejectNote(e.target.value)} rows={4} placeholder="Tell the creator why this was rejected and what they can fix…"
+                style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#0f172a", outline: "none", resize: "vertical", boxSizing: "border-box" }} />
+              <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+                <button onClick={() => { setRejectModal(null); setRejectNote(""); }} style={{ flex: 1, background: "#f1f5f9", border: "none", borderRadius: 8, padding: "11px", fontSize: 13, fontWeight: 600, color: "#475569", cursor: "pointer" }}>Cancel</button>
+                <button onClick={() => rejectEpisode(rejectModal, rejectNote)} style={{ flex: 1, background: "#ef4444", border: "none", borderRadius: 8, padding: "11px", fontSize: 13, fontWeight: 700, color: "#fff", cursor: "pointer" }}>Reject & Notify Partner</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ────── PAYOUTS VIEW (inside Boss) ────── */}
+        {tab === "creators" && creatorsTab === "payouts" && (
+          <div style={{ maxWidth: 1600, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
+            <div style={{ marginBottom: 24 }}>
+              <button onClick={() => setCreatorsTab("list")} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 14px", fontSize: 13, color: "#374151", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>← Back</button>
+            </div>
+            {/* Sub-tab toggle */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 28 }}>
+              {[["current", "Monthly Payouts"], ["history", "Payout History"]].map(([v, label]) => (
+                <button key={v} onClick={() => setPayoutView(v)} style={{ background: payoutView === v ? "rgba(167,139,250,0.12)" : "transparent", border: `1px solid ${payoutView === v ? "rgba(167,139,250,0.4)" : "#e2e8f0"}`, borderRadius: 8, padding: "8px 18px", color: payoutView === v ? "#7c3aed" : "#6b7280", fontSize: 13, fontWeight: payoutView === v ? 700 : 400, cursor: "pointer" }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* How payouts work info box */}
+            <div style={{ marginBottom: 20 }}>
+              <button onClick={() => setShowPayoutInfo(v => !v)} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, color: "#6b7280", fontSize: 12, fontWeight: 600 }}>
+                <span style={{ fontSize: 14 }}>{showPayoutInfo ? "▾" : "▸"}</span> How payouts work
+              </button>
+              {showPayoutInfo && (
+                <div style={{ marginTop: 12, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px" }}>
+                  <p style={{ margin: "0 0 12px", fontWeight: 700, fontSize: 14, color: "#0f172a" }}>Content Partner Revenue Share — How It Works</p>
+                  <p style={{ margin: "0 0 10px", fontSize: 13, color: "#374151", lineHeight: 1.6 }}>Every month, <strong>50% of Peep's total revenue</strong> goes into a creator pool. Each creator's cut of that pool is based on how much of the platform's total watch time their content drove that month.</p>
+                  <p style={{ margin: "0 0 6px", fontSize: 12, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5 }}>Formula</p>
+                  <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px", marginBottom: 12, fontFamily: "monospace", fontSize: 12, color: "#374151" }}>
+                    Creator Pool = Total Revenue × 50%<br />
+                    Your Payout = Creator Pool × (Your Watch Mins ÷ All Watch Mins)
+                  </div>
+                  <p style={{ margin: "0 0 6px", fontSize: 12, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5 }}>Example</p>
+                  <p style={{ margin: "0 0 10px", fontSize: 13, color: "#374151", lineHeight: 1.6 }}>Peep makes <strong>$2,000</strong> → pool is <strong>$1,000</strong>. Your content = <strong>30% of all watch time</strong> → you earn <strong>$300</strong>.</p>
+                  <p style={{ margin: "0 0 10px", fontSize: 13, color: "#374151", lineHeight: 1.6 }}>The per-minute rate is never fixed — it grows as Peep grows. More subscribers = more revenue = bigger pool = more money per watch minute.</p>
+                  <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>Payments go out on the 15th of each month for the previous month's watch data. Only watch sessions where the viewer watched at least 25% of an episode count toward your total.</p>
+                </div>
+              )}
+            </div>
+
+            {payoutView === "current" && (
+              <div>
+                {(() => {
+                  const today = new Date();
+                  const day = today.getDate();
+                  const yr = today.getFullYear();
+                  const mo = today.getMonth();
+                  const nextDue = day < 15 ? new Date(yr, mo, 15) : new Date(yr, mo + 1, 15);
+                  const daysUntil = Math.ceil((nextDue - today) / 86400000);
+                  const nextDueStr = nextDue.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+                  const lastMonthStr = new Date(yr, mo - 1).toISOString().slice(0, 7);
+                  const unpaidCount = payoutData.filter(r => r.status !== "paid").length;
+                  const isOverdue = day >= 15 && payoutMonth === lastMonthStr && unpaidCount > 0;
+                  const overdueMonthLabel = new Date(payoutMonth + "-02").toLocaleDateString("en-US", { month: "long", year: "numeric" });
+                  return (
+                    <div style={{ marginBottom: 20 }}>
+                      {isOverdue && (
+                        <div style={{ background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 12, padding: "14px 20px", marginBottom: 12, display: "flex", alignItems: "center", gap: 16 }}>
+                          <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#ef4444", flexShrink: 0 }} />
+                          <div>
+                            <p style={{ margin: 0, fontWeight: 700, color: "#ef4444", fontSize: 14 }}>Overdue — {overdueMonthLabel} payouts not complete</p>
+                            <p style={{ margin: "3px 0 0", fontSize: 12, color: "#6b7280" }}>Payments were due by the 15th. {unpaidCount} creator{unpaidCount !== 1 ? "s" : ""} still unpaid.</p>
+                          </div>
+                        </div>
+                      )}
+                      <div style={{ background: isOverdue ? "rgba(239,68,68,0.04)" : "rgba(167,139,250,0.06)", border: `1px solid ${isOverdue ? "rgba(239,68,68,0.15)" : "rgba(167,139,250,0.2)"}`, borderRadius: 12, padding: "14px 20px", display: "flex", alignItems: "center", gap: 16 }}>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ margin: 0, fontSize: 11, color: "#6b7280", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>Next Payout Due</p>
+                          <p style={{ margin: "4px 0 0", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>{nextDueStr}</p>
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: isOverdue ? "#ef4444" : "#7c3aed" }}>{daysUntil === 0 ? "Due today" : daysUntil === 1 ? "1 day away" : `${daysUntil} days away`}</p>
+                          <p style={{ margin: "3px 0 0", fontSize: 11, color: "#9ca3af" }}>Payments go out on the 15th of each month</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+                <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
+                  <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Monthly Payouts</h2>
+                  <input type="month" value={payoutMonth} onChange={e => setPayoutMonth(e.target.value)}
+                    style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: "7px 12px", fontSize: 13, color: "#0f172a", outline: "none" }} />
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    <span style={{ fontSize: 12, color: "#6b7280" }}>Total Revenue: $</span>
+                    <input type="number" value={totalRevenue}
+                      onChange={e => { const v = parseFloat(e.target.value) || 0; if (v > 100000) { alert("Revenue over $100,000 — double-check this number before calculating."); return; } setTotalRevenue(v); }}
+                      step="0.01" min="0" max="100000" placeholder="0.00"
+                      style={{ width: 90, border: `1px solid ${totalRevenue > 50000 ? "#ef4444" : "#e2e8f0"}`, borderRadius: 8, padding: "7px 10px", fontSize: 13, color: "#0f172a", outline: "none" }} />
+                    <button onClick={fetchStripeRevenue} disabled={fetchingRevenue} style={{ background: "rgba(74,222,128,0.08)", border: "1px solid rgba(74,222,128,0.25)", borderRadius: 8, padding: "7px 14px", color: "#16a34a", fontSize: 12, fontWeight: 600, cursor: fetchingRevenue ? "not-allowed" : "pointer", opacity: fetchingRevenue ? 0.7 : 1, whiteSpace: "nowrap" }}>
+                      {fetchingRevenue ? "Fetching…" : "↓ From Stripe"}
+                    </button>
+                    <span style={{ fontSize: 11, color: "#9ca3af" }}>50% pool = ${(totalRevenue * 0.5).toFixed(2)}</span>
+                    <button onClick={() => { if (totalRevenue <= 0) { alert("Enter a total revenue amount before calculating."); return; } if (!window.confirm(`Calculate payouts for ${payoutMonth} with $${totalRevenue.toFixed(2)} total revenue?\n\nCreator pool: $${(totalRevenue * 0.5).toFixed(2)}`)) return; loadPayouts(); }} style={{ background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.3)", borderRadius: 8, padding: "7px 14px", color: "#7c3aed", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Calculate</button>
+                    <button onClick={exportPayoutsCSV} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "7px 14px", color: "#475569", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Export CSV</button>
+                  </div>
+                </div>
+
+                {payoutLoading ? (
+                  <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Spinner /></div>
+                ) : payoutData.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: 80, color: "#9ca3af" }}>No content partners yet. Add partners first.</div>
+                ) : (
+                  <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, overflow: "hidden" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: "#f8fafc", borderBottom: "1px solid #f1f5f9" }}>
+                          {["Partner", "Watch Time", "Share", "Payout (50%)", "Status", ""].map(h => (
+                            <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, whiteSpace: "nowrap" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {payoutData.map((row, i) => (
+                          <tr key={row.creator.id} style={{ borderBottom: i < payoutData.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                            <td style={{ padding: "14px 16px" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <p style={{ margin: "0 0 2px", fontWeight: 600, color: "#0f172a" }}>{row.creator.name}</p>
+                                {row.fraudFlag && bossSettings.fraud_detection_enabled === "true" && (
+                                  <span title={`One account = ${row.fraudFlag}% of this creator's watch time`} style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 99, background: "rgba(239,68,68,0.1)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.25)", whiteSpace: "nowrap", cursor: "default" }}>Suspicious</span>
+                                )}
+                              </div>
+                              <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>{row.creator.email}</p>
+                            </td>
+                            <td style={{ padding: "14px 16px", color: "#0f172a", fontWeight: 600 }}>
+                              {row.watchMins >= 60 ? `${(row.watchMins / 60).toFixed(1)} hrs` : `${row.watchMins} mins`}
+                            </td>
+                            <td style={{ padding: "14px 16px", color: "#475569", fontWeight: 600 }}>{row.share}%</td>
+                            <td style={{ padding: "14px 16px" }}>
+                              <span style={{ fontWeight: 700, color: row.payout < 10 ? "#9ca3af" : "#7c3aed" }}>${row.payout.toFixed(2)}</span>
+                              {row.rolloverAmount > 0 && (
+                                <span title={`Includes $${row.rolloverAmount.toFixed(2)} rolled over from previous months`} style={{ display: "block", fontSize: 10, color: "#7c3aed", marginTop: 2 }}>+${row.rolloverAmount.toFixed(2)} rollover</span>
+                              )}
+                              {row.payout < 10 && row.status !== "paid" && (
+                                <span title="Below $10 minimum — rolls over to next month" style={{ display: "block", fontSize: 10, color: "#9ca3af", marginTop: 2 }}>Below min — carries forward</span>
+                              )}
+                            </td>
+                            <td style={{ padding: "14px 16px" }}>
+                              {row.status === "paid"
+                                ? <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99, background: "rgba(34,197,94,0.1)", color: "#16a34a" }}>Paid{row.paid_at ? ` ${new Date(row.paid_at).toLocaleDateString()}` : ""}</span>
+                                : row.payout < 10
+                                  ? <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99, background: "rgba(156,163,175,0.1)", color: "#9ca3af" }}>Below Min</span>
+                                  : <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99, background: "rgba(251,146,60,0.1)", color: "#ea580c" }}>Unpaid</span>
+                              }
+                            </td>
+                            <td style={{ padding: "14px 16px" }}>
+                              <button onClick={() => togglePayoutStatus(row)} disabled={row.payout < 10 && row.status !== "paid"}
+                                style={{ background: row.status === "paid" ? "rgba(239,68,68,0.08)" : "rgba(34,197,94,0.1)", border: `1px solid ${row.status === "paid" ? "rgba(239,68,68,0.2)" : "rgba(34,197,94,0.3)"}`, borderRadius: 6, padding: "5px 12px", color: row.status === "paid" ? "#ef4444" : "#16a34a", fontSize: 11, fontWeight: 600, cursor: (row.payout < 10 && row.status !== "paid") ? "default" : "pointer", opacity: (row.payout < 10 && row.status !== "paid") ? 0.4 : 1, whiteSpace: "nowrap" }}>
+                                {row.status === "paid" ? "Mark Unpaid" : "Mark Paid"}
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                        {/* Totals row */}
+                        {(() => {
+                          const totalPayout = payoutData.reduce((s, r) => s + r.payout, 0);
+                          const unpaidPayout = payoutData.filter(r => r.status !== "paid").reduce((s, r) => s + r.payout, 0);
+                          const totalMins = payoutData.reduce((s, r) => s + r.watchMins, 0);
+                          return (
+                            <tr style={{ background: "#f8fafc", borderTop: "2px solid #e2e8f0" }}>
+                              <td style={{ padding: "14px 16px", fontWeight: 700, color: "#0f172a" }}>Total</td>
+                              <td style={{ padding: "14px 16px", fontWeight: 700, color: "#0f172a" }}>{totalMins >= 60 ? `${(totalMins / 60).toFixed(1)} hrs` : `${totalMins} mins`}</td>
+                              <td style={{ padding: "14px 16px", fontWeight: 700, color: "#475569" }}>100%</td>
+                              <td style={{ padding: "14px 16px", fontWeight: 700, color: "#7c3aed" }}>${totalPayout.toFixed(2)}</td>
+                              <td colSpan={2} style={{ padding: "14px 16px" }}>
+                                <span style={{ fontSize: 12, color: "#ea580c", fontWeight: 700 }}>${unpaidPayout.toFixed(2)} still owed</span>
+                              </td>
+                            </tr>
+                          );
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {payoutView === "history" && (
+              <div>
+                <h2 style={{ margin: "0 0 24px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Payout History</h2>
+                {payoutHistoryLoading ? (
+                  <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Spinner /></div>
+                ) : payoutHistory.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: 80, color: "#9ca3af" }}>No paid payouts yet.</div>
+                ) : (
+                  <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, overflow: "hidden" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: "#f8fafc", borderBottom: "1px solid #f1f5f9" }}>
+                          {["Month", "Partner", "Watch Time", "Revenue", "Paid Out", "Date Paid"].map(h => (
+                            <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6 }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {payoutHistory.map((p, i) => (
+                          <tr key={p.id} style={{ borderBottom: i < payoutHistory.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                            <td style={{ padding: "14px 16px", fontWeight: 600, color: "#0f172a" }}>{p.month}</td>
+                            <td style={{ padding: "14px 16px", color: "#0f172a" }}>{p.creator_name}</td>
+                            <td style={{ padding: "14px 16px", color: "#475569" }}>{p.watch_minutes} mins</td>
+                            <td style={{ padding: "14px 16px", color: "#475569" }}>${(+p.revenue).toFixed(2)}</td>
+                            <td style={{ padding: "14px 16px", fontWeight: 700, color: "#7c3aed" }}>${(+p.payout_amount).toFixed(2)}</td>
+                            <td style={{ padding: "14px 16px", color: "#475569" }}>{p.paid_at ? new Date(p.paid_at).toLocaleDateString() : "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ────── STORAGE TAB ────── */}
+        {tab === "storage" && (
+          <div style={{ maxWidth: 1600, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28, flexWrap: "wrap", gap: 12 }}>
+              <div>
+                <p style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 700, color: "#0f172a" }}>Uploaded Files</p>
+                <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Files in your Supabase bucket. Click "Publish" to make them watchable on Peep.</p>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => { setStorageAddForm({ title: "", type: "movie", show_id: "", podcast_id: "", description: "", year: new Date().getFullYear(), genre: "", artist: "", episode_number: 1, season_number: 1, linked_id: "", linked_table: "videos", url: "" }); setStorageAddModal({ name: "External URL", folder: "", url: "" }); }} style={{ padding: "10px 18px", background: "#4f46e5", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add from URL</button>
+                <button onClick={loadStorageFiles} style={{ padding: "10px 20px", background: "#0f172a", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{storageLoading ? "Scanning…" : "Refresh"}</button>
+              </div>
+            </div>
+
+            {storageLoading && <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Spinner /></div>}
+
+            {!storageLoading && storageFiles.length === 0 && (
+              <div style={{ textAlign: "center", padding: "80px 0", color: "#9ca3af" }}>
+                <p style={{ fontSize: 15, marginBottom: 8 }}>No media files found in the bucket.</p>
+                <p style={{ fontSize: 13 }}>Upload video or audio files to Supabase Storage, then click Refresh.</p>
+              </div>
+            )}
+
+            {!storageLoading && storageFiles.length > 0 && (() => {
+              const FOLDER_META = {
+                shorts:        { label: "Movies",       color: "#6366f1", icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 7h5M17 17h5"/></svg> },
+                trailers:      { label: "Trailers",     color: "#f59e0b", icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg> },
+                episodes:      { label: "Episodes",     color: "#8b5cf6", icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></svg> },
+                podcasts:      { label: "Podcasts",     color: "#22d3ee", icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg> },
+                root:          { label: "Unsorted",     color: "#94a3b8", icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> },
+              };
+              const pending = storageFiles.filter(f => !f.ingested);
+              const ingested = storageFiles.filter(f => f.ingested);
+              const visible = storageFilter === "pending" ? pending : storageFilter === "ingested" ? ingested : storageFiles;
+              const folderOrder = ["shorts", "trailers", "episodes", "podcasts", "root"];
+              const byFolder = folderOrder.reduce((acc, k) => { acc[k] = visible.filter(f => f.folder === k); return acc; }, {});
+              return (
+                <>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 28 }}>
+                    {[
+                      { key: "pending", label: "Unpublished", count: pending.length, color: "#f59e0b" },
+                      { key: "ingested", label: "Published", count: ingested.length, color: "#22c55e" },
+                      { key: "all", label: "All", count: storageFiles.length, color: "#6366f1" },
+                    ].map(({ key, label, count, color }) => (
+                      <button key={key} onClick={() => setStorageFilter(key)} style={{ padding: "8px 18px", borderRadius: 8, border: `1.5px solid ${storageFilter === key ? color : "#e2e8f0"}`, background: storageFilter === key ? color : "#fff", color: storageFilter === key ? "#fff" : "#64748b", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                        {label} <span style={{ opacity: 0.8 }}>({count})</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {visible.length === 0 && (
+                    <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "40px 0" }}>
+                      {storageFilter === "ingested" ? "No files ingested yet." : "All files are already ingested."}
+                    </p>
+                  )}
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+                    {folderOrder.map(folder => {
+                      const files = byFolder[folder];
+                      if (!files || files.length === 0) return null;
+                      const meta = FOLDER_META[folder];
+                      return (
+                        <div key={folder}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                            <span style={{ color: meta.color, display: "flex", alignItems: "center" }}>{meta.icon}</span>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: meta.color, textTransform: "uppercase", letterSpacing: 1 }}>{meta.label}</span>
+                            <span style={{ fontSize: 12, color: "#cbd5e1" }}>({files.length})</span>
+                          </div>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            {files.map(file => (
+                              <div key={file.path} style={{ background: "#fff", border: `1px solid ${file.ingested ? "#dcfce7" : "#e2e8f0"}`, borderRadius: 10, padding: "14px 18px", display: "flex", alignItems: "center", gap: 14 }}>
+                                <div style={{ width: 36, height: 36, borderRadius: 7, background: `${meta.color}18`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: meta.color }}>
+                                  {file.isVideo
+                                    ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+                                    : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                                  }
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+                                    <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{file.name}</p>
+                                    {file.ingested && <span style={{ fontSize: 10, fontWeight: 700, color: "#16a34a", background: "#dcfce7", borderRadius: 4, padding: "2px 7px", flexShrink: 0 }}>Published</span>}
+                                  </div>
+                                  <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>{file.metadata?.size ? `${(file.metadata.size / 1024 / 1024).toFixed(1)} MB` : ""}</p>
+                                </div>
+                                <a href={file.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "#6366f1", textDecoration: "none", flexShrink: 0 }}>Preview</a>
+                                {!file.ingested && (
+                                  <button
+                                    onClick={() => {
+                                      const cleanName = file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+                                      setStorageAddForm({ title: cleanName, type: file.typeHint, show_id: "", podcast_id: "", description: "", year: new Date().getFullYear(), genre: "", artist: "", episode_number: 1, season_number: 1, linked_id: "", linked_table: "videos", url: file.url });
+                                      setStorageAddModal(file);
+                                    }}
+                                    style={{ padding: "7px 14px", background: "#0f172a", color: "#fff", border: "none", borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
+                                  >Publish</button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              );
+            })()}
+
+            {storageAddModal && (
+              <>
+                <div onClick={() => setStorageAddModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200 }} />
+                <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 201, background: "#fff", borderRadius: 16, padding: 32, width: "min(520px, 95vw)", maxHeight: "90vh", overflowY: "auto" }}>
+                  <p style={{ margin: "0 0 20px", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>Publish to Peep</p>
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Video URL *</label>
+                    <input value={storageAddForm.url} onChange={e => setStorageAddForm(p => ({ ...p, url: e.target.value }))} placeholder="https://archive.org/... or Supabase URL" style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13, boxSizing: "border-box" }} />
+                  </div>
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Content Type</label>
+                    <select value={storageAddForm.type} onChange={e => setStorageAddForm(p => ({ ...p, type: e.target.value }))} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14, background: "#fff", color: "#0f172a" }}>
+                      <option value="movie">Short</option>
+                      <option value="trailer">Trailer (attach to existing title)</option>
+                      <option value="episode">TV Episode</option>
+                      <option value="podcast_episode">Podcast Episode</option>
+                    </select>
+                  </div>
+                  {storageAddForm.type === "trailer" && (
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Attach to</label>
+                      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                        <button onClick={() => setStorageAddForm(p => ({ ...p, linked_table: "videos", linked_id: "" }))} style={{ flex: 1, padding: "8px", borderRadius: 7, border: `1.5px solid ${storageAddForm.linked_table === "videos" ? "#6366f1" : "#e2e8f0"}`, background: storageAddForm.linked_table === "videos" ? "#eef2ff" : "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", color: storageAddForm.linked_table === "videos" ? "#6366f1" : "#64748b" }}>Movie</button>
+                        <button onClick={() => setStorageAddForm(p => ({ ...p, linked_table: "shows", linked_id: "" }))} style={{ flex: 1, padding: "8px", borderRadius: 7, border: `1.5px solid ${storageAddForm.linked_table === "shows" ? "#6366f1" : "#e2e8f0"}`, background: storageAddForm.linked_table === "shows" ? "#eef2ff" : "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", color: storageAddForm.linked_table === "shows" ? "#6366f1" : "#64748b" }}>Show</button>
+                      </div>
+                      <select value={storageAddForm.linked_id} onChange={e => setStorageAddForm(p => ({ ...p, linked_id: e.target.value }))} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14, background: "#fff" }}>
+                        <option value="">Select title…</option>
+                        {(storageAddForm.linked_table === "videos" ? videosList : showsList).map(v => <option key={v.id} value={v.id}>{v.title}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Title</label>
+                    <input value={storageAddForm.title} onChange={e => setStorageAddForm(p => ({ ...p, title: e.target.value }))} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14, boxSizing: "border-box" }} />
+                  </div>
+                  {storageAddForm.type === "episode" && (
+                    <>
+                      <div style={{ marginBottom: 16 }}>
+                        <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Show</label>
+                        <select value={storageAddForm.show_id} onChange={e => setStorageAddForm(p => ({ ...p, show_id: e.target.value }))} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14, background: "#fff" }}>
+                          <option value="">Select a show…</option>
+                          {showsList.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+                        <div>
+                          <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Season</label>
+                          <input type="number" value={storageAddForm.season_number} onChange={e => setStorageAddForm(p => ({ ...p, season_number: parseInt(e.target.value) || 1 }))} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14, boxSizing: "border-box" }} />
+                        </div>
+                        <div>
+                          <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Episode #</label>
+                          <input type="number" value={storageAddForm.episode_number} onChange={e => setStorageAddForm(p => ({ ...p, episode_number: parseInt(e.target.value) || 1 }))} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14, boxSizing: "border-box" }} />
+                        </div>
+                      </div>
+                    </>
+                  )}
+                  {storageAddForm.type === "podcast_episode" && (
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Podcast</label>
+                      <select value={storageAddForm.podcast_id} onChange={e => setStorageAddForm(p => ({ ...p, podcast_id: e.target.value }))} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14, background: "#fff" }}>
+                        <option value="">Select a podcast…</option>
+                        {podcastsList.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  {storageAddForm.type === "movie" && (
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Year</label>
+                        <input type="number" value={storageAddForm.year} onChange={e => setStorageAddForm(p => ({ ...p, year: parseInt(e.target.value) || null }))} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14, boxSizing: "border-box" }} />
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Genre</label>
+                        <input value={storageAddForm.genre} onChange={e => setStorageAddForm(p => ({ ...p, genre: e.target.value }))} placeholder="Comedy, Drama…" style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14, boxSizing: "border-box" }} />
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ marginBottom: 24 }}>
+                    <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Description</label>
+                    <textarea value={storageAddForm.description} onChange={e => setStorageAddForm(p => ({ ...p, description: e.target.value }))} rows={3} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14, resize: "vertical", boxSizing: "border-box" }} />
+                  </div>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button onClick={() => setStorageAddModal(null)} style={{ flex: 1, padding: "11px 0", background: "#f1f5f9", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#64748b" }}>Cancel</button>
+                    <button onClick={saveStorageItem} disabled={storageAddSaving || !storageAddForm.title || !storageAddForm.url.trim()} style={{ flex: 2, padding: "11px 0", background: "#0f172a", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#fff", opacity: storageAddSaving || !storageAddForm.title || !storageAddForm.url.trim() ? 0.6 : 1 }}>
+                      {storageAddSaving ? "Publishing…" : "Publish to Peep"}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
     </div>
   );
 }
@@ -4253,6 +7836,29 @@ function FieldInput({ label, value, onChange, placeholder, type = "text" }) {
         onFocus={e => (e.target.style.borderColor = "#4f46e5")}
         onBlur={e => (e.target.style.borderColor = "#e2e8f0")}
       />
+    </div>
+  );
+}
+
+function FieldCombo({ label, value, onChange, options, placeholder }) {
+  const id = `combo-${label.replace(/\s+/g, "-").toLowerCase()}`;
+  return (
+    <div>
+      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>
+        {label}
+      </label>
+      <input
+        list={id}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder || "Type or pick..."}
+        style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+        onFocus={e => e.target.style.borderColor = "#4f46e5"}
+        onBlur={e => e.target.style.borderColor = "#e2e8f0"}
+      />
+      <datalist id={id}>
+        {options.map(o => <option key={o} value={o} />)}
+      </datalist>
     </div>
   );
 }
@@ -4292,6 +7898,87 @@ function Spinner() {
   return (
     <div style={{ width: 32, height: 32, border: "3px solid #e2e8f0", borderTop: "3px solid #4f46e5", borderRadius: "50%", animation: "spin 0.8s linear infinite" }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
+function AdminAccessCard({ supabaseUrl, currentUser }) {
+  const [searchEmail, setSearchEmail] = useState("");
+  const [result, setResult] = useState(null); // { email, role }
+  const [searching, setSearching] = useState(false);
+  const [acting, setActing] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  async function lookupUser() {
+    if (!searchEmail.trim()) return;
+    setSearching(true);
+    setResult(null);
+    setMsg(null);
+    const { data } = await supabase.from("profiles").select("email, role").eq("email", searchEmail.trim().toLowerCase()).maybeSingle();
+    if (!data) setMsg({ type: "error", text: "No account found with that email." });
+    else setResult(data);
+    setSearching(false);
+  }
+
+  async function changeRole(action) {
+    setActing(true);
+    setMsg(null);
+    try {
+      const token = await getAdminToken();
+      const res = await fetch(`${supabaseUrl}/functions/v1/manage-admin-role`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ targetEmail: result.email, action }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setResult(prev => ({ ...prev, role: data.role }));
+      setMsg({ type: "success", text: action === "promote" ? `${result.email} is now an admin.` : `${result.email} has been demoted to viewer.` });
+    } catch (err) {
+      setMsg({ type: "error", text: err.message });
+    }
+    setActing(false);
+  }
+
+  const inp = { width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px", color: "#0f172a", fontSize: 14, outline: "none", boxSizing: "border-box", fontFamily: "inherit" };
+
+  return (
+    <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 28 }}>
+      <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: "#0f172a" }}>Admin Access</p>
+      <p style={{ margin: "0 0 18px", fontSize: 13, color: "#9ca3af" }}>Promote or demote accounts. Only visible to you.</p>
+      <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+        <input style={{ ...inp, flex: 1 }} placeholder="Enter their email address" value={searchEmail}
+          onChange={e => { setSearchEmail(e.target.value); setResult(null); setMsg(null); }}
+          onKeyDown={e => e.key === "Enter" && lookupUser()} />
+        <button onClick={lookupUser} disabled={searching}
+          style={{ background: "#0f172a", border: "none", borderRadius: 8, padding: "10px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: searching ? "not-allowed" : "pointer", opacity: searching ? 0.7 : 1, whiteSpace: "nowrap" }}>
+          {searching ? "Looking up…" : "Look Up"}
+        </button>
+      </div>
+      {result && (
+        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <div>
+            <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{result.email}</p>
+            <p style={{ margin: 0, fontSize: 12, color: result.role === "admin" ? "#7c3aed" : "#6b7280", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>{result.role}</p>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            {result.role !== "admin" ? (
+              <button onClick={() => changeRole("promote")} disabled={acting}
+                style={{ background: "#7c3aed", border: "none", borderRadius: 8, padding: "8px 16px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: acting ? "not-allowed" : "pointer", opacity: acting ? 0.7 : 1 }}>
+                {acting ? "…" : "Make Admin"}
+              </button>
+            ) : (
+              <button onClick={() => changeRole("demote")} disabled={acting}
+                style={{ background: "#ef4444", border: "none", borderRadius: 8, padding: "8px 16px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: acting ? "not-allowed" : "pointer", opacity: acting ? 0.7 : 1 }}>
+                {acting ? "…" : "Remove Admin"}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+      {msg && (
+        <p style={{ margin: "10px 0 0", fontSize: 13, color: msg.type === "error" ? "#ef4444" : "#16a34a", fontWeight: 500 }}>{msg.text}</p>
+      )}
     </div>
   );
 }
