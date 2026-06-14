@@ -183,6 +183,8 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
 
   const [bannedWords, setBannedWords] = useState([]);
   const [newWord, setNewWord]         = useState("");
+  const [slowMode, setSlowMode]       = useState(0);
+  const [followerOnly, setFollowerOnly] = useState(false);
   const [savingWords, setSavingWords] = useState(false);
 
   const [analyticsFollowers, setAnalyticsFollowers] = useState([]);
@@ -272,6 +274,8 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
       setDiscordUrl(data.discord_url || "");
       setInstagramUrl(data.instagram_url || "");
       setBannedWords(data.banned_words || []);
+      setSlowMode(data.slow_mode_seconds || 0);
+      setFollowerOnly(data.follower_only_chat || false);
       setListed(data.listed ?? false);
       loadFollows(data.id);
       loadSchedule(data.id);
@@ -1179,8 +1183,51 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
             </div>
           </SectionCard>
 
+          {/* Chat Settings */}
+          <SectionCard title="Chat Settings" collapsible defaultOpen={false}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {/* Slow mode */}
+              <div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                  <div>
+                    <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: "#ccc" }}>Slow Mode</p>
+                    <p style={{ margin: 0, fontSize: 12, color: "#444" }}>Limit how often viewers can send messages</p>
+                  </div>
+                  <span style={{ fontSize: 13, color: slowMode > 0 ? YELLOW : "#444", fontWeight: 600 }}>{slowMode > 0 ? `${slowMode}s` : "Off"}</span>
+                </div>
+                <input type="range" min={0} max={120} step={5} value={slowMode} onChange={e => setSlowMode(Number(e.target.value))}
+                  style={{ width: "100%", accentColor: YELLOW }} />
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#333", marginTop: 2 }}>
+                  <span>Off</span><span>30s</span><span>60s</span><span>120s</span>
+                </div>
+              </div>
+              {/* Follower-only */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", background: "#0d0d0d", borderRadius: 10, border: `1px solid ${BORDER}` }}>
+                <div>
+                  <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: "#ccc" }}>Followers Only</p>
+                  <p style={{ margin: 0, fontSize: 12, color: "#444" }}>Only your followers can chat</p>
+                </div>
+                <div onClick={async () => {
+                  const next = !followerOnly;
+                  setFollowerOnly(next);
+                  await supabase.from("live_streams").update({ follower_only_chat: next }).eq("id", stream.id);
+                  setStream(s => ({ ...s, follower_only_chat: next }));
+                }} style={{ width: 40, height: 22, borderRadius: 11, background: followerOnly ? YELLOW : "#1e1e1e", cursor: "pointer", position: "relative", transition: "background 0.2s", border: `1px solid ${BORDER}` }}>
+                  <div style={{ position: "absolute", top: 2, left: followerOnly ? 20 : 2, width: 16, height: 16, borderRadius: "50%", background: followerOnly ? "#0a0a0a" : "#333", transition: "left 0.2s" }} />
+                </div>
+              </div>
+              <button onClick={async () => {
+                await supabase.from("live_streams").update({ slow_mode_seconds: slowMode }).eq("id", stream.id);
+                setStream(s => ({ ...s, slow_mode_seconds: slowMode }));
+                showToast("Chat settings saved!");
+              }} style={{ background: YELLOW, border: "none", borderRadius: 9, padding: "9px 18px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: "pointer", alignSelf: "flex-start" }}>
+                Save
+              </button>
+            </div>
+          </SectionCard>
+
           {/* Moderation */}
-          <SectionCard title="Chat Moderation" collapsible defaultOpen={false}>
+          <SectionCard title="Word Filter" collapsible defaultOpen={false}>
             <p style={{ margin: "0 0 12px", fontSize: 13, color: "#444" }}>Words automatically blocked from your live chat.</p>
             {bannedWords.length > 0 && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>

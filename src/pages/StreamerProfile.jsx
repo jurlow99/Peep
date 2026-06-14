@@ -5,6 +5,19 @@ import { supabase } from "../supabase";
 const YELLOW = "#facc15";
 const CHAT_WIDTH = 320;
 
+const EMOJIS = ["😂","😭","❤️","🔥","👏","💯","😮","🎉","👀","💀","😍","🤣","😢","🙏","💪","🤔","😎","🥳","✨","🚀","👑","🎮","🏆","⭐","💝","🫡","🤯","👋","😤","🗿"];
+
+function usernameColor(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff;
+  return `hsl(${h % 360}, 75%, 65%)`;
+}
+
+function chatTimestamp(iso) {
+  const d = new Date(iso);
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 const CATEGORY_LABELS = {
   general: "General", gaming: "Gaming",
   talk: "Talk", irl: "IRL", sports: "Sports",
@@ -234,6 +247,10 @@ export function StreamerProfile() {
   const [chatMessages, setChatMessages]   = useState([]);
   const [chatInput, setChatInput]         = useState("");
   const [chatSending, setChatSending]     = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [slowCooldown, setSlowCooldown]   = useState(0);
+  const emojiPickerRef = useRef(null);
+  const slowTimerRef = useRef(null);
   const [streamEnded, setStreamEnded]     = useState(false);
   const [copied, setCopied]               = useState(false);
   const [globalBanned, setGlobalBanned]   = useState([]);
@@ -394,15 +411,29 @@ export function StreamerProfile() {
     return () => supabase.removeChannel(ch);
   }, [stream?.id, stream?.is_live]);
 
+  useEffect(() => {
+    if (!showEmojiPicker) return;
+    const handler = e => { if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target)) setShowEmojiPicker(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showEmojiPicker]);
+
+  useEffect(() => () => clearInterval(slowTimerRef.current), []);
+
+  async function deleteMsg(id) {
+    await supabase.from("live_chat").delete().eq("id", id);
+    setChatMessages(prev => prev.filter(m => m.id !== id));
+  }
+
   async function sendChat() {
-    if (!chatInput.trim() || !currentUser || chatSending) return;
+    if (!chatInput.trim() || !currentUser || chatSending || slowCooldown > 0) return;
     const msg = chatInput.trim();
     const lower = msg.toLowerCase().replace(/\s+/g, " ");
     const allBanned = [...HARD_BLOCKED, ...globalBanned, ...(stream?.banned_words || [])];
     if (allBanned.some(w => lower.includes(w.toLowerCase()))) {
       setChatInput(""); return;
     }
-    setChatSending(true); setChatInput("");
+    setChatSending(true); setChatInput(""); setShowEmojiPicker(false);
     const { data } = await supabase.from("live_chat").insert({
       channel_id: stream.id, user_id: currentUser.id,
       profile_name: currentUser.user_metadata?.full_name || currentUser.email?.split("@")[0] || "Viewer",
@@ -413,6 +444,15 @@ export function StreamerProfile() {
       setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
     }
     setChatSending(false);
+    // Start slow mode countdown if enabled (streamers are exempt)
+    const secs = stream?.slow_mode_seconds || 0;
+    if (secs > 0 && currentUser.id !== stream?.user_id) {
+      setSlowCooldown(secs);
+      clearInterval(slowTimerRef.current);
+      slowTimerRef.current = setInterval(() => {
+        setSlowCooldown(prev => { if (prev <= 1) { clearInterval(slowTimerRef.current); return 0; } return prev - 1; });
+      }, 1000);
+    }
   }
 
   async function loadFollowers(streamId) {
@@ -760,48 +800,104 @@ export function StreamerProfile() {
                 <span style={{ fontSize: 11, fontWeight: 700, color: streamEnded ? "#333" : "#e0e0e0", letterSpacing: "0.08em", textTransform: "uppercase" }}>
                   {streamEnded ? "Stream Ended" : "Live Chat"}
                 </span>
-                {!streamEnded && viewers > 0 && (
-                  <span style={{ marginLeft: "auto", fontSize: 11, color: "#444", fontWeight: 500 }}>{viewers.toLocaleString()} watching</span>
-                )}
+                <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
+                  {!streamEnded && stream?.slow_mode_seconds > 0 && (
+                    <span style={{ fontSize: 9, fontWeight: 700, color: "#555", background: "#111", border: "1px solid #1e1e1e", borderRadius: 3, padding: "2px 5px", letterSpacing: "0.05em" }}>
+                      SLOW {stream.slow_mode_seconds}s
+                    </span>
+                  )}
+                  {!streamEnded && stream?.follower_only_chat && (
+                    <span style={{ fontSize: 9, fontWeight: 700, color: "#555", background: "#111", border: "1px solid #1e1e1e", borderRadius: 3, padding: "2px 5px", letterSpacing: "0.05em" }}>
+                      FOLLOWERS
+                    </span>
+                  )}
+                  {!streamEnded && viewers > 0 && (
+                    <span style={{ fontSize: 11, color: "#333", fontWeight: 500 }}>{viewers.toLocaleString()} watching</span>
+                  )}
+                </div>
               </div>
 
               {/* Messages */}
-              <div style={{ flex: 1, overflowY: "auto", padding: "10px 0", display: "flex", flexDirection: "column", gap: 1 }}>
+              <div style={{ flex: 1, overflowY: "auto", padding: "8px 0", display: "flex", flexDirection: "column", gap: 0 }}>
                 {chatMessages.length === 0
                   ? <p style={{ color: "#222", fontSize: 12, margin: "auto 0", textAlign: "center" }}>No messages yet</p>
-                  : chatMessages.map(m => (
-                    <div key={m.id} className="chat-msg" style={{ fontSize: 13, lineHeight: 1.55, wordBreak: "break-word", padding: "3px 14px", borderRadius: 4 }}>
-                      <span style={{ color: YELLOW, fontWeight: 700, marginRight: 5, fontSize: 12 }}>{m.profile_name}</span>
-                      <span style={{ color: "#999" }}>{m.message}</span>
-                    </div>
-                  ))
+                  : chatMessages.map(m => {
+                    const isStreamer = m.user_id === stream.user_id;
+                    const nameColor = isStreamer ? YELLOW : usernameColor(m.profile_name || "");
+                    const canDelete = currentUser?.id === stream.user_id;
+                    return (
+                      <div key={m.id} className="chat-msg" style={{ fontSize: 13, lineHeight: 1.6, wordBreak: "break-word", padding: "3px 14px", borderRadius: 4, position: "relative" }}
+                        onMouseEnter={e => { if (canDelete) e.currentTarget.querySelector(".del-btn")?.style && (e.currentTarget.querySelector(".del-btn").style.opacity = "1"); }}
+                        onMouseLeave={e => { if (canDelete) e.currentTarget.querySelector(".del-btn")?.style && (e.currentTarget.querySelector(".del-btn").style.opacity = "0"); }}>
+                        <span style={{ color: "#2a2a2a", fontSize: 10, marginRight: 5, userSelect: "none" }}>{chatTimestamp(m.created_at)}</span>
+                        {isStreamer && <span title="Streamer" style={{ marginRight: 4, fontSize: 11 }}>👑</span>}
+                        <span style={{ color: nameColor, fontWeight: 700, marginRight: 5 }}>{m.profile_name}</span>
+                        <span style={{ color: "#bbb" }}>{m.message}</span>
+                        {canDelete && (
+                          <button className="del-btn" onClick={() => deleteMsg(m.id)}
+                            style={{ opacity: 0, position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "rgba(239,68,68,0.15)", border: "none", borderRadius: 4, width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "opacity 0.15s" }}>
+                            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })
                 }
                 <div ref={chatBottomRef} />
               </div>
 
               {/* Input */}
-              <div style={{ padding: "10px 12px", borderTop: "1px solid #111", flexShrink: 0 }}>
+              <div style={{ padding: "10px 12px", borderTop: "1px solid #111", flexShrink: 0, position: "relative" }}>
+                {/* Emoji picker */}
+                {showEmojiPicker && (
+                  <div ref={emojiPickerRef} style={{ position: "absolute", bottom: "100%", left: 12, right: 12, marginBottom: 6, background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 10, display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 4, zIndex: 10 }}>
+                    {EMOJIS.map(e => (
+                      <button key={e} onClick={() => setChatInput(prev => prev + e)}
+                        style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", padding: "4px 0", borderRadius: 6, transition: "background 0.1s" }}
+                        onMouseEnter={ev => ev.currentTarget.style.background = "#1e1e1e"}
+                        onMouseLeave={ev => ev.currentTarget.style.background = "none"}>
+                        {e}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {streamEnded ? (
                   <p style={{ margin: 0, textAlign: "center", color: "#2a2a2a", fontSize: 12, padding: "4px 0" }}>Chat is closed</p>
-                ) : currentUser ? (
-                  <div style={{ display: "flex", gap: 7 }}>
-                    <input
-                      value={chatInput}
-                      onChange={e => setChatInput(e.target.value)}
-                      onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendChat()}
-                      placeholder="Say something…"
-                      maxLength={300}
-                      style={{ flex: 1, background: "#111", border: "1px solid #1a1a1a", borderRadius: 7, padding: "8px 11px", color: "#fff", fontSize: 13, outline: "none", fontFamily: "inherit", minWidth: 0 }}
-                    />
-                    <button onClick={sendChat} disabled={!chatInput.trim() || chatSending}
-                      style={{ background: chatInput.trim() ? YELLOW : "#111", border: "none", borderRadius: 7, padding: "8px 13px", color: chatInput.trim() ? "#0a0a0a" : "#333", fontSize: 12, fontWeight: 700, cursor: !chatInput.trim() || chatSending ? "not-allowed" : "pointer", flexShrink: 0, transition: "all 0.15s", fontFamily: "inherit" }}>
-                      ↑
-                    </button>
-                  </div>
-                ) : (
+                ) : !currentUser ? (
                   <a href="/signin" style={{ display: "block", textAlign: "center", color: "#444", fontSize: 12, textDecoration: "none", padding: "4px 0" }}>
                     <span style={{ color: YELLOW }}>Sign in</span> to chat
                   </a>
+                ) : stream?.follower_only_chat && !isFollowing && currentUser.id !== stream.user_id ? (
+                  <p style={{ margin: 0, textAlign: "center", color: "#444", fontSize: 12, padding: "4px 0" }}>
+                    <span style={{ color: YELLOW, cursor: "pointer" }} onClick={() => document.querySelector(".follow-btn")?.click()}>Follow</span> to chat
+                  </p>
+                ) : (
+                  <>
+                    {slowCooldown > 0 && (
+                      <div style={{ marginBottom: 6, textAlign: "center", fontSize: 11, color: "#555" }}>
+                        Slow mode — send again in <strong style={{ color: "#888" }}>{slowCooldown}s</strong>
+                      </div>
+                    )}
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button onClick={() => setShowEmojiPicker(p => !p)}
+                        style={{ background: showEmojiPicker ? "#1e1e1e" : "none", border: "1px solid #1e1e1e", borderRadius: 7, padding: "0 9px", color: "#555", fontSize: 16, cursor: "pointer", flexShrink: 0, transition: "background 0.15s" }}>
+                        😊
+                      </button>
+                      <input
+                        value={chatInput}
+                        onChange={e => setChatInput(e.target.value)}
+                        onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendChat()}
+                        placeholder={slowCooldown > 0 ? `${slowCooldown}s…` : "Say something…"}
+                        maxLength={300}
+                        disabled={slowCooldown > 0}
+                        style={{ flex: 1, background: "#111", border: "1px solid #1a1a1a", borderRadius: 7, padding: "8px 11px", color: slowCooldown > 0 ? "#333" : "#fff", fontSize: 13, outline: "none", fontFamily: "inherit", minWidth: 0, transition: "color 0.15s" }}
+                      />
+                      <button onClick={sendChat} disabled={!chatInput.trim() || chatSending || slowCooldown > 0}
+                        style={{ background: chatInput.trim() && slowCooldown === 0 ? YELLOW : "#111", border: "none", borderRadius: 7, padding: "8px 13px", color: chatInput.trim() && slowCooldown === 0 ? "#0a0a0a" : "#333", fontSize: 12, fontWeight: 700, cursor: !chatInput.trim() || chatSending || slowCooldown > 0 ? "not-allowed" : "pointer", flexShrink: 0, transition: "all 0.15s", fontFamily: "inherit" }}>
+                        ↑
+                      </button>
+                    </div>
+                  </>
                 )}
               </div>
             </div>
