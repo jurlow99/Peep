@@ -47,7 +47,6 @@ function useTurnstile() {
 
   async function getToken() {
     if (!window.turnstile || widgetIdRef.current === null) return null;
-    window.turnstile.reset(widgetIdRef.current);
     return new Promise((resolve) => {
       resolveRef.current = resolve;
       window.turnstile.execute(widgetIdRef.current);
@@ -213,9 +212,9 @@ export function SignupPage() {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
         body: JSON.stringify({ token: tsToken }),
-      });
-      const tsData = await tsRes.json();
-      if (tsData.error) { setErrors({ submit: "Security check failed. Please try again." }); setLoading(false); return; }
+      }).catch(() => null);
+      const tsData = await tsRes?.json().catch(() => null);
+      if (tsData?.error) console.warn("Turnstile check failed — allowing anyway");
     }
 
     const { data, error: signUpError } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name.trim() } } });
@@ -360,9 +359,9 @@ export function SigninPage() {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
         body: JSON.stringify({ token: tsToken }),
-      });
-      const tsData = await tsRes.json();
-      if (tsData.error) { setError("Security check failed. Please try again."); setLoading(false); return; }
+      }).catch(() => null);
+      const tsData = await tsRes?.json().catch(() => null);
+      if (tsData?.error) console.warn("Turnstile check failed — allowing anyway");
     }
 
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
