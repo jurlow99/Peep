@@ -6,6 +6,57 @@ const BG = "#0a0a0a";
 const CARD = "#111";
 const BORDER = "#1e1e1e";
 const SUPABASE_URL = "https://iuozujwtuzuwubhsnhix.supabase.co";
+const TURNSTILE_SITE_KEY = "0x4AAAAAADlZlihNdneLgny1";
+
+function useTurnstile() {
+  const containerRef = useRef(null);
+  const widgetIdRef = useRef(null);
+  const resolveRef = useRef(null);
+
+  useEffect(() => {
+    function initWidget() {
+      if (!containerRef.current || !window.turnstile || widgetIdRef.current !== null) return;
+      widgetIdRef.current = window.turnstile.render(containerRef.current, {
+        sitekey: TURNSTILE_SITE_KEY,
+        size: "invisible",
+        callback: (token) => { resolveRef.current?.(token); resolveRef.current = null; },
+        "error-callback": () => { resolveRef.current?.(null); resolveRef.current = null; },
+      });
+    }
+
+    if (window.turnstile) {
+      initWidget();
+    } else if (!document.querySelector('script[src*="challenges.cloudflare.com/turnstile"]')) {
+      const s = document.createElement("script");
+      s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+      s.async = true;
+      s.onload = initWidget;
+      document.head.appendChild(s);
+    } else {
+      const t = setInterval(() => { if (window.turnstile) { clearInterval(t); initWidget(); } }, 100);
+      return () => clearInterval(t);
+    }
+
+    return () => {
+      if (widgetIdRef.current !== null && window.turnstile) {
+        try { window.turnstile.remove(widgetIdRef.current); } catch {}
+        widgetIdRef.current = null;
+      }
+    };
+  }, []);
+
+  async function getToken() {
+    if (!window.turnstile || widgetIdRef.current === null) return null;
+    window.turnstile.reset(widgetIdRef.current);
+    return new Promise((resolve) => {
+      resolveRef.current = resolve;
+      window.turnstile.execute(widgetIdRef.current);
+      setTimeout(() => { resolveRef.current?.(null); resolveRef.current = null; }, 15000);
+    });
+  }
+
+  return { containerRef, getToken };
+}
 
 const STEPS = ["Account", "Password"];
 
@@ -102,6 +153,7 @@ export function SignupPage() {
   const [loading, setLoading] = useState(false);
   const emailTimer = useRef(null);
   const refCode = new URLSearchParams(window.location.search).get("ref")?.toUpperCase() || null;
+  const { containerRef: turnstileRef, getToken } = useTurnstile();
 
   useEffect(() => {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setEmailStatus(null); return; }
@@ -155,6 +207,17 @@ export function SignupPage() {
     setErrors({});
     setLoading(true);
 
+    const tsToken = await getToken();
+    if (tsToken) {
+      const tsRes = await fetch(`${SUPABASE_URL}/functions/v1/verify-turnstile`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+        body: JSON.stringify({ token: tsToken }),
+      });
+      const tsData = await tsRes.json();
+      if (tsData.error) { setErrors({ submit: "Security check failed. Please try again." }); setLoading(false); return; }
+    }
+
     const { data, error: signUpError } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name.trim() } } });
     if (signUpError) { setErrors({ submit: signUpError.message }); setLoading(false); return; }
 
@@ -196,6 +259,7 @@ export function SignupPage() {
         {step < 3 && <StepBar step={step} />}
 
         <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 16, padding: "36px clamp(20px, 6vw, 40px)" }}>
+          <div ref={turnstileRef} style={{ display: "none" }} />
 
           {/* Step 1: Account info */}
           {step === 1 && (
@@ -281,13 +345,26 @@ export function SigninPage() {
   const [forgotMode, setForgotMode] = useState(false);
   const [resetSent, setResetSent] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
-  const [streamerWarning, setStreamerWarning] = useState(null); // { channel_name }
+  const [streamerWarning, setStreamerWarning] = useState(null);
+  const { containerRef: turnstileRef, getToken } = useTurnstile();
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError(null);
     setResetSent(false);
     setLoading(true);
+
+    const tsToken = await getToken();
+    if (tsToken) {
+      const tsRes = await fetch(`${SUPABASE_URL}/functions/v1/verify-turnstile`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+        body: JSON.stringify({ token: tsToken }),
+      });
+      const tsData = await tsRes.json();
+      if (tsData.error) { setError("Security check failed. Please try again."); setLoading(false); return; }
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) { setError(error.message); setLoading(false); return; }
 
@@ -357,6 +434,7 @@ export function SigninPage() {
           </div>
         ) : (
         <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 16, padding: "36px clamp(20px, 6vw, 40px)" }}>
+          <div ref={turnstileRef} style={{ display: "none" }} />
           <h2 style={{ margin: "0 0 6px", fontSize: 22, fontWeight: 700 }}>Welcome back</h2>
           <p style={{ margin: "0 0 28px", fontSize: 13, color: "#555" }}>Sign in to your peep account.</p>
 
