@@ -17,7 +17,7 @@ const FOOTER_MODALS = {
     content: (
       <>
         <p>For press inquiries, partnership opportunities, or media assets, please reach out to our communications team.</p>
-        <p style={{ marginTop: 16, color: "#facc15" }}>press@peep.tv</p>
+        <p style={{ marginTop: 16, color: "#facc15" }}>press@watchpeep.tv</p>
         <p style={{ marginTop: 16 }}>We typically respond within 2 business days.</p>
       </>
     ),
@@ -28,7 +28,7 @@ const FOOTER_MODALS = {
       <>
         <p>We're building a small, focused team of people who love great storytelling and great software. If that's you, we'd love to hear from you.</p>
         <p style={{ marginTop: 16 }}>Open roles are posted as we grow. In the meantime, send your resume and a note about what excites you to:</p>
-        <p style={{ marginTop: 12, color: "#facc15" }}>jobs@peep.tv</p>
+        <p style={{ marginTop: 12, color: "#facc15" }}>jobs@watchpeep.tv</p>
       </>
     ),
   },
@@ -37,8 +37,8 @@ const FOOTER_MODALS = {
     content: (
       <>
         <p>Have a question, a content suggestion, or just want to say hello? We're all ears.</p>
-        <p style={{ marginTop: 16, color: "#facc15" }}>hello@peep.tv</p>
-        <p style={{ marginTop: 16 }}>For technical support, visit the Help Center or email support@peep.tv.</p>
+        <p style={{ marginTop: 16, color: "#facc15" }}>hello@watchpeep.tv</p>
+        <p style={{ marginTop: 16 }}>For technical support, visit the Help Center or email support@watchpeep.tv.</p>
       </>
     ),
   },
@@ -66,7 +66,7 @@ const FOOTER_MODALS = {
     content: (
       <>
         <p>Running into an issue? We're here to help.</p>
-        <p style={{ marginTop: 16, color: "#facc15" }}>support@peep.tv</p>
+        <p style={{ marginTop: 16, color: "#facc15" }}>support@watchpeep.tv</p>
         <p style={{ marginTop: 16 }}>Include your username and a description of the issue and we'll get back to you within 24 hours.</p>
       </>
     ),
@@ -77,7 +77,7 @@ const FOOTER_MODALS = {
       <>
         <p>By using Peep, you agree to use the platform for lawful purposes only. You may not copy, distribute, or reproduce any content without explicit permission.</p>
         <p style={{ marginTop: 14 }}>Peep reserves the right to suspend accounts that violate these terms. Content availability is subject to change without notice.</p>
-        <p style={{ marginTop: 14 }}>These terms are governed by applicable law. For questions, contact legal@peep.tv.</p>
+        <p style={{ marginTop: 14 }}>These terms are governed by applicable law. For questions, contact legal@watchpeep.tv.</p>
         <p style={{ marginTop: 14, color: "#444", fontSize: 12 }}>Last updated: 2025</p>
       </>
     ),
@@ -89,7 +89,7 @@ const FOOTER_MODALS = {
         <p>Peep collects only the information necessary to provide the service: your email address, username, and watch activity.</p>
         <p style={{ marginTop: 14 }}>We do not sell your data. We do not share your personal information with third parties except as required by law.</p>
         <p style={{ marginTop: 14 }}>Watch history and list data are stored securely and used solely to improve your experience on Peep.</p>
-        <p style={{ marginTop: 14 }}>You can request deletion of your account and all associated data at any time by contacting privacy@peep.tv.</p>
+        <p style={{ marginTop: 14 }}>You can request deletion of your account and all associated data at any time by contacting privacy@watchpeep.tv.</p>
         <p style={{ marginTop: 14, color: "#444", fontSize: 12 }}>Last updated: 2025</p>
       </>
     ),
@@ -97,7 +97,7 @@ const FOOTER_MODALS = {
   "Privacy Settings": {
     title: "Privacy Settings",
     content: (
-      <p>Privacy controls are coming soon. For now, to request data deletion or opt out of watch history, email privacy@peep.tv.</p>
+      <p>Privacy controls are coming soon. For now, to request data deletion or opt out of watch history, email privacy@watchpeep.tv.</p>
     ),
   },
 };
