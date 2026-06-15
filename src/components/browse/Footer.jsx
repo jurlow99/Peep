@@ -90,6 +90,7 @@ const FOOTER_MODALS = {
         <p style={{ marginTop: 14 }}>We do not sell your data. We do not share your personal information with third parties except as required by law.</p>
         <p style={{ marginTop: 14 }}>Watch history and list data are stored securely and used solely to improve your experience on Peep.</p>
         <p style={{ marginTop: 14 }}>You can request deletion of your account and all associated data at any time by contacting privacy@watchpeep.tv.</p>
+        <p style={{ marginTop: 14 }}>This site is protected by Cloudflare Turnstile. Use of Turnstile is subject to the <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener noreferrer" style={{ color: "#facc15" }}>Cloudflare Privacy Policy</a>.</p>
         <p style={{ marginTop: 14, color: "#444", fontSize: 12 }}>Last updated: 2025</p>
       </>
     ),
