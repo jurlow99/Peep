@@ -341,10 +341,8 @@ export function SigninPage() {
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [forgotMode, setForgotMode] = useState(false);
   const [resetSent, setResetSent] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
-  const [streamerWarning, setStreamerWarning] = useState(null);
   const { containerRef: turnstileRef, getToken } = useTurnstile();
 
   async function handleSubmit(e) {
@@ -366,19 +364,6 @@ export function SigninPage() {
 
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) { setError(error.message); setLoading(false); return; }
-
-    // Check if this is a streamer account
-    const { data: liveStream } = await supabase
-      .from("live_streams")
-      .select("id, channel_name")
-      .eq("user_id", data.user.id)
-      .maybeSingle();
-
-    if (liveStream) {
-      setStreamerWarning(liveStream);
-      setLoading(false);
-      return;
-    }
 
     const redirect = new URLSearchParams(window.location.search).get("redirect");
     window.location.href = redirect && redirect.startsWith("/") ? redirect : "/";
@@ -410,28 +395,6 @@ export function SigninPage() {
       <div style={{ width: "min(420px, 100%)" }}>
         <Logo />
 
-        {streamerWarning ? (
-          <div style={{ background: CARD, border: "1px solid rgba(250,204,21,0.2)", borderRadius: 16, padding: "36px clamp(20px, 6vw, 40px)", textAlign: "center" }}>
-            <div style={{ width: 52, height: 52, borderRadius: "50%", background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.2)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#facc15" strokeWidth="2"><path d="M15 10l4.553-2.07A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.9L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/></svg>
-            </div>
-            <h2 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 700, color: "#fff" }}>You're a streamer</h2>
-            <p style={{ margin: "0 0 6px", fontSize: 14, color: "#888" }}>
-              <strong style={{ color: "#e0e0e0" }}>{streamerWarning.channel_name || "Your channel"}</strong> is registered as a streaming account.
-            </p>
-            <p style={{ margin: "0 0 28px", fontSize: 13, color: "#555", lineHeight: 1.6 }}>
-              Use the <strong style={{ color: "#888" }}>Streaming Portal</strong> to manage your channel, stream key, and dashboard.
-            </p>
-            <a href="/streamer"
-              style={{ display: "block", background: "#facc15", borderRadius: 10, padding: "13px", color: "#0a0a0a", fontSize: 14, fontWeight: 700, textDecoration: "none", marginBottom: 10 }}>
-              Go to Streaming Dashboard →
-            </a>
-            <button onClick={() => { setStreamerWarning(null); window.location.href = "/"; }}
-              style={{ display: "block", width: "100%", background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "12px", color: "#555", fontSize: 13, cursor: "pointer" }}>
-              Continue to Peep anyway
-            </button>
-          </div>
-        ) : (
         <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 16, padding: "36px clamp(20px, 6vw, 40px)" }}>
           <div ref={turnstileRef} style={{ display: "none" }} />
           <h2 style={{ margin: "0 0 6px", fontSize: 22, fontWeight: 700 }}>Welcome back</h2>
@@ -475,7 +438,6 @@ export function SigninPage() {
             <span style={{ flexShrink: 0, color: YELLOW, fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" }}>Go to portal →</span>
           </a>
         </div>
-        )}
 
       </div>
     </div>
