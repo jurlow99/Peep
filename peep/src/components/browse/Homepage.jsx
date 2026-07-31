@@ -285,7 +285,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
   }
 
   const [sbExpanded, setSbExpanded] = useState(false);
-  const SB_W = 64;
+  const SB_W = 76;
   const SB_EXPANDED = 210;
   const liveNow = liveStreams.filter(s => s.is_live);
   // Live TV channels for the unified "Live Now" row, with their current program
@@ -321,11 +321,9 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
       {/* ── LEFT SIDEBAR (desktop only) ── */}
       {!isMobile && (
         <div
-          onMouseEnter={() => setSbExpanded(true)}
-          onMouseLeave={() => setSbExpanded(false)}
           style={{
             position: "fixed", top: 0, left: 0, bottom: 0, zIndex: 200,
-            width: sbExpanded ? SB_EXPANDED : SB_W,
+            width: SB_W,
             background: "#0a0a0a",
             borderRight: "1px solid rgba(255,255,255,0.05)",
             display: "flex", flexDirection: "column",
