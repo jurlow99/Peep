@@ -22,6 +22,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
   const [shows, setShows] = useState([]);
   const [carousels, setCarousels] = useState([]);
   const [podcasts, setPodcasts] = useState([]);
+  const [watchRows, setWatchRows] = useState([]); // recent watch_progress, for Continue Watching / Recommended rows
   const [liveStreams, setLiveStreams] = useState([]);
   const [epgEntries, setEpgEntries] = useState([]);
   const [channels, setChannels] = useState([]);
@@ -84,6 +85,15 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
     const t = setTimeout(() => setDebouncedQuery(searchQuery), 150);
     return () => clearTimeout(t);
   }, [searchQuery]);
+
+  // Recent watch history — powers Continue Watching / Recommended carousel types
+  useEffect(() => {
+    if (!user?.id) { setWatchRows([]); return; }
+    supabase.from("watch_progress")
+      .select("content_id, content_type, progress_seconds, completed, last_watched_at")
+      .eq("user_id", user.id).order("last_watched_at", { ascending: false }).limit(50)
+      .then(({ data }) => setWatchRows(data || []));
+  }, [user?.id]);
 
   async function fetchAll() {
     const epgWindowStart = new Date(Date.now() - 60 * 60 * 1000);
@@ -175,7 +185,33 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
     return false;
   }), [carousels, activeNav]);
 
-  const baseSections = useMemo(() => activeNav === "My List"
+  // Continue Watching — in-progress movies from watch history (newest first)
+  const continueItems = useMemo(() => {
+    if (!watchRows.length) return [];
+    const movieById = {};
+    allContent.forEach(v => { if (v._type === "movie") movieById[String(v.id)] = v; });
+    const seen = new Set();
+    const out = [];
+    for (const r of watchRows) {
+      if (r.completed || r.content_type !== "movie") continue; // movies map by uuid; episodes need show lookup
+      const v = movieById[String(r.content_id)];
+      if (v && !seen.has(v.id)) { seen.add(v.id); out.push(v); }
+    }
+    return out;
+  }, [watchRows, allContent]);
+
+  // Recommended — titles sharing a category with the last watched (or a saved) title
+  const recommendedItems = useMemo(() => {
+    const movieById = {};
+    allContent.forEach(v => { if (v._type === "movie") movieById[String(v.id)] = v; });
+    let seed = null;
+    for (const r of watchRows) { const v = movieById[String(r.content_id)]; if (v) { seed = v; break; } }
+    if (!seed) seed = allContent.find(v => myList?.[`${v._type}_${v.id}`]);
+    if (!seed?.category) return [];
+    return allContent.filter(v => v.category === seed.category && !(v.id === seed.id && v._type === seed._type));
+  }, [watchRows, allContent, myList]);
+
+  const sections = useMemo(() => activeNav === "My List"
     ? []
     : activeNav === "Streams"
     ? []
@@ -192,6 +228,10 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
         }
         const baseItems = c.type === "trending"
           ? [...filteredContent].reverse()
+          : c.type === "recommended"
+          ? recommendedItems
+          : c.type === "continue"
+          ? continueItems
           : c.type === "category"
           ? filteredContent.filter(v => v.category?.toLowerCase() === filterVal)
           : c.type === "handpicked"
@@ -209,21 +249,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
           id: cat, title: `${cat} Films`, videos: filteredContent.filter(v => v.category === cat),
         })),
       ],
-  [activeNav, allContent, filteredContent, visibleCarousels, podcasts, carousels, myList]);
-
-  // Home-only rows layered on top of the carousels: New This Week + Because You Watched
-  const sections = useMemo(() => {
-    if (activeNav !== "Home") return baseSections;
-    const extra = [];
-    const newest = [...filteredContent].reverse().slice(0, 14);
-    if (newest.length) extra.push({ id: "new-this-week", title: "New This Week", videos: newest });
-    const seed = allContent.find(v => myList?.[`${v._type}_${v.id}`]);
-    if (seed?.category) {
-      const related = filteredContent.filter(v => v.category === seed.category && !(v.id === seed.id && v._type === seed._type)).slice(0, 14);
-      if (related.length) extra.push({ id: "because-you-watched", title: `Because You Watched ${seed.title}`, videos: related });
-    }
-    return [...extra, ...baseSections];
-  }, [baseSections, activeNav, filteredContent, allContent, myList]);
+  [activeNav, allContent, filteredContent, visibleCarousels, podcasts, carousels, myList, continueItems, recommendedItems]);
 
   const searchPool = useMemo(() => {
     const tagsStr = (tags) => Array.isArray(tags) ? tags.join(" ") : (tags || "");
