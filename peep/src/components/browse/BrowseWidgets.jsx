@@ -188,20 +188,20 @@ export function HeroBanner({ video, onPlay, isShow, myList, onToggleList, catego
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 20%", filter: "brightness(0.65)", transition: "opacity 1.4s ease", opacity: bgPlaying ? 1 : 0, pointerEvents: "none" }} />
       )}
 
-      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, #0a0a0a 0%, rgba(10,10,10,0.2) 50%, transparent 75%)" }} />
-      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, rgba(10,10,10,0.85) 0%, rgba(10,10,10,0.3) 55%, transparent 85%)" }} />
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, #0a0a0a 0%, rgba(10,10,10,0.55) 38%, transparent 72%)" }} />
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, rgba(10,10,10,0.92) 0%, rgba(10,10,10,0.5) 48%, transparent 82%)" }} />
 
       <div style={{ position: "absolute", bottom: isMobile ? "12%" : "16%", left: PAD, right: PAD, maxWidth: isMobile ? "100%" : "clamp(400px, 38vw, 600px)", zIndex: 3 }}>
 
-        {/* Featured label */}
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "rgba(250,204,21,0.12)", border: "1px solid rgba(250,204,21,0.3)", borderRadius: 20, padding: "5px 14px", marginBottom: 16 }}>
-          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#facc15", flexShrink: 0 }} />
-          <span style={{ fontSize: 11, fontWeight: 700, color: "#facc15", letterSpacing: 1.2, textTransform: "uppercase" }}>
+        {/* Featured label — solid yellow so it stands out */}
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "#facc15", border: "none", borderRadius: 20, padding: "5px 14px", marginBottom: 18, boxShadow: "0 2px 12px rgba(250,204,21,0.35)" }}>
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#0a0a0a", flexShrink: 0 }} />
+          <span style={{ fontSize: 11, fontWeight: 800, color: "#0a0a0a", letterSpacing: 1.2, textTransform: "uppercase" }}>
             {isShow ? "Featured Series" : video.category === "podcast" ? "Featured Podcast" : video.category ? video.category : "Featured"}
           </span>
         </div>
 
-        <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: "clamp(32px, 4vw, 60px)", lineHeight: 1.1, margin: "0 0 12px", fontWeight: 800, letterSpacing: "-0.02em" }}>{video.title}</h1>
+        <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: "clamp(40px, 5.5vw, 82px)", lineHeight: 1.04, margin: "0 0 14px", fontWeight: 900, letterSpacing: "-0.03em" }}>{video.title}</h1>
 
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
           {isShow && <span style={{ fontSize: 13, fontWeight: 600, color: "#facc15" }}>Series</span>}

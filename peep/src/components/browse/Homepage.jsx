@@ -175,7 +175,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
     return false;
   }), [carousels, activeNav]);
 
-  const sections = useMemo(() => activeNav === "My List"
+  const baseSections = useMemo(() => activeNav === "My List"
     ? []
     : activeNav === "Streams"
     ? []
@@ -210,6 +210,20 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
         })),
       ],
   [activeNav, allContent, filteredContent, visibleCarousels, podcasts, carousels, myList]);
+
+  // Home-only rows layered on top of the carousels: New This Week + Because You Watched
+  const sections = useMemo(() => {
+    if (activeNav !== "Home") return baseSections;
+    const extra = [];
+    const newest = [...filteredContent].reverse().slice(0, 14);
+    if (newest.length) extra.push({ id: "new-this-week", title: "New This Week", videos: newest });
+    const seed = allContent.find(v => myList?.[`${v._type}_${v.id}`]);
+    if (seed?.category) {
+      const related = filteredContent.filter(v => v.category === seed.category && !(v.id === seed.id && v._type === seed._type)).slice(0, 14);
+      if (related.length) extra.push({ id: "because-you-watched", title: `Because You Watched ${seed.title}`, videos: related });
+    }
+    return [...extra, ...baseSections];
+  }, [baseSections, activeNav, filteredContent, allContent, myList]);
 
   const searchPool = useMemo(() => {
     const tagsStr = (tags) => Array.isArray(tags) ? tags.join(" ") : (tags || "");
@@ -331,9 +345,9 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
                 <div key={item.id} className="sb-item"
                   onClick={() => { if (item.id === "My List" && !user) { onAuthOpen(); return; } onExitStudio?.(); setActiveNav(item.id); }}
                   style={{
-                    display: "flex", alignItems: "center", gap: 14,
-                    padding: sbExpanded ? "11px 20px" : "11px 0",
-                    justifyContent: sbExpanded ? "flex-start" : "center",
+                    display: "flex", flexDirection: sbExpanded ? "row" : "column", alignItems: "center", gap: sbExpanded ? 14 : 4,
+                    padding: sbExpanded ? "11px 20px" : "10px 0",
+                    justifyContent: "center",
                     cursor: "pointer",
                     color: active ? "#facc15" : "rgba(255,255,255,0.5)",
                     background: active ? "rgba(250,204,21,0.06)" : "transparent",
@@ -344,7 +358,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
                   {item.badge && (
                     <div style={{ position: "absolute", top: 8, left: sbExpanded ? 30 : 36, width: 7, height: 7, borderRadius: "50%", background: "#ef4444", border: "2px solid #0a0a0a" }} />
                   )}
-                  {sbExpanded && <span style={{ fontSize: 14, fontWeight: active ? 600 : 400, whiteSpace: "nowrap" }}>{item.label}</span>}
+                  <span style={{ fontSize: sbExpanded ? 14 : 9.5, fontWeight: active ? 600 : 400, whiteSpace: "nowrap", letterSpacing: sbExpanded ? 0 : 0.2 }}>{item.label}</span>
                   {sbExpanded && item.badge && liveNow.length > 0 && (
                     <span style={{ marginLeft: "auto", background: "#ef4444", color: "#fff", fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "1px 5px" }}>{liveNow.length} LIVE</span>
                   )}
@@ -423,19 +437,16 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
           {!isMobile && <div />}
 
           <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 12 : 18 }}>
-            {/* Search */}
+            {/* Search — always-visible box with placeholder */}
             <div style={{ display: "flex", alignItems: "center", position: "relative" }}>
-              {searchOpen && (
-                <input autoFocus value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Escape") closeSearch(); if (e.key === "Enter" && searchResults[0]) handleSearchResultClick(searchResults[0]); }}
-                  onBlur={() => { if (!searchQuery) closeSearch(); }}
-                  placeholder="Search titles, channels..."
-                  style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "8px 14px 8px 38px", color: "#fff", fontSize: 13, width: isMobile ? "calc(100vw - 140px)" : 280, outline: "none" }}
-                />
-              )}
-              <div onClick={() => setSearchOpen(o => !o)} style={{ position: searchOpen ? "absolute" : "relative", left: searchOpen ? 11 : 0, cursor: "pointer", color: "rgba(255,255,255,0.55)", display: "flex", alignItems: "center" }}>
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              </div>
+              <svg style={{ position: "absolute", left: 12, pointerEvents: "none", color: "rgba(255,255,255,0.5)" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                onFocus={() => setSearchOpen(true)}
+                onKeyDown={e => { if (e.key === "Escape") { closeSearch(); e.currentTarget.blur(); } if (e.key === "Enter" && searchResults[0]) handleSearchResultClick(searchResults[0]); }}
+                onBlur={() => { if (!searchQuery) closeSearch(); }}
+                placeholder={isMobile ? "Search…" : "Search titles, channels, podcasts…"}
+                style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "8px 14px 8px 36px", color: "#fff", fontSize: 13, width: isMobile ? "min(52vw, 200px)" : 300, outline: "none" }}
+              />
             </div>
             <NotifBell user={user} />
             {user ? (() => {
@@ -448,7 +459,10 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
                 </div>
               );
             })() : (
-              <button onClick={onAuthOpen} style={{ background: "#facc15", border: "none", borderRadius: 6, padding: "7px 16px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Sign In</button>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button onClick={onAuthOpen} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 6, padding: "7px 14px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Sign In</button>
+                <button onClick={() => { window.location.href = "/signup"; }} style={{ background: "#facc15", border: "none", borderRadius: 6, padding: "7px 16px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>Sign Up</button>
+              </div>
             )}
         </div>
       </nav>
