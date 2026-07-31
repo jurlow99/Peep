@@ -1,7 +1,7 @@
-const ALLOWED_ORIGIN = Deno.env.get("SITE_URL") || "https://watchpeep.tv";
-
+// Auth is enforced by the JWT (not CORS), so allow any origin — this lets the
+// admin work from local dev / preview builds, not only watchpeep.tv.
 export const corsHeaders = {
-  "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
+  "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, content-type, x-client-info, apikey",
 };
 

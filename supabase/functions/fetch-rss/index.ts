@@ -1,7 +1,8 @@
-const CORS_ORIGIN = Deno.env.get("SITE_URL") || "https://watchpeep.tv";
+// Read-only proxy — auth is enforced by the JWT, not CORS, so allow any origin
+// (needed for local dev / preview builds, not just watchpeep.tv).
 const CORS = {
-  "Access-Control-Allow-Origin": CORS_ORIGIN,
-  "Access-Control-Allow-Headers": "authorization, content-type",
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info",
 };
 
 function tag(xml: string, name: string): string {
