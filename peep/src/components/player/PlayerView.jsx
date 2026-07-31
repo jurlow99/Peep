@@ -11,7 +11,7 @@ import { rankRelated } from "../../lib/recommendations";
 import { PREF_AUTOPLAY_NEXT } from "../../pages/settingsHelpers";
 import { VideoCard } from "../browse/BrowseWidgets";
 
-export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, activeProfile }) {
+export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, userName }) {
   const isMobile = useIsMobile();
   const [allVideos, setAllVideos] = useState([]);
   const [allShows, setAllShows] = useState([]);
@@ -67,7 +67,7 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
     const epgStart = new Date(Date.now() - 60 * 60 * 1000).toISOString();
     const epgEnd = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     Promise.all([
-      supabase.from("live_streams").select("*").order("channel_number", { ascending: true }),
+      supabase.from("channels").select("*").eq("is_active", true).order("sort_order", { ascending: true }),
       supabase.from("epg_entries").select("*").gte("end_time", epgStart).lte("start_time", epgEnd),
     ]).then(([liveRes, epgRes]) => {
       if (liveRes.data) setLiveChannels(liveRes.data);
@@ -121,7 +121,7 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
     await supabase.from("live_chat").insert({
       channel_id: video.id,
       user_id: user.id,
-      profile_name: activeProfile?.name || user.email.split("@")[0],
+      profile_name: userName || user.email.split("@")[0],
       message: msg,
     });
     setChatSending(false);
@@ -212,22 +212,22 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
   }, [video.url]);
 
   useEffect(() => {
-    if (!user || !activeProfile || getEmbedUrl(video.url) || video._type === "live" || video._type === "live_epg") return;
+    if (!user || getEmbedUrl(video.url) || video._type === "live" || video._type === "live_epg") return;
     const ct = isEpisode ? "episode" : "movie";
     saveProgressRef.current = async () => {
       if (!videoRef.current) return;
       const { currentTime, duration } = videoRef.current;
       if (currentTime < 5 || !duration) return;
       await supabase.from("watch_progress").upsert({
-        user_id: user.id, profile_id: activeProfile.id, content_id: video.id, content_type: ct,
+        user_id: user.id, content_id: video.id, content_type: ct,
         progress_seconds: currentTime, duration_seconds: duration,
         completed: currentTime / duration > 0.9 || duration - currentTime < 60,
         last_watched_at: new Date().toISOString(),
-      }, { onConflict: "user_id,profile_id,content_id,content_type" });
+      }, { onConflict: "user_id,content_id,content_type" });
     };
     progressTimerRef.current = setInterval(() => { saveProgressRef.current?.(); }, 15000);
     return () => clearInterval(progressTimerRef.current);
-  }, [video.id, user, activeProfile?.id]);
+  }, [video.id, user]);
 
   useEffect(() => () => { clearInterval(progressTimerRef.current); saveProgressRef.current?.(); }, []);
 
@@ -589,11 +589,11 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
   }
 
   async function handleEnded() {
-    if (user && activeProfile && videoRef.current && !getEmbedUrl(video.url)) {
+    if (user && videoRef.current && !getEmbedUrl(video.url)) {
       const { currentTime, duration } = videoRef.current;
       if (duration > 0) {
         const ct = isEpisode ? "episode" : "movie";
-        await supabase.from("watch_progress").upsert({ user_id: user.id, profile_id: activeProfile.id, content_id: video.id, content_type: ct, progress_seconds: currentTime, duration_seconds: duration, completed: true, last_watched_at: new Date().toISOString() }, { onConflict: "user_id,profile_id,content_id,content_type" });
+        await supabase.from("watch_progress").upsert({ user_id: user.id, content_id: video.id, content_type: ct, progress_seconds: currentTime, duration_seconds: duration, completed: true, last_watched_at: new Date().toISOString() }, { onConflict: "user_id,content_id,content_type" });
       }
     }
     const afterAd = () => {
@@ -631,10 +631,10 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
       if (duration && video._elapsed < duration) videoRef.current.currentTime = video._elapsed;
       return;
     }
-    if (!user || !activeProfile || getEmbedUrl(video.url)) return;
+    if (!user || getEmbedUrl(video.url)) return;
     const ct = isEpisode ? "episode" : "movie";
     supabase.from("watch_progress").select("progress_seconds, duration_seconds, completed")
-      .eq("user_id", user.id).eq("profile_id", activeProfile.id).eq("content_id", video.id).eq("content_type", ct).maybeSingle()
+      .eq("user_id", user.id).eq("content_id", video.id).eq("content_type", ct).maybeSingle()
       .then(({ data }) => {
         if (!data || data.completed || !videoRef.current) return;
         const pct = data.duration_seconds > 0 ? data.progress_seconds / data.duration_seconds : 0;
@@ -662,12 +662,12 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
           <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
         </div>
         {(() => {
-          const av = avatarForId(userAvatarId || activeProfile?.avatar_id);
+          const av = avatarForId(userAvatarId);
           return user ? (
-            <div onClick={onProfileOpen} title={activeProfile?.name ?? "Profile"} style={{ width: 34, height: 34, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? 15 : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
+            <div onClick={onProfileOpen} title={userName ?? "Profile"} style={{ width: 34, height: 34, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? 15 : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
               onMouseEnter={e => e.currentTarget.style.borderColor = "#facc15"}
               onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}>
-              {av ? av.emoji : (activeProfile?.name?.[0] || user.email[0]).toUpperCase()}
+              {av ? av.emoji : (userName?.[0] || user.email[0]).toUpperCase()}
             </div>
           ) : null;
         })()}
@@ -794,12 +794,12 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
                 <FullscreenGuide
                   channels={liveChannels}
                   epgEntries={liveEpg}
-                  currentId={video.id}
+                  currentId={typeof video.id === "string" ? video.id.replace(/^ch-/, "") : video.id}
                   onSwitch={ch => {
                     const now = new Date();
                     const cur = liveEpg.find(e => e.channel_id === ch.id && new Date(e.start_time) <= now && new Date(e.end_time) > now);
                     const upNext = liveEpg.filter(e => e.channel_id === ch.id && new Date(e.start_time) > now).sort((a, b) => new Date(a.start_time) - new Date(b.start_time))[0];
-                    onSelect({ ...ch, url: ch.stream_url, _type: "live", now_airing: cur?.title ?? ch.now_airing, up_next: upNext?.title ?? ch.up_next, badge_text: ch.badge_text || "LIVE" });
+                    onSelect({ ...ch, id: `ch-${ch.id}`, title: ch.name, url: ch.hls_url, _type: "live", thumbnail: ch.hero_url || ch.logo_url || "", now_airing: cur?.title, up_next: upNext?.title, badge_text: "LIVE" });
                     setGuideVisible(false);
                     setGuideExpanded(false);
                   }}
@@ -891,12 +891,12 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
           <LiveChannelStrip
             channels={liveChannels}
             epgEntries={liveEpg}
-            currentId={video.id}
+            currentId={typeof video.id === "string" ? video.id.replace(/^ch-/, "") : video.id}
             onSwitch={ch => {
               const now = new Date();
               const cur = liveEpg.find(e => e.channel_id === ch.id && new Date(e.start_time) <= now && new Date(e.end_time) > now);
               const upNext = liveEpg.filter(e => e.channel_id === ch.id && new Date(e.start_time) > now).sort((a, b) => new Date(a.start_time) - new Date(b.start_time))[0];
-              onSelect({ ...ch, url: ch.stream_url, _type: "live", now_airing: cur?.title ?? ch.now_airing, up_next: upNext?.title ?? ch.up_next, badge_text: ch.badge_text || "LIVE" });
+              onSelect({ ...ch, id: `ch-${ch.id}`, title: ch.name, url: ch.hls_url, _type: "live", thumbnail: ch.hero_url || ch.logo_url || "", now_airing: cur?.title, up_next: upNext?.title, badge_text: "LIVE" });
             }}
           />
         )}

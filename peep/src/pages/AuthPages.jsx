@@ -206,16 +206,15 @@ export function SignupPage() {
     setErrors({});
     setLoading(true);
 
-    const tsToken = await getToken();
-    if (tsToken) {
-      const tsRes = await fetch(`${SUPABASE_URL}/functions/v1/verify-turnstile`, {
+    // Turnstile runs in background — don't block signup on it
+    getToken().then(tsToken => {
+      if (!tsToken) return;
+      fetch(`${SUPABASE_URL}/functions/v1/verify-turnstile`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
         body: JSON.stringify({ token: tsToken }),
       }).catch(() => null);
-      const tsData = await tsRes?.json().catch(() => null);
-      if (tsData?.error) console.warn("Turnstile check failed — allowing anyway");
-    }
+    });
 
     const { data, error: signUpError } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name.trim() } } });
     if (signUpError) { setErrors({ submit: signUpError.message }); setLoading(false); return; }
@@ -351,16 +350,15 @@ export function SigninPage() {
     setResetSent(false);
     setLoading(true);
 
-    const tsToken = await getToken();
-    if (tsToken) {
-      const tsRes = await fetch(`${SUPABASE_URL}/functions/v1/verify-turnstile`, {
+    // Turnstile runs in background — don't block signin on it
+    getToken().then(tsToken => {
+      if (!tsToken) return;
+      fetch(`${SUPABASE_URL}/functions/v1/verify-turnstile`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
         body: JSON.stringify({ token: tsToken }),
       }).catch(() => null);
-      const tsData = await tsRes?.json().catch(() => null);
-      if (tsData?.error) console.warn("Turnstile check failed — allowing anyway");
-    }
+    });
 
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) { setError(error.message); setLoading(false); return; }
@@ -427,16 +425,6 @@ export function SigninPage() {
             <a href="/signup" style={{ color: YELLOW, textDecoration: "none", fontWeight: 600 }}>Create one</a>
           </p>
 
-          <a href="/streamer-signin"
-            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, marginTop: 16, width: "100%", background: CARD, border: `1px solid ${BORDER}`, borderRadius: 16, padding: "20px clamp(20px, 6vw, 40px)", cursor: "pointer", textAlign: "left", transition: "border-color 0.15s", textDecoration: "none" }}
-            onMouseEnter={e => e.currentTarget.style.borderColor = "#333"}
-            onMouseLeave={e => e.currentTarget.style.borderColor = BORDER}>
-            <div>
-              <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 600, color: "#fff" }}>Are you a streamer?</p>
-              <p style={{ margin: 0, fontSize: 12, color: "#555" }}>Sign in to your streaming portal.</p>
-            </div>
-            <span style={{ flexShrink: 0, color: YELLOW, fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" }}>Go to portal →</span>
-          </a>
         </div>
 
       </div>

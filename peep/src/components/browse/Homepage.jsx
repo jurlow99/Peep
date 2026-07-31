@@ -17,13 +17,14 @@ import { Footer } from "./Footer";
 import { Spinner } from "../ui/Spinner";
 import { LiveTVPage } from "../../pages/LiveTV";
 
-export function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, activeProfile, onSwitchProfile, onGoLive, onExitStudio, studioContent }) {
+export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, userName, onGoLive, onExitStudio, studioContent, flags = {} }) {
   const [videos, setVideos] = useState([]);
   const [shows, setShows] = useState([]);
   const [carousels, setCarousels] = useState([]);
   const [podcasts, setPodcasts] = useState([]);
   const [liveStreams, setLiveStreams] = useState([]);
   const [epgEntries, setEpgEntries] = useState([]);
+  const [channels, setChannels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [scrolled, setScrolled] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -87,13 +88,14 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, 
   async function fetchAll() {
     const epgWindowStart = new Date(Date.now() - 60 * 60 * 1000);
     const epgWindowEnd = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    const [videosRes, showsRes, carouselsRes, podcastsRes, liveRes, epgRes] = await Promise.all([
+    const [videosRes, showsRes, carouselsRes, podcastsRes, liveRes, epgRes, channelsRes] = await Promise.all([
       supabase.from("videos").select(contentSelect.videosBrowse).order("id", { ascending: true }),
       supabase.from("shows").select("*").order("id", { ascending: true }),
       supabase.from("carousels").select("*").eq("enabled", true).order("position", { ascending: true }),
       supabase.from("podcasts").select("*").order("id", { ascending: true }),
       supabase.from("live_streams").select("*").or("is_live.eq.true,listed.eq.true").order("id", { ascending: true }),
       supabase.from("epg_entries").select("*").gte("end_time", epgWindowStart.toISOString()).lte("start_time", epgWindowEnd.toISOString()).order("start_time", { ascending: true }),
+      supabase.from("channels").select("*").eq("is_active", true).order("sort_order"),
     ]);
     if (videosRes.data) setVideos(videosRes.data);
     if (showsRes.data) setShows(showsRes.data);
@@ -106,6 +108,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, 
       setLiveStreams(liveRes.data);
     }
     if (epgRes.data) setEpgEntries(epgRes.data);
+    if (channelsRes.data) setChannels(channelsRes.data);
     setLoading(false);
 
     // Resolve deep link
@@ -271,12 +274,22 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, 
   const SB_W = 64;
   const SB_EXPANDED = 210;
   const liveNow = liveStreams.filter(s => s.is_live);
+  // Live TV channels for the unified "Live Now" row, with their current program
+  const liveChannels = (channels || []).filter(c => c.is_active !== false);
+  const nowByChannel = {};
+  {
+    const t = Date.now();
+    (epgEntries || []).forEach(e => {
+      if (new Date(e.start_time).getTime() <= t && new Date(e.end_time).getTime() > t) nowByChannel[e.channel_id] = e;
+    });
+  }
+  const liveNowEnabled = flags.live_now_home !== false;
 
   const SB_ITEMS = [
     { id: "Home",    label: "Home",    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
     { id: "Movies",  label: "Movies",  icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="2"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg> },
     { id: "Series",  label: "Series",  icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></svg> },
-    { id: "Streams", label: "Live",    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49"/><path d="M7.76 7.76a6 6 0 0 0 0 8.49"/><path d="M20.66 3.34a12 12 0 0 1 0 17.32"/><path d="M3.34 3.34a12 12 0 0 0 0 17.32"/></svg>, badge: liveNow.length > 0 },
+    { id: "Streams", label: "Live TV", icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49"/><path d="M7.76 7.76a6 6 0 0 0 0 8.49"/><path d="M20.66 3.34a12 12 0 0 1 0 17.32"/><path d="M3.34 3.34a12 12 0 0 0 0 17.32"/></svg>, badge: liveNow.length > 0 },
     { id: "Podcasts",label: "Podcasts",icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg> },
     { id: "My List", label: "My List", icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg> },
   ];
@@ -312,7 +325,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, 
 
           {/* Nav items */}
           <nav style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "8px 0" }}>
-            {SB_ITEMS.map(item => {
+            {SB_ITEMS.filter(item => item.id !== "Podcasts" || flags.show_podcasts !== false).map(item => {
               const active = !studioContent && activeNav === item.id;
               return (
                 <div key={item.id} className="sb-item"
@@ -354,7 +367,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, 
                 <div style={{ flexShrink: 0, display: "flex", alignItems: "center" }}>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
                 </div>
-                {sbExpanded && <span style={{ fontSize: 14, fontWeight: 600, whiteSpace: "nowrap" }}>Go Live</span>}
+                {sbExpanded && <span style={{ fontSize: 14, fontWeight: 600, whiteSpace: "nowrap" }}>Channel</span>}
               </div>
             )}
 
@@ -426,12 +439,12 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, 
             </div>
             <NotifBell user={user} />
             {user ? (() => {
-              const av = avatarForId(userAvatarId || activeProfile?.avatar_id);
+              const av = avatarForId(userAvatarId);
               return (
                 <div onClick={onProfileOpen} style={{ width: 34, height: 34, borderRadius: "50%", background: av?.svg ? "none" : (av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)"), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s", overflow: "hidden" }}
                   onMouseEnter={e => e.currentTarget.style.borderColor = "#facc15"}
                   onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}>
-                  {av?.svg ? <div style={{ width: "100%", height: "100%" }} dangerouslySetInnerHTML={{ __html: av.svg }} /> : (av ? av.emoji : (activeProfile?.name?.[0] || user.email?.[0] || "?").toUpperCase())}
+                  {av?.svg ? <div style={{ width: "100%", height: "100%" }} dangerouslySetInnerHTML={{ __html: av.svg }} /> : (av ? av.emoji : (userName?.[0] || user.email?.[0] || "?").toUpperCase())}
                 </div>
               );
             })() : (
@@ -606,18 +619,45 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, 
 
       {/* Streams tab */}
       {!studioContent && activeNav === "Streams" && !loading && (
-        <LiveTVPage streams={liveStreams} user={user} streamsLoading={loading} />
+        <LiveTVPage streams={liveStreams} channels={channels} epgEntries={epgEntries} onChannelPlay={onChannelPlay} user={user} streamsLoading={loading} />
       )}
 
-      {/* ── LIVE NOW STRIP (Home tab) ── */}
-      {!studioContent && activeNav === "Home" && liveNow.length > 0 && !loading && (
+      {/* ── LIVE NOW STRIP (Home tab) — live TV channels + live streamers ── */}
+      {!studioContent && activeNav === "Home" && liveNowEnabled && (liveChannels.length > 0 || liveNow.length > 0) && !loading && (
         <div style={{ padding: `24px ${PAD} 0` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
             <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite" }} />
             <span style={{ fontSize: 12, fontWeight: 700, color: "#ef4444", letterSpacing: "0.1em", textTransform: "uppercase" }}>Live Now</span>
-            <span style={{ fontSize: 12, color: "#333" }}>{liveNow.length} channel{liveNow.length !== 1 ? "s" : ""}</span>
+            <span style={{ fontSize: 12, color: "#333" }}>{liveChannels.length + liveNow.length} live</span>
           </div>
           <div className="scroll-row" style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4 }}>
+            {liveChannels.map(ch => {
+              const nowAiring = nowByChannel[ch.id];
+              const img = ch.hero_url || ch.logo_url || "";
+              return (
+                <div key={`ch-${ch.id}`} onClick={() => onChannelPlay?.(ch)}
+                  style={{ flexShrink: 0, width: isMobile ? 180 : 220, cursor: "pointer", borderRadius: 10, overflow: "hidden", background: "#0f0f0f", border: "1px solid rgba(239,68,68,0.15)", transition: "transform 0.15s, border-color 0.15s, box-shadow 0.15s" }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.borderColor = "rgba(239,68,68,0.4)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(239,68,68,0.1)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.borderColor = "rgba(239,68,68,0.15)"; e.currentTarget.style.boxShadow = "none"; }}>
+                  <div style={{ position: "relative", aspectRatio: "16/9", overflow: "hidden", background: "#111" }}>
+                    {img
+                      ? <img src={img} alt={ch.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #0c1a2e, #12385f)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2" opacity="0.4"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></svg>
+                        </div>}
+                    <div style={{ position: "absolute", top: 7, left: 7, display: "flex", alignItems: "center", gap: 4, background: "#ef4444", borderRadius: 4, padding: "2px 7px" }}>
+                      <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#fff", animation: "livepulse 1.5s infinite" }} />
+                      <span style={{ fontSize: 9, fontWeight: 800, color: "#fff", letterSpacing: 0.6 }}>LIVE</span>
+                    </div>
+                    <div style={{ position: "absolute", top: 7, right: 7, background: "rgba(0,0,0,0.6)", borderRadius: 4, padding: "2px 7px", fontSize: 9, fontWeight: 700, color: "#38bdf8", letterSpacing: 0.5 }}>TV</div>
+                  </div>
+                  <div style={{ padding: "9px 10px", minWidth: 0 }}>
+                    <p style={{ margin: "0 0 1px", fontSize: 12, fontWeight: 700, color: "#e8e8e8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch.name}</p>
+                    <p style={{ margin: 0, fontSize: 11, color: "#555", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{nowAiring ? nowAiring.title : (ch.description || "Live TV")}</p>
+                  </div>
+                </div>
+              );
+            })}
             {liveNow.map(s => {
               const slug = s.username || (s.channel_name || s.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
               const name = s.channel_name || s.title || "";
@@ -680,7 +720,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, user, myList, 
             { id: "Home", label: "Home", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
             { id: "Movies", label: "Movies", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="2"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg> },
             { id: "Series", label: "Series", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></svg> },
-            { id: "Streams", label: "Streams", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49"/><path d="M7.76 7.76a6 6 0 0 0 0 8.49"/><path d="M20.66 3.34a12 12 0 0 1 0 17.32"/><path d="M3.34 3.34a12 12 0 0 0 0 17.32"/></svg> },
+            { id: "Streams", label: "Live TV", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49"/><path d="M7.76 7.76a6 6 0 0 0 0 8.49"/><path d="M20.66 3.34a12 12 0 0 1 0 17.32"/><path d="M3.34 3.34a12 12 0 0 0 0 17.32"/></svg> },
             { id: "My List", label: "My List", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg> },
           ].map(tab => {
             const active = activeNav === tab.id;

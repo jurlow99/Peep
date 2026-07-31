@@ -278,7 +278,145 @@ function StreamCard({ stream, viewers, isLive, isFollowing, onToggleFollow, user
   );
 }
 
-export function LiveTVPage({ streams, user, streamsLoading }) {
+const CHANNEL_CATEGORIES = {
+  general: "General", movies: "Movies", sports: "Sports", news: "News",
+  gaming: "Gaming", music: "Music", kids: "Kids", education: "Education", entertainment: "Entertainment",
+};
+
+function ChannelCard({ channel, onPlay, index = 0 }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      className="stream-card"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onClick={() => onPlay(channel)}
+      style={{
+        borderRadius: 12, overflow: "hidden", background: "#0f0f0f",
+        border: "1px solid rgba(239,68,68,0.2)",
+        boxShadow: hovered ? "0 0 0 1px rgba(239,68,68,0.35), 0 8px 28px rgba(239,68,68,0.1)" : "0 0 0 1px rgba(239,68,68,0.08), 0 2px 12px rgba(0,0,0,0.4)",
+        transition: "box-shadow 0.2s, transform 0.2s",
+        transform: hovered ? "translateY(-4px)" : "translateY(0)",
+        cursor: "pointer",
+        animationDelay: `${index * 50}ms`,
+      }}>
+      <div style={{ position: "relative", aspectRatio: "16/9", overflow: "hidden", background: "#111" }}>
+        <div style={{ width: "100%", height: "100%", transition: "transform 0.35s ease", transform: hovered ? "scale(1.05)" : "scale(1)" }}>
+          {channel.hero_url
+            ? <img src={channel.hero_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            : <ThumbnailPlaceholder />
+          }
+        </div>
+        <div style={{ position: "absolute", inset: 0, background: hovered ? "linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 50%)" : "transparent", transition: "background 0.3s", pointerEvents: "none" }} />
+        <div style={{ position: "absolute", top: 10, left: 10 }}>
+          <LiveBadge />
+        </div>
+        {channel.category && channel.category !== "general" && (
+          <div style={{ position: "absolute", top: 10, right: 10, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)", borderRadius: 5, padding: "3px 9px" }}>
+            <span style={{ fontSize: 10, fontWeight: 600, color: "#aaa" }}>{CHANNEL_CATEGORIES[channel.category] || channel.category}</span>
+          </div>
+        )}
+        {hovered && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ background: "rgba(239,68,68,0.9)", borderRadius: "50%", width: 48, height: 48, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><polygon points="5,3 19,12 5,21"/></svg>
+            </div>
+          </div>
+        )}
+      </div>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", padding: "11px 12px 13px" }}>
+        {channel.logo_url
+          ? <img src={channel.logo_url} alt="" style={{ width: 36, height: 36, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
+          : <div style={{ width: 36, height: 36, borderRadius: 8, background: "linear-gradient(135deg,#ef4444,#991b1b)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>📺</div>
+        }
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: "#e8e8e8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.3 }}>{channel.name}</p>
+          {channel.description && (
+            <p style={{ margin: 0, fontSize: 12, color: "#3a3a3a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{channel.description}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function fmtClock(dt) {
+  return new Date(dt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+function channelNowNext(epgEntries, channelId) {
+  const now = Date.now();
+  const mine = epgEntries
+    .filter(e => String(e.channel_id) === String(channelId))
+    .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+  let current = null, next = null, progress = 0;
+  for (const e of mine) {
+    const s = new Date(e.start_time).getTime();
+    const en = new Date(e.end_time).getTime();
+    if (s <= now && now < en) { current = e; progress = (now - s) / (en - s); }
+    else if (s > now && !next) next = e;
+  }
+  return { current, next, progress };
+}
+
+function ChannelGuideCard({ channel, epgEntries, onPlay, index }) {
+  const [hovered, setHovered] = useState(false);
+  const { current, next, progress } = channelNowNext(epgEntries, channel.id);
+  return (
+    <div className="stream-card" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} onClick={() => onPlay(channel)}
+      style={{ borderRadius: 12, overflow: "hidden", background: "#0f0f0f", border: "1px solid rgba(239,68,68,0.2)",
+        boxShadow: hovered ? "0 0 0 1px rgba(239,68,68,0.35), 0 8px 28px rgba(239,68,68,0.1)" : "0 0 0 1px rgba(239,68,68,0.08), 0 2px 12px rgba(0,0,0,0.4)",
+        transition: "box-shadow 0.2s, transform 0.2s", transform: hovered ? "translateY(-4px)" : "translateY(0)", cursor: "pointer", animationDelay: `${index * 50}ms` }}>
+      <div style={{ position: "relative", aspectRatio: "16/9", overflow: "hidden", background: "#111" }}>
+        <div style={{ width: "100%", height: "100%", transition: "transform 0.35s ease", transform: hovered ? "scale(1.05)" : "scale(1)" }}>
+          {(current?.thumbnail || channel.hero_url)
+            ? <img src={current?.thumbnail || channel.hero_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            : <ThumbnailPlaceholder />}
+        </div>
+        <div style={{ position: "absolute", top: 10, left: 10 }}><LiveBadge /></div>
+        {hovered && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ background: "rgba(239,68,68,0.9)", borderRadius: "50%", width: 48, height: 48, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><polygon points="5,3 19,12 5,21"/></svg>
+            </div>
+          </div>
+        )}
+      </div>
+      <div style={{ padding: "11px 13px 14px" }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: current ? 10 : 0 }}>
+          {channel.logo_url
+            ? <img src={channel.logo_url} alt="" style={{ width: 32, height: 32, borderRadius: 7, objectFit: "cover", flexShrink: 0 }} />
+            : <div style={{ width: 32, height: 32, borderRadius: 7, background: "linear-gradient(135deg,#ef4444,#991b1b)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>📺</div>}
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#e8e8e8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.3 }}>{channel.name}</p>
+        </div>
+        {current ? (
+          <>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
+              <span style={{ fontSize: 13, color: "#fff", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{current.title}</span>
+              <span style={{ fontSize: 11, color: "#555", flexShrink: 0 }}>{fmtClock(current.start_time)}</span>
+            </div>
+            <div style={{ height: 3, borderRadius: 2, background: "rgba(255,255,255,0.1)", overflow: "hidden", marginBottom: next ? 10 : 0 }}>
+              <div style={{ height: "100%", width: `${Math.max(2, Math.min(100, progress * 100))}%`, background: "#ef4444", borderRadius: 2 }} />
+            </div>
+            {next && (
+              <p style={{ margin: 0, fontSize: 12, color: "#555", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <span style={{ color: "#3a3a3a", fontWeight: 600 }}>Up next</span> · {fmtClock(next.start_time)} {next.title}
+              </p>
+            )}
+          </>
+        ) : (
+          <p style={{ margin: 0, fontSize: 12, color: "#3a3a3a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {channel.description || "Live TV"}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function LiveTVPage({ streams, channels = [], epgEntries = [], onChannelPlay, user, streamsLoading }) {
+  const [, setNowTick] = useState(0); // re-render every 30s so the guide's Now/Up-next rolls over live
+  useEffect(() => { const t = setInterval(() => setNowTick(n => n + 1), 30000); return () => clearInterval(t); }, []);
   const [viewerCounts, setViewerCounts] = useState({});
   const [activeCategory, setActiveCategory] = useState("all");
   const [activeTab, setActiveTab] = useState("all");
@@ -362,7 +500,7 @@ export function LiveTVPage({ streams, user, streamsLoading }) {
 
   if (streamsLoading) return <div style={{ paddingTop: 90, minHeight: "100vh" }} />;
 
-  if (streams.length === 0) {
+  if (streams.length === 0 && channels.length === 0) {
     return (
       <div style={{ paddingTop: 90, paddingBottom: 80, minHeight: "100vh" }}>
         <div style={{ padding: `clamp(80px,12vw,140px) ${PAD}`, display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
@@ -383,7 +521,7 @@ export function LiveTVPage({ streams, user, streamsLoading }) {
 
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20, flexWrap: "wrap" }}>
-          <h1 style={{ margin: 0, fontSize: "clamp(22px, 3vw, 30px)", fontWeight: 700, color: "#fff" }}>Streams</h1>
+          <h1 style={{ margin: 0, fontSize: "clamp(22px, 3vw, 30px)", fontWeight: 700, color: "#fff" }}>Live TV</h1>
           {liveStreams.length > 0 && !searchQuery && (
             <div style={{ display: "flex", alignItems: "center", gap: 7, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.18)", borderRadius: 20, padding: "5px 14px" }}>
               <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite" }} />
@@ -412,6 +550,19 @@ export function LiveTVPage({ streams, user, streamsLoading }) {
             {searchFiltered.length === 0 ? `No channels found for "${searchQuery}"` : `${searchFiltered.length} channel${searchFiltered.length !== 1 ? "s" : ""} found`}
           </p>
         )}
+
+        {/* ── Live TV channel guide (primary) ── */}
+        {channels.length > 0 && (
+          <div style={{ marginBottom: 8 }}>
+            <p style={{ margin: "0 0 16px", fontSize: 11, fontWeight: 700, color: "#ef4444", letterSpacing: "0.12em", textTransform: "uppercase" }}>Live TV · Now Playing</p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}>
+              {channels.map((ch, i) => <ChannelGuideCard key={ch.id} channel={ch} epgEntries={epgEntries} onPlay={onChannelPlay} index={i} />)}
+            </div>
+          </div>
+        )}
+
+        {/* ── Creator Streams (secondary) ── */}
+        <h2 style={{ margin: channels.length > 0 ? "56px 0 18px" : "0 0 18px", fontSize: 18, fontWeight: 700, color: "#fff" }}>Creator Streams</h2>
 
         {/* Tabs */}
         <div style={{ display: "flex", gap: 6, marginBottom: 20 }}>

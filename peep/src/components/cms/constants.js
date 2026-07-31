@@ -48,6 +48,20 @@ export const EMPTY_CAROUSEL = {
   pages: "home",
 };
 
+export const EMPTY_CHANNEL = {
+  name: "",
+  slug: "",
+  description: "",
+  logo_url: "",
+  hero_url: "",
+  category: "general",
+  ingest_type: "hls",
+  hls_url: "",
+  stream_uid: "",
+  is_active: true,
+  sort_order: 0,
+};
+
 export const EMPTY_LIVE_STREAM = {
   title: "",
   description: "",

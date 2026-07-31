@@ -1033,19 +1033,56 @@ export function StreamerProfile() {
       ) : (
         /* ══════════════ OFFLINE CHANNEL PAGE ══════════════ */
         <>
-          {/* Banner */}
-          <div style={{ position: "relative", height: "clamp(200px, 28vw, 380px)", overflow: "hidden", background: stream.hero_image ? "#0a0a0a" : "linear-gradient(135deg, #1a1730 0%, #252040 50%, #1a1730 100%)" }}>
-            {stream.hero_image && (
-              <img src={stream.hero_image} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
-            )}
-            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(10,10,10,0.92) 0%, rgba(10,10,10,0.3) 40%, rgba(10,10,10,0.1) 100%)" }} />
-          </div>
+          {/* Offline Screen */}
+          {(() => {
+            const bgImg = stream.offline_image || stream.hero_image;
+            const isCustomBg = !!stream.offline_image;
+            const nextStream = stream.offline_show_schedule
+              ? schedule.find(s => new Date(s.scheduled_at) > new Date())
+              : null;
+            return (
+              <div style={{ position: "relative", width: "100%", aspectRatio: "16/9", maxHeight: "62vh", overflow: "hidden", background: "#050508", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                {bgImg && (
+                  <img src={bgImg} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: isCustomBg ? "none" : "brightness(0.12) blur(14px)", transform: "scale(1.06)" }} />
+                )}
+                <div style={{ position: "absolute", inset: 0, background: isCustomBg ? "linear-gradient(to top, rgba(5,5,8,0.92) 0%, rgba(5,5,8,0.35) 60%, transparent 100%)" : "linear-gradient(to top, rgba(5,5,8,1) 0%, rgba(5,5,8,0.5) 50%, rgba(5,5,8,0.15) 100%)" }} />
+                <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 14, padding: "0 28px", textAlign: "center" }}>
+                  <Avatar size={64} />
+                  <div>
+                    <p style={{ margin: "0 0 6px", fontSize: 20, fontWeight: 700, color: "#e5e5e5" }}>
+                      {stream.offline_title || channelName}
+                    </p>
+                    <p style={{ margin: 0, fontSize: 13, color: "#444", maxWidth: 420, lineHeight: 1.6 }}>
+                      {stream.offline_message || "This channel is currently offline."}
+                    </p>
+                  </div>
+                  {nextStream && (() => {
+                    const d = new Date(nextStream.scheduled_at);
+                    return (
+                      <div style={{ background: "rgba(250,204,21,0.07)", border: "1px solid rgba(250,204,21,0.15)", borderRadius: 7, padding: "7px 16px" }}>
+                        <p style={{ margin: 0, fontSize: 12, color: "#a16207", fontWeight: 600 }}>
+                          Next stream: {d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })} at {d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                        </p>
+                      </div>
+                    );
+                  })()}
+                  <span style={{ fontSize: 10, fontWeight: 700, color: "#2e2e2e", background: "#0f0f0f", border: "1px solid #1a1a1a", borderRadius: 4, padding: "3px 10px", letterSpacing: 0.8, textTransform: "uppercase" }}>OFFLINE</span>
+                </div>
+              </div>
+            );
+          })()}
 
-          {/* Profile header — avatar overlaps banner */}
-          <div style={{ padding: "0 24px 24px", borderBottom: "1px solid #111", marginTop: -44, position: "relative", zIndex: 1 }}>
-            <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 14, marginBottom: 16, flexWrap: "wrap" }}>
-              <Avatar size={80} />
-              <div style={{ display: "flex", gap: 8, paddingBottom: 4, flexShrink: 0 }}>
+          {/* Profile header */}
+          <div style={{ padding: "20px 24px 24px", borderBottom: "1px solid #111" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, marginBottom: 14, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <Avatar size={46} />
+                <div>
+                  <h1 style={{ margin: "0 0 2px", fontSize: 22, fontWeight: 700, color: "#fff", lineHeight: 1.2 }}>{channelName}</h1>
+                  {stream.slug && <p style={{ margin: 0, fontSize: 12, color: "#2e2e2e" }}>/{stream.slug}</p>}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
                 <ShareBtn />
                 <SupportBtn />
                 <ReportBtn />
@@ -1053,17 +1090,13 @@ export function StreamerProfile() {
               </div>
             </div>
 
-            <h1 style={{ margin: "0 0 4px", fontSize: 26, fontWeight: 700, color: "#fff", lineHeight: 1.2 }}>{channelName}</h1>
-            {stream.slug && <p style={{ margin: "0 0 10px", fontSize: 13, color: "#3a3a3a" }}>/{stream.slug}</p>}
-
-            <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: stream.bio ? 14 : 0 }}>
+            <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: stream.bio ? 12 : 0 }}>
               <span style={{ fontSize: 13, color: "#555" }}><strong style={{ color: "#888", fontWeight: 600 }}>{followers.toLocaleString()}</strong> followers</span>
               {stream.category && stream.category !== "general" && (
                 <span style={{ fontSize: 12, color: "#444", background: "#0f0f0f", border: "1px solid #1a1a1a", borderRadius: 5, padding: "3px 10px" }}>
                   {CATEGORY_LABELS[stream.category] || stream.category}
                 </span>
               )}
-              <span style={{ fontSize: 12, color: "#2e2e2e", background: "#0f0f0f", border: "1px solid #1a1a1a", borderRadius: 5, padding: "3px 10px" }}>Offline</span>
             </div>
 
             {stream.bio && (

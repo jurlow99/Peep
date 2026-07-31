@@ -22,10 +22,10 @@ export function avatarForId(id) {
   return PRESET_AVATARS.find(a => a.id === id) ?? null;
 }
 
-export function ProfileScreen({ user, activeProfile, onClose, onAvatarChange, onProfileUpdate, onSwitchProfile, onViewProfile, onOpenSettings, onCreatorDash, onStreamerDash }) {
+export function ProfileScreen({ user, userAvatarId, userName, onClose, onAvatarChange, onNameChange, onViewProfile, onOpenSettings, onCreatorDash, onStreamerDash }) {
   const [profile, setProfile] = useState(null);
-  const [savedAvatar, setSavedAvatar] = useState(null);
-  const [selectedAvatar, setSelectedAvatar] = useState(null);
+  const [savedAvatar, setSavedAvatar] = useState(userAvatarId ?? null);
+  const [selectedAvatar, setSelectedAvatar] = useState(userAvatarId ?? null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -43,19 +43,11 @@ export function ProfileScreen({ user, activeProfile, onClose, onAvatarChange, on
 
   async function handleSaveAvatar() {
     setSaving(true);
-    const saves = [
-      supabase.from("profiles").upsert({ id: user.id, avatar_id: selectedAvatar }, { onConflict: "id" }),
-    ];
-    if (activeProfile?.id) {
-      saves.push(supabase.from("viewer_profiles").update({ avatar_id: selectedAvatar }).eq("id", activeProfile.id));
-    }
-    const results = await Promise.all(saves);
+    const { error } = await supabase.from("profiles").update({ avatar_id: selectedAvatar }).eq("id", user.id);
     setSaving(false);
-    const hasError = results.some(r => r.error);
-    if (!hasError) {
+    if (!error) {
       setSavedAvatar(selectedAvatar);
       onAvatarChange?.(selectedAvatar);
-      onProfileUpdate?.({ ...activeProfile, avatar_id: selectedAvatar });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     }
@@ -153,14 +145,6 @@ export function ProfileScreen({ user, activeProfile, onClose, onAvatarChange, on
               onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
               onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
               Settings
-            </button>
-          )}
-          {onSwitchProfile && (
-            <button onClick={() => { onClose(); onSwitchProfile(); }}
-              style={{ width: "100%", background: "transparent", border: "1px solid #2a2a2a", borderRadius: 10, padding: "12px", color: "#e5e5e5", fontSize: 14, fontWeight: 600, cursor: "pointer", transition: "background 0.15s" }}
-              onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
-              onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-              Switch Profile
             </button>
           )}
           <button onClick={handleSignOut} style={{ width: "100%", background: "transparent", border: "1px solid #2a2a2a", borderRadius: 10, padding: "12px", color: "#f87171", fontSize: 14, fontWeight: 600, cursor: "pointer", transition: "background 0.15s" }}

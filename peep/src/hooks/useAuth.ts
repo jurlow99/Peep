@@ -7,6 +7,7 @@ export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [userAvatarId, setUserAvatarId] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<ProfileRole | null>(null);
   const [passwordRecovery, setPasswordRecovery] = useState<false | "invite" | true>(() => {
     const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
@@ -33,10 +34,11 @@ export function useAuth() {
         userIdRef.current = activeUser.id;
         const { data: profile } = await supabase
           .from("profiles")
-          .select("avatar_id, role")
+          .select("avatar_id, role, full_name, username")
           .eq("id", activeUser.id)
           .maybeSingle();
         if (profile?.avatar_id) setUserAvatarId(profile.avatar_id);
+        if (profile?.full_name || profile?.username) setUserName(profile.full_name || profile.username);
         setUserRole((profile?.role as ProfileRole) || "viewer");
         setUser(activeUser);
       } else {
@@ -66,6 +68,7 @@ export function useAuth() {
             .maybeSingle()
             .then(({ data }) => {
               if (data?.avatar_id) setUserAvatarId(data.avatar_id);
+              if (data?.full_name || data?.username) setUserName(data.full_name || data.username);
               setUserRole((data?.role as ProfileRole) || "viewer");
             });
         }
@@ -87,6 +90,8 @@ export function useAuth() {
     authChecked,
     userAvatarId,
     setUserAvatarId,
+    userName,
+    setUserName,
     userRole,
     passwordRecovery,
     setPasswordRecovery,

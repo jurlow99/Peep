@@ -30,6 +30,7 @@ Deno.serve(async (req) => {
 
     // Create Supabase auth account for the streamer (or get existing)
     let streamerId: string;
+    let isNewAccount = true;
     const { data: createData, error: createErr } = await supabase.auth.admin.createUser({
       email: app.email,
       email_confirm: true,
@@ -37,13 +38,27 @@ Deno.serve(async (req) => {
     });
 
     if (createErr) {
-      // User likely already exists — find them
+      // User likely already exists — find them (in-app applicants always hit this path)
       const { data: listData } = await supabase.auth.admin.listUsers({ perPage: 1000 });
       const existing = listData?.users?.find(u => u.email?.toLowerCase() === app.email.toLowerCase());
       if (!existing) throw new Error(`Could not create or find user: ${createErr.message}`);
       streamerId = existing.id;
+      isNewAccount = false;
     } else {
       streamerId = createData.user.id;
+    }
+
+    // Guard: if they already have a channel, just mark the application approved
+    const { data: existingStream } = await supabase
+      .from("live_streams")
+      .select("id, stream_uid")
+      .eq("user_id", streamerId)
+      .maybeSingle();
+    if (existingStream) {
+      await supabase.from("streamer_applications").update({ status: "approved" }).eq("id", application_id);
+      return new Response(JSON.stringify({ success: true, stream_id: existingStream.id, stream_uid: existingStream.stream_uid, already_had_channel: true }), {
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
     }
 
     // Ensure profiles row exists
@@ -98,19 +113,26 @@ Deno.serve(async (req) => {
       .single();
     if (insertErr) throw new Error(`Failed to create stream: ${insertErr.message}`);
 
-    // Generate a recovery link → streamer clicks, sets a password, lands on /streamer
+    // New accounts get a recovery link to set a password; existing accounts go straight to the dashboard
     const siteUrl = "https://watchpeep.tv";
-    let setPasswordLink = `${siteUrl}/set-password`;
-    try {
-      const { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({
-        type: "recovery",
-        email: app.email,
-        options: { redirectTo: `${siteUrl}/set-password` },
-      });
-      if (!linkErr && linkData?.properties?.action_link) {
-        setPasswordLink = linkData.properties.action_link;
-      }
-    } catch (_) { /* fall back to plain /set-password link */ }
+    let ctaLink = `${siteUrl}/streamer`;
+    let ctaLabel = "Open Your Creator Studio →";
+    let ctaHint = `Sign in at <a href="${siteUrl}/signin" style="color:#facc15;">watchpeep.tv/signin</a> with your existing password to access your dashboard.`;
+    if (isNewAccount) {
+      ctaLabel = "Set Your Password →";
+      ctaHint = `Click to set your password — then you can sign in at any time from <a href="${siteUrl}/signin" style="color:#facc15;">watchpeep.tv/signin</a>. Link expires in 24 hours.`;
+      ctaLink = `${siteUrl}/set-password`;
+      try {
+        const { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({
+          type: "recovery",
+          email: app.email,
+          options: { redirectTo: `${siteUrl}/set-password` },
+        });
+        if (!linkErr && linkData?.properties?.action_link) {
+          ctaLink = linkData.properties.action_link;
+        }
+      } catch (_) { /* fall back to plain /set-password link */ }
+    }
 
     // Update application status
     await supabase
@@ -140,11 +162,11 @@ Deno.serve(async (req) => {
               Keep your stream key private — anyone with it can stream to your channel.
             </p>
 
-            <a href="${setPasswordLink}" style="display:block;background:#facc15;color:#0a0a0a;text-align:center;padding:16px;border-radius:10px;text-decoration:none;font-weight:700;font-size:16px;margin-bottom:32px;">
-              Set Your Password →
+            <a href="${ctaLink}" style="display:block;background:#facc15;color:#0a0a0a;text-align:center;padding:16px;border-radius:10px;text-decoration:none;font-weight:700;font-size:16px;margin-bottom:32px;">
+              ${ctaLabel}
             </a>
 
-            <p style="font-size:12px;color:#444;margin:0 0 32px;text-align:center;">Click to set your password — then you can sign in at any time from <a href="${siteUrl}/signin" style="color:#facc15;">watchpeep.tv/signin</a>. Link expires in 24 hours.</p>
+            <p style="font-size:12px;color:#444;margin:0 0 32px;text-align:center;">${ctaHint}</p>
 
             <div style="background:#111;border:1px solid #1e1e1e;border-radius:12px;padding:24px;margin-bottom:20px;">
               <p style="margin:0 0 16px;font-size:11px;color:#555;text-transform:uppercase;letter-spacing:0.8px;font-weight:700;">OBS Stream Settings</p>

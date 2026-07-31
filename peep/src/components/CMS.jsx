@@ -6,10 +6,12 @@ import {
   EMPTY_SHOW,
   EMPTY_EPISODE,
   EMPTY_CAROUSEL,
+  EMPTY_CHANNEL,
   EMPTY_LIVE_STREAM,
   EMPTY_PODCAST,
   EMPTY_PODCAST_EPISODE,
 } from "./cms/constants";
+import { FEATURE_FLAGS, loadFlags, setFlag } from "../lib/flags";
 
 const EMPTY_AD = {
   name: "",
@@ -28,9 +30,50 @@ async function getAdminToken() {
   return session?.access_token ?? null;
 }
 
+// Top-level admin categories. Each maps to existing internal render state (tab + sub-tab),
+// so the underlying feature blocks stay untouched — only the navigation is reorganized.
+const ADMIN_NAV = [
+  { key: "channels", label: "Channels", color: "#ef4444", target: { tab: "live", liveSubTab: "channels" } },
+  { key: "epg", label: "EPG", color: "#f59e0b", target: { tab: "live", liveSubTab: "channels" } },
+  { key: "shows", label: "Shows", color: "#3b82f6", sections: [
+    { key: "series", label: "Series", target: { tab: "content", videoSubTab: "series" } },
+    { key: "episodes", label: "Episodes", target: { tab: "content", videoSubTab: "episodes" } },
+  ] },
+  { key: "vod", label: "VOD", color: "#4f46e5", sections: [
+    { key: "movies", label: "Movies", target: { tab: "content", videoSubTab: "shorts" } },
+    { key: "podcasts", label: "Podcasts", target: { tab: "content", videoSubTab: "podcasts" } },
+    { key: "carousels", label: "Carousels", target: { tab: "content", videoSubTab: "carousels" } },
+  ] },
+  { key: "regions", label: "Regions & Packages", color: "#14b8a6", scaffold: { icon: "🌍", blurb: "Define subscription packages and tiers, and control regional (geo) availability of content." } },
+  { key: "commercial", label: "Commercial", color: "#a855f7", target: { tab: "analytics", analyticsTab: "ads" } },
+  { key: "resources", label: "Resources", color: "#0ea5e9", scaffold: { icon: "📄", blurb: "Manage static pages and help content — FAQ, legal, about, and support articles." } },
+  { key: "devices", label: "Devices", color: "#64748b", scaffold: { icon: "📱", blurb: "Manage supported device platforms and app builds — web, mobile, Roku, Fire TV, and more." } },
+  { key: "streaming", label: "Streaming", color: "#ec4899", sections: [
+    { key: "streams", label: "Live Streams", target: { tab: "live", liveSubTab: "streams" } },
+    { key: "applications", label: "Applications", target: { tab: "live", liveSubTab: "applications" } },
+    { key: "partners", label: "Partners", target: { tab: "creators", creatorsTab: "list" } },
+  ] },
+  { key: "reports", label: "Reports", color: "#34d399", sections: [
+    { key: "content", label: "Content Reports", target: { tab: "moderation" } },
+    { key: "analytics", label: "Analytics", target: { tab: "analytics", analyticsTab: "reports" } },
+  ] },
+  { key: "system", label: "System", color: "#eab308", sections: [
+    { key: "members", label: "Members", target: { tab: "members", membersTab: "users" } },
+    { key: "subs", label: "Subscriptions", target: { tab: "members", membersTab: "subscriptions" } },
+    { key: "support", label: "Support", target: { tab: "members", membersTab: "support" } },
+    { key: "storage", label: "Storage", target: { tab: "storage" } },
+    { key: "flags", label: "Feature Flags", target: { tab: "flags" } },
+    { key: "audit", label: "Audit Log", target: { tab: "audit" } },
+    { key: "settings", label: "Settings", target: { tab: "settings" } },
+    { key: "security", label: "Security", target: { tab: "security" } },
+  ] },
+];
+
 export function CMS({ onExit, currentUser }) {
   const [tab, setTab] = useState("content");
   const [videoSubTab, setVideoSubTab] = useState("shorts"); // "shorts" | "series" | "episodes" | "carousels" | "podcasts" | "music"
+  const [section, setSection] = useState("vod"); // top-level admin category (see ADMIN_NAV)
+  const [openMenu, setOpenMenu] = useState(null); // which category dropdown is open
   const [analyticsTab, setAnalyticsTab] = useState("reports"); // "reports" | "ads"
   const [membersTab, setMembersTab] = useState("users"); // "users" | "subscriptions" | "support"
   const [creatorsTab, setCreatorsTab] = useState("list"); // "list" | "review" | "payouts"
@@ -87,6 +130,15 @@ export function CMS({ onExit, currentUser }) {
   const [podcastSaving, setPodcastSaving] = useState(false);
   const [deletePodcastConfirm, setDeletePodcastConfirm] = useState(null);
 
+  // RSS import state
+  const [rssOpen, setRssOpen] = useState(false);
+  const [rssUrl, setRssUrl] = useState("");
+  const [rssLoading, setRssLoading] = useState(false);
+  const [rssPreview, setRssPreview] = useState(null);
+  const [rssImporting, setRssImporting] = useState(false);
+  const [rssError, setRssError] = useState(null);
+  const [rssSyncTarget, setRssSyncTarget] = useState(null); // existing podcast when re-syncing
+
   // Podcast Episodes state
   const [selectedPodcastForEp, setSelectedPodcastForEp] = useState(null);
   const [podEpList, setPodEpList] = useState([]);
@@ -109,6 +161,11 @@ export function CMS({ onExit, currentUser }) {
   const [liveLoading, setLiveLoading] = useState(true);
   const [editingLiveId, setEditingLiveId] = useState(null);
   const [liveForm, setLiveForm] = useState(EMPTY_LIVE_STREAM);
+  const [channelList, setChannelList] = useState([]);
+  const [channelLoading, setChannelLoading] = useState(false);
+  const [editingChannelId, setEditingChannelId] = useState(null);
+  const [channelForm, setChannelForm] = useState(EMPTY_CHANNEL);
+  const [channelSaving, setChannelSaving] = useState(false);
   const [liveSaving, setLiveSaving] = useState(false);
   const [deleteLiveConfirm, setDeleteLiveConfirm] = useState(null);
   const [deletePlaylistConfirm, setDeletePlaylistConfirm] = useState(null);
@@ -378,6 +435,7 @@ export function CMS({ onExit, currentUser }) {
 
   useEffect(() => {
     if (liveSubTab === "applications") loadApplications();
+    if (liveSubTab === "channels") loadChannels();
   }, [liveSubTab]);
 
   useEffect(() => {
@@ -2120,10 +2178,123 @@ export function CMS({ onExit, currentUser }) {
     if (error) showToast("Delete failed: " + error.message, "error");
     else {
       showToast("Podcast deleted");
+      logAudit("delete", "podcast", id);
       setDeletePodcastConfirm(null);
       if (selectedPodcastForEp?.id === id) { setSelectedPodcastForEp(null); setPodEpList([]); cancelPodEpEdit(); }
       await loadPodcasts();
     }
+  }
+
+  // ──── RSS IMPORT ────
+
+  function openRssImport(podcast = null) {
+    setRssSyncTarget(podcast);
+    setRssUrl(podcast?.feed_url || "");
+    setRssPreview(null);
+    setRssError(null);
+    setRssOpen(true);
+  }
+
+  function closeRssImport() {
+    setRssOpen(false);
+    setRssSyncTarget(null);
+    setRssUrl("");
+    setRssPreview(null);
+    setRssError(null);
+  }
+
+  async function fetchRssPreview() {
+    const url = rssUrl.trim();
+    if (!url) { setRssError("Paste a podcast RSS feed URL first."); return; }
+    setRssLoading(true); setRssError(null); setRssPreview(null);
+    try {
+      const token = await getAdminToken();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/fetch-rss?url=${encodeURIComponent(url)}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      if (!data.episodes?.length) throw new Error("No episodes found in that feed. Double-check the URL points to an RSS/XML feed.");
+      setRssPreview(data);
+    } catch (e) {
+      setRssError(e.message || "Could not read that feed.");
+    }
+    setRssLoading(false);
+  }
+
+  async function importRss() {
+    if (!rssPreview) return;
+    setRssImporting(true);
+    setRssError(null);
+    try {
+      const meta = rssPreview.podcast || {};
+      const feedUrl = rssUrl.trim();
+      let podcastId = rssSyncTarget?.id;
+
+      if (!rssSyncTarget) {
+        const { data: created, error } = await supabase.from("podcasts").insert([{
+          title: meta.title || "Untitled Podcast",
+          host: meta.host || "",
+          description: (meta.description || "").slice(0, 1000),
+          artwork_url: meta.artwork_url || "",
+          link_url: meta.link_url || "",
+          episode_count: rssPreview.total ?? null,
+          tags: [],
+          enabled: true,
+        }]).select().single();
+        if (error) throw error;
+        podcastId = created.id;
+      }
+
+      // Best-effort: store the feed URL for one-click re-sync. Ignored gracefully
+      // if the feed_url column hasn't been added yet (see podcasts_feed_url_migration.sql).
+      supabase.from("podcasts").update({ feed_url: feedUrl }).eq("id", podcastId).then(() => {});
+
+      // Dedup against episodes already stored (by title) so re-syncing only adds new ones
+      const { data: existing } = await supabase.from("podcast_episodes").select("title").eq("podcast_id", podcastId);
+      const seen = new Set((existing || []).map(e => (e.title || "").trim().toLowerCase()));
+
+      const total = rssPreview.episodes.length;
+      const rows = rssPreview.episodes
+        .filter(ep => ep.audio_url && !seen.has((ep.title || "").trim().toLowerCase()))
+        .map(ep => {
+          // Feed index 0 = newest. Number oldest→newest so ascending sort reads chronologically.
+          const number = ep.episode_number ?? (total - ep.index);
+          let published_at = null;
+          if (ep.pub_date) { const d = new Date(ep.pub_date); if (!isNaN(d.getTime())) published_at = d.toISOString(); }
+          return {
+            podcast_id: podcastId,
+            episode_number: number,
+            title: ep.title || `Episode ${number}`,
+            description: (ep.description || "").slice(0, 1000),
+            audio_url: ep.audio_url,
+            duration: ep.duration || "",
+            thumbnail: ep.thumbnail || "",
+            published_at,
+          };
+        });
+
+      if (rows.length) {
+        const { error: insErr } = await supabase.from("podcast_episodes").insert(rows);
+        if (insErr) throw insErr;
+      }
+
+      // Keep episode_count accurate
+      const { count } = await supabase.from("podcast_episodes").select("*", { count: "exact", head: true }).eq("podcast_id", podcastId);
+      await supabase.from("podcasts").update({ episode_count: count ?? rows.length }).eq("id", podcastId);
+
+      const skipped = total - rows.length;
+      showToast(rssSyncTarget
+        ? (rows.length ? `Synced — ${rows.length} new episode${rows.length === 1 ? "" : "s"} added` : "Already up to date — no new episodes")
+        : `Imported "${meta.title || "podcast"}" with ${rows.length} episode${rows.length === 1 ? "" : "s"}${skipped ? ` (${skipped} skipped)` : ""}`);
+
+      closeRssImport();
+      await loadPodcasts();
+      if (rssSyncTarget && selectedPodcastForEp?.id === rssSyncTarget.id) loadPodEpisodes(rssSyncTarget.id);
+    } catch (e) {
+      setRssError(e.message || "Import failed.");
+    }
+    setRssImporting(false);
   }
 
   // ──── PODCAST EPISODES ────
@@ -2172,7 +2343,7 @@ export function CMS({ onExit, currentUser }) {
   async function deletePodEp(id) {
     const { error } = await supabase.from("podcast_episodes").delete().eq("id", id);
     if (error) showToast("Delete failed: " + error.message, "error");
-    else { showToast("Episode deleted"); setDeletePodEpConfirm(null); await loadPodEpisodes(selectedPodcastForEp.id); }
+    else { showToast("Episode deleted"); logAudit("delete", "podcast_episode", id); setDeletePodEpConfirm(null); await loadPodEpisodes(selectedPodcastForEp.id); }
   }
 
   // ──── MUSIC VIDEOS ────
@@ -2297,6 +2468,7 @@ export function CMS({ onExit, currentUser }) {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       showToast(`${app.name} approved — stream key sent to ${app.email}`);
+      logAudit("approve", "streamer_application", app.id, { email: app.email });
       await loadApplications();
       await loadLiveStreams();
     } catch (err) {
@@ -2318,6 +2490,7 @@ export function CMS({ onExit, currentUser }) {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       showToast(`${rejectTarget.name} rejected`);
+      logAudit("reject", "streamer_application", rejectTarget.id);
       setRejectTarget(null);
       setAppRejectNote("");
       await loadApplications();
@@ -2382,6 +2555,111 @@ export function CMS({ onExit, currentUser }) {
     else { showToast(s.is_live ? "Stream is now offline" : "🔴 Stream is live!"); await loadLiveStreams(); }
   }
 
+  // ──── Channels ────
+  async function loadChannels() {
+    setChannelLoading(true);
+    const { data } = await supabase.from("channels").select("*").order("sort_order");
+    setChannelList(data || []);
+    setChannelLoading(false);
+  }
+
+  async function saveChannel() {
+    if (!channelForm.name.trim()) { showToast("Name is required.", "error"); return; }
+    setChannelSaving(true);
+    const slug = channelForm.slug.trim() || channelForm.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    const payload = { ...channelForm, name: channelForm.name.trim(), slug };
+    try {
+      if (editingChannelId) {
+        const { error } = await supabase.from("channels").update(payload).eq("id", editingChannelId);
+        if (error) throw error;
+        showToast("Channel updated");
+      } else {
+        const { error } = await supabase.from("channels").insert([payload]);
+        if (error) throw error;
+        showToast("Channel added");
+      }
+      setEditingChannelId(null); setChannelForm(EMPTY_CHANNEL); setDrawerOpen(false);
+      loadChannels();
+    } catch (e) { showToast("Save failed: " + e.message, "error"); }
+    setChannelSaving(false);
+  }
+
+  async function deleteChannel(id) {
+    if (!confirm("Delete this channel?")) return;
+    await supabase.from("channels").delete().eq("id", id);
+    logAudit("delete", "channel", id);
+    loadChannels();
+  }
+
+  // ──── Feature flags + audit log ────
+  const [flagStates, setFlagStates] = useState({});
+  const [flagsLoading, setFlagsLoading] = useState(false);
+  const [auditRows, setAuditRows] = useState([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+
+  async function logAudit(action, entity, entityId, details) {
+    try {
+      await supabase.from("audit_log").insert({
+        actor_id: currentUser?.id ?? null,
+        actor_email: currentUser?.email ?? null,
+        action,
+        entity: entity ?? null,
+        entity_id: entityId != null ? String(entityId) : null,
+        details: details ?? null,
+      });
+    } catch { /* audit is best-effort — never block the action */ }
+  }
+
+  async function loadFlagStates() {
+    setFlagsLoading(true);
+    setFlagStates(await loadFlags());
+    setFlagsLoading(false);
+  }
+  async function toggleFlag(key, on) {
+    setFlagStates(s => ({ ...s, [key]: on }));
+    const { error } = await setFlag(key, on);
+    if (error) { showToast("Failed to save flag: " + error.message, "error"); setFlagStates(s => ({ ...s, [key]: !on })); return; }
+    logAudit("flag.toggle", "feature_flag", key, { on });
+    showToast(`"${key}" turned ${on ? "on" : "off"}`);
+  }
+  async function loadAudit() {
+    setAuditLoading(true);
+    const { data } = await supabase.from("audit_log").select("*").order("created_at", { ascending: false }).limit(200);
+    setAuditRows(data || []);
+    setAuditLoading(false);
+  }
+
+  useEffect(() => {
+    if (tab === "flags") loadFlagStates();
+    if (tab === "audit") loadAudit();
+  }, [tab]);
+
+  // ──── Admin navigation ────
+  function applyTarget(t) {
+    if (!t) return;
+    setTab(t.tab);
+    if (t.videoSubTab) setVideoSubTab(t.videoSubTab);
+    if (t.liveSubTab) setLiveSubTab(t.liveSubTab);
+    if (t.analyticsTab) setAnalyticsTab(t.analyticsTab);
+    if (t.membersTab) setMembersTab(t.membersTab);
+    if (t.creatorsTab) setCreatorsTab(t.creatorsTab);
+    if (t.tab === "members") { setSupportUser(null); setSupportResults([]); setSupportSearch(""); setSupportActionMsg(null); }
+  }
+  function selectCategory(cat) {
+    setSection(cat.key);
+    if (cat.scaffold) { setTab("scaffold"); return; }
+    applyTarget(cat.target || cat.sections?.[0]?.target);
+  }
+  function isTargetActive(t) {
+    if (!t || t.tab !== tab) return false;
+    if (t.videoSubTab && t.videoSubTab !== videoSubTab) return false;
+    if (t.liveSubTab && t.liveSubTab !== liveSubTab) return false;
+    if (t.analyticsTab && t.analyticsTab !== analyticsTab) return false;
+    if (t.membersTab && t.membersTab !== membersTab) return false;
+    if (t.creatorsTab && t.creatorsTab !== creatorsTab) return false;
+    return true;
+  }
+
   // ──── EPG ────
 
   function parseDurationSecs(dur) {
@@ -2443,9 +2721,10 @@ export function CMS({ onExit, currentUser }) {
     const autoMap = {};
     Object.entries(channels).forEach(([xId, xName]) => {
       const lower = xName.toLowerCase();
-      const match = liveList.find(ch =>
-        ch.title.toLowerCase().includes(lower) || lower.includes(ch.title.toLowerCase())
-      );
+      const match = channelList.find(ch => {
+        const name = (ch.name || "").toLowerCase();
+        return name && (name.includes(lower) || lower.includes(name));
+      });
       if (match) autoMap[xId] = match.id;
     });
     return autoMap;
@@ -2467,8 +2746,15 @@ export function CMS({ onExit, currentUser }) {
     if (!xmltvUrl.trim()) return;
     setXmltvLoading(true); setXmltvError(""); setXmltvParsed(null); setXmltvRawText(""); setXmltvRawOpen(false);
     try {
-      const res = await fetch(xmltvUrl.trim());
-      if (!res.ok) throw new Error(`HTTP ${res.status} — check the URL`);
+      const token = await getAdminToken();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/fetch-xmltv?url=${encodeURIComponent(xmltvUrl.trim())}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        let msg = `HTTP ${res.status} — check the URL`;
+        try { const j = await res.json(); if (j.error) msg = j.error; } catch {}
+        throw new Error(msg);
+      }
       const text = await res.text();
       setXmltvRawText(text);
       const parsed = parseXMLTVText(text);
@@ -2506,12 +2792,18 @@ export function CMS({ onExit, currentUser }) {
       const { error } = await supabase.from("epg_entries").insert(entries.slice(i, i + BATCH));
       if (error) { setXmltvError(error.message); setXmltvImporting(false); return; }
     }
-    // Save source tracking to DB per channel
+    // Save source tracking to DB per channel — records the feed URL + which XMLTV
+    // channel each of our channels maps to, so the daily refresh cron can re-pull.
     const sourceName = xmltvFileName || xmltvUrl || "XMLTV import";
     const now = new Date().toISOString();
+    const srcUrl = xmltvFileName ? null : (xmltvUrl.trim() || null);
+    const channelToXmltv = {};
+    Object.entries(xmltvChannelMap).forEach(([xId, cid]) => { if (cid) channelToXmltv[cid] = xId; });
     const sourceRows = channelIds.map(cId => ({
       channel_id: cId,
       source_name: sourceName,
+      source_url: srcUrl,
+      xmltv_channel_id: channelToXmltv[cId] || null,
       imported_at: now,
       program_count: entries.filter(e => e.channel_id === cId).length,
       xml_content: xmltvRawText || null,
@@ -3019,36 +3311,114 @@ export function CMS({ onExit, currentUser }) {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div style={{ borderBottom: "1px solid #e2e8f0", padding: `0 ${PAD}`, display: "flex", gap: 24, background: "#ffffff", overflowX: "auto" }}>
-        {[
-          { key: "content",   label: `Content (${rows.length + showsList.length + podcastsList.length})`, color: "#4f46e5" },
-          { key: "live",      label: `Live (${liveList.length})`,   color: "#ef4444" },
-          { key: "creators",  label: `Partners`,                    color: "#f97316" },
-          { key: "members",   label: `Members`,                     color: "#818cf8" },
-          { key: "analytics", label: `Analytics`,                   color: "#34d399" },
-          { key: "storage",   label: `Storage`,                     color: "#22d3ee" },
-          { key: "settings",  label: `Settings`,                    color: "#facc15" },
-          { key: "security",  label: `Security`,                    color: "#f87171" },
-          { key: "moderation", label: `Moderation${contentReports.filter(r => r.status === "pending").length > 0 ? ` (${contentReports.filter(r => r.status === "pending").length})` : ""}`, color: "#fb923c" },
-        ].map(({ key, label, color }) => (
-          <button key={key}
-            onClick={() => {
-              setTab(key);
-              if (key === "live") { setLivePasscodeInput(""); setLivePasscodeEntered(false); }
-              if (key === "members") { setSupportUser(null); setSupportResults([]); setSupportSearch(""); setSupportActionMsg(null); }
-            }}
-            style={{ background: "transparent", border: "none", borderBottom: tab === key ? `2px solid ${color}` : "none", color: tab === key ? color : "#6b7280", padding: "16px 0", fontSize: 14, fontWeight: tab === key ? 600 : 400, cursor: "pointer", transition: "color 0.2s", whiteSpace: "nowrap", flexShrink: 0 }}
-          >
-            {label}
-          </button>
-        ))}
+      {/* Top category nav (dropdowns) */}
+      <div style={{ position: "relative", zIndex: 20, borderBottom: "1px solid #e2e8f0", padding: `0 ${PAD}`, display: "flex", gap: 2, background: "#ffffff", flexWrap: "wrap" }}>
+        {ADMIN_NAV.map(cat => {
+          const on = section === cat.key;
+          const badge = cat.key === "reports" ? contentReports.filter(r => r.status === "pending").length : 0;
+          const hasMenu = !!cat.sections;
+          const menuOpen = openMenu === cat.key;
+          return (
+            <div key={cat.key} style={{ position: "relative" }}>
+              <button
+                onClick={() => { if (hasMenu) setOpenMenu(menuOpen ? null : cat.key); else { selectCategory(cat); setOpenMenu(null); } }}
+                style={{ background: menuOpen ? "#f8fafc" : "transparent", border: "none", borderBottom: on ? `2px solid ${cat.color}` : "2px solid transparent", color: on ? cat.color : "#6b7280", padding: "16px 12px", fontSize: 14, fontWeight: on ? 600 : 400, cursor: "pointer", transition: "color 0.2s", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}>
+                {cat.label}{badge > 0 ? ` (${badge})` : ""}
+                {hasMenu && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" style={{ opacity: 0.55, transform: menuOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}><polyline points="6 9 12 15 18 9" /></svg>}
+              </button>
+              {hasMenu && menuOpen && (
+                <div style={{ position: "absolute", top: "100%", left: 0, marginTop: -1, minWidth: 200, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, boxShadow: "0 12px 32px rgba(0,0,0,0.12)", padding: 6, zIndex: 40 }}>
+                  {cat.sections.map(sec => {
+                    const secOn = isTargetActive(sec.target);
+                    return (
+                      <button key={sec.key}
+                        onClick={() => { setSection(cat.key); applyTarget(sec.target); setOpenMenu(null); }}
+                        style={{ display: "block", width: "100%", textAlign: "left", background: secOn ? `${cat.color}14` : "transparent", border: "none", borderRadius: 7, padding: "9px 12px", color: secOn ? cat.color : "#374151", fontSize: 13, fontWeight: secOn ? 600 : 400, cursor: "pointer", whiteSpace: "nowrap" }}
+                        onMouseEnter={e => { if (!secOn) e.currentTarget.style.background = "#f1f5f9"; }}
+                        onMouseLeave={e => { if (!secOn) e.currentTarget.style.background = "transparent"; }}>
+                        {sec.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
+      {openMenu && <div onClick={() => setOpenMenu(null)} style={{ position: "fixed", inset: 0, zIndex: 15 }} />}
 
       <div style={{ maxWidth: 1600, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
 
-        {/* ────── CONTENT SUB-TAB BAR ────── */}
-        {tab === "content" && (
+        {/* ────── SCAFFOLD (new categories without features yet) ────── */}
+        {tab === "scaffold" && (() => {
+          const cat = ADMIN_NAV.find(c => c.key === section);
+          if (!cat?.scaffold) return null;
+          return (
+            <div style={{ padding: "80px 24px", textAlign: "center", border: "1px dashed #e2e8f0", borderRadius: 16, background: "#fafafa" }}>
+              <div style={{ fontSize: 48, marginBottom: 20 }}>{cat.scaffold.icon}</div>
+              <h2 style={{ margin: "0 0 10px", fontSize: 22, fontWeight: 700, color: "#0f172a" }}>{cat.label}</h2>
+              <p style={{ margin: "0 auto", maxWidth: 440, fontSize: 14, color: "#6b7280", lineHeight: 1.7 }}>{cat.scaffold.blurb}</p>
+              <div style={{ display: "inline-block", marginTop: 22, background: `${cat.color}14`, border: `1px solid ${cat.color}`, borderRadius: 20, padding: "5px 16px", fontSize: 12, fontWeight: 700, color: cat.color, letterSpacing: 0.5 }}>COMING SOON</div>
+            </div>
+          );
+        })()}
+
+        {/* ────── FEATURE FLAGS ────── */}
+        {tab === "flags" && (
+          <div>
+            <div style={{ marginBottom: 20 }}>
+              <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Feature Flags</h2>
+              <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Turn features on or off instantly — no redeploy. Changes apply on each visitor's next load.</p>
+            </div>
+            {flagsLoading ? <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>Loading…</div> : (
+              FEATURE_FLAGS.map(f => {
+                const on = flagStates[f.key] ?? f.default;
+                return (
+                  <div key={f.key} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 18px", marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ margin: "0 0 3px", fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{f.label} <span style={{ fontSize: 11, color: "#9ca3af", fontWeight: 400 }}>({f.key})</span></p>
+                      <p style={{ margin: 0, fontSize: 12, color: "#6b7280", lineHeight: 1.5 }}>{f.description}</p>
+                    </div>
+                    <button onClick={() => toggleFlag(f.key, !on)} aria-label={on ? "On" : "Off"}
+                      style={{ flexShrink: 0, width: 46, height: 26, borderRadius: 999, border: "none", cursor: "pointer", background: on ? "#22c55e" : "#cbd5e1", position: "relative", transition: "background 0.15s" }}>
+                      <span style={{ position: "absolute", top: 3, left: on ? 23 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.15s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+
+        {/* ────── AUDIT LOG ────── */}
+        {tab === "audit" && (
+          <div>
+            <div style={{ marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
+              <div>
+                <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Audit Log</h2>
+                <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Recent admin actions — who did what, and when. Last 200 events.</p>
+              </div>
+              <button onClick={loadAudit} disabled={auditLoading} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, color: "#374151", cursor: "pointer", flexShrink: 0 }}>{auditLoading ? "…" : "↻ Refresh"}</button>
+            </div>
+            {auditLoading ? <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>Loading…</div>
+              : auditRows.length === 0 ? <div style={{ color: "#6b7280", padding: 40, textAlign: "center", border: "1px dashed #e2e8f0", borderRadius: 10 }}>No audit entries yet. Deletes, approvals, and flag changes will show up here.</div>
+              : (
+                <div style={{ border: "1px solid #e2e8f0", borderRadius: 10, overflow: "hidden" }}>
+                  {auditRows.map(r => (
+                    <div key={r.id} style={{ display: "grid", gridTemplateColumns: "180px 1fr 150px", gap: 12, padding: "10px 16px", borderBottom: "1px solid #f1f5f9", fontSize: 13, alignItems: "center" }}>
+                      <span style={{ fontWeight: 600, color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.action}{r.entity ? ` · ${r.entity}` : ""}</span>
+                      <span style={{ color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.entity_id ? `#${r.entity_id} · ` : ""}{r.actor_email || r.actor_id || "—"}{r.details ? ` · ${JSON.stringify(r.details)}` : ""}</span>
+                      <span style={{ color: "#9ca3af", textAlign: "right" }}>{new Date(r.created_at).toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+          </div>
+        )}
+
+        {/* ────── CONTENT SUB-TAB BAR (retired — replaced by section nav) ────── */}
+        {false && tab === "content" && (
           <div style={{ display: "flex", gap: 6, marginBottom: 8, paddingBottom: 20, borderBottom: "1px solid #e2e8f0" }}>
             {[
               { key: "shorts",    label: "Movies",    count: rows.length },
@@ -3467,10 +3837,12 @@ export function CMS({ onExit, currentUser }) {
         )}
         {tab === "live" && livePasscodeEntered && (
           <div>
-            {/* Sub-tab nav */}
+            {/* Sub-tab nav (retired — replaced by section nav) */}
+            {false && (
             <div style={{ display: "flex", gap: 4, marginBottom: 24, background: "#f1f5f9", borderRadius: 10, padding: 4, width: "fit-content" }}>
               {[
                 { key: "streams", label: "Streams" },
+                { key: "channels", label: `Fast Channels${channelList.length > 0 ? ` (${channelList.length})` : ""}` },
                 { key: "applications", label: `Applications${applications.filter(a => a.status === "pending").length > 0 ? ` (${applications.filter(a => a.status === "pending").length})` : ""}` },
               ].map(t => (
                 <button key={t.key} onClick={() => setLiveSubTab(t.key)}
@@ -3479,6 +3851,117 @@ export function CMS({ onExit, currentUser }) {
                 </button>
               ))}
             </div>
+            )}
+
+            {/* Channels sub-tab */}
+            {liveSubTab === "channels" && (
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                  <div>
+                    <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Fast Channels ({channelList.length})</h2>
+                    <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Always-on linear TV channels. Paste an HLS URL, or enter Cloudflare Stream / SRT ingest details.</p>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => { setXmltvOpen(true); setXmltvParsed(null); setXmltvChannelMap({}); setXmltvError(""); setXmltvImportDone(null); setXmltvUrl(""); setXmltvFileName(""); setXmltvRawText(""); setXmltvRawOpen(false); }}
+                      style={{ background: "#eef2ff", border: "1px solid #c7d2fe", borderRadius: 8, padding: "9px 16px", color: "#4f46e5", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                      Import EPG (XMLTV)
+                    </button>
+                    <button onClick={() => { setChannelForm(EMPTY_CHANNEL); setEditingChannelId(null); setDrawerOpen(true); }}
+                      style={{ background: "#ef4444", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                      + Add Channel
+                    </button>
+                  </div>
+                </div>
+                {channelLoading ? (
+                  <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>Loading…</div>
+                ) : channelList.length === 0 ? (
+                  <div style={{ color: "#6b7280", padding: 40, textAlign: "center", border: "1px dashed #e2e8f0", borderRadius: 10 }}>No channels yet. Add one above.</div>
+                ) : channelList.map(ch => (
+                  <div key={ch.id} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 18px", marginBottom: 10, display: "flex", alignItems: "center", gap: 14 }}>
+                    {ch.logo_url
+                      ? <img src={ch.logo_url} alt="" style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
+                      : <div style={{ width: 44, height: 44, borderRadius: 8, background: "#f1f5f9", border: "1px solid #e2e8f0", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, color: "#94a3b8" }}>📺</div>
+                    }
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>{ch.name}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: "1px 8px", borderRadius: 20, background: ch.is_active ? "rgba(34,197,94,0.1)" : "rgba(100,100,100,0.1)", color: ch.is_active ? "#15803d" : "#888", border: `1px solid ${ch.is_active ? "rgba(34,197,94,0.3)" : "rgba(100,100,100,0.2)"}` }}>{ch.is_active ? "ACTIVE" : "INACTIVE"}</span>
+                        <span style={{ fontSize: 11, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.5 }}>{ch.ingest_type}</span>
+                      </div>
+                      <p style={{ margin: 0, fontSize: 12, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch.hls_url || "No playback URL set"}</p>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                      <button onClick={() => {
+                        if (selectedChannelForEpg?.id === ch.id) { setSelectedChannelForEpg(null); setEpgEntries([]); }
+                        else { setSelectedChannelForEpg(ch); setEpgDayOffset(0); loadEpgEntries(ch.id, 0); loadContentForEpg(); }
+                      }}
+                        style={{ background: selectedChannelForEpg?.id === ch.id ? "rgba(79,70,229,0.15)" : "#eef2ff", border: `1px solid ${selectedChannelForEpg?.id === ch.id ? "#4f46e5" : "#c7d2fe"}`, borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: selectedChannelForEpg?.id === ch.id ? 700 : 600, color: "#4f46e5", cursor: "pointer" }}>
+                        {selectedChannelForEpg?.id === ch.id ? "Close" : "Schedule"}
+                      </button>
+                      <button onClick={() => { setChannelForm({ name: ch.name, slug: ch.slug || "", description: ch.description || "", logo_url: ch.logo_url || "", hero_url: ch.hero_url || "", category: ch.category || "general", ingest_type: ch.ingest_type || "hls", hls_url: ch.hls_url || "", stream_uid: ch.stream_uid || "", is_active: ch.is_active ?? true, sort_order: ch.sort_order ?? 0 }); setEditingChannelId(ch.id); setDrawerOpen(true); }}
+                        style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, color: "#374151", cursor: "pointer" }}>
+                        Edit
+                      </button>
+                      <button onClick={() => deleteChannel(ch.id)}
+                        style={{ background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, color: "#dc2626", cursor: "pointer" }}>
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {/* ── Inline channel schedule (EPG) ── */}
+                {selectedChannelForEpg && channelList.some(c => c.id === selectedChannelForEpg.id) && (
+                  <div style={{ marginTop: 24, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 12, padding: 24 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18, gap: 12, flexWrap: "wrap" }}>
+                      <div>
+                        <h3 style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 700, color: "#4f46e5" }}>Schedule — {selectedChannelForEpg.name}</h3>
+                        <p style={{ margin: 0, fontSize: 11, color: "#6b7280" }}>Programs the "Now / Up next" guide viewers see on the Live TV tab.</p>
+                      </div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button onClick={startEpgAdd} style={{ background: "#4f46e5", border: "none", borderRadius: 7, padding: "8px 16px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Program</button>
+                        <button onClick={() => { setSelectedChannelForEpg(null); setEpgEntries([]); }} style={{ background: "none", border: "none", color: "#6b7280", fontSize: 20, cursor: "pointer", lineHeight: 1, padding: "2px 4px" }}>×</button>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 18 }}>
+                      {Array.from({ length: 7 }, (_, off) => {
+                        const d = new Date(); d.setDate(d.getDate() + off);
+                        const label = off === 0 ? "Today" : d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+                        const active = epgDayOffset === off;
+                        return (
+                          <button key={off} onClick={() => { setEpgDayOffset(off); loadEpgEntries(selectedChannelForEpg.id, off); }}
+                            style={{ background: active ? "#4f46e5" : "#fff", border: `1px solid ${active ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 7, padding: "6px 12px", fontSize: 12, fontWeight: active ? 700 : 500, color: active ? "#fff" : "#374151", cursor: "pointer" }}>
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {epgLoading ? (
+                      <div style={{ color: "#6b7280", padding: 28, textAlign: "center", fontSize: 13 }}>Loading…</div>
+                    ) : epgEntries.length === 0 ? (
+                      <div style={{ color: "#9ca3af", padding: 28, textAlign: "center", fontSize: 13, border: "1px dashed #e2e8f0", borderRadius: 10 }}>No programs scheduled for this day. Click "+ Add Program".</div>
+                    ) : epgEntries.map(entry => (
+                      <div key={entry.id} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 9, padding: "11px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{ width: 84, flexShrink: 0 }}>
+                          <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: "#4f46e5" }}>{new Date(entry.start_time).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</p>
+                          <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>{new Date(entry.end_time).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</p>
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.title}</p>
+                          {entry.content_type && <p style={{ margin: 0, fontSize: 11, color: "#94a3b8" }}>Linked {entry.content_type}</p>}
+                        </div>
+                        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                          <button onClick={() => startEpgEdit(entry)} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 5, padding: "5px 10px", color: "#374151", fontSize: 11, cursor: "pointer" }}>Edit</button>
+                          <button onClick={() => { if (confirm("Remove this program?")) deleteEpgEntry(entry.id); }} style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 5, padding: "5px 10px", color: "#f87171", fontSize: 11, cursor: "pointer" }}>Delete</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Applications sub-tab */}
             {liveSubTab === "applications" && (
@@ -3966,14 +4449,23 @@ export function CMS({ onExit, currentUser }) {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
                 <div>
                   <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 600, color: "#0f172a" }}>All Podcasts ({podcastsList.length})</h2>
-                  <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Click <strong style={{ color: "#4f46e5", fontWeight: 600 }}>Episodes</strong> on any podcast to manage its audio episodes.</p>
+                  <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Import a show from its RSS feed, or click <strong style={{ color: "#4f46e5", fontWeight: 600 }}>Episodes</strong> on any podcast to manage them manually.</p>
                 </div>
-                <button
-                  onClick={() => { setPodcastForm(EMPTY_PODCAST); setEditingPodcastId(null); setDrawerOpen(true); }}
-                  style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
-                >
-                  + Add Podcast
-                </button>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    onClick={() => openRssImport(null)}
+                    style={{ background: "#eef2ff", border: "1px solid #c7d2fe", borderRadius: 8, padding: "9px 16px", color: "#4f46e5", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+                    Import from RSS
+                  </button>
+                  <button
+                    onClick={() => { setPodcastForm(EMPTY_PODCAST); setEditingPodcastId(null); setDrawerOpen(true); }}
+                    style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+                  >
+                    + Add Podcast
+                  </button>
+                </div>
               </div>
 
               {podcastsLoading ? (
@@ -4011,6 +4503,7 @@ export function CMS({ onExit, currentUser }) {
                     }} style={{ background: selectedPodcastForEp?.id === pod.id ? "rgba(79,70,229,0.15)" : "rgba(79,70,229,0.08)", border: `1px solid ${selectedPodcastForEp?.id === pod.id ? "#4f46e5" : "rgba(79,70,229,0.25)"}`, borderRadius: 5, padding: "5px 10px", color: "#4f46e5", fontSize: 11, cursor: "pointer", fontWeight: selectedPodcastForEp?.id === pod.id ? 700 : 400 }}>
                       {selectedPodcastForEp?.id === pod.id ? "Close" : "Episodes"}
                     </button>
+                    <button onClick={() => openRssImport(pod)} title="Fetch new episodes from this podcast's RSS feed" style={{ background: "#eef2ff", border: "1px solid #c7d2fe", borderRadius: 5, padding: "5px 10px", color: "#4f46e5", fontSize: 11, cursor: "pointer" }}>Sync</button>
                     <button onClick={() => startPodcastEdit(pod)} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 5, padding: "5px 10px", color: "#374151", fontSize: 11, cursor: "pointer" }}>Edit</button>
                     <button onClick={() => setDeletePodcastConfirm(pod)} style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 5, padding: "5px 10px", color: "#f87171", fontSize: 11, cursor: "pointer" }}>Delete</button>
                   </div>
@@ -4113,11 +4606,87 @@ export function CMS({ onExit, currentUser }) {
                   </div>
                 </div>
               )}
+
+              {/* ── RSS import / sync modal ── */}
+              {rssOpen && (
+                <div style={{ position: "fixed", inset: 0, zIndex: 210, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+                  <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "28px 30px", width: "min(560px, 100%)", maxHeight: "88vh", overflowY: "auto", boxShadow: "0 24px 64px rgba(0,0,0,0.2)" }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 6 }}>
+                      <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#0f172a" }}>
+                        {rssSyncTarget ? `Sync "${rssSyncTarget.title}"` : "Import podcast from RSS"}
+                      </h3>
+                      <button onClick={closeRssImport} style={{ background: "none", border: "none", color: "#6b7280", fontSize: 22, cursor: "pointer", lineHeight: 1, padding: "0 4px" }}>×</button>
+                    </div>
+                    <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280", lineHeight: 1.5 }}>
+                      {rssSyncTarget
+                        ? "Re-fetch the feed and pull in any episodes that aren't already stored. Existing episodes are left untouched."
+                        : "Paste a podcast's RSS feed URL. We'll read its details and episodes so you can import the whole show in one click."}
+                    </p>
+
+                    <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                      <input
+                        type="text" value={rssUrl}
+                        onChange={e => { setRssUrl(e.target.value); setRssError(null); }}
+                        onKeyDown={e => { if (e.key === "Enter" && !rssLoading) fetchRssPreview(); }}
+                        placeholder="https://feeds.example.com/my-podcast.xml"
+                        style={{ flex: 1, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                        onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")}
+                      />
+                      <button onClick={fetchRssPreview} disabled={rssLoading}
+                        style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 18px", color: "#374151", fontSize: 13, fontWeight: 600, cursor: rssLoading ? "wait" : "pointer", whiteSpace: "nowrap", opacity: rssLoading ? 0.6 : 1 }}>
+                        {rssLoading ? "Reading…" : "Fetch"}
+                      </button>
+                    </div>
+
+                    {rssError && (
+                      <div style={{ background: "rgba(220,38,38,0.06)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 8, padding: "10px 14px", marginBottom: 16 }}>
+                        <p style={{ margin: 0, fontSize: 13, color: "#dc2626" }}>{rssError}</p>
+                      </div>
+                    )}
+
+                    {rssPreview && (
+                      <>
+                        <div style={{ display: "flex", gap: 14, alignItems: "center", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                          {rssPreview.podcast?.artwork_url
+                            ? <img src={rssPreview.podcast.artwork_url} alt="" style={{ width: 64, height: 64, borderRadius: 9, objectFit: "cover", flexShrink: 0 }} onError={e => { e.target.style.display = "none"; }} />
+                            : <div style={{ width: 64, height: 64, borderRadius: 9, background: "linear-gradient(135deg, #e0e7ff, #c7d2fe)", flexShrink: 0 }} />}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ margin: "0 0 3px", fontSize: 15, fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{rssPreview.podcast?.title || "Untitled Podcast"}</p>
+                            {rssPreview.podcast?.host && <p style={{ margin: "0 0 4px", fontSize: 12, color: "#4f46e5" }}>{rssPreview.podcast.host}</p>}
+                            <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>{rssPreview.total} episode{rssPreview.total === 1 ? "" : "s"} in feed</p>
+                          </div>
+                        </div>
+
+                        <div style={{ maxHeight: 180, overflowY: "auto", border: "1px solid #e2e8f0", borderRadius: 10, marginBottom: 20 }}>
+                          {rssPreview.episodes.slice(0, 40).map((ep, i) => (
+                            <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderBottom: i < Math.min(rssPreview.episodes.length, 40) - 1 ? "1px solid #f1f5f9" : "none" }}>
+                              <span style={{ fontSize: 11, color: "#9ca3af", width: 40, flexShrink: 0 }}>{ep.duration || "—"}</span>
+                              <span style={{ fontSize: 13, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>{ep.title || "(untitled)"}</span>
+                              {!ep.audio_url && <span style={{ fontSize: 10, color: "#f87171", flexShrink: 0 }}>no audio</span>}
+                            </div>
+                          ))}
+                          {rssPreview.episodes.length > 40 && (
+                            <div style={{ padding: "8px 12px", fontSize: 11, color: "#9ca3af", textAlign: "center" }}>+ {rssPreview.episodes.length - 40} more…</div>
+                          )}
+                        </div>
+
+                        <div style={{ display: "flex", gap: 10 }}>
+                          <button onClick={closeRssImport} style={{ flex: "0 0 auto", background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "11px 18px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                          <button onClick={importRss} disabled={rssImporting}
+                            style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 8, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: rssImporting ? "wait" : "pointer", opacity: rssImporting ? 0.7 : 1 }}>
+                            {rssImporting ? (rssSyncTarget ? "Syncing…" : "Importing…") : (rssSyncTarget ? "Sync new episodes" : `Import podcast + ${rssPreview.episodes.filter(e => e.audio_url).length} episodes`)}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
           </>
         )}
 
-        {/* ────── ANALYTICS SUB-TAB BAR ────── */}
-        {tab === "analytics" && (
+        {/* ────── ANALYTICS SUB-TAB BAR (retired — replaced by section nav) ────── */}
+        {false && tab === "analytics" && (
           <div style={{ display: "flex", gap: 6, marginBottom: 28, paddingBottom: 20, borderBottom: "1px solid #e2e8f0" }}>
             {[{ key: "reports", label: "Reports" }, { key: "ads", label: `Ads${adList.length > 0 ? ` (${adList.length})` : ""}` }].map(({ key, label }) => (
               <button key={key} onClick={() => setAnalyticsTab(key)} style={{ background: analyticsTab === key ? "rgba(52,211,153,0.08)" : "transparent", border: `1px solid ${analyticsTab === key ? "rgba(52,211,153,0.3)" : "#e2e8f0"}`, borderRadius: 8, padding: "7px 16px", color: analyticsTab === key ? "#059669" : "#6b7280", fontSize: 13, fontWeight: analyticsTab === key ? 600 : 400, cursor: "pointer" }}>
@@ -4999,8 +5568,8 @@ export function CMS({ onExit, currentUser }) {
           </div>
         )}
 
-        {/* ────── MEMBERS SUB-TAB BAR ────── */}
-        {tab === "members" && (
+        {/* ────── MEMBERS SUB-TAB BAR (retired — replaced by section nav) ────── */}
+        {false && tab === "members" && (
           <div style={{ display: "flex", gap: 6, marginBottom: 28, paddingBottom: 20, borderBottom: "1px solid #e2e8f0" }}>
             {[{ key: "users", label: `Users${users.length > 0 ? ` (${users.length})` : ""}` }, { key: "subscriptions", label: `Subscriptions${subs.length > 0 ? ` (${subs.length})` : ""}` }, { key: "support", label: "Support" }].map(({ key, label }) => (
               <button key={key} onClick={() => { setMembersTab(key); if (key === "support") { setSupportUser(null); setSupportResults([]); setSupportSearch(""); setSupportActionMsg(null); } }} style={{ background: membersTab === key ? "rgba(129,140,248,0.08)" : "transparent", border: `1px solid ${membersTab === key ? "rgba(129,140,248,0.3)" : "#e2e8f0"}`, borderRadius: 8, padding: "7px 16px", color: membersTab === key ? "#4f46e5" : "#6b7280", fontSize: 13, fontWeight: membersTab === key ? 600 : 400, cursor: "pointer" }}>
@@ -5700,7 +6269,7 @@ export function CMS({ onExit, currentUser }) {
             </div>
 
             {/* ── Creators Card ── */}
-            <div onClick={() => { setTab("creators"); setCreatorsTab("list"); }}
+            <div onClick={() => { setSection("streaming"); setTab("creators"); setCreatorsTab("list"); }}
               style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "22px 28px", marginBottom: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "box-shadow 0.15s" }}
               onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"}
               onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
@@ -5717,7 +6286,7 @@ export function CMS({ onExit, currentUser }) {
             </div>
 
             {/* ── Review Queue Card ── */}
-            <div onClick={() => { setTab("creators"); setCreatorsTab("review"); }}
+            <div onClick={() => { setSection("streaming"); setTab("creators"); setCreatorsTab("review"); }}
               style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "22px 28px", marginBottom: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "box-shadow 0.15s" }}
               onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"}
               onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
@@ -5737,7 +6306,7 @@ export function CMS({ onExit, currentUser }) {
             </div>
 
             {/* ── Payouts Card ── */}
-            <div onClick={() => { setTab("creators"); setCreatorsTab("payouts"); setPayoutView("current"); }}
+            <div onClick={() => { setSection("streaming"); setTab("creators"); setCreatorsTab("payouts"); setPayoutView("current"); }}
               style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "22px 28px", marginBottom: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "box-shadow 0.15s" }}
               onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"}
               onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
@@ -5754,7 +6323,7 @@ export function CMS({ onExit, currentUser }) {
             </div>
 
             {/* ── Security Card ── */}
-            <div onClick={() => { setTab("security"); loadSecurityData(); }}
+            <div onClick={() => { setSection("system"); setTab("security"); loadSecurityData(); }}
               style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "22px 28px", marginBottom: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "box-shadow 0.15s" }}
               onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"}
               onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
@@ -6010,7 +6579,8 @@ export function CMS({ onExit, currentUser }) {
                   {tab === "content" && videoSubTab === "episodes" && (editingEpisodeId ? "Edit Episode" : "Add Episode")}
                   {tab === "content" && videoSubTab === "podcasts" && (editingPodcastId ? "Edit Podcast" : "Add Podcast")}
                   {tab === "content" && videoSubTab === "carousels" && (editingCarouselId ? "Edit Carousel" : "Add Carousel")}
-                  {tab === "live" && drawerFormType !== "epg" && drawerFormType !== "bulk" && (editingLiveId ? "Edit Stream" : "Add Stream")}
+                  {tab === "live" && liveSubTab === "channels" && (editingChannelId ? "Edit Channel" : "Add Channel")}
+                  {tab === "live" && liveSubTab !== "channels" && drawerFormType !== "epg" && drawerFormType !== "bulk" && (editingLiveId ? "Edit Stream" : "Add Stream")}
                   {tab === "live" && drawerFormType === "epg" && (editingEpgId ? "Edit Program" : "Add Program")}
                   {tab === "live" && drawerFormType === "bulk" && "Auto-Schedule Block"}
                   {tab === "analytics" && analyticsTab === "ads" && (editingAdId ? "Edit Ad Tag" : "Add Ad Tag")}
@@ -6637,8 +7207,90 @@ export function CMS({ onExit, currentUser }) {
                   </div>
                 )}
 
+                {/* ── CHANNEL FORM ── */}
+                {tab === "live" && liveSubTab === "channels" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                    <p style={{ margin: "0 0 10px", fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 1 }}>Basics</p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
+                      <FieldInput label="Name *" value={channelForm.name} onChange={v => setChannelForm(f => ({ ...f, name: v }))} placeholder="e.g. Peep Classics" />
+                      <FieldInput label="Slug" value={channelForm.slug} onChange={v => setChannelForm(f => ({ ...f, slug: v }))} placeholder="auto-generated from name" />
+                      <FieldInput label="Description" value={channelForm.description} onChange={v => setChannelForm(f => ({ ...f, description: v }))} placeholder="What's on this channel?" />
+                      <div>
+                        <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Category</label>
+                        <select value={channelForm.category} onChange={e => setChannelForm(f => ({ ...f, category: e.target.value }))}
+                          style={{ width: "100%", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }}>
+                          {["general","movies","sports","news","gaming","music","kids","education","entertainment"].map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                          <input type="checkbox" checked={channelForm.is_active} onChange={e => setChannelForm(f => ({ ...f, is_active: e.target.checked }))} />
+                          <span style={{ fontSize: 13, color: "#374151" }}>Active (visible to users)</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <p style={{ margin: "0 0 10px", fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 1 }}>Ingest / Playback</p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Protocol</label>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          {[{ k: "hls", l: "HLS (pull)" }, { k: "rtmp", l: "RTMP (push)" }, { k: "srt", l: "SRT (push)" }].map(({ k, l }) => (
+                            <button key={k} onClick={() => setChannelForm(f => ({ ...f, ingest_type: k }))}
+                              style={{ flex: 1, background: channelForm.ingest_type === k ? "#ef4444" : "#f1f5f9", border: `1px solid ${channelForm.ingest_type === k ? "#ef4444" : "#e2e8f0"}`, borderRadius: 7, padding: "8px 4px", color: channelForm.ingest_type === k ? "#fff" : "#374151", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                              {l}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <FieldInput label="Playback URL (HLS .m3u8) *" value={channelForm.hls_url} onChange={v => setChannelForm(f => ({ ...f, hls_url: v }))} placeholder="https://…/video.m3u8" />
+                      {channelForm.ingest_type !== "hls" && (
+                        <FieldInput label="Cloudflare Live Input UID" value={channelForm.stream_uid} onChange={v => setChannelForm(f => ({ ...f, stream_uid: v }))} placeholder="From Cloudflare Stream dashboard" />
+                      )}
+                      {channelForm.ingest_type === "rtmp" && (
+                        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 14px" }}>
+                          <p style={{ margin: "0 0 4px", fontSize: 12, fontWeight: 600, color: "#374151" }}>RTMP push endpoint</p>
+                          <p style={{ margin: 0, fontSize: 12, color: "#6b7280", fontFamily: "monospace" }}>rtmps://live.cloudflare.com/live/{"<stream_key>"}</p>
+                          <p style={{ margin: "8px 0 0", fontSize: 11, color: "#9ca3af" }}>Get the stream key from Cloudflare Stream → Live Inputs. Feed it to FFmpeg or your encoder 24/7.</p>
+                        </div>
+                      )}
+                      {channelForm.ingest_type === "srt" && (
+                        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 14px" }}>
+                          <p style={{ margin: "0 0 4px", fontSize: 12, fontWeight: 600, color: "#374151" }}>SRT push endpoint</p>
+                          <p style={{ margin: 0, fontSize: 12, color: "#6b7280", fontFamily: "monospace" }}>srt://live.cloudflare.com:778</p>
+                          <p style={{ margin: "8px 0 0", fontSize: 11, color: "#9ca3af" }}>Pass the stream key as the SRT stream ID. Cloudflare Stream supports SRT ingest natively.</p>
+                        </div>
+                      )}
+                      <FieldInput label="Sort Order" value={String(channelForm.sort_order)} onChange={v => setChannelForm(f => ({ ...f, sort_order: parseInt(v) || 0 }))} placeholder="0" />
+                    </div>
+
+                    <p style={{ margin: "0 0 10px", fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 1 }}>Media</p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 28 }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Logo (square)</label>
+                        <ImageUploader label="Upload Logo" folder="channels" onUploadSuccess={url => setChannelForm(f => ({ ...f, logo_url: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
+                        <input type="text" value={channelForm.logo_url} onChange={e => setChannelForm(f => ({ ...f, logo_url: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 2, textTransform: "uppercase", letterSpacing: 0.7 }}>Hero Image</label>
+                        <p style={{ margin: "0 0 6px", fontSize: 11, color: "#9ca3af" }}>1920×1080 recommended.</p>
+                        <ImageUploader label="Upload Hero" folder="channels" onUploadSuccess={url => setChannelForm(f => ({ ...f, hero_url: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
+                        <input type="text" value={channelForm.hero_url} onChange={e => setChannelForm(f => ({ ...f, hero_url: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                        {channelForm.hero_url && <img src={channelForm.hero_url} alt="" style={{ marginTop: 8, width: "100%", height: 80, objectFit: "cover", borderRadius: 6, border: "1px solid #e2e8f0" }} onError={e => { e.target.style.display = "none"; }} />}
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <button onClick={saveChannel} disabled={channelSaving} style={{ flex: 1, background: "#ef4444", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: channelSaving ? "not-allowed" : "pointer", opacity: channelSaving ? 0.7 : 1 }}>
+                        {channelSaving ? "Saving…" : editingChannelId ? "Save Changes" : "Add Channel"}
+                      </button>
+                      <button onClick={() => { setEditingChannelId(null); setChannelForm(EMPTY_CHANNEL); setDrawerOpen(false); }} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+
                 {/* ── LIVE FORM ── */}
-                {tab === "live" && drawerFormType !== "epg" && drawerFormType !== "bulk" && (
+                {tab === "live" && liveSubTab !== "channels" && drawerFormType !== "epg" && drawerFormType !== "bulk" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
 
                     {/* Section: Basics */}
@@ -7124,7 +7776,7 @@ export function CMS({ onExit, currentUser }) {
           <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
               <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#0f172a" }}>Import EPG · XMLTV</h2>
-              <p style={{ margin: "3px 0 0", fontSize: 12, color: "#6b7280" }}>Upload a .xml file or load from a URL, then map channels to your live streams</p>
+              <p style={{ margin: "3px 0 0", fontSize: 12, color: "#6b7280" }}>Upload a .xml/.xml.gz file or load from a URL, then map each guide channel to one of your channels</p>
             </div>
             <button onClick={() => setXmltvOpen(false)} style={{ background: "none", border: "none", fontSize: 20, color: "#9ca3af", cursor: "pointer", lineHeight: 1, padding: 4 }}>✕</button>
           </div>
@@ -7210,7 +7862,7 @@ export function CMS({ onExit, currentUser }) {
                       </p>
                     </div>
 
-                    <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "#374151" }}>2. Map XMLTV channels to your live streams</p>
+                    <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "#374151" }}>2. Map XMLTV channels to your channels</p>
                     <div style={{ border: "1px solid #e2e8f0", borderRadius: 10, overflow: "hidden", marginBottom: 20 }}>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr auto", gap: 0, background: "#f8fafc", padding: "8px 16px", borderBottom: "1px solid #e2e8f0" }}>
                         <span style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5 }}>XMLTV Channel</span>
@@ -7233,8 +7885,8 @@ export function CMS({ onExit, currentUser }) {
                               onChange={e => setXmltvChannelMap(m => ({ ...m, [xId]: e.target.value ? Number(e.target.value) : undefined }))}
                               style={{ border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 10px", fontSize: 13, background: xmltvChannelMap[xId] ? "#f0fdf4" : "#fff", color: xmltvChannelMap[xId] ? "#15803d" : "#374151" }}>
                               <option value="">— Skip —</option>
-                              {liveList.map(ch => (
-                                <option key={ch.id} value={ch.id}>{ch.channel_number ? `CH ${ch.channel_number} · ` : ""}{ch.title}</option>
+                              {channelList.map(ch => (
+                                <option key={ch.id} value={ch.id}>{ch.name}</option>
                               ))}
                             </select>
                             <button

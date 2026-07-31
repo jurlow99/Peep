@@ -22,6 +22,7 @@ import { useIsMobile } from "./hooks/useIsMobile";
 import { rankRelated } from "./lib/recommendations";
 import { TrailerModal } from "./lib/playerUtils";
 import { Spinner } from "./components/ui/Spinner";
+import { loadFlags, getFlags } from "./lib/flags";
 import { contentSelect } from "./lib/contentQueries";
 import { contentKey } from "./lib/contentIds";
 
@@ -69,19 +70,21 @@ export default function App() {
   const [selectedPodcastEp, setSelectedPodcastEp] = useState(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [activeProfile, setActiveProfile] = useState(null);
   const [streamRecord, setStreamRecord] = useState(null);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [flags, setFlags] = useState(() => getFlags());
   const {
     user,
     authChecked,
     userAvatarId,
     setUserAvatarId,
+    userName,
+    setUserName,
     userRole,
     passwordRecovery,
     setPasswordRecovery,
   } = useAuth();
-  const { myList, toggleList } = useMyList(user?.id, activeProfile?.id, () => setAuthOpen(true));
+  const { myList, toggleList } = useMyList(user?.id, () => setAuthOpen(true));
   const [creatorRecord, setCreatorRecord] = useState(null);
   const [betaAck, setBetaAck] = useState(() => localStorage.getItem("peep_beta_ack") === "true");
   const [guestMode, setGuestMode] = useState(() => sessionStorage.getItem("peep_guest") === "1");
@@ -99,9 +102,7 @@ export default function App() {
     });
   }, []);
 
-  useEffect(() => {
-    if (!user) setActiveProfile(null);
-  }, [user]);
+  useEffect(() => { loadFlags().then(setFlags); }, []);
 
   // Check if viewer-role user is also a creator partner (for in-app creator portal link)
   useEffect(() => {
@@ -118,55 +119,28 @@ export default function App() {
       .then(({ data }) => setStreamRecord(data ?? null));
   }, [user?.id]);
 
-  // Load saved profile from localStorage, or auto-select the first viewer profile
-  useEffect(() => {
-    if (!user) { setActiveProfile(null); return; }
-    try {
-      const stored = JSON.parse(localStorage.getItem(`peep_profile_${user.id}`));
-      if (stored) { setActiveProfile(stored); return; }
-    } catch {}
-    // No stored profile — auto-select first viewer profile
-    supabase.from("viewer_profiles").select("*").eq("user_id", user.id).order("id", { ascending: true }).limit(1).maybeSingle()
-      .then(({ data }) => {
-        if (data) {
-          setActiveProfile(data);
-          localStorage.setItem(`peep_profile_${user.id}`, JSON.stringify(data));
-        }
-      });
-  }, [user?.id]);
-
   // Presence heartbeat — mark this user online while browsing
   useEffect(() => {
     if (!user) return;
     const ping = () => supabase.from("user_presence").upsert(
-      { user_id: user.id, last_seen: new Date().toISOString(), current_page: page, profile_id: activeProfile?.id ?? null },
+      { user_id: user.id, last_seen: new Date().toISOString(), current_page: page },
       { onConflict: "user_id" }
     ).then(() => {});
     ping();
     const t = setInterval(ping, 60000);
     return () => clearInterval(t);
-  }, [user?.id, page, activeProfile?.id]);
+  }, [user?.id, page]);
 
-  function selectProfile(profile) {
-    setActiveProfile(profile);
-    localStorage.setItem(`peep_profile_${user.id}`, JSON.stringify(profile));
-  }
-
-  function switchProfile() {
-    setActiveProfile(null);
-    if (user) localStorage.removeItem(`peep_profile_${user.id}`);
-  }
-
-  const { goHome: navigateHome } = useAppNavigation({ page, setPage, selectedVideo, selectedShow, selectedPodcast });
-  const goHome = () => {
-    navigateHome();
+  const clearSelection = () => {
     setSelectedVideo(null);
     setSelectedShow(null);
     setSelectedPodcast(null);
     setSelectedPodcastEp(null);
   };
+  const { goHome: navigateHome } = useAppNavigation({ page, setPage, selectedVideo, selectedShow, selectedPodcast, onClearSelection: clearSelection });
+  const goHome = () => { navigateHome(); clearSelection(); };
 
-  const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true), onProfileOpen: () => setPage("profile"), userAvatarId, activeProfile, onSwitchProfile: switchProfile, onPodcastSelect: pod => { setSelectedPodcast(pod); setPage("podcast"); }, onViewProfile: () => setPage("profile") };
+  const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true), onProfileOpen: () => setPage("profile"), userAvatarId, userName, onPodcastSelect: pod => { setSelectedPodcast(pod); setPage("podcast"); }, onViewProfile: () => setPage("profile"), onChannelPlay: ch => { setSelectedVideo({ id: `ch-${ch.id}`, title: ch.name, url: ch.hls_url, _type: "live", thumbnail: ch.hero_url || ch.logo_url || "", description: ch.description || "" }); setPage("player"); } };
 
 
   if (maintenanceMode) return (
@@ -188,7 +162,7 @@ export default function App() {
   if (user && userRole === "creator") return <CreatorDashboard user={user} onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }} />;
 
   const goToStudio = () => { setProfileOpen(false); setPage("studio"); };
-  const profileScreenEl = profileOpen && <ProfileScreen user={user} activeProfile={activeProfile} onClose={() => setProfileOpen(false)} onAvatarChange={id => setUserAvatarId(id)} onProfileUpdate={updated => { setActiveProfile(updated); localStorage.setItem(`peep_profile_${user.id}`, JSON.stringify(updated)); }} onSwitchProfile={switchProfile} onViewProfile={() => { setProfileOpen(false); setPage("profile"); }} onOpenSettings={() => { setProfileOpen(false); setPage("settings"); }} onCreatorDash={creatorRecord ? () => { setProfileOpen(false); setPage("creator"); } : null} onStreamerDash={streamRecord ? goToStudio : null} />;
+  const profileScreenEl = profileOpen && <ProfileScreen user={user} userAvatarId={userAvatarId} userName={userName} onClose={() => setProfileOpen(false)} onAvatarChange={id => setUserAvatarId(id)} onNameChange={n => setUserName(n)} onViewProfile={() => { setProfileOpen(false); setPage("profile"); }} onOpenSettings={() => { setProfileOpen(false); setPage("settings"); }} onCreatorDash={creatorRecord ? () => { setProfileOpen(false); setPage("creator"); } : null} onStreamerDash={streamRecord ? goToStudio : null} />;
 
   if (page === "player" && selectedVideo) {
     const isLiveVideo = selectedVideo._type === "live" || selectedVideo._type === "live_epg";
@@ -269,14 +243,9 @@ export default function App() {
         {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
         <SettingsPage
           user={user}
-          activeProfile={activeProfile}
           isOwner={isOwnerEmail(user?.email)}
           onBack={() => setPage("home")}
           onGoHome={goHome}
-          onProfileUpdate={updated => {
-            setActiveProfile(updated);
-            localStorage.setItem(`peep_profile_${user.id}`, JSON.stringify(updated));
-          }}
           onAvatarChange={id => setUserAvatarId(id)}
           onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }}
         />
@@ -289,13 +258,11 @@ export default function App() {
         {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
         <ProfilePage
           user={user}
-          activeProfile={activeProfile}
+          userAvatarId={userAvatarId}
+          userName={userName}
           onBack={() => setPage("home")}
           onGoHome={goHome}
-          onProfileUpdate={updated => {
-            setActiveProfile(updated);
-            localStorage.setItem(`peep_profile_${user.id}`, JSON.stringify(updated));
-          }}
+          onNameChange={n => setUserName(n)}
           onOpenSettings={() => setPage("settings")}
           onAvatarChange={id => setUserAvatarId(id)}
           onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }}
@@ -358,6 +325,7 @@ export default function App() {
         onGoLive={() => setPage("studio")}
         onExitStudio={() => setPage("home")}
         studioContent={page === "studio" ? <StreamerDashboard embedded preloadedUser={user} /> : null}
+        flags={flags}
         {...listProps}
       />
     </>
@@ -369,7 +337,7 @@ export default function App() {
 // ─── Homepage ─────────────────────────────────────────────────────────────────
 
 
-function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, activeProfile }) {
+function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, userName }) {
   const [episodes, setEpisodes] = useState([]);
   const [selectedSeason, setSelectedSeason] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -410,9 +378,9 @@ function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList
   }, [show.id]);
 
   useEffect(() => {
-    if (!user || !activeProfile || !episodes.length) { setWatchProgress({}); return; }
+    if (!user || !episodes.length) { setWatchProgress({}); return; }
     supabase.from("watch_progress").select("*")
-      .eq("user_id", user.id).eq("profile_id", activeProfile.id).eq("content_type", "episode")
+      .eq("user_id", user.id).eq("content_type", "episode")
       .in("content_id", episodes.map(e => e.id))
       .then(({ data }) => {
         if (data) {
@@ -421,7 +389,7 @@ function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList
           setWatchProgress(map);
         }
       });
-  }, [episodes, user, activeProfile?.id]);
+  }, [episodes, user?.id]);
 
   const seasons = [...new Set(episodes.map(e => e.season))].sort((a, b) => a - b);
   const seasonEpisodes = episodes.filter(e => e.season === selectedSeason);
@@ -460,12 +428,12 @@ function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList
             <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
           </div>
           {(() => {
-            const av = avatarForId(userAvatarId || activeProfile?.avatar_id);
+            const av = avatarForId(userAvatarId);
             return user ? (
-              <div onClick={onProfileOpen} title={activeProfile?.name ?? "Profile"} style={{ width: 34, height: 34, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? 15 : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
+              <div onClick={onProfileOpen} title={userName ?? "Profile"} style={{ width: 34, height: 34, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? 15 : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
                 onMouseEnter={e => e.currentTarget.style.borderColor = "#facc15"}
                 onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}>
-                {av ? av.emoji : (activeProfile?.name?.[0] || user.email[0]).toUpperCase()}
+                {av ? av.emoji : (userName?.[0] || user.email[0]).toUpperCase()}
               </div>
             ) : null;
           })()}
@@ -668,7 +636,7 @@ function EpisodeCard({ episode, show, onPlay, progress }) {
 
 // ─── Podcast Detail ───────────────────────────────────────────────────────────
 
-function PodcastDetail({ podcast, onBack, onGoHome, onPlay, onProfileOpen, userAvatarId, user, activeProfile }) {
+function PodcastDetail({ podcast, onBack, onGoHome, onPlay, onProfileOpen, userAvatarId, user, userName }) {
   const [episodes, setEpisodes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [watchProgress, setWatchProgress] = useState({});
@@ -684,14 +652,14 @@ function PodcastDetail({ podcast, onBack, onGoHome, onPlay, onProfileOpen, userA
   }, [podcast.id]);
 
   useEffect(() => {
-    if (!user || !activeProfile || !episodes.length) { setWatchProgress({}); return; }
+    if (!user || !episodes.length) { setWatchProgress({}); return; }
     supabase.from("watch_progress").select("*")
-      .eq("user_id", user.id).eq("profile_id", activeProfile.id).eq("content_type", "podcast_episode")
+      .eq("user_id", user.id).eq("content_type", "podcast_episode")
       .in("content_id", episodes.map(e => e.id))
       .then(({ data }) => {
         if (data) { const m = {}; data.forEach(p => { m[p.content_id] = p; }); setWatchProgress(m); }
       });
-  }, [episodes, user, activeProfile?.id]);
+  }, [episodes, user?.id]);
 
   const resumeEp = (() => {
     if (!episodes.length) return null;
@@ -726,12 +694,12 @@ function PodcastDetail({ podcast, onBack, onGoHome, onPlay, onProfileOpen, userA
             <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
           </div>
           {(() => {
-            const av = avatarForId(userAvatarId || activeProfile?.avatar_id);
+            const av = avatarForId(userAvatarId);
             return user ? (
-              <div onClick={onProfileOpen} title={activeProfile?.name ?? "Profile"} style={{ width: 34, height: 34, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? 15 : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
+              <div onClick={onProfileOpen} title={userName ?? "Profile"} style={{ width: 34, height: 34, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? 15 : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
                 onMouseEnter={e => e.currentTarget.style.borderColor = "#facc15"}
                 onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}>
-                {av ? av.emoji : (activeProfile?.name?.[0] || user.email[0]).toUpperCase()}
+                {av ? av.emoji : (userName?.[0] || user.email[0]).toUpperCase()}
               </div>
             ) : null;
           })()}
@@ -837,7 +805,7 @@ function PodcastEpisodeRow({ episode, podcast, onPlay, progress }) {
 
 // ─── Podcast Player ────────────────────────────────────────────────────────────
 
-function PodcastPlayerView({ episode, podcast, onBack, onGoHome, onSelect, onProfileOpen, userAvatarId, user, activeProfile }) {
+function PodcastPlayerView({ episode, podcast, onBack, onGoHome, onSelect, onProfileOpen, userAvatarId, user, userName }) {
   const audioRef = useRef(null);
   const saveProgressRef = useRef(null);
   const progressTimerRef = useRef(null);
@@ -857,28 +825,28 @@ function PodcastPlayerView({ episode, podcast, onBack, onGoHome, onSelect, onPro
   }, [episode.id, podcast.id]);
 
   useEffect(() => {
-    if (!user || !activeProfile) return;
+    if (!user) return;
     saveProgressRef.current = async () => {
       if (!audioRef.current) return;
       const { currentTime, duration } = audioRef.current;
       if (currentTime < 5 || !duration) return;
       await supabase.from("watch_progress").upsert({
-        user_id: user.id, profile_id: activeProfile.id, content_id: episode.id, content_type: "podcast_episode",
+        user_id: user.id, content_id: episode.id, content_type: "podcast_episode",
         progress_seconds: currentTime, duration_seconds: duration,
         completed: currentTime / duration > 0.92 || duration - currentTime < 30,
         last_watched_at: new Date().toISOString(),
-      }, { onConflict: "user_id,profile_id,content_id,content_type" });
+      }, { onConflict: "user_id,content_id,content_type" });
     };
     progressTimerRef.current = setInterval(() => { saveProgressRef.current?.(); }, 15000);
     return () => clearInterval(progressTimerRef.current);
-  }, [episode.id, user, activeProfile?.id]);
+  }, [episode.id, user]);
 
   useEffect(() => () => { clearInterval(progressTimerRef.current); saveProgressRef.current?.(); }, []);
 
   function handleLoadedMetadata() {
-    if (!user || !activeProfile || !audioRef.current) return;
+    if (!user || !audioRef.current) return;
     supabase.from("watch_progress").select("progress_seconds, duration_seconds, completed")
-      .eq("user_id", user.id).eq("profile_id", activeProfile.id)
+      .eq("user_id", user.id)
       .eq("content_id", episode.id).eq("content_type", "podcast_episode").maybeSingle()
       .then(({ data }) => {
         if (!data || data.completed || !audioRef.current) return;
@@ -912,12 +880,12 @@ function PodcastPlayerView({ episode, podcast, onBack, onGoHome, onSelect, onPro
             <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
           </div>
           {(() => {
-            const av = avatarForId(userAvatarId || activeProfile?.avatar_id);
+            const av = avatarForId(userAvatarId);
             return user ? (
-              <div onClick={onProfileOpen} title={activeProfile?.name ?? "Profile"} style={{ width: 34, height: 34, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? 15 : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
+              <div onClick={onProfileOpen} title={userName ?? "Profile"} style={{ width: 34, height: 34, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? 15 : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
                 onMouseEnter={e => e.currentTarget.style.borderColor = "#facc15"}
                 onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}>
-                {av ? av.emoji : (activeProfile?.name?.[0] || user.email[0]).toUpperCase()}
+                {av ? av.emoji : (userName?.[0] || user.email[0]).toUpperCase()}
               </div>
             ) : null;
           })()}
@@ -986,26 +954,25 @@ function PodcastPlayerView({ episode, podcast, onBack, onGoHome, onSelect, onPro
 
 // ─── Profile Page ─────────────────────────────────────────────────────────────
 
-function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, onOpenSettings, onAvatarChange, onSignOut }) {
+function ProfilePage({ user, userAvatarId, userName, onBack, onGoHome, onNameChange, onOpenSettings, onAvatarChange, onSignOut }) {
   const [history, setHistory] = useState([]);
   const [contentMap, setContentMap] = useState({});
   const [showsMap, setShowsMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(activeProfile?.name || "");
-  const [bio, setBio] = useState(activeProfile?.bio || "");
-  const [avatarId, setAvatarId] = useState(activeProfile?.avatar_id || null);
+  const [name, setName] = useState(userName || "");
+  const [avatarId, setAvatarId] = useState(userAvatarId || null);
   const [saving, setSaving] = useState(false);
   const isMobile = useIsMobile();
   const memberSince = user?.created_at ? new Date(user.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : null;
-  const av = avatarForId(editing ? avatarId : activeProfile?.avatar_id);
+  const av = avatarForId(editing ? avatarId : userAvatarId);
 
-  useEffect(() => { fetchData(); }, [activeProfile?.id]);
+  useEffect(() => { fetchData(); }, [user?.id]);
 
   async function fetchData() {
     setLoading(true);
     const [progressRes, videosRes, showsRes, episodesRes, podEpRes, podRes] = await Promise.all([
-      supabase.from("watch_progress").select("*").eq("user_id", user.id).eq("profile_id", activeProfile.id).order("last_watched_at", { ascending: false }),
+      supabase.from("watch_progress").select("*").eq("user_id", user.id).order("last_watched_at", { ascending: false }),
       supabase.from("videos").select("id, title, thumbnail, poster, category, year"),
       supabase.from("shows").select("id, title, thumbnail, poster, category"),
       supabase.from("episodes").select("id, title, thumbnail, show_id, season, episode_number"),
@@ -1028,14 +995,11 @@ function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, o
 
   async function saveProfile() {
     setSaving(true);
-    await Promise.all([
-      supabase.from("viewer_profiles").update({ name: name.trim(), bio: bio.trim(), avatar_id: avatarId }).eq("id", activeProfile.id),
-      supabase.from("profiles").upsert({ id: user.id, avatar_id: avatarId }, { onConflict: "id" }),
-    ]);
+    await supabase.from("profiles").update({ full_name: name.trim(), avatar_id: avatarId }).eq("id", user.id);
     setSaving(false);
     setEditing(false);
     onAvatarChange?.(avatarId);
-    onProfileUpdate?.({ ...activeProfile, name: name.trim(), bio: bio.trim(), avatar_id: avatarId });
+    onNameChange?.(name.trim());
   }
 
   const enriched = history.map(h => ({ ...h, content: contentMap[h.content_id] || null })).filter(h => h.content);
@@ -1069,11 +1033,10 @@ function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, o
       <div style={{ paddingTop: 68 + 40, paddingLeft: PAD, paddingRight: PAD, paddingBottom: 0, maxWidth: 860, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 24, marginBottom: 28, flexWrap: "wrap" }}>
           <div style={{ width: isMobile ? 80 : 96, height: isMobile ? 80 : 96, borderRadius: "50%", background: av?.svg ? "none" : (av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)"), display: "flex", alignItems: "center", justifyContent: "center", fontSize: isMobile ? 30 : 38, border: "3px solid #222", flexShrink: 0, overflow: "hidden" }}>
-            {av?.svg ? <div style={{ width: "100%", height: "100%" }} dangerouslySetInnerHTML={{ __html: av.svg }} /> : (av?.emoji ?? (activeProfile?.name?.[0] ?? user?.email?.[0] ?? "?").toUpperCase())}
+            {av?.svg ? <div style={{ width: "100%", height: "100%" }} dangerouslySetInnerHTML={{ __html: av.svg }} /> : (av?.emoji ?? (userName?.[0] ?? user?.email?.[0] ?? "?").toUpperCase())}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h1 style={{ margin: "0 0 4px", fontSize: isMobile ? 20 : 26, fontWeight: 700, color: "#fff" }}>{editing ? (name || activeProfile?.name) : activeProfile?.name}</h1>
-            {!editing && activeProfile?.bio && <p style={{ margin: "0 0 6px", fontSize: 13, color: "#666", lineHeight: 1.6 }}>{activeProfile.bio}</p>}
+            <h1 style={{ margin: "0 0 4px", fontSize: isMobile ? 20 : 26, fontWeight: 700, color: "#fff" }}>{editing ? name : (userName || user?.email)}</h1>
             <p style={{ margin: 0, fontSize: 12, color: "#333" }}>{memberSince ? `Member since ${memberSince}` : user?.email}</p>
           </div>
           <div style={{ display: "flex", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
@@ -1082,7 +1045,7 @@ function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, o
                 Settings
               </button>
             )}
-            <button onClick={() => { setEditing(e => !e); setName(activeProfile?.name || ""); setBio(activeProfile?.bio || ""); setAvatarId(activeProfile?.avatar_id || null); }}
+            <button onClick={() => { setEditing(e => !e); setName(userName || ""); setAvatarId(userAvatarId || null); }}
               style={{ background: editing ? "rgba(250,204,21,0.12)" : "rgba(255,255,255,0.06)", border: `1px solid ${editing ? "rgba(250,204,21,0.3)" : "#2a2a2a"}`, borderRadius: 8, padding: "8px 18px", color: editing ? "#facc15" : "#aaa", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
               {editing ? "Cancel" : "Edit Profile"}
             </button>
@@ -1109,11 +1072,6 @@ function ProfilePage({ user, activeProfile, onBack, onGoHome, onProfileUpdate, o
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: "block", fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Display Name</label>
               <input type="text" value={name} onChange={e => setName(e.target.value)} maxLength={40} placeholder="Your name" style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 8, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box", fontFamily: "inherit" }} />
-            </div>
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ display: "block", fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Bio</label>
-              <textarea value={bio} onChange={e => setBio(e.target.value)} rows={3} maxLength={200} placeholder="Write something about yourself..." style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 8, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }} />
-              <p style={{ margin: "4px 0 0", fontSize: 11, color: "#333", textAlign: "right" }}>{bio.length}/200</p>
             </div>
             <button onClick={saveProfile} disabled={saving} style={{ background: "#facc15", border: "none", borderRadius: 8, padding: "10px 28px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
               {saving ? "Saving…" : "Save Changes"}

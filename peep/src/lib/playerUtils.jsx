@@ -1,4 +1,9 @@
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
+
+function useNowTick(ms = 30000) {
+  const [, setTick] = useState(0);
+  useEffect(() => { const t = setInterval(() => setTick(n => n + 1), ms); return () => clearInterval(t); }, [ms]);
+}
 
 export function getTrailerType(url) {
   if (!url) return null;
@@ -45,6 +50,7 @@ export function TrailerModal({ url, title, onClose }) {
 
 export function LiveChannelStrip({ channels, epgEntries, currentId, onSwitch }) {
   const scrollRef = useRef(null);
+  useNowTick();
   const now = new Date();
 
   const nowByChannel = {};
@@ -70,7 +76,7 @@ export function LiveChannelStrip({ channels, epgEntries, currentId, onSwitch }) 
       </div>
       <div ref={scrollRef} className="scroll-row" style={{ display: "flex", gap: 10, overflowX: "auto", scrollbarWidth: "none", paddingBottom: 4 }}>
         {channels.map(ch => {
-          const isCurrent = ch.id === currentId;
+          const isCurrent = String(ch.id) === String(currentId);
           const nowAiring = nowByChannel[ch.id];
           return (
             <div key={ch.id} onClick={() => !isCurrent && onSwitch(ch)}
@@ -99,7 +105,7 @@ export function LiveChannelStrip({ channels, epgEntries, currentId, onSwitch }) 
                   </div>
                 )}
               </div>
-              <p style={{ margin: "0 0 4px", fontSize: 12, fontWeight: 700, color: isCurrent ? "#e0e7ff" : "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch.title}</p>
+              <p style={{ margin: "0 0 4px", fontSize: 12, fontWeight: 700, color: isCurrent ? "#e0e7ff" : "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch.name || ch.title}</p>
               <p style={{ margin: 0, fontSize: 11, color: isCurrent ? "#6366f1" : "#3a3a4a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {nowAiring ? nowAiring.title : "No guide info"}
               </p>
@@ -112,6 +118,7 @@ export function LiveChannelStrip({ channels, epgEntries, currentId, onSwitch }) 
 }
 
 export function FullscreenGuide({ channels, epgEntries, currentId, onSwitch }) {
+  useNowTick();
   const now = new Date();
   const nowByChannel = {};
   epgEntries.forEach(e => {
@@ -122,7 +129,7 @@ export function FullscreenGuide({ channels, epgEntries, currentId, onSwitch }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(175px, 1fr))", gap: 8, maxHeight: "42vh", overflowY: "auto" }}>
       {channels.map(ch => {
-        const isCurrent = ch.id === currentId;
+        const isCurrent = String(ch.id) === String(currentId);
         const nowAiring = nowByChannel[ch.id];
         return (
           <div key={ch.id} onClick={() => !isCurrent && onSwitch(ch)}
@@ -149,7 +156,7 @@ export function FullscreenGuide({ channels, epgEntries, currentId, onSwitch }) {
                 </div>
               )}
             </div>
-            <p style={{ margin: "0 0 3px", fontSize: 12, fontWeight: 700, color: isCurrent ? "#e0e7ff" : "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch.title}</p>
+            <p style={{ margin: "0 0 3px", fontSize: 12, fontWeight: 700, color: isCurrent ? "#e0e7ff" : "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch.name || ch.title}</p>
             <p style={{ margin: 0, fontSize: 10, color: isCurrent ? "#6366f1" : "#2e2e3a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {nowAiring ? nowAiring.title : "No guide info"}
             </p>

@@ -35,6 +35,22 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Peep Live is invite-only — channel creation requires an approved application
+    const email = user.email?.toLowerCase();
+    const { data: approvedApp } = await supabase
+      .from("streamer_applications")
+      .select("id")
+      .eq("email", email)
+      .eq("status", "approved")
+      .limit(1)
+      .maybeSingle();
+    if (!approvedApp) {
+      return new Response(JSON.stringify({ error: "Streaming on Peep is invite-only. Apply from the Creator Studio and we'll review your application." }), {
+        status: 403,
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      });
+    }
+
     // Get profile info for default name/slug
     const { data: profile } = await supabase
       .from("profiles")

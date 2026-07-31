@@ -45,7 +45,7 @@ const FAQ_ITEMS = [
   { q: "Is it really free?", a: "Yes. Watch everything on Peep for free — short ads keep the lights on, same as YouTube. Create a free account to save your list and pick up where you left off." },
   { q: "Do I need to download anything?", a: "No. Runs entirely in your browser on any device. Nothing to install." },
   { q: "How do I go ad-free?", a: "Coming soon. We'll offer an optional paid tier for ad-free viewing. For now, short pre-roll ads run before videos." },
-  { q: "Can I stream on Peep?", a: "Yes — create an account and enable streaming from your profile. You'll get your own live channel with a stream key." },
+  { q: "Can I stream on Peep?", a: "Peep Live is a curated lineup, not an open platform. Create an account, then apply from the Creator Studio — we review every application. If you're approved, you get your own live channel on the network." },
 ];
 
 function FaqItem({ q, a, open, onToggle }) {

@@ -3,12 +3,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../supabase";
 import { contentKey } from "../lib/contentIds";
 
-async function loadMyListMap(userId: string, profileId: string): Promise<Record<string, boolean>> {
+async function loadMyListMap(userId: string): Promise<Record<string, boolean>> {
   const { data } = await supabase
     .from("user_list")
     .select("content_id, content_type")
-    .eq("user_id", userId)
-    .eq("profile_id", profileId);
+    .eq("user_id", userId);
   const map: Record<string, boolean> = {};
   (data || []).forEach((item) => {
     map[contentKey(item.content_type, item.content_id)] = true;
@@ -18,36 +17,31 @@ async function loadMyListMap(userId: string, profileId: string): Promise<Record<
 
 export function useMyList(
   userId: string | undefined,
-  profileId: string | undefined,
   onNeedAuth: () => void
 ) {
   const queryClient = useQueryClient();
   const [myList, setMyList] = useState<Record<string, boolean>>({});
 
   const { data } = useQuery({
-    queryKey: ["myList", userId, profileId],
-    queryFn: () => loadMyListMap(userId!, profileId!),
-    enabled: !!userId && !!profileId,
+    queryKey: ["myList", userId],
+    queryFn: () => loadMyListMap(userId!),
+    enabled: !!userId,
   });
 
   useEffect(() => {
     if (data) setMyList(data);
-    else if (!userId || !profileId) setMyList({});
-  }, [data, userId, profileId]);
+    else if (!userId) setMyList({});
+  }, [data, userId]);
 
   const toggleList = useCallback(
     async (contentId: string | number, contentType: string) => {
-      if (!userId || !profileId) {
-        onNeedAuth();
-        return;
-      }
+      if (!userId) { onNeedAuth(); return; }
       const key = contentKey(contentType, contentId);
       if (myList[key]) {
         await supabase
           .from("user_list")
           .delete()
           .eq("user_id", userId)
-          .eq("profile_id", profileId)
           .eq("content_id", contentId)
           .eq("content_type", contentType);
         setMyList((prev) => {
@@ -58,15 +52,14 @@ export function useMyList(
       } else {
         await supabase.from("user_list").insert({
           user_id: userId,
-          profile_id: profileId,
           content_id: contentId,
           content_type: contentType,
         });
         setMyList((prev) => ({ ...prev, [key]: true }));
       }
-      queryClient.invalidateQueries({ queryKey: ["myList", userId, profileId] });
+      queryClient.invalidateQueries({ queryKey: ["myList", userId] });
     },
-    [userId, profileId, myList, onNeedAuth, queryClient]
+    [userId, myList, onNeedAuth, queryClient]
   );
 
   return { myList, toggleList, setMyList };

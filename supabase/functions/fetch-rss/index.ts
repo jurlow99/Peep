@@ -5,9 +5,11 @@ const CORS = {
 };
 
 function tag(xml: string, name: string): string {
+  // String.raw is required: in a normal template literal `\s`/`\S` collapse to
+  // literal "s"/"S", silently breaking the [\s\S] "any char" class.
   const patterns = [
-    new RegExp(`<${name}[^>]*><!\[CDATA\[([\s\S]*?)\]\]><\/${name}>`, "i"),
-    new RegExp(`<${name}[^>]*>([\s\S]*?)<\/${name}>`, "i"),
+    new RegExp(String.raw`<${name}[^>]*><!\[CDATA\[([\s\S]*?)\]\]></${name}>`, "i"),
+    new RegExp(String.raw`<${name}[^>]*>([\s\S]*?)</${name}>`, "i"),
   ];
   for (const re of patterns) {
     const m = xml.match(re);

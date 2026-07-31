@@ -164,10 +164,16 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
   const [instagramUrl, setInstagramUrl] = useState("");
   const [savingInfo, setSavingInfo]     = useState(false);
 
-  const [uploadingThumb, setUploadingThumb]   = useState(false);
-  const [uploadingHero, setUploadingHero]     = useState(false);
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [pendingFiles, setPendingFiles]       = useState({ thumbnail: null, hero: null, avatar: null });
+  const [offlineTitle, setOfflineTitle]           = useState("");
+  const [offlineMessage, setOfflineMessage]       = useState("");
+  const [offlineShowSchedule, setOfflineShowSchedule] = useState(false);
+  const [savingOffline, setSavingOffline]         = useState(false);
+
+  const [uploadingThumb, setUploadingThumb]         = useState(false);
+  const [uploadingHero, setUploadingHero]           = useState(false);
+  const [uploadingAvatar, setUploadingAvatar]       = useState(false);
+  const [uploadingOfflineImg, setUploadingOfflineImg] = useState(false);
+  const [pendingFiles, setPendingFiles]             = useState({ thumbnail: null, hero: null, avatar: null, offline: null });
 
   const [revealKey, setRevealKey]         = useState(false);
   const [rotatingKey, setRotatingKey]     = useState(false);
@@ -220,6 +226,13 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
   const [copied, setCopied] = useState(null);
   const [toast, setToast]   = useState(null);
   const [enablingStream, setEnablingStream] = useState(false);
+  const [application, setApplication] = useState(undefined); // undefined = not loaded, null = none
+  const [appName, setAppName] = useState("");
+  const [appWhy, setAppWhy] = useState("");
+  const [appSocial, setAppSocial] = useState("");
+  const [applying, setApplying] = useState(false);
+  const [appError, setAppError] = useState(null);
+  const [showApplyForm, setShowApplyForm] = useState(false);
   const [listed, setListed] = useState(false);
   const [savingListed, setSavingListed] = useState(false);
 
@@ -257,6 +270,10 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
     return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (user?.user_metadata?.full_name) setAppName(prev => prev || user.user_metadata.full_name);
+  }, [user?.id]);
+
   async function loadAll(userId) {
     setLoading(true);
     const { data } = await supabase.from("live_streams").select("*").eq("user_id", userId).maybeSingle();
@@ -276,6 +293,9 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
       setBannedWords(data.banned_words || []);
       setSlowMode(data.slow_mode_seconds || 0);
       setFollowerOnly(data.follower_only_chat || false);
+      setOfflineTitle(data.offline_title || "");
+      setOfflineMessage(data.offline_message || "");
+      setOfflineShowSchedule(data.offline_show_schedule ?? false);
       setListed(data.listed ?? false);
       loadFollows(data.id);
       loadSchedule(data.id);
@@ -283,8 +303,24 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
       loadNotifications(data.id);
       loadVods(data.stream_uid, data.previous_stream_uids || []);
       loadUploads(data.id);
+    } else {
+      await loadApplication();
     }
     setLoading(false);
+  }
+
+  async function loadApplication() {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { setApplication(null); return; }
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/my-streamer-application`, {
+        headers: { "Authorization": `Bearer ${session.access_token}` },
+      });
+      const json = await res.json();
+      setApplication(json.application ?? null);
+    } catch (_) {
+      setApplication(null);
+    }
   }
 
   async function loadFollows(streamId) {
@@ -597,6 +633,20 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
     showToast("Channel info saved!");
   }
 
+  async function saveOfflineScreen() {
+    if (!stream) return;
+    setSavingOffline(true);
+    const update = {
+      offline_title: offlineTitle.trim() || null,
+      offline_message: offlineMessage.trim() || null,
+      offline_show_schedule: offlineShowSchedule,
+    };
+    await supabase.from("live_streams").update(update).eq("id", stream.id);
+    setStream(s => ({ ...s, ...update }));
+    setSavingOffline(false);
+    showToast("Offline screen saved!");
+  }
+
   async function rotateKey() {
     setRotatingKey(true); setConfirmRotate(false);
     try {
@@ -730,25 +780,122 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
       setEnablingStream(false);
     }
 
-    return (
-      <div style={{ background: embedded ? "transparent" : BG, minHeight: embedded ? 0 : "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 16px", fontFamily: "'Space Grotesk', sans-serif" }}>
-        {!embedded && <a href="/" style={{ textDecoration: "none", marginBottom: 40 }}><span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 42, color: YELLOW }}>peep.</span></a>}
-        <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 16, padding: "48px 40px", width: "min(480px,100%)", textAlign: "center" }}>
-          <div style={{ width: 56, height: 56, borderRadius: "50%", background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.15)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px" }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={YELLOW} strokeWidth="2"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/></svg>
-          </div>
-          <h2 style={{ margin: "0 0 10px", fontSize: 22, fontWeight: 700, color: "#fff" }}>Start streaming on Peep</h2>
+    async function submitApplication() {
+      if (appName.trim().length < 2) { setAppError("Enter your name or channel name."); return; }
+      if (appWhy.trim().length < 20) { setAppError("Tell us a bit more about what you'd stream."); return; }
+      setApplying(true);
+      setAppError(null);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/my-streamer-application`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ name: appName.trim(), why: appWhy.trim(), social_links: appSocial.trim() }),
+        });
+        const json = await res.json();
+        if (json.error) throw new Error(json.error);
+        setApplication(json.application);
+        setShowApplyForm(false);
+      } catch (e) {
+        setAppError(e.message);
+      }
+      setApplying(false);
+    }
+
+    const status = application?.status;
+    const gateCard = { background: CARD, border: `1px solid ${BORDER}`, borderRadius: 16, width: "min(480px,100%)" };
+    const signOutBtn = <button onClick={signOut} style={{ background: "none", border: "none", color: "#333", fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>Sign out</button>;
+    let card;
+
+    if (status === "approved") {
+      card = (
+        <div style={{ ...gateCard, padding: "48px 40px", textAlign: "center" }}>
+          <div style={{ width: 56, height: 56, borderRadius: "50%", background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.2)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px", fontSize: 24 }}>✓</div>
+          <h2 style={{ margin: "0 0 10px", fontSize: 22, fontWeight: 700, color: "#fff" }}>You're approved!</h2>
           <p style={{ margin: "0 0 32px", fontSize: 14, color: "#555", lineHeight: 1.7 }}>
-            Create your channel in seconds. Stream live to your audience with OBS, Streamlabs, or any RTMP software.
+            Welcome to the Peep lineup. Create your channel to get your stream key — then go live with OBS, Streamlabs, or any RTMP software.
           </p>
           <button
             onClick={enableStreaming}
             disabled={enablingStream}
             style={{ display: "block", width: "100%", background: enablingStream ? "#333" : YELLOW, color: enablingStream ? "#888" : "#0a0a0a", fontWeight: 700, fontSize: 15, padding: "14px", borderRadius: 10, border: "none", cursor: enablingStream ? "not-allowed" : "pointer", fontFamily: "inherit", marginBottom: 14, transition: "all 0.15s" }}>
-            {enablingStream ? "Setting up your channel…" : "Enable Streaming →"}
+            {enablingStream ? "Setting up your channel…" : "Create My Channel →"}
           </button>
-          <button onClick={signOut} style={{ background: "none", border: "none", color: "#333", fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>Sign out</button>
+          {signOutBtn}
         </div>
+      );
+    } else if (status === "pending") {
+      card = (
+        <div style={{ ...gateCard, padding: "48px 40px", textAlign: "center" }}>
+          <div style={{ width: 56, height: 56, borderRadius: "50%", background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.15)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px", fontSize: 24 }}>⏳</div>
+          <h2 style={{ margin: "0 0 10px", fontSize: 22, fontWeight: 700, color: "#fff" }}>Application under review</h2>
+          <p style={{ margin: "0 0 8px", fontSize: 14, color: "#555", lineHeight: 1.7 }}>
+            Thanks for applying, {application.name?.split(" ")[0] || "there"}. We review every application to keep the Peep lineup curated — expect to hear back within 5 business days.
+          </p>
+          <p style={{ margin: "0 0 32px", fontSize: 13, color: "#444" }}>We'll email you at <strong style={{ color: "#888" }}>{user.email}</strong></p>
+          {signOutBtn}
+        </div>
+      );
+    } else if (status === "rejected" && !showApplyForm) {
+      card = (
+        <div style={{ ...gateCard, padding: "48px 40px", textAlign: "center" }}>
+          <h2 style={{ margin: "0 0 10px", fontSize: 22, fontWeight: 700, color: "#fff" }}>Not this time</h2>
+          <p style={{ margin: "0 0 16px", fontSize: 14, color: "#555", lineHeight: 1.7 }}>
+            We reviewed your application and weren't able to move forward. You're welcome to apply again.
+          </p>
+          {application.notes && (
+            <div style={{ background: "#0d0d0d", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "14px 18px", marginBottom: 24, textAlign: "left" }}>
+              <p style={{ margin: "0 0 4px", fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 700 }}>Note from the team</p>
+              <p style={{ margin: 0, fontSize: 13, color: "#aaa", lineHeight: 1.6 }}>{application.notes}</p>
+            </div>
+          )}
+          <button
+            onClick={() => setShowApplyForm(true)}
+            style={{ display: "block", width: "100%", background: YELLOW, color: "#0a0a0a", fontWeight: 700, fontSize: 15, padding: "14px", borderRadius: 10, border: "none", cursor: "pointer", fontFamily: "inherit", marginBottom: 14 }}>
+            Apply Again →
+          </button>
+          {signOutBtn}
+        </div>
+      );
+    } else {
+      card = (
+        <div style={{ ...gateCard, padding: "40px clamp(20px,6vw,40px)" }}>
+          <h2 style={{ margin: "0 0 6px", fontSize: 22, fontWeight: 700, color: "#fff" }}>Apply to stream on Peep</h2>
+          <p style={{ margin: "0 0 28px", fontSize: 13, color: "#555", lineHeight: 1.6 }}>
+            Peep Live is a curated lineup, not an open platform. Tell us what you'd bring — we review every application.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div>
+              <p style={{ margin: "0 0 6px", fontSize: 12, color: "#666", fontWeight: 500 }}>Name or channel name</p>
+              <input value={appName} onChange={e => { setAppName(e.target.value); setAppError(null); }} placeholder="Your name or channel name" style={inp} />
+            </div>
+            <div>
+              <p style={{ margin: "0 0 6px", fontSize: 12, color: "#666", fontWeight: 500 }}>What would you stream?</p>
+              <textarea value={appWhy} onChange={e => { setAppWhy(e.target.value); setAppError(null); }} rows={5}
+                placeholder="What you'd stream, why it fits Peep, and anything else relevant…" style={{ ...inp, resize: "vertical" }} />
+            </div>
+            <div>
+              <p style={{ margin: "0 0 6px", fontSize: 12, color: "#666", fontWeight: 500 }}>Social / channel links <span style={{ color: "#444" }}>(optional)</span></p>
+              <textarea value={appSocial} onChange={e => setAppSocial(e.target.value)} rows={2}
+                placeholder="YouTube, Twitch, X, TikTok — anything that shows your work" style={{ ...inp, resize: "vertical" }} />
+            </div>
+          </div>
+          {appError && <p style={{ margin: "14px 0 0", color: "#f87171", fontSize: 13 }}>{appError}</p>}
+          <button
+            onClick={submitApplication}
+            disabled={applying}
+            style={{ display: "block", width: "100%", marginTop: 24, background: applying ? "#333" : YELLOW, color: applying ? "#888" : "#0a0a0a", fontWeight: 700, fontSize: 15, padding: "14px", borderRadius: 10, border: "none", cursor: applying ? "not-allowed" : "pointer", fontFamily: "inherit", marginBottom: 14, transition: "all 0.15s" }}>
+            {applying ? "Submitting…" : "Submit Application"}
+          </button>
+          <div style={{ textAlign: "center" }}>{signOutBtn}</div>
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ background: embedded ? "transparent" : BG, minHeight: embedded ? 0 : "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 16px", fontFamily: "'Space Grotesk', sans-serif" }}>
+        {!embedded && <a href="/" style={{ textDecoration: "none", marginBottom: 40 }}><span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 42, color: YELLOW }}>peep.</span></a>}
+        {card}
         {toast && <Toast msg={toast} />}
       </div>
     );
@@ -777,7 +924,6 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
     { id: "analytics",     label: "Analytics" },
     { id: "notifications", label: "Notifications", badge: unreadCount },
     { id: "vods",          label: "Past Streams" },
-    { id: "videos",        label: "Videos" },
     { id: "help",          label: "Help" },
   ];
 
@@ -1003,7 +1149,7 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
         <div style={{ padding: `24px ${PAD} 80px`, display: "flex", flexDirection: "column", gap: 12, maxWidth: 860 }}>
 
           {/* Channel Identity */}
-          <SectionCard title="Identity" collapsible defaultOpen>
+          <SectionCard title="Identity" collapsible defaultOpen={false}>
             {/* Channel URL — set & share */}
             <div style={{ background: "#0d0d0d", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "14px 16px", marginBottom: 16 }}>
               <p style={{ margin: "0 0 8px", fontSize: 11, color: "#444", fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase" }}>Your Channel URL</p>
@@ -1085,7 +1231,7 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
           </SectionCard>
 
           {/* Stream Info */}
-          <SectionCard title="Stream Info" collapsible defaultOpen>
+          <SectionCard title="Stream Info" collapsible defaultOpen={false}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, marginBottom: 12 }}>
               <div>
                 <Label>Stream Title</Label>
@@ -1130,7 +1276,7 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
           </SectionCard>
 
           {/* Channel Art */}
-          <SectionCard title="Channel Art" collapsible defaultOpen>
+          <SectionCard title="Channel Art" collapsible defaultOpen={false}>
             {/* Avatar */}
             <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid ${BORDER}` }}>
               <div style={{ width: 60, height: 60, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 700, color: "#fff", flexShrink: 0, overflow: "hidden", border: `2px solid ${pendingFiles.avatar ? YELLOW : BORDER}` }}>
@@ -1197,6 +1343,103 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
                   </div>
                 );
               })}
+            </div>
+          </SectionCard>
+
+          {/* Offline Screen */}
+          <SectionCard title="Offline Screen" collapsible defaultOpen={false}>
+            <p style={{ margin: "0 0 16px", fontSize: 13, color: "#555" }}>Customize what viewers see when your channel is offline.</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+              {/* Text fields */}
+              <div>
+                <Label>Title</Label>
+                <input value={offlineTitle} onChange={e => setOfflineTitle(e.target.value)} placeholder="e.g. We'll be back soon!" maxLength={80} style={inp} />
+              </div>
+              <div>
+                <Label>Message <span style={{ color: "#2a2a2a", fontWeight: 400 }}>optional</span></Label>
+                <textarea value={offlineMessage} onChange={e => setOfflineMessage(e.target.value)} placeholder="Next stream schedule, social links, etc." maxLength={200} rows={2} style={{ ...inp, resize: "vertical", lineHeight: 1.6 }} />
+              </div>
+
+              {/* Offline image */}
+              <div>
+                <Label>Background Image <span style={{ color: "#2a2a2a", fontWeight: 400 }}>optional · replaces banner blur</span></Label>
+                <div style={{ display: "flex", gap: 10, alignItems: "center", background: "#0d0d0d", border: `1px solid ${pendingFiles.offline ? YELLOW : BORDER}`, borderRadius: 10, padding: "10px 12px" }}>
+                  <div style={{ width: 72, height: 44, borderRadius: 6, overflow: "hidden", background: "#111", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {(pendingFiles.offline?.previewUrl || stream.offline_image)
+                      ? <img src={pendingFiles.offline?.previewUrl || stream.offline_image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2a2a2a" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: "0 0 1px", fontSize: 12, fontWeight: 600, color: "#bbb" }}>Offline screen background</p>
+                    <p style={{ margin: 0, fontSize: 11, color: "#333" }}>1920 × 1080 · Custom "be right back" graphic</p>
+                  </div>
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                    {pendingFiles.offline ? (
+                      <>
+                        <button onClick={() => saveImage("offline", "offline_image", setUploadingOfflineImg, "Offline image updated!")} disabled={uploadingOfflineImg} style={{ background: YELLOW, border: "none", borderRadius: 7, padding: "6px 14px", color: "#0a0a0a", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: uploadingOfflineImg ? 0.6 : 1 }}>{uploadingOfflineImg ? "Saving…" : "Save"}</button>
+                        <button onClick={() => cancelPending("offline")} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "6px 10px", color: "#555", fontSize: 12, cursor: "pointer" }}>Cancel</button>
+                      </>
+                    ) : (
+                      <>
+                        <label style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "6px 14px", color: "#bbb", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                          <input type="file" accept="image/*" onChange={e => handleImagePick(e, "offline")} style={{ display: "none" }} />
+                          {stream.offline_image ? "Replace" : "Upload"}
+                        </label>
+                        {stream.offline_image && <button onClick={() => clearImage("offline_image")} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "6px 10px", color: "#333", fontSize: 12, cursor: "pointer" }}>Remove</button>}
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Show schedule toggle */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#0d0d0d", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "12px 14px" }}>
+                <div>
+                  <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: "#ccc" }}>Show Next Scheduled Stream</p>
+                  <p style={{ margin: 0, fontSize: 12, color: "#444" }}>Displays your next stream date &amp; time on the offline screen</p>
+                </div>
+                <div onClick={() => setOfflineShowSchedule(v => !v)} style={{ width: 40, height: 22, borderRadius: 11, background: offlineShowSchedule ? YELLOW : "#1e1e1e", cursor: "pointer", position: "relative", transition: "background 0.2s", border: `1px solid ${BORDER}`, flexShrink: 0 }}>
+                  <div style={{ position: "absolute", top: 2, left: offlineShowSchedule ? 20 : 2, width: 16, height: 16, borderRadius: "50%", background: offlineShowSchedule ? "#0a0a0a" : "#333", transition: "left 0.2s" }} />
+                </div>
+              </div>
+
+              {/* Live preview */}
+              <div style={{ position: "relative", aspectRatio: "16/9", background: "#050508", borderRadius: 10, overflow: "hidden", border: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                {(pendingFiles.offline?.previewUrl || stream.offline_image || stream.hero_image) && (
+                  <img src={pendingFiles.offline?.previewUrl || stream.offline_image || stream.hero_image} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: stream.offline_image || pendingFiles.offline ? "none" : "brightness(0.12) blur(14px)", transform: "scale(1.06)" }} />
+                )}
+                <div style={{ position: "absolute", inset: 0, background: (stream.offline_image || pendingFiles.offline) ? "linear-gradient(to top, rgba(5,5,8,0.9) 0%, rgba(5,5,8,0.3) 60%, transparent 100%)" : "linear-gradient(to top, rgba(5,5,8,1) 0%, rgba(5,5,8,0.5) 50%, rgba(5,5,8,0.15) 100%)" }} />
+                <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "0 20px", textAlign: "center" }}>
+                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: "linear-gradient(135deg,#312e81,#6d28d9)", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: "#fff" }}>
+                    {stream?.avatar_url ? <img src={stream.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : (stream?.channel_name || stream?.title || "?")[0]?.toUpperCase()}
+                  </div>
+                  <div>
+                    <p style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 700, color: "#e5e5e5" }}>{offlineTitle || (stream?.channel_name || stream?.title || "Channel Name")}</p>
+                    <p style={{ margin: 0, fontSize: 12, color: "#555" }}>{offlineMessage || "This channel is currently offline."}</p>
+                  </div>
+                  {offlineShowSchedule && schedule.length > 0 && (() => {
+                    const next = schedule.find(s => new Date(s.scheduled_at) > new Date());
+                    if (!next) return null;
+                    const d = new Date(next.scheduled_at);
+                    return (
+                      <div style={{ background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.15)", borderRadius: 6, padding: "5px 12px", marginTop: 2 }}>
+                        <p style={{ margin: 0, fontSize: 11, color: "#a16207", fontWeight: 600 }}>
+                          Next stream: {d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} at {d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                        </p>
+                      </div>
+                    );
+                  })()}
+                  {offlineShowSchedule && schedule.filter(s => new Date(s.scheduled_at) > new Date()).length === 0 && (
+                    <p style={{ margin: 0, fontSize: 10, color: "#333", fontStyle: "italic" }}>No upcoming streams scheduled</p>
+                  )}
+                  <span style={{ fontSize: 9, fontWeight: 700, color: "#2e2e2e", background: "#0f0f0f", border: "1px solid #1a1a1a", borderRadius: 4, padding: "2px 8px", letterSpacing: 0.8 }}>OFFLINE</span>
+                </div>
+              </div>
+
+              <button onClick={saveOfflineScreen} disabled={savingOffline} style={{ background: YELLOW, border: "none", borderRadius: 9, padding: "9px 18px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: savingOffline ? "wait" : "pointer", opacity: savingOffline ? 0.6 : 1, alignSelf: "flex-start" }}>
+                {savingOffline ? "Saving…" : "Save"}
+              </button>
             </div>
           </SectionCard>
 
@@ -1466,108 +1709,6 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
         </div>
       )}
 
-      {/* ── VIDEOS TAB ── */}
-      {activeTab === "videos" && (
-        <div style={{ padding: `24px ${PAD} 80px`, maxWidth: 860 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#fff" }}>Videos</h2>
-            <span style={{ fontSize: 13, color: "#444" }}>{uploads.length} video{uploads.length !== 1 ? "s" : ""}</span>
-          </div>
-
-          {!pendingUpload ? (
-            <div style={{ marginBottom: 24 }}>
-              <CloudflareVideoUploader
-                onComplete={result => { setPendingUpload(result); setUploadTitle(""); setUploadDesc(""); }}
-                onError={msg => showToast("Upload error: " + msg)}
-              />
-            </div>
-          ) : (
-            <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 20, marginBottom: 24 }}>
-              <p style={{ margin: "0 0 14px", fontSize: 13, fontWeight: 700, color: "#4ade80" }}>✓ Upload complete — add details before publishing</p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <div>
-                  <Label>Title <span style={{ color: "#555", fontWeight: 400 }}>required</span></Label>
-                  <input value={uploadTitle} onChange={e => setUploadTitle(e.target.value)} placeholder="Give your video a title…" maxLength={120} style={inp} autoFocus />
-                </div>
-                <div>
-                  <Label>Description <span style={{ color: "#555", fontWeight: 400 }}>optional</span></Label>
-                  <textarea value={uploadDesc} onChange={e => setUploadDesc(e.target.value)} placeholder="What's this video about?" maxLength={500} rows={3} style={{ ...inp, resize: "vertical", lineHeight: 1.6 }} />
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={saveUpload} disabled={savingUpload || !uploadTitle.trim()}
-                    style={{ background: YELLOW, border: "none", borderRadius: 9, padding: "10px 22px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: !uploadTitle.trim() ? 0.4 : 1 }}>
-                    {savingUpload ? "Publishing…" : "Publish Video"}
-                  </button>
-                  <button onClick={() => { setPendingUpload(null); setUploadTitle(""); setUploadDesc(""); }}
-                    style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 9, padding: "10px 16px", color: "#555", fontSize: 13, cursor: "pointer" }}>
-                    Discard
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {uploadsLoading ? <p style={{ color: "#555", fontSize: 14 }}>Loading…</p>
-            : uploads.length === 0 && !pendingUpload ? (
-              <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "40px 24px", textAlign: "center" }}>
-                <p style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 600, color: "#fff" }}>No videos yet</p>
-                <p style={{ margin: 0, fontSize: 13, color: "#444" }}>Upload your first video above — it'll appear on your channel page.</p>
-              </div>
-            ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14 }}>
-                {uploads.map(v => {
-                  const isDeleting = deletingUpload === v.id;
-                  const isEditing  = editingUpload?.id === v.id;
-                  return (
-                    <div key={v.id} style={{ background: CARD, border: `1px solid ${isDeleting ? "rgba(239,68,68,0.3)" : BORDER}`, borderRadius: 12, overflow: "hidden" }}>
-                      <div onClick={() => setWatchingVod({ url: v.hls_url, title: v.title })}
-                        style={{ position: "relative", aspectRatio: "16/9", background: "#090910", cursor: "pointer", overflow: "hidden" }}
-                        onMouseEnter={e => e.currentTarget.querySelector(".vod-play")?.style && (e.currentTarget.querySelector(".vod-play").style.opacity = "1")}
-                        onMouseLeave={e => e.currentTarget.querySelector(".vod-play")?.style && (e.currentTarget.querySelector(".vod-play").style.opacity = "0")}>
-                        {v.thumbnail_url
-                          ? <img src={v.thumbnail_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                          : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}><svg width="28" height="28" viewBox="0 0 24 24" fill="rgba(255,255,255,0.08)"><polygon points="5,3 19,12 5,21" /></svg></div>}
-                        <div className="vod-play" style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", opacity: 0, transition: "opacity 0.15s" }}>
-                          <div style={{ width: 44, height: 44, borderRadius: "50%", background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg>
-                          </div>
-                        </div>
-                      </div>
-                      <div style={{ padding: "12px 14px" }}>
-                        {isEditing ? (
-                          <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-                            <input value={editingUpload.title} onChange={e => setEditingUpload(ev => ({ ...ev, title: e.target.value }))}
-                              onKeyDown={e => { if (e.key === "Enter") saveUploadTitle(v.id, editingUpload.title); if (e.key === "Escape") setEditingUpload(null); }}
-                              style={{ ...inp, padding: "7px 10px", fontSize: 13, flex: 1 }} autoFocus />
-                            <button onClick={() => saveUploadTitle(v.id, editingUpload.title)} disabled={savingVod} style={{ background: YELLOW, border: "none", borderRadius: 8, padding: "0 12px", color: "#0a0a0a", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{savingVod ? "…" : "Save"}</button>
-                            <button onClick={() => setEditingUpload(null)} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "0 10px", color: "#666", fontSize: 12, cursor: "pointer" }}>✕</button>
-                          </div>
-                        ) : (
-                          <p style={{ margin: "0 0 3px", fontSize: 13, fontWeight: 600, color: "#e0e0e0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.title}</p>
-                        )}
-                        <p style={{ margin: "0 0 10px", fontSize: 11, color: "#444" }}>{new Date(v.created_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}</p>
-                        {isDeleting ? (
-                          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                            <span style={{ fontSize: 12, color: "#dc2626", flex: 1 }}>Delete this video?</span>
-                            <button onClick={() => deleteUpload(v.id)} disabled={savingVod} style={{ background: "#dc2626", border: "none", borderRadius: 7, padding: "5px 12px", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{savingVod ? "…" : "Yes"}</button>
-                            <button onClick={() => setDeletingUpload(null)} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "5px 10px", color: "#666", fontSize: 12, cursor: "pointer" }}>No</button>
-                          </div>
-                        ) : (
-                          <div style={{ display: "flex", gap: 6 }}>
-                            <button onClick={() => setWatchingVod({ url: v.hls_url, title: v.title })} style={{ flex: 1, background: "rgba(255,255,255,0.04)", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "6px 0", color: "#bbb", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Watch</button>
-                            <button onClick={() => setEditingUpload({ id: v.id, title: v.title })} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 7, padding: "6px 10px", color: "#888", fontSize: 12, cursor: "pointer" }}>Rename</button>
-                            <button onClick={() => setDeletingUpload(v.id)} style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 7, padding: "6px 10px", color: "#dc2626", fontSize: 12, cursor: "pointer" }}>Delete</button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-        </div>
-      )}
-
       {/* ── HELP TAB ── */}
       {activeTab === "help" && (
         <div style={{ padding: `24px ${PAD} 80px`, maxWidth: 860 }}>
@@ -1575,7 +1716,7 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
           <p style={{ margin: "0 0 28px", fontSize: 14, color: "#444" }}>Everything you need to go live using OBS or Streamlabs.</p>
 
           {/* Recommended Settings */}
-          <SectionCard title="Recommended Settings" collapsible defaultOpen>
+          <SectionCard title="Recommended Settings" collapsible defaultOpen={false}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 10 }}>
               {[
                 { label: "Resolution", value: "1920 × 1080" },
@@ -1594,7 +1735,7 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
           </SectionCard>
 
           {/* OBS Setup */}
-          <SectionCard title="OBS Studio Setup" collapsible defaultOpen>
+          <SectionCard title="OBS Studio Setup" collapsible defaultOpen={false}>
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
               <div>
                 <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 600, color: "#888" }}>Step 1 — Stream Settings</p>
