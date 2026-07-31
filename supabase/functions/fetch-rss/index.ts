@@ -5,6 +5,15 @@ const CORS = {
   "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info",
 };
 
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(parseInt(n, 10)))
+    .replace(/&amp;/g, "&"); // must be last so "&amp;lt;" style double-encoding survives
+}
+
 function tag(xml: string, name: string): string {
   // String.raw is required: in a normal template literal `\s`/`\S` collapse to
   // literal "s"/"S", silently breaking the [\s\S] "any char" class.
@@ -14,7 +23,7 @@ function tag(xml: string, name: string): string {
   ];
   for (const re of patterns) {
     const m = xml.match(re);
-    if (m) return m[1].trim();
+    if (m) return decodeEntities(m[1].trim());
   }
   return "";
 }
