@@ -671,18 +671,25 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
           <div className="scroll-row" style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4 }}>
             {liveChannels.map(ch => {
               const nowAiring = nowByChannel[ch.id];
-              const img = ch.hero_url || ch.logo_url || "";
+              const hero = ch.hero_url || "";
+              const logo = ch.logo_url || "";
               return (
                 <div key={`ch-${ch.id}`} onClick={() => onChannelPlay?.(ch)}
                   style={{ flexShrink: 0, width: isMobile ? 180 : 220, cursor: "pointer", borderRadius: 10, overflow: "hidden", background: "#0f0f0f", border: "1px solid rgba(239,68,68,0.15)", transition: "transform 0.15s, border-color 0.15s, box-shadow 0.15s" }}
                   onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.borderColor = "rgba(239,68,68,0.4)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(239,68,68,0.1)"; }}
                   onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.borderColor = "rgba(239,68,68,0.15)"; e.currentTarget.style.boxShadow = "none"; }}>
-                  <div style={{ position: "relative", aspectRatio: "16/9", overflow: "hidden", background: "#111" }}>
-                    {img
-                      ? <img src={img} alt={ch.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                      : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #0c1a2e, #12385f)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ position: "relative", aspectRatio: "16/9", overflow: "hidden", background: "linear-gradient(135deg, #0c1a2e, #12385f)" }}>
+                    {hero
+                      ? <img src={hero} alt={ch.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      : logo
+                      ? <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+                          <img src={logo} alt={ch.name} style={{ maxWidth: "72%", maxHeight: "58%", objectFit: "contain" }} />
+                        </div>
+                      : <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2" opacity="0.4"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></svg>
                         </div>}
+                    {/* top scrim keeps LIVE/TV badges legible over any art */}
+                    <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 36, background: "linear-gradient(to bottom, rgba(0,0,0,0.5), transparent)", pointerEvents: "none" }} />
                     <div style={{ position: "absolute", top: 7, left: 7, display: "flex", alignItems: "center", gap: 4, background: "#ef4444", borderRadius: 4, padding: "2px 7px" }}>
                       <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#fff", animation: "livepulse 1.5s infinite" }} />
                       <span style={{ fontSize: 9, fontWeight: 800, color: "#fff", letterSpacing: 0.6 }}>LIVE</span>
