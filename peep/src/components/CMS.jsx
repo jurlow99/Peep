@@ -3771,7 +3771,7 @@ export function CMS({ onExit, currentUser }) {
                   const rowPages = (carousel.pages || "home").split(",").map(p => p.trim()).filter(Boolean);
                   const contentLabel = t === "podcast" ? "Podcasts" : ct === "shorts" ? "Movies only" : ct === "shows" ? "Series only" : "All content";
                   const handpickedCount = t === "handpicked" ? (() => { try { return JSON.parse(carousel.filter_value || "[]").length; } catch { return 0; } })() : 0;
-                  const orderLabel = t === "trending" ? "Trending" : t === "recommended" ? "Recommended" : t === "continue" ? "Continue Watching" : t === "handpicked" ? `${handpickedCount} hand-picked` : t === "category" ? `Genre: ${carousel.filter_value || "?"}` : t === "podcast" ? (carousel.filter_value ? `Tag: ${carousel.filter_value}` : "All podcasts") : "Default order";
+                  const orderLabel = t === "trending" ? "Recently Added" : t === "recommended" ? "Recommended" : t === "continue" ? "Continue Watching" : t === "handpicked" ? `${handpickedCount} hand-picked` : t === "category" ? `Genre: ${carousel.filter_value || "?"}` : t === "podcast" ? (carousel.filter_value ? `Tag: ${carousel.filter_value}` : "All podcasts") : "Default order";
                   const contentColor = t === "podcast" ? "#a78bfa" : ct === "shorts" ? "#facc15" : ct === "shows" ? "#34d399" : "#f59e0b";
                   const pageLabels = { home: "Home", shorts: "Movies", series: "Series" };
 
@@ -7028,12 +7028,12 @@ export function CMS({ onExit, currentUser }) {
 
                     {carouselForm.type !== "podcast" ? (
                       <div>
-                        <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>4 · How to order</label>
-                        <p style={{ margin: "0 0 10px", fontSize: 11, color: "#6b7280" }}>How content is sorted inside this row.</p>
+                        <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>4 · What fills this row</label>
+                        <p style={{ margin: "0 0 10px", fontSize: 11, color: "#6b7280" }}>Choose where this row pulls its content from.</p>
                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                           {[
-                            { val: "custom",      icon: "📋", label: "Show all",         desc: "All matching content, default order" },
-                            { val: "trending",    icon: "🔥", label: "Trending / New",   desc: "Newest added first" },
+                            { val: "custom",      icon: "📋", label: "Everything",        desc: "Every title of the chosen type" },
+                            { val: "trending",    icon: "🔥", label: "Recently Added",    desc: "Newest titles first" },
                             { val: "recommended", icon: "🪄", label: "Recommended",       desc: "Personalized picks from each viewer's history" },
                             { val: "continue",    icon: "⏱️", label: "Continue Watching", desc: "In-progress titles for the signed-in viewer" },
                             { val: "category",    icon: "🏷️", label: "By category",     desc: "Filter to a specific genre" },
