@@ -269,6 +269,8 @@ export function HeroBanner({ video, onPlay, isShow, myList, onToggleList, catego
 export function ContentRow({ section, onPlay, onShowSelect, myList, onToggleList }) {
   const scrollRef = useRef(null);
   const isMobile = useIsMobile();
+  // Shelf presentation: standard | top10 (numbered) | spotlight (large cards)
+  const layout = section.layout || (section.numbered ? "top10" : "standard");
   const scroll = dir => scrollRef.current?.scrollBy({ left: dir * scrollRef.current.clientWidth * 0.85, behavior: "smooth" });
 
   return (
@@ -298,7 +300,8 @@ export function ContentRow({ section, onPlay, onShowSelect, myList, onToggleList
           {section.videos.map((video, i) => (
             <VideoCard key={video.id + (video._type || "")} video={video}
               onClick={() => video._type === "show" ? onShowSelect(video) : onPlay(video)}
-              rank={section.numbered ? i + 1 : null}
+              rank={layout === "top10" ? i + 1 : null}
+              size={layout === "spotlight" ? "large" : undefined}
               myList={myList} onToggleList={onToggleList} />
           ))}
         </div>
@@ -487,7 +490,7 @@ function LiveCard({ stream }) {
 const TRAILER_OVERLAY_W = 520;
 const TRAILER_INFO_H = 200;
 
-export function VideoCard({ video, onClick, rank, myList, onToggleList }) {
+export function VideoCard({ video, onClick, rank, size, myList, onToggleList }) {
   const [hovered, setHovered] = useState(false);
   const [trailerMounted, setTrailerMounted] = useState(false);
   const [trailerExpanded, setTrailerExpanded] = useState(false);
@@ -555,7 +558,7 @@ export function VideoCard({ video, onClick, rank, myList, onToggleList }) {
   }
 
   return (
-    <div ref={cardRef} style={{ position: "relative", flexShrink: 0, width: rank ? `calc(${CARD_W} + 40px)` : CARD_W }}>
+    <div ref={cardRef} style={{ position: "relative", flexShrink: 0, width: rank ? `calc(${CARD_W} + 40px)` : size === "large" ? `calc(${CARD_W} * 1.5)` : CARD_W }}>
       {rank && (
         <div style={{ position: "absolute", left: -8, bottom: 24, fontFamily: "'DM Serif Display', serif", fontSize: 88, lineHeight: 1, fontWeight: 400, color: "transparent", WebkitTextStroke: "1px rgba(255,255,255,0.08)", userSelect: "none", zIndex: 0, pointerEvents: "none" }}>{rank}</div>
       )}

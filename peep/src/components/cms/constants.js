@@ -43,6 +43,7 @@ export const EMPTY_CAROUSEL = {
   type: "category",
   filter_value: "",
   content_type: "all",
+  layout: "standard",
   enabled: true,
   position: 0,
   pages: "home",

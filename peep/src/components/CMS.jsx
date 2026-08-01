@@ -1910,6 +1910,7 @@ export function CMS({ onExit, currentUser }) {
       type: carousel.type ?? "category",
       filter_value: carousel.filter_value ?? "",
       content_type: carousel.content_type ?? "all",
+      layout: carousel.layout ?? "standard",
       enabled: carousel.enabled ?? true,
       position: carousel.position ?? 0,
       pages: carousel.pages ?? "home",
@@ -7187,8 +7188,37 @@ export function CMS({ onExit, currentUser }) {
 
                     <div style={{ height: 1, background: "#e2e8f0" }} />
 
+                    {carouselForm.type !== "podcast" && (
+                      <div>
+                        <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>5 · Presentation</label>
+                        <p style={{ margin: "0 0 10px", fontSize: 11, color: "#6b7280" }}>How this shelf looks on the home screen.</p>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          {[
+                            { val: "standard",  icon: "🎞️", label: "Standard row", desc: "Normal poster cards" },
+                            { val: "top10",     icon: "🔢", label: "Top 10",        desc: "Big ranked numbers behind each card" },
+                            { val: "spotlight", icon: "🖼️", label: "Spotlight",     desc: "Larger cards for a featured feel" },
+                          ].map(({ val, icon, label, desc }) => {
+                            const isActive = (carouselForm.layout || "standard") === val;
+                            return (
+                              <button key={val} onClick={() => setCarouselForm(f => ({ ...f, layout: val }))}
+                                style={{ background: isActive ? "rgba(79,70,229,0.08)" : "#f8fafc", border: `1.5px solid ${isActive ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 9, padding: "11px 14px", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 12 }}>
+                                <span style={{ fontSize: 17, flexShrink: 0 }}>{icon}</span>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ fontSize: 13, fontWeight: 600, color: isActive ? "#4f46e5" : "#374151" }}>{label}</div>
+                                  <div style={{ fontSize: 11, color: "#6b7280", marginTop: 1 }}>{desc}</div>
+                                </div>
+                                {isActive && <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#4f46e5", flexShrink: 0 }} />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {carouselForm.type !== "podcast" && <div style={{ height: 1, background: "#e2e8f0" }} />}
+
                     <div>
-                      <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>5 · Visibility</label>
+                      <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>6 · Visibility</label>
                       <button onClick={() => setCarouselForm(f => ({ ...f, enabled: !f.enabled }))}
                         style={{ width: "100%", background: carouselForm.enabled ? "rgba(16,185,129,0.1)" : "rgba(107,114,128,0.08)", border: `1px solid ${carouselForm.enabled ? "rgba(16,185,129,0.35)" : "#222"}`, borderRadius: 8, padding: "11px", color: carouselForm.enabled ? "#10b981" : "#555", fontSize: 13, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                         <span style={{ fontSize: 16 }}>{carouselForm.enabled ? "✓" : "○"}</span>

@@ -240,11 +240,11 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
         const items = c.content_type === "shorts" ? baseItems.filter(v => v._type === "movie")
           : c.content_type === "shows" ? baseItems.filter(v => v._type === "show")
           : baseItems;
-        return { id: String(c.id), title: c.title, videos: items, numbered: c.type === "trending" };
+        return { id: String(c.id), title: c.title, videos: items, layout: c.layout || (c.type === "trending" ? "top10" : "standard"), numbered: c.type === "trending" };
       }).filter(s => s.isPodcast ? s.podcastItems.length > 0 : s.videos.length > 0)
     : visibleCarousels.length === 0 && carousels.length > 0 ? []
     : [
-        { id: "trending", title: "Trending Now", videos: [...filteredContent].reverse(), numbered: true },
+        { id: "trending", title: "Trending Now", videos: [...filteredContent].reverse(), numbered: true, layout: "top10" },
         ...[...new Set(filteredContent.map(v => v.category).filter(Boolean))].map(cat => ({
           id: cat, title: `${cat} Films`, videos: filteredContent.filter(v => v.category === cat),
         })),
