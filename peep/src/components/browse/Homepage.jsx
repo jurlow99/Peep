@@ -121,28 +121,28 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
     if (channelsRes.data) setChannels(channelsRes.data);
     setLoading(false);
 
-    // Resolve deep link
-    const { v, e, s, live, podcast } = deepLink;
+    // Resolve deep link (from URL params, using this component's own handlers)
+    const params = new URLSearchParams(window.location.search);
+    const v = params.get("v"), e = params.get("e"), s = params.get("s"), live = params.get("live"), podcast = params.get("podcast");
     if (v && videosRes.data) {
       const vid = videosRes.data.find(x => String(x.id) === v);
-      if (vid) { setSelectedVideo({ ...vid, _type: "movie" }); setPage("player"); }
+      if (vid) onPlay?.({ ...vid, _type: "movie" });
     } else if (e) {
       const { data: ep } = await supabase.from("episodes").select("*").eq("id", e).maybeSingle();
       if (ep) {
         const show = showsRes.data?.find(x => String(x.id) === String(ep.show_id));
-        if (show) setSelectedShow(show);
-        setSelectedVideo({ ...ep, _type: "episode" });
-        setPage("player");
+        if (show) onShowSelect?.(show);
+        onPlay?.({ ...ep, _type: "episode" });
       }
     } else if (s && showsRes.data) {
       const show = showsRes.data.find(x => String(x.id) === s);
-      if (show) { setSelectedShow(show); setPage("show"); }
+      if (show) onShowSelect?.(show);
     } else if (live && liveRes.data) {
       const stream = liveRes.data.find(x => String(x.id) === live);
-      if (stream) { setSelectedVideo({ ...stream, url: stream.stream_url, _type: "live" }); setPage("player"); }
+      if (stream) onPlay?.({ ...stream, url: stream.stream_url, _type: "live" });
     } else if (podcast && podcastsRes.data) {
       const pod = podcastsRes.data.find(x => String(x.id) === podcast);
-      if (pod) { setSelectedPodcast(pod); setPage("podcast"); }
+      if (pod) onPodcastSelect?.(pod);
     }
   }
 
