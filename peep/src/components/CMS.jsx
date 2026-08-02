@@ -119,6 +119,7 @@ export function CMS({ onExit, currentUser }) {
   const [editingCarouselId, setEditingCarouselId] = useState(null);
   const [carouselForm, setCarouselForm] = useState(EMPTY_CAROUSEL);
   const [carouselSaving, setCarouselSaving] = useState(false);
+  const carouselSaveRef = useRef(false); // hard guard against double-submit duplicates
   const [deleteCarouselConfirm, setDeleteCarouselConfirm] = useState(null);
   const [handpickedSearch, setHandpickedSearch] = useState("");
   const [handpickedSelected, setHandpickedSelected] = useState([]); // [{id, type, title, thumbnail}]
@@ -1963,6 +1964,7 @@ export function CMS({ onExit, currentUser }) {
   }
 
   async function saveCarousel() {
+    if (carouselSaveRef.current) return; // already saving — ignore duplicate clicks
     if (!carouselForm.title.trim()) {
       showToast("Title is required.", "error");
       return;
@@ -1976,6 +1978,7 @@ export function CMS({ onExit, currentUser }) {
       return;
     }
 
+    carouselSaveRef.current = true;
     setCarouselSaving(true);
     const serializedForm = carouselForm.type === "handpicked"
       ? { ...carouselForm, filter_value: JSON.stringify(handpickedSelected.map(({ id, type }) => ({ id, type }))) }
@@ -2005,6 +2008,7 @@ export function CMS({ onExit, currentUser }) {
       showToast("Save failed: " + error.message, "error");
     }
     setCarouselSaving(false);
+    carouselSaveRef.current = false;
   }
 
   async function deleteCarousel(id) {
@@ -2038,6 +2042,17 @@ export function CMS({ onExit, currentUser }) {
     const swapIdx = idx + dir;
     if (swapIdx < 0 || swapIdx >= next.length) return;
     [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+    await reorderCarousels(next);
+  }
+  // Reorder within the selected screen — swap with the adjacent row on the same page
+  async function moveCarouselOnPage(carousel, dir) {
+    const pageList = carouselsOnPage(carouselPageTab);
+    const swapWith = pageList[pageList.indexOf(carousel) + dir];
+    if (!swapWith) return;
+    const next = [...carousels];
+    const a = next.indexOf(carousel), b = next.indexOf(swapWith);
+    if (a < 0 || b < 0) return;
+    [next[a], next[b]] = [next[b], next[a]];
     await reorderCarousels(next);
   }
 
@@ -3802,8 +3817,8 @@ export function CMS({ onExit, currentUser }) {
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {carouselsOnPage(carouselPageTab).map((carousel) => {
-                  const idx = carousels.indexOf(carousel);
+                {carouselsOnPage(carouselPageTab).map((carousel, i) => {
+                  const pageCount = carouselsOnPage(carouselPageTab).length;
                   const t = carousel.type;
                   const ct = carousel.content_type;
                   const rowPages = (carousel.pages || "home").split(",").map(p => p.trim()).filter(Boolean);
@@ -3811,13 +3826,13 @@ export function CMS({ onExit, currentUser }) {
                   const handpickedCount = t === "handpicked" ? (() => { try { return JSON.parse(carousel.filter_value || "[]").length; } catch { return 0; } })() : 0;
                   const orderLabel = t === "trending" ? "Recently Added" : t === "recommended" ? "Recommended" : t === "continue" ? "Continue Watching" : t === "handpicked" ? `${handpickedCount} hand-picked` : t === "category" ? `Genre: ${carousel.filter_value || "?"}` : t === "podcast" ? (carousel.filter_value ? `Tag: ${carousel.filter_value}` : "All podcasts") : "Default order";
                   const contentColor = t === "podcast" ? "#a78bfa" : ct === "shorts" ? "#facc15" : ct === "shows" ? "#34d399" : "#f59e0b";
-                  const pageLabels = { home: "Home", shorts: "Movies", series: "Series" };
+                  const pageLabels = { home: "Home", shorts: "Movies", series: "Series", podcasts: "Podcasts", live: "Live TV" };
 
                   return (
                     <div key={carousel.id} style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
                       <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
-                        <button onClick={() => moveCarousel(idx, -1)} disabled={idx === 0} style={{ background: "transparent", border: "none", color: idx === 0 ? "#e2e8f0" : "#6b7280", cursor: idx === 0 ? "default" : "pointer", fontSize: 11, padding: "2px 5px", lineHeight: 1 }}>▲</button>
-                        <button onClick={() => moveCarousel(idx, 1)} disabled={idx === carousels.length - 1} style={{ background: "transparent", border: "none", color: idx === carousels.length - 1 ? "#e2e8f0" : "#6b7280", cursor: idx === carousels.length - 1 ? "default" : "pointer", fontSize: 11, padding: "2px 5px", lineHeight: 1 }}>▼</button>
+                        <button onClick={() => moveCarouselOnPage(carousel, -1)} disabled={i === 0} style={{ background: "transparent", border: "none", color: i === 0 ? "#e2e8f0" : "#6b7280", cursor: i === 0 ? "default" : "pointer", fontSize: 11, padding: "2px 5px", lineHeight: 1 }}>▲</button>
+                        <button onClick={() => moveCarouselOnPage(carousel, 1)} disabled={i === pageCount - 1} style={{ background: "transparent", border: "none", color: i === pageCount - 1 ? "#e2e8f0" : "#6b7280", cursor: i === pageCount - 1 ? "default" : "pointer", fontSize: 11, padding: "2px 5px", lineHeight: 1 }}>▼</button>
                       </div>
 
                       <div style={{ flex: 1, minWidth: 0 }}>
