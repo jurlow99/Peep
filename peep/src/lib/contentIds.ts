@@ -28,12 +28,12 @@ export function contentKey(type: string, id: string | number): string {
 
 /** Fields safe to fetch for browse grids (no playback URLs). */
 export const VIDEO_BROWSE_SELECT =
-  "id, title, category, tags, year, score, rating, thumbnail, poster, duration, description, trailer_url, featured";
+  "id, title, category, tags, year, score, rating, thumbnail, poster, duration, description, trailer_url, featured, is_premium";
 
 /** Full video row including playback URL — use only when starting playback. */
 export const VIDEO_PLAY_SELECT = "*";
 
 export const EPISODE_BROWSE_SELECT =
-  "id, show_id, season, episode_number, title, description, thumbnail, duration, status";
+  "id, show_id, season, episode_number, title, description, thumbnail, duration, status, is_premium";
 
 export const EPISODE_PLAY_SELECT = "*";
