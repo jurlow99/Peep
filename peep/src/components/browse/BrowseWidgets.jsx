@@ -541,8 +541,11 @@ export function VideoCard({ video, onClick, rank, size, locked, myList, onToggle
 
   let overlayStyle = null;
   if (trailerMounted && cardRect) {
-    const endLeft = Math.max(8, Math.min(window.innerWidth - overlayW - 8, cardRect.left + cardRect.width / 2 - overlayW / 2));
-    const endTop  = Math.max(8, Math.min(window.innerHeight - overlayH - 8, cardRect.top + cardRect.height / 2 - overlayH / 2));
+    // Keep the expanded preview clear of the fixed sidebar (left) and top nav
+    const minLeft = isMobile ? 8 : 84;
+    const minTop = 66;
+    const endLeft = Math.max(minLeft, Math.min(window.innerWidth - overlayW - 8, cardRect.left + cardRect.width / 2 - overlayW / 2));
+    const endTop  = Math.max(minTop, Math.min(window.innerHeight - overlayH - 8, cardRect.top + cardRect.height / 2 - overlayH / 2));
     overlayStyle = {
       position: "fixed",
       left:   trailerExpanded ? endLeft      : cardRect.left,
@@ -551,7 +554,7 @@ export function VideoCard({ video, onClick, rank, size, locked, myList, onToggle
       height: trailerExpanded ? overlayH     : cardRect.height,
       borderRadius: trailerExpanded ? 14 : 8,
       boxShadow: trailerExpanded ? "0 40px 100px rgba(0,0,0,0.97)" : "none",
-      zIndex: 200,
+      zIndex: 250,
       overflow: "hidden",
       background: "#141414",
       transition: "left 0.2s ease, top 0.2s ease, width 0.2s ease, height 0.2s ease, border-radius 0.2s ease, box-shadow 0.2s ease",
