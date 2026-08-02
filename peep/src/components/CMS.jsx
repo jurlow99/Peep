@@ -7038,8 +7038,8 @@ export function CMS({ onExit, currentUser }) {
                     <div style={{ height: 1, background: "#e2e8f0" }} />
 
                     <div>
-                      <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>3 · What to show</label>
-                      <p style={{ margin: "0 0 10px", fontSize: 11, color: "#6b7280" }}>What kind of content fills this row.</p>
+                      <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>3 · What's in this row</label>
+                      <p style={{ margin: "0 0 10px", fontSize: 11, color: "#6b7280" }}>Pick the kind of content — then how it's chosen, just below.</p>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                         {[
                           { ct: "shorts",       t: null,      icon: "🎬", label: "Movies only",    desc: "Only shorts" },
@@ -7066,12 +7066,9 @@ export function CMS({ onExit, currentUser }) {
                       </div>
                     </div>
 
-                    <div style={{ height: 1, background: "#e2e8f0" }} />
-
                     {carouselForm.type !== "podcast" ? (
-                      <div>
-                        <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>4 · What fills this row</label>
-                        <p style={{ margin: "0 0 10px", fontSize: 11, color: "#6b7280" }}>Choose where this row pulls its content from.</p>
+                      <div style={{ marginTop: 6 }}>
+                        <label style={{ display: "block", fontSize: 12, color: "#374151", fontWeight: 600, marginBottom: 8 }}>…and how it's chosen</label>
                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                           {[
                             { val: "custom",      icon: "📋", label: "Everything",        desc: "Every title of the chosen type" },
@@ -7219,7 +7216,7 @@ export function CMS({ onExit, currentUser }) {
                       </div>
                     ) : (
                       <div>
-                        <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>4 · Tag filter (optional)</label>
+                        <label style={{ display: "block", fontSize: 12, color: "#374151", fontWeight: 600, marginBottom: 8 }}>…and filter by tag (optional)</label>
                         <input value={carouselForm.filter_value} onChange={e => setCarouselForm(f => ({ ...f, filter_value: e.target.value }))}
                           placeholder="e.g. true-crime — leave blank to show all podcasts"
                           style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }}
@@ -7231,7 +7228,7 @@ export function CMS({ onExit, currentUser }) {
 
                     {carouselForm.type !== "podcast" && (
                       <div>
-                        <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>5 · Presentation</label>
+                        <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>4 · Presentation</label>
                         <p style={{ margin: "0 0 10px", fontSize: 11, color: "#6b7280" }}>How this shelf looks on the home screen.</p>
                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                           {[
@@ -7259,7 +7256,7 @@ export function CMS({ onExit, currentUser }) {
                     {carouselForm.type !== "podcast" && <div style={{ height: 1, background: "#e2e8f0" }} />}
 
                     <div>
-                      <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>6 · Visibility</label>
+                      <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>5 · Visibility</label>
                       <button onClick={() => setCarouselForm(f => ({ ...f, enabled: !f.enabled }))}
                         style={{ width: "100%", background: carouselForm.enabled ? "rgba(16,185,129,0.1)" : "rgba(107,114,128,0.08)", border: `1px solid ${carouselForm.enabled ? "rgba(16,185,129,0.35)" : "#222"}`, borderRadius: 8, padding: "11px", color: carouselForm.enabled ? "#10b981" : "#555", fontSize: 13, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                         <span style={{ fontSize: 16 }}>{carouselForm.enabled ? "✓" : "○"}</span>
