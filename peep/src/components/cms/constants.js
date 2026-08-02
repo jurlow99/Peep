@@ -12,6 +12,7 @@ export const EMPTY_ROW = {
   trailer_url: "",
   description: "",
   tags: "",
+  is_premium: false,
 };
 
 export const EMPTY_SHOW = {
@@ -25,6 +26,7 @@ export const EMPTY_SHOW = {
   description: "",
   tags: "",
   trailer_url: "",
+  is_premium: false,
 };
 
 export const EMPTY_EPISODE = {
@@ -61,6 +63,7 @@ export const EMPTY_CHANNEL = {
   stream_uid: "",
   is_active: true,
   sort_order: 0,
+  is_premium: false,
 };
 
 export const EMPTY_LIVE_STREAM = {

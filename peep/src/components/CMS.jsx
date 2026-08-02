@@ -30,6 +30,23 @@ async function getAdminToken() {
   return session?.access_token ?? null;
 }
 
+// Reusable "Peep Premium" toggle for content forms (movies, series, channels)
+function PremiumToggleButton({ on, onToggle }) {
+  return (
+    <button type="button" onClick={onToggle}
+      style={{ width: "100%", background: on ? "rgba(250,204,21,0.12)" : "#f8fafc", border: `1px solid ${on ? "#facc15" : "#e2e8f0"}`, borderRadius: 8, padding: "11px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, textAlign: "left" }}>
+      <span style={{ fontSize: 16 }}>{on ? "🔒" : "🔓"}</span>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: on ? "#a16207" : "#374151" }}>Peep Premium</div>
+        <div style={{ fontSize: 11, color: "#6b7280" }}>{on ? "Locked — subscribers only" : "Free — available to everyone"}</div>
+      </div>
+      <div style={{ width: 40, height: 22, borderRadius: 999, background: on ? "#facc15" : "#cbd5e1", position: "relative", flexShrink: 0 }}>
+        <span style={{ position: "absolute", top: 2, left: on ? 20 : 2, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left 0.15s" }} />
+      </div>
+    </button>
+  );
+}
+
 // Top-level admin categories. Each maps to existing internal render state (tab + sub-tab),
 // so the underlying feature blocks stay untouched — only the navigation is reorganized.
 const ADMIN_NAV = [
@@ -1754,6 +1771,7 @@ export function CMS({ onExit, currentUser }) {
     setDrawerOpen(true);
     setForm({
       title: row.title ?? "",
+      is_premium: row.is_premium ?? false,
       category: row.category ?? "Horror",
       rating: row.rating ?? "NR",
       score: row.score ?? "",
@@ -2034,7 +2052,7 @@ export function CMS({ onExit, currentUser }) {
   function startShowEdit(show) {
     setEditingShowId(show.id);
     setDrawerOpen(true);
-    setShowForm({ title: show.title ?? "", category: show.category ?? "Horror", rating: show.rating ?? "NR", year: show.year ?? "", score: show.score ?? "", thumbnail: show.thumbnail ?? "", poster: show.poster ?? "", description: show.description ?? "", tags: Array.isArray(show.tags) ? show.tags.join(", ") : (show.tags ?? ""), trailer_url: show.trailer_url ?? "" });
+    setShowForm({ title: show.title ?? "", category: show.category ?? "Horror", rating: show.rating ?? "NR", year: show.year ?? "", score: show.score ?? "", thumbnail: show.thumbnail ?? "", poster: show.poster ?? "", description: show.description ?? "", tags: Array.isArray(show.tags) ? show.tags.join(", ") : (show.tags ?? ""), trailer_url: show.trailer_url ?? "", is_premium: show.is_premium ?? false });
   }
 
   function cancelShowEdit() { setEditingShowId(null); setShowForm(EMPTY_SHOW); setDrawerOpen(false); }
@@ -3899,7 +3917,7 @@ export function CMS({ onExit, currentUser }) {
                         style={{ background: selectedChannelForEpg?.id === ch.id ? "rgba(79,70,229,0.15)" : "#eef2ff", border: `1px solid ${selectedChannelForEpg?.id === ch.id ? "#4f46e5" : "#c7d2fe"}`, borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: selectedChannelForEpg?.id === ch.id ? 700 : 600, color: "#4f46e5", cursor: "pointer" }}>
                         {selectedChannelForEpg?.id === ch.id ? "Close" : "Schedule"}
                       </button>
-                      <button onClick={() => { setChannelForm({ name: ch.name, slug: ch.slug || "", description: ch.description || "", logo_url: ch.logo_url || "", hero_url: ch.hero_url || "", category: ch.category || "general", ingest_type: ch.ingest_type || "hls", hls_url: ch.hls_url || "", stream_uid: ch.stream_uid || "", is_active: ch.is_active ?? true, sort_order: ch.sort_order ?? 0 }); setEditingChannelId(ch.id); setDrawerOpen(true); }}
+                      <button onClick={() => { setChannelForm({ name: ch.name, slug: ch.slug || "", description: ch.description || "", logo_url: ch.logo_url || "", hero_url: ch.hero_url || "", category: ch.category || "general", ingest_type: ch.ingest_type || "hls", hls_url: ch.hls_url || "", stream_uid: ch.stream_uid || "", is_active: ch.is_active ?? true, sort_order: ch.sort_order ?? 0, is_premium: ch.is_premium ?? false }); setEditingChannelId(ch.id); setDrawerOpen(true); }}
                         style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, color: "#374151", cursor: "pointer" }}>
                         Edit
                       </button>
@@ -6763,6 +6781,7 @@ export function CMS({ onExit, currentUser }) {
                 {tab === "content" && videoSubTab === "shorts" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <FieldInput label="Title *" value={form.title} onChange={v => setForm(f => ({ ...f, title: v }))} placeholder="e.g. Metropolis" />
+                    <PremiumToggleButton on={form.is_premium} onToggle={() => setForm(f => ({ ...f, is_premium: !f.is_premium }))} />
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                       <FieldCombo label="Category" value={form.category} onChange={v => setForm(f => ({ ...f, category: v }))} options={categories} />
                       <FieldSelect label="Rating" value={form.rating} onChange={v => setForm(f => ({ ...f, rating: v }))} options={["NR", "G", "PG", "PG-13", "R"]} />
@@ -6824,6 +6843,7 @@ export function CMS({ onExit, currentUser }) {
                 {tab === "content" && videoSubTab === "series" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <FieldInput label="Title *" value={showForm.title} onChange={v => setShowForm(f => ({ ...f, title: v }))} placeholder="e.g. The Twilight Zone" />
+                    <PremiumToggleButton on={showForm.is_premium} onToggle={() => setShowForm(f => ({ ...f, is_premium: !f.is_premium }))} />
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                       <FieldCombo label="Category" value={showForm.category} onChange={v => setShowForm(f => ({ ...f, category: v }))} options={categories} />
                       <FieldSelect label="Rating" value={showForm.rating} onChange={v => setShowForm(f => ({ ...f, rating: v }))} options={["NR", "G", "PG", "PG-13", "R"]} />
@@ -7245,6 +7265,7 @@ export function CMS({ onExit, currentUser }) {
                     <p style={{ margin: "0 0 10px", fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 1 }}>Basics</p>
                     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
                       <FieldInput label="Name *" value={channelForm.name} onChange={v => setChannelForm(f => ({ ...f, name: v }))} placeholder="e.g. Peep Classics" />
+                      <PremiumToggleButton on={channelForm.is_premium} onToggle={() => setChannelForm(f => ({ ...f, is_premium: !f.is_premium }))} />
                       <FieldInput label="Slug" value={channelForm.slug} onChange={v => setChannelForm(f => ({ ...f, slug: v }))} placeholder="auto-generated from name" />
                       <FieldInput label="Description" value={channelForm.description} onChange={v => setChannelForm(f => ({ ...f, description: v }))} placeholder="What's on this channel?" />
                       <div>
