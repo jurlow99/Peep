@@ -14,6 +14,8 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { PasswordResetPage, EmailVerificationGate } from "./components/auth/AuthGates";
 import { useAuth } from "./hooks/useAuth";
 import { useMyList } from "./hooks/useMyList";
+import { useSubscription, hasActiveSubscription } from "./hooks/useSubscription";
+import { PaywallPage } from "./pages/PaywallPage";
 import { isOwnerEmail } from "./lib/auth";
 import { PAD, CARD_W, SAFE_TOP } from "./lib/theme";
 import { AvatarThumb } from "./pages/settingsHelpers";
@@ -85,6 +87,13 @@ export default function App() {
     setPasswordRecovery,
   } = useAuth();
   const { myList, toggleList } = useMyList(user?.id, () => setAuthOpen(true));
+  const { subscription } = useSubscription(user?.id);
+  const isPremiumUser = hasActiveSubscription(subscription, isOwnerEmail(user?.email));
+  const [paywallOpen, setPaywallOpen] = useState(false);
+  const isLocked = (item) => !!item?.is_premium && !isPremiumUser;
+  const openGate = (item) => { if (!user) setAuthOpen(true); else setPaywallOpen(true); };
+  const guardPlay = (v) => { if (isLocked(v)) { openGate(v); return; } setSelectedVideo(v); setPage("player"); };
+  const guardShowOpen = (s) => { if (isLocked(s)) { openGate(s); return; } setSelectedShow(s); setPage("show"); };
   const [creatorRecord, setCreatorRecord] = useState(null);
   const [betaAck, setBetaAck] = useState(() => localStorage.getItem("peep_beta_ack") === "true");
   const [guestMode, setGuestMode] = useState(() => sessionStorage.getItem("peep_guest") === "1");
@@ -140,7 +149,7 @@ export default function App() {
   const { goHome: navigateHome } = useAppNavigation({ page, setPage, selectedVideo, selectedShow, selectedPodcast, onClearSelection: clearSelection });
   const goHome = () => { navigateHome(); clearSelection(); };
 
-  const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true), onProfileOpen: () => setPage("profile"), userAvatarId, userName, onPodcastSelect: pod => { setSelectedPodcast(pod); setPage("podcast"); }, onViewProfile: () => setPage("profile"), onChannelPlay: ch => { setSelectedVideo({ id: `ch-${ch.id}`, title: ch.name, url: ch.hls_url, _type: "live", thumbnail: ch.hero_url || ch.logo_url || "", description: ch.description || "" }); setPage("player"); } };
+  const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true), onProfileOpen: () => setPage("profile"), userAvatarId, userName, isPremiumUser, onPodcastSelect: pod => { setSelectedPodcast(pod); setPage("podcast"); }, onViewProfile: () => setPage("profile"), onChannelPlay: ch => { if (isLocked(ch)) { openGate(ch); return; } setSelectedVideo({ id: `ch-${ch.id}`, title: ch.name, url: ch.hls_url, _type: "live", thumbnail: ch.hero_url || ch.logo_url || "", description: ch.description || "" }); setPage("player"); } };
 
 
   if (maintenanceMode) return (
@@ -160,6 +169,7 @@ export default function App() {
   if (!user && !guestMode) return <LandingPage onBrowse={() => { sessionStorage.setItem("peep_guest", "1"); setGuestMode(true); }} />;
   if (user && !user.email_confirmed_at) return <EmailVerificationGate user={user} />;
   if (user && userRole === "creator") return <CreatorDashboard user={user} onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }} />;
+  if (paywallOpen) return <PaywallPage user={user} onBack={() => setPaywallOpen(false)} onSubscribed={() => setPaywallOpen(false)} onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }} />;
 
   const goToStudio = () => { setProfileOpen(false); setPage("studio"); };
   const profileScreenEl = profileOpen && <ProfileScreen user={user} userAvatarId={userAvatarId} userName={userName} onClose={() => setProfileOpen(false)} onAvatarChange={id => setUserAvatarId(id)} onNameChange={n => setUserName(n)} onViewProfile={() => { setProfileOpen(false); setPage("profile"); }} onOpenSettings={() => { setProfileOpen(false); setPage("settings"); }} onCreatorDash={creatorRecord ? () => { setProfileOpen(false); setPage("creator"); } : null} onStreamerDash={streamRecord ? goToStudio : null} />;
@@ -199,7 +209,7 @@ export default function App() {
           show={selectedShow}
           onBack={() => { setSelectedShow(null); setPage("home"); }}
           onGoHome={goHome}
-          onPlay={v => { setSelectedVideo(v); setPage("player"); }}
+          onPlay={guardPlay}
           onShowSelect={s => setSelectedShow(s)}
           {...listProps}
         />
@@ -320,8 +330,8 @@ export default function App() {
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
       {profileScreenEl}
       <Homepage
-        onPlay={v => { setSelectedVideo(v); setPage("player"); }}
-        onShowSelect={s => { setSelectedShow(s); setPage("show"); }}
+        onPlay={guardPlay}
+        onShowSelect={guardShowOpen}
         onGoLive={() => setPage("studio")}
         onExitStudio={() => setPage("home")}
         studioContent={page === "studio" ? <StreamerDashboard embedded preloadedUser={user} /> : null}

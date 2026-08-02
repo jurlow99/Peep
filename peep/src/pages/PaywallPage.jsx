@@ -140,12 +140,17 @@ function CheckoutForm({ user, onSignOut, selectedPlan }) {
   );
 }
 
-export function PaywallPage({ user, onSubscribed, onSignOut }) {
+export function PaywallPage({ user, onSubscribed, onSignOut, onBack }) {
   const [selectedPlan, setSelectedPlan] = useState(FOUNDING_PRICE_ID);
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", padding: 24 }}>
 
       <div style={{ width: "100%", maxWidth: 440 }}>
+        {onBack && (
+          <button onClick={onBack} style={{ background: "none", border: "none", color: "#666", fontSize: 13, cursor: "pointer", marginBottom: 12, display: "flex", alignItems: "center", gap: 6, padding: 0 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg> Back
+          </button>
+        )}
         <div style={{ textAlign: "center", marginBottom: 40 }}>
           <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 42, color: "#facc15" }}>peep.</span>
         </div>
@@ -155,9 +160,9 @@ export function PaywallPage({ user, onSubscribed, onSignOut }) {
             <div style={{ width: 56, height: 56, borderRadius: "50%", background: "rgba(250,204,21,0.1)", border: "1px solid rgba(250,204,21,0.2)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#facc15" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
             </div>
-            <h1 style={{ margin: "0 0 10px", fontSize: 24, fontWeight: 700, color: "#fff" }}>Start Watching</h1>
+            <h1 style={{ margin: "0 0 10px", fontSize: 24, fontWeight: 700, color: "#fff" }}>Peep Premium</h1>
             <p style={{ margin: 0, fontSize: 14, color: "#555", lineHeight: 1.6 }}>
-              Weird content. Nothing ordinary. All of it.
+              Unlock premium channels, films & series.
             </p>
           </div>
 

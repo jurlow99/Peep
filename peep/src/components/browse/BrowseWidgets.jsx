@@ -266,7 +266,7 @@ export function HeroBanner({ video, onPlay, isShow, myList, onToggleList, catego
 
 // ─── Content Row ──────────────────────────────────────────────────────────────
 
-export function ContentRow({ section, onPlay, onShowSelect, myList, onToggleList }) {
+export function ContentRow({ section, onPlay, onShowSelect, myList, onToggleList, isPremiumUser = false }) {
   const scrollRef = useRef(null);
   const isMobile = useIsMobile();
   // Shelf presentation: standard | top10 (numbered) | spotlight (large cards)
@@ -302,6 +302,7 @@ export function ContentRow({ section, onPlay, onShowSelect, myList, onToggleList
               onClick={() => video._type === "show" ? onShowSelect(video) : onPlay(video)}
               rank={layout === "top10" ? i + 1 : null}
               size={layout === "spotlight" ? "large" : undefined}
+              locked={!!video.is_premium && !isPremiumUser}
               myList={myList} onToggleList={onToggleList} />
           ))}
         </div>
@@ -490,7 +491,7 @@ function LiveCard({ stream }) {
 const TRAILER_OVERLAY_W = 520;
 const TRAILER_INFO_H = 200;
 
-export function VideoCard({ video, onClick, rank, size, myList, onToggleList }) {
+export function VideoCard({ video, onClick, rank, size, locked, myList, onToggleList }) {
   const [hovered, setHovered] = useState(false);
   const [trailerMounted, setTrailerMounted] = useState(false);
   const [trailerExpanded, setTrailerExpanded] = useState(false);
@@ -567,6 +568,13 @@ export function VideoCard({ video, onClick, rank, size, myList, onToggleList }) 
         <div style={{ position: "relative", aspectRatio: "2/3", overflow: "hidden" }}>
           <img src={video.poster || video.thumbnail} alt={video.title}
             style={{ width: "100%", height: "100%", objectFit: "cover", transition: "filter 0.35s ease, transform 0.35s ease", filter: hovered ? "brightness(0.45)" : "brightness(0.82)", transform: hovered ? "scale(1.06)" : "scale(1)" }} />
+
+          {locked && (
+            <div style={{ position: "absolute", top: 8, right: 8, display: "flex", alignItems: "center", gap: 4, background: "rgba(0,0,0,0.72)", border: "1px solid rgba(250,204,21,0.5)", borderRadius: 5, padding: "3px 7px", zIndex: 3 }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#facc15" strokeWidth="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <span style={{ fontSize: 8, fontWeight: 800, color: "#facc15", letterSpacing: 0.5 }}>PREMIUM</span>
+            </div>
+          )}
 
           {/* Hover overlay */}
           <div style={{ position: "absolute", inset: 0, background: `linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 50%)`, opacity: hovered ? 1 : 0, transition: "opacity 0.3s ease" }} />

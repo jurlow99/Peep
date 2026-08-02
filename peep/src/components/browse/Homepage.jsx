@@ -17,7 +17,7 @@ import { Footer } from "./Footer";
 import { Spinner } from "../ui/Spinner";
 import { LiveTVPage } from "../../pages/LiveTV";
 
-export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, userName, onGoLive, onExitStudio, studioContent, flags = {} }) {
+export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, userName, onGoLive, onExitStudio, studioContent, flags = {}, isPremiumUser = false }) {
   const [videos, setVideos] = useState([]);
   const [shows, setShows] = useState([]);
   const [carousels, setCarousels] = useState([]);
@@ -747,7 +747,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
               No {activeNav.toLowerCase()} yet.
             </div>
           ) : sections.map(section => section.videos.length > 0 ? (
-            <ContentRow key={section.id} section={section} onPlay={onPlay} onShowSelect={onShowSelect} myList={myList} onToggleList={onToggleList} />
+            <ContentRow key={section.id} section={section} onPlay={onPlay} onShowSelect={onShowSelect} myList={myList} onToggleList={onToggleList} isPremiumUser={isPremiumUser} />
           ) : null)}
         </div>
       )}
