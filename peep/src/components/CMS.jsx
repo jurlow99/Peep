@@ -7001,44 +7001,22 @@ export function CMS({ onExit, currentUser }) {
                       </div>
                     </div>
 
-                    <div style={{ height: 1, background: "#e2e8f0" }} />
-
-                    <div>
-                      <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>2 · Where to show it</label>
-                      <p style={{ margin: "0 0 12px", fontSize: 11, color: "#6b7280" }}>Pick every page this row should appear on.</p>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {[
-                          { val: "home",         icon: "🏠", label: "Home",             desc: "The main landing page" },
-                          { val: "shorts",       icon: "🎬", label: "Movies tab",       desc: "The dedicated Shorts browse page" },
-                          { val: "series",       icon: "📺", label: "Series tab",       desc: "The dedicated Series browse page" },
-                          { val: "podcasts",     icon: "🎙️", label: "Podcasts tab",     desc: "The Podcasts browse page" },
-                          { val: "live",         icon: "📡", label: "Live TV tab",      desc: "Above the Live TV channel grid" },
-                        ].map(({ val, icon, label, desc }) => {
-                          const on = pagesArr.includes(val);
-                          return (
-                            <button key={val} onClick={() => togglePage(val)}
-                              style={{ background: on ? "rgba(79,70,229,0.08)" : "#f8fafc", border: `1.5px solid ${on ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 9, padding: "11px 14px", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 12, transition: "border-color 0.15s, background 0.15s" }}>
-                              <span style={{ fontSize: 18, flexShrink: 0 }}>{icon}</span>
-                              <div style={{ flex: 1 }}>
-                                <div style={{ fontSize: 13, fontWeight: 600, color: on ? "#4f46e5" : "#374151" }}>{label}</div>
-                                <div style={{ fontSize: 11, color: "#6b7280", marginTop: 1 }}>{desc}</div>
-                              </div>
-                              <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${on ? "#4f46e5" : "#e2e8f0"}`, background: on ? "#4f46e5" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.15s" }}>
-                                {on && <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {pagesArr.length === 0 && (
-                        <p style={{ margin: "8px 0 0", fontSize: 11, color: "#dc2626" }}>Pick at least one page.</p>
-                      )}
+                    {/* Location is already chosen by the screen tab you added from — just confirm it */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px" }}>
+                      <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 600 }}>Appears on</span>
+                      {pagesArr.length === 0
+                        ? <span style={{ fontSize: 12, color: "#dc2626" }}>No screen selected</span>
+                        : pagesArr.map(p => (
+                            <span key={p} style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20, background: "rgba(79,70,229,0.08)", color: "#4f46e5", border: "1px solid rgba(79,70,229,0.2)" }}>
+                              {({ home: "🏠 Home", shorts: "🎬 Movies", series: "📺 Series", podcasts: "🎙️ Podcasts", live: "📡 Live TV" }[p] || p)}
+                            </span>
+                          ))}
                     </div>
 
                     <div style={{ height: 1, background: "#e2e8f0" }} />
 
                     <div>
-                      <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>3 · What's in this row</label>
+                      <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>2 · What's in this row</label>
                       <p style={{ margin: "0 0 10px", fontSize: 11, color: "#6b7280" }}>Pick the kind of content — then how it's chosen, just below.</p>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                         {[
@@ -7228,7 +7206,7 @@ export function CMS({ onExit, currentUser }) {
 
                     {carouselForm.type !== "podcast" && (
                       <div>
-                        <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>4 · Presentation</label>
+                        <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>3 · Presentation</label>
                         <p style={{ margin: "0 0 10px", fontSize: 11, color: "#6b7280" }}>How this shelf looks on the home screen.</p>
                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                           {[
@@ -7256,7 +7234,7 @@ export function CMS({ onExit, currentUser }) {
                     {carouselForm.type !== "podcast" && <div style={{ height: 1, background: "#e2e8f0" }} />}
 
                     <div>
-                      <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>5 · Visibility</label>
+                      <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>4 · Visibility</label>
                       <button onClick={() => setCarouselForm(f => ({ ...f, enabled: !f.enabled }))}
                         style={{ width: "100%", background: carouselForm.enabled ? "rgba(16,185,129,0.1)" : "rgba(107,114,128,0.08)", border: `1px solid ${carouselForm.enabled ? "rgba(16,185,129,0.35)" : "#222"}`, borderRadius: 8, padding: "11px", color: carouselForm.enabled ? "#10b981" : "#555", fontSize: 13, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                         <span style={{ fontSize: 16 }}>{carouselForm.enabled ? "✓" : "○"}</span>
