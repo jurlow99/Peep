@@ -1977,6 +1977,16 @@ export function CMS({ onExit, currentUser }) {
       showToast("Pick at least one title.", "error");
       return;
     }
+    // Block duplicate rows: same name already on one of the chosen screens
+    if (!editingCarouselId) {
+      const t = carouselForm.title.trim().toLowerCase();
+      const newPages = (carouselForm.pages || "").split(",").map(p => p.trim()).filter(Boolean);
+      const dupe = carousels.find(c =>
+        (c.title || "").trim().toLowerCase() === t &&
+        (c.pages || "").split(",").map(p => p.trim()).some(p => newPages.includes(p))
+      );
+      if (dupe) { showToast("A row with that name already exists on this screen.", "error"); return; }
+    }
 
     carouselSaveRef.current = true;
     setCarouselSaving(true);
