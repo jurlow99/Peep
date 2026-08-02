@@ -114,6 +114,8 @@ export function CMS({ onExit, currentUser }) {
   // Carousels state
   const [carousels, setCarousels] = useState([]);
   const [carouselLoading, setCarouselLoading] = useState(true);
+  const [carouselPageTab, setCarouselPageTab] = useState("home"); // which screen's rows the carousel admin is showing
+  const carouselsOnPage = (page) => carousels.filter(c => (c.pages || "home").split(",").map(p => p.trim()).includes(page));
   const [editingCarouselId, setEditingCarouselId] = useState(null);
   const [carouselForm, setCarouselForm] = useState(EMPTY_CAROUSEL);
   const [carouselSaving, setCarouselSaving] = useState(false);
@@ -3764,27 +3766,44 @@ export function CMS({ onExit, currentUser }) {
         {/* ────── CAROUSELS TAB ────── */}
         {tab === "content" && videoSubTab === "carousels" && (
           <div>
+            {/* Page selector — which screen these rows appear on */}
+            <p style={{ margin: "0 0 8px", fontSize: 12, color: "#6b7280" }}>Pick a screen to see and manage the rows that appear on it:</p>
+            <div style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" }}>
+              {[{ key: "home", label: "🏠 Home" }, { key: "shorts", label: "🎬 Movies" }, { key: "series", label: "📺 Series" }].map(pg => {
+                const count = carouselsOnPage(pg.key).length;
+                const on = carouselPageTab === pg.key;
+                return (
+                  <button key={pg.key} onClick={() => setCarouselPageTab(pg.key)}
+                    style={{ background: on ? "#4f46e5" : "#ffffff", border: `1px solid ${on ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 10, padding: "10px 18px", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, boxShadow: on ? "0 2px 10px rgba(79,70,229,0.28)" : "none", transition: "all 0.15s" }}>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: on ? "#fff" : "#0f172a" }}>{pg.label}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, background: on ? "rgba(255,255,255,0.25)" : "#f1f5f9", color: on ? "#fff" : "#6b7280", borderRadius: 20, padding: "1px 8px" }}>{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+
             {/* Header row with Add button */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Content Rows ({carousels.length}) <span style={{ color: "#6b7280", fontWeight: 400, fontSize: 13 }}>— ▲▼ to reorder</span></h2>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#0f172a" }}>{({ home: "Home", shorts: "Movies", series: "Series" }[carouselPageTab])} rows ({carouselsOnPage(carouselPageTab).length}) <span style={{ color: "#6b7280", fontWeight: 400, fontSize: 13 }}>— ▲▼ to reorder</span></h2>
               <button
-                onClick={() => { setCarouselForm(EMPTY_CAROUSEL); setEditingCarouselId(null); setDrawerOpen(true); }}
+                onClick={() => { setCarouselForm({ ...EMPTY_CAROUSEL, pages: carouselPageTab }); setEditingCarouselId(null); setDrawerOpen(true); }}
                 style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
               >
-                + Add Carousel
+                + Add row to {({ home: "Home", shorts: "Movies", series: "Series" }[carouselPageTab])}
               </button>
             </div>
 
             {carouselLoading ? (
               <div style={{ padding: 40, textAlign: "center", color: "#6b7280" }}>Loading…</div>
-            ) : carousels.length === 0 ? (
+            ) : carouselsOnPage(carouselPageTab).length === 0 ? (
               <div style={{ padding: 40, textAlign: "center", color: "#6b7280", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12 }}>
                 <div style={{ fontSize: 32, marginBottom: 10 }}>📋</div>
-                <p style={{ margin: 0, fontSize: 14 }}>No rows yet. Create your first one.</p>
+                <p style={{ margin: 0, fontSize: 14 }}>No rows on this screen yet. Add one above.</p>
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {carousels.map((carousel, idx) => {
+                {carouselsOnPage(carouselPageTab).map((carousel) => {
+                  const idx = carousels.indexOf(carousel);
                   const t = carousel.type;
                   const ct = carousel.content_type;
                   const rowPages = (carousel.pages || "home").split(",").map(p => p.trim()).filter(Boolean);
