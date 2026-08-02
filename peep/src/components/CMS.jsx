@@ -3769,7 +3769,7 @@ export function CMS({ onExit, currentUser }) {
             {/* Page selector — which screen these rows appear on */}
             <p style={{ margin: "0 0 8px", fontSize: 12, color: "#6b7280" }}>Pick a screen to see and manage the rows that appear on it:</p>
             <div style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" }}>
-              {[{ key: "home", label: "🏠 Home" }, { key: "shorts", label: "🎬 Movies" }, { key: "series", label: "📺 Series" }].map(pg => {
+              {[{ key: "home", label: "🏠 Home" }, { key: "shorts", label: "🎬 Movies" }, { key: "series", label: "📺 Series" }, { key: "podcasts", label: "🎙️ Podcasts" }, { key: "live", label: "📡 Live TV" }].map(pg => {
                 const count = carouselsOnPage(pg.key).length;
                 const on = carouselPageTab === pg.key;
                 return (
@@ -3784,12 +3784,12 @@ export function CMS({ onExit, currentUser }) {
 
             {/* Header row with Add button */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#0f172a" }}>{({ home: "Home", shorts: "Movies", series: "Series" }[carouselPageTab])} rows ({carouselsOnPage(carouselPageTab).length}) <span style={{ color: "#6b7280", fontWeight: 400, fontSize: 13 }}>— ▲▼ to reorder</span></h2>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#0f172a" }}>{({ home: "Home", shorts: "Movies", series: "Series", podcasts: "Podcasts", live: "Live TV" }[carouselPageTab])} rows ({carouselsOnPage(carouselPageTab).length}) <span style={{ color: "#6b7280", fontWeight: 400, fontSize: 13 }}>— ▲▼ to reorder</span></h2>
               <button
                 onClick={() => { setCarouselForm({ ...EMPTY_CAROUSEL, pages: carouselPageTab }); setEditingCarouselId(null); setDrawerOpen(true); }}
                 style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
               >
-                + Add row to {({ home: "Home", shorts: "Movies", series: "Series" }[carouselPageTab])}
+                + Add row to {({ home: "Home", shorts: "Movies", series: "Series", podcasts: "Podcasts", live: "Live TV" }[carouselPageTab])}
               </button>
             </div>
 
@@ -7011,6 +7011,8 @@ export function CMS({ onExit, currentUser }) {
                           { val: "home",         icon: "🏠", label: "Home",             desc: "The main landing page" },
                           { val: "shorts",       icon: "🎬", label: "Movies tab",       desc: "The dedicated Shorts browse page" },
                           { val: "series",       icon: "📺", label: "Series tab",       desc: "The dedicated Series browse page" },
+                          { val: "podcasts",     icon: "🎙️", label: "Podcasts tab",     desc: "The Podcasts browse page" },
+                          { val: "live",         icon: "📡", label: "Live TV tab",      desc: "Above the Live TV channel grid" },
                         ].map(({ val, icon, label, desc }) => {
                           const on = pagesArr.includes(val);
                           return (

@@ -182,6 +182,8 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
     if (activeNav === "Home") return pages.includes("home");
     if (activeNav === "Movies") return pages.includes("shorts");
     if (activeNav === "Series") return pages.includes("series");
+    if (activeNav === "Podcasts") return pages.includes("podcasts");
+    if (activeNav === "Streams") return pages.includes("live");
     return false;
   }), [carousels, activeNav]);
 
@@ -213,10 +215,6 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
 
   const sections = useMemo(() => activeNav === "My List"
     ? []
-    : activeNav === "Streams"
-    ? []
-    : activeNav === "Podcasts"
-    ? [{ id: "all-podcasts", title: "All Podcasts", isPodcast: true, videos: [], podcastItems: podcasts }]
     : visibleCarousels.length > 0
     ? visibleCarousels.map(c => {
         const filterVal = c.filter_value?.toLowerCase();
@@ -242,6 +240,10 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
           : baseItems;
         return { id: String(c.id), title: c.title, videos: items, layout: c.layout || (c.type === "trending" ? "top10" : "standard"), numbered: c.type === "trending" };
       }).filter(s => s.isPodcast ? s.podcastItems.length > 0 : s.videos.length > 0)
+    : activeNav === "Podcasts"
+    ? [{ id: "all-podcasts", title: "All Podcasts", isPodcast: true, videos: [], podcastItems: podcasts }]
+    : activeNav === "Streams"
+    ? []
     : visibleCarousels.length === 0 && carousels.length > 0 ? []
     : [
         { id: "trending", title: "Trending Now", videos: [...filteredContent].reverse(), numbered: true, layout: "top10" },
@@ -655,9 +657,18 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
         </div>
       )}
 
-      {/* Streams tab */}
+      {/* Streams tab — optional promo rows above the channel grid, then the guide */}
       {!studioContent && activeNav === "Streams" && !loading && (
-        <LiveTVPage streams={liveStreams} channels={channels} epgEntries={epgEntries} onChannelPlay={onChannelPlay} user={user} streamsLoading={loading} />
+        <>
+          {sections.filter(s => !s.isPodcast && s.videos?.length > 0).length > 0 && (
+            <div style={{ paddingTop: isMobile ? "calc(max(env(safe-area-inset-top), 44px) + 48px)" : 90, paddingBottom: 4 }}>
+              {sections.filter(s => !s.isPodcast && s.videos?.length > 0).map(section => (
+                <ContentRow key={section.id} section={section} onPlay={onPlay} onShowSelect={onShowSelect} myList={myList} onToggleList={onToggleList} isPremiumUser={isPremiumUser} />
+              ))}
+            </div>
+          )}
+          <LiveTVPage streams={liveStreams} channels={channels} epgEntries={epgEntries} onChannelPlay={onChannelPlay} user={user} streamsLoading={loading} />
+        </>
       )}
 
       {/* ── LIVE NOW STRIP (Home tab) — live TV channels + live streamers ── */}
