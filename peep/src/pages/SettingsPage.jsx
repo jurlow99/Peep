@@ -272,7 +272,7 @@ const TABS = [
   { id: "preferences", label: "Preferences", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3v1m0 16v1M3 12h1m16 0h1M5.6 5.6l.7.7m11.4-.7-.7.7M5.6 18.4l.7-.7m11.4.7-.7-.7"/><circle cx="12" cy="12" r="4"/></svg> },
 ];
 
-export function SettingsPage({ user, isOwner, onBack, onGoHome, onProfileUpdate, onSignOut }) {
+export function SettingsPage({ user, isOwner, isStreamer = false, onApplyToStream, onBack, onGoHome, onProfileUpdate, onSignOut }) {
   const [activeTab, setActiveTab] = useState("profile");
   const isMobile = typeof window !== "undefined" && window.innerWidth < 700;
 
@@ -320,6 +320,20 @@ export function SettingsPage({ user, isOwner, onBack, onGoHome, onProfileUpdate,
           {activeTab === "profile" && <ProfileTab user={user} onProfileUpdate={onProfileUpdate} />}
           {activeTab === "account" && <AccountTab user={user} />}
           {activeTab === "preferences" && <PreferencesTab />}
+
+          {/* Stream on Peep — apply (non-streamers) or open studio (approved) */}
+          {onApplyToStream && (
+            <div style={{ marginTop: 32, padding: "14px 18px", background: "rgba(250,204,21,0.04)", border: "1px solid rgba(250,204,21,0.12)", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <div>
+                <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 600, color: "#e0e0e0" }}>{isStreamer ? "Creator Studio" : "Stream on Peep"}</p>
+                <p style={{ margin: 0, fontSize: 12, color: "#555" }}>{isStreamer ? "Manage your channel, go live, and see analytics" : "Peep Live is a curated lineup — apply for your own live channel."}</p>
+              </div>
+              <button onClick={onApplyToStream}
+                style={{ background: "transparent", border: "1px solid rgba(250,204,21,0.2)", borderRadius: 8, padding: "8px 16px", color: YELLOW, fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                {isStreamer ? "Open →" : "Apply →"}
+              </button>
+            </div>
+          )}
 
           {/* Admin shortcut */}
           {isOwner && (

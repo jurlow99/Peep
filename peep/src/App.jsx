@@ -263,6 +263,8 @@ export default function App() {
         <SettingsPage
           user={user}
           isOwner={isOwnerEmail(user?.email)}
+          isStreamer={!!streamRecord}
+          onApplyToStream={() => setPage("studio")}
           onBack={() => setPage("home")}
           onGoHome={goHome}
           onAvatarChange={id => setUserAvatarId(id)}
@@ -316,12 +318,12 @@ export default function App() {
 
               <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "rgba(250,204,21,0.13)", border: "1px solid rgba(250,204,21,0.32)", borderRadius: 100, padding: "6px 16px", marginBottom: 24 }}>
                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#facc15", display: "inline-block", boxShadow: "0 0 8px #facc15" }} />
-                <span style={{ fontSize: 10, color: "#facc15", fontWeight: 700, letterSpacing: 2, textTransform: "uppercase" }}>Early Access</span>
+                <span style={{ fontSize: 10, color: "#facc15", fontWeight: 700, letterSpacing: 2, textTransform: "uppercase" }}>Pre-Beta · Early Access</span>
               </div>
 
               <h2 style={{ margin: "0 0 14px", fontSize: 27, fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1.15, color: "#fff" }}>You're early.</h2>
               <p style={{ margin: "0 0 24px", fontSize: 15, color: "#cbc9c2", lineHeight: 1.7 }}>
-                Welcome inside Peep — a hand-picked mix of films, series and always-on live channels you won't find on the big platforms. Some corners are still under construction, and fresh drops land every week.
+                Welcome inside Peep — we're in <span style={{ color: "#e8e6df", fontWeight: 600 }}>pre-beta</span>, the very beginning stages, so expect rough edges, missing pieces, and things changing fast. It's a growing mix of films, series and always-on live channels, with fresh drops landing every week. Thanks for being here this early.
               </p>
 
               {/* What's inside */}
@@ -352,6 +354,7 @@ export default function App() {
         onExitStudio={() => setPage("home")}
         studioContent={page === "studio" ? <StreamerDashboard embedded preloadedUser={user} /> : null}
         flags={flags}
+        isStreamer={!!streamRecord}
         {...listProps}
       />
     </>

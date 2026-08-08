@@ -97,7 +97,7 @@ function FieldError({ msg }) {
   return <p style={{ color: "#f87171", fontSize: 12, margin: "5px 0 0" }}>{msg}</p>;
 }
 
-function Input({ label, type = "text", value, onChange, placeholder, autoComplete, error, rightSlot, ...rest }) {
+function Input({ label, type = "text", value, onChange, placeholder, autoComplete, error, rightSlot, hint, ...rest }) {
   const [focused, setFocused] = useState(false);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
@@ -110,6 +110,7 @@ function Input({ label, type = "text", value, onChange, placeholder, autoComplet
         />
         {rightSlot && <div style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)" }}>{rightSlot}</div>}
       </div>
+      {hint && !error && <p style={{ margin: "6px 0 0", fontSize: 11, color: "#555", lineHeight: 1.4 }}>{hint}</p>}
       <FieldError msg={error} />
     </div>
   );
@@ -265,7 +266,7 @@ export function SignupPage() {
               <h2 style={{ margin: "0 0 6px", fontSize: 22, fontWeight: 700 }}>Create your account</h2>
               <p style={{ margin: "0 0 28px", fontSize: 13, color: "#555" }}>Enter your name and email to get started.</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                <Input label="Name" value={name} onChange={e => { setName(e.target.value); setErrors(p => ({ ...p, name: null })); }} placeholder="Hi! What's your name?" autoComplete="name" error={errors.name} />
+                <Input label="Name" value={name} onChange={e => { setName(e.target.value); setErrors(p => ({ ...p, name: null })); }} placeholder="Hi! What's your name?" autoComplete="name" error={errors.name} hint="This is your public display name — it's what other viewers see in live chat and comments." />
                 <Input label="Email" type="email" value={email} onChange={e => { setEmail(e.target.value); setErrors(p => ({ ...p, email: null })); }} placeholder="you@example.com" autoComplete="email"
                   error={errors.email || (emailStatus === "taken" ? "An account with that email already exists." : null)}
                   rightSlot={emailStatus === "checking" ? <span style={{ color: "#555", fontSize: 13 }}>⋯</span> : emailStatus === "taken" ? <span style={{ color: "#f87171", fontSize: 13 }}>✗</span> : null}

@@ -111,7 +111,7 @@ function LiveRow({ title, channels = [], streams = [], nowByChannel = {}, onChan
   );
 }
 
-export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, userName, onGoLive, onExitStudio, studioContent, flags = {}, isPremiumUser = false }) {
+export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, userName, onGoLive, onExitStudio, studioContent, flags = {}, isPremiumUser = false, isStreamer = false }) {
   const [videos, setVideos] = useState([]);
   const [shows, setShows] = useState([]);
   const [carousels, setCarousels] = useState([]);
@@ -142,36 +142,17 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
 
 
   useEffect(() => {
+    // Load content once. We deliberately DON'T open Realtime subscriptions on the
+    // public browse page — viewers don't need live DB updates, and each subscription
+    // holds a WebSocket connection (Supabase Free caps concurrent connections at ~200).
+    // Dropping them lets thousands browse at once for free. Content refreshes on
+    // navigation/reload; admins still get live updates in the CMS.
     fetchAll();
 
-    const videoChannel = supabase.channel("videos-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "videos" }, fetchAll)
-      .subscribe();
-    const showChannel = supabase.channel("shows-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "shows" }, fetchAll)
-      .subscribe();
-    const carouselChannel = supabase.channel("carousels-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "carousels" }, fetchAll)
-      .subscribe();
-    const podcastChannel = supabase.channel("podcasts-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "podcasts" }, fetchAll)
-      .subscribe();
-    const liveChannel = supabase.channel("live-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "live_streams" }, fetchAll)
-      .subscribe();
-    const epgChannel = supabase.channel("epg-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "epg_entries" }, fetchAll)
-      .subscribe();
     const handler = () => setScrolled(window.scrollY > 60);
     window.addEventListener("scroll", handler);
 
     return () => {
-      supabase.removeChannel(videoChannel);
-      supabase.removeChannel(showChannel);
-      supabase.removeChannel(carouselChannel);
-      supabase.removeChannel(podcastChannel);
-      supabase.removeChannel(liveChannel);
-      supabase.removeChannel(epgChannel);
       window.removeEventListener("scroll", handler);
     };
   }, []);
@@ -510,8 +491,8 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
               );
             })}
 
-            {/* Go Live */}
-            {user && (
+            {/* Go Live — only for approved streamers (others apply from Settings) */}
+            {isStreamer && (
               <div className="sb-item" onClick={() => onGoLive?.()} style={{
                 display: "flex", alignItems: "center", gap: 14,
                 padding: sbExpanded ? "11px 20px" : "11px 0",
