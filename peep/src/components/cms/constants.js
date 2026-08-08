@@ -49,6 +49,7 @@ export const EMPTY_CAROUSEL = {
   enabled: true,
   position: 0,
   pages: "home",
+  environment: "test", // new rows start in Test; publish to Production when ready
 };
 
 export const EMPTY_CHANNEL = {
@@ -64,6 +65,8 @@ export const EMPTY_CHANNEL = {
   is_active: true,
   sort_order: 0,
   is_premium: false,
+  tile_size: "normal",
+  is_live_hero: false,
 };
 
 export const EMPTY_LIVE_STREAM = {

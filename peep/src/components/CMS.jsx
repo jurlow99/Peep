@@ -120,6 +120,9 @@ export function CMS({ onExit, currentUser }) {
   const [carouselForm, setCarouselForm] = useState(EMPTY_CAROUSEL);
   const [carouselSaving, setCarouselSaving] = useState(false);
   const carouselSaveRef = useRef(false); // hard guard against double-submit duplicates
+  const suppressCarouselRT = useRef(false); // ignore our own realtime echoes during a reorder
+  const [dragCarouselIdx, setDragCarouselIdx] = useState(null); // drag-to-reorder source (index within current page)
+  const [dragOverCarouselIdx, setDragOverCarouselIdx] = useState(null);
   const [deleteCarouselConfirm, setDeleteCarouselConfirm] = useState(null);
   const [handpickedSearch, setHandpickedSearch] = useState("");
   const [handpickedSelected, setHandpickedSelected] = useState([]); // [{id, type, title, thumbnail}]
@@ -193,6 +196,10 @@ export function CMS({ onExit, currentUser }) {
   const [channelStatuses, setChannelStatuses] = useState({});
   const [testingChannels, setTestingChannels] = useState(false);
   const [testProgress, setTestProgress] = useState({ done: 0, total: 0 });
+  // Health check for the Fast Channels (channels table)
+  const [fastChannelStatuses, setFastChannelStatuses] = useState({});
+  const [testingFastChannels, setTestingFastChannels] = useState(false);
+  const [fastTestProgress, setFastTestProgress] = useState({ done: 0, total: 0 });
   const [m3uOpen, setM3uOpen] = useState(false);
   const [m3uUrl, setM3uUrl] = useState("");
   const [m3uFetching, setM3uFetching] = useState(false);
@@ -200,9 +207,13 @@ export function CMS({ onExit, currentUser }) {
   const [m3uSelected, setM3uSelected] = useState(new Set());
   const [m3uError, setM3uError] = useState("");
   const [m3uSearch, setM3uSearch] = useState("");
+  const [m3uCategoryFilter, setM3uCategoryFilter] = useState("All");
   const [m3uPage, setM3uPage] = useState(0);
   const [m3uImporting, setM3uImporting] = useState(false);
-  const [m3uImportDone, setM3uImportDone] = useState(null);
+  const [m3uImportProgress, setM3uImportProgress] = useState({ done: 0, total: 0 });
+  const [m3uImportResult, setM3uImportResult] = useState(null);
+  const [m3uSourceLabel, setM3uSourceLabel] = useState("");
+  const m3uFileInputRef = useRef(null);
 
   // EPG state
   const [epgEntries, setEpgEntries] = useState([]);
@@ -1906,14 +1917,16 @@ export function CMS({ onExit, currentUser }) {
         "postgres_changes",
         { event: "*", schema: "public", table: "carousels" },
         (payload) => {
+          // During a local reorder we own the order optimistically — ignore our own echoes
+          // so the list doesn't jump around or spam toasts while positions settle.
+          if (suppressCarouselRT.current && payload.eventType === "UPDATE") return;
           if (payload.eventType === "INSERT") {
-            setCarousels(prev => [...prev, payload.new].sort((a, b) => a.position - b.position));
+            setCarousels(prev => prev.some(c => c.id === payload.new.id) ? prev : [...prev, payload.new].sort((a, b) => a.position - b.position));
             showToast("Carousel added", "success");
           } else if (payload.eventType === "UPDATE") {
             setCarousels(prev =>
               prev.map(c => c.id === payload.new.id ? payload.new : c).sort((a, b) => a.position - b.position)
             );
-            showToast("Carousel updated", "success");
           } else if (payload.eventType === "DELETE") {
             setCarousels(prev => prev.filter(c => c.id !== payload.old.id));
             showToast("Carousel deleted", "success");
@@ -1935,6 +1948,7 @@ export function CMS({ onExit, currentUser }) {
       enabled: carousel.enabled ?? true,
       position: carousel.position ?? 0,
       pages: carousel.pages ?? "home",
+      environment: carousel.environment ?? "production",
     });
     if (carousel.type === "handpicked") {
       try {
@@ -2034,16 +2048,24 @@ export function CMS({ onExit, currentUser }) {
   }
 
   async function reorderCarousels(newCarousels) {
+    // Renumber positions to match the new order.
+    const renumbered = newCarousels.map((c, idx) => ({ ...c, position: idx }));
+    // 1) Update the UI immediately so the move feels instant.
+    setCarousels(renumbered);
+    // 2) Ignore the realtime echoes our own writes will fire (they'd re-sort mid-flight).
+    suppressCarouselRT.current = true;
     try {
-      const updates = newCarousels.map((c, idx) => ({ id: c.id, position: idx }));
-      for (const update of updates) {
-        const { error } = await supabase.from("carousels").update({ position: update.position }).eq("id", update.id);
-        if (error) throw error;
-      }
-      setCarousels(newCarousels);
+      // 3) Persist all positions in parallel (fast, no mid-flight re-sorts).
+      const results = await Promise.all(renumbered.map(c => supabase.from("carousels").update({ position: c.position }).eq("id", c.id)));
+      const failed = results.find(r => r.error);
+      if (failed) throw failed.error;
       showToast("Order updated");
     } catch (error) {
-      showToast("Reorder failed: " + error.message, "error");
+      showToast("Reorder failed: " + (error?.message || error), "error");
+      loadCarousels(); // fall back to server truth on failure
+    } finally {
+      // Re-enable realtime after the echoes have drained.
+      setTimeout(() => { suppressCarouselRT.current = false; }, 1200);
     }
   }
 
@@ -2054,6 +2076,35 @@ export function CMS({ onExit, currentUser }) {
     [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
     await reorderCarousels(next);
   }
+  // Move a row between Test and Production regions.
+  async function setCarouselEnvironment(carousel, env) {
+    suppressCarouselRT.current = true;
+    setCarousels(prev => prev.map(c => c.id === carousel.id ? { ...c, environment: env } : c));
+    const { error } = await supabase.from("carousels").update({ environment: env }).eq("id", carousel.id);
+    if (error) { showToast("Failed: " + error.message, "error"); loadCarousels(); }
+    else { showToast(env === "production" ? "Published to Production ✓" : "Moved to Test"); logAudit("update", "carousel", carousel.id, `region → ${env}`); }
+    setTimeout(() => { suppressCarouselRT.current = false; }, 1000);
+  }
+
+  // Drag-to-reorder within the selected screen. `from`/`to` are indices in the page list.
+  async function dropReorderCarousel(from, to) {
+    setDragCarouselIdx(null); setDragOverCarouselIdx(null);
+    if (from == null || to == null || from === to) return;
+    const page = carouselPageTab;
+    const pageList = carouselsOnPage(page);
+    if (from < 0 || from >= pageList.length || to < 0 || to >= pageList.length) return;
+    const reordered = [...pageList];
+    const [moved] = reordered.splice(from, 1);
+    reordered.splice(to, 0, moved);
+    // Slot the reordered page rows back into the same global positions they occupied,
+    // leaving other pages' rows untouched — then renumber everything.
+    const slots = [];
+    carousels.forEach((c, gi) => { if (pageList.includes(c)) slots.push(gi); });
+    const next = [...carousels];
+    slots.forEach((slot, k) => { next[slot] = reordered[k]; });
+    await reorderCarousels(next);
+  }
+
   // Reorder within the selected screen — swap with the adjacent row on the same page
   async function moveCarouselOnPage(carousel, dir) {
     const pageList = carouselsOnPage(carouselPageTab);
@@ -2637,6 +2688,59 @@ export function CMS({ onExit, currentUser }) {
     loadChannels();
   }
 
+  // Ping each channel's playback URL to find dead streams (M3U imports go stale often).
+  function fastChannelUrl(ch) {
+    if (ch.hls_url) return ch.hls_url;
+    if (ch.stream_uid) return `https://customer-x9w8t8qxjaf49jqb.cloudflarestream.com/${ch.stream_uid}/manifest/video.m3u8`;
+    return "";
+  }
+  // Health-check channels server-side via the check-channels edge function.
+  // Server-side is the only reliable way — no CORS, real User-Agent, true HTTP status.
+  async function testFastChannels() {
+    const list = channelList.filter(c => fastChannelUrl(c));
+    if (!list.length) { showToast("No channels with a playback URL to test", "error"); return; }
+    setTestingFastChannels(true);
+    setFastChannelStatuses(Object.fromEntries(list.map(c => [c.id, "testing"])));
+    setFastTestProgress({ done: 0, total: list.length });
+    // Direct fetch to the edge function (matches our other function calls; avoids
+    // supabase-js invoke quirks). Chunked so big lists stay under the time limit and
+    // results/progress stream in. Counting is done outside setState to stay correct.
+    const token = await getAdminToken();
+    const CHUNK = 40;
+    let ok = 0, dead = 0, failedChunks = 0, done = 0, lastErr = "";
+    for (let i = 0; i < list.length; i += CHUNK) {
+      const chunk = list.slice(i, i + CHUNK);
+      try {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/check-channels`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          body: JSON.stringify({ channels: chunk.map(c => ({ id: String(c.id), url: fastChannelUrl(c) })) }),
+          signal: AbortSignal.timeout(90000),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        const results = json.results || {};
+        const upd = {};
+        chunk.forEach(c => { const st = results[String(c.id)] === "ok" ? "ok" : "error"; upd[c.id] = st; if (st === "ok") ok++; else dead++; });
+        setFastChannelStatuses(prev => ({ ...prev, ...upd }));
+      } catch (e) {
+        failedChunks++;
+        lastErr = e?.message || "request failed";
+        const upd = {};
+        chunk.forEach(c => { upd[c.id] = "unknown"; });
+        setFastChannelStatuses(prev => ({ ...prev, ...upd }));
+      }
+      done += chunk.length;
+      setFastTestProgress({ done, total: list.length });
+    }
+    setTestingFastChannels(false);
+    if (ok === 0 && dead === 0) {
+      showToast(`Channel checker failed: ${lastErr || "unreachable"}`, "error");
+    } else {
+      showToast(`Test complete · ${ok} online, ${dead} dead${failedChunks ? " · some untested" : ""}`);
+    }
+  }
+
   // ──── Feature flags + audit log ────
   const [flagStates, setFlagStates] = useState({});
   const [flagsLoading, setFlagsLoading] = useState(false);
@@ -3176,64 +3280,163 @@ export function CMS({ onExit, currentUser }) {
   }
 
   function parseM3U(text) {
-    const lines = text.split("\n").map(l => l.trim());
+    const lines = text.split(/\r?\n/).map(l => l.trim());
     const channels = [];
     for (let i = 0; i < lines.length; i++) {
       if (!lines[i].startsWith("#EXTINF")) continue;
       const extinf = lines[i];
       let url = "";
-      for (let j = i + 1; j < Math.min(i + 6, lines.length); j++) {
-        if (lines[j] && !lines[j].startsWith("#")) { url = lines[j]; break; }
+      for (let j = i + 1; j < lines.length; j++) {
+        const l = lines[j];
+        if (!l) continue;
+        if (l.startsWith("#")) continue; // skip #EXTVLCOPT, #EXTGRP, etc.
+        url = l; break;
       }
-      if (!url) continue;
+      if (!url || !/^https?:\/\//i.test(url)) continue; // only real playback URLs
       const commaIdx = extinf.lastIndexOf(",");
-      const name = commaIdx >= 0 ? extinf.slice(commaIdx + 1).trim() : "Unknown Channel";
-      const logoMatch = extinf.match(/tvg-logo="([^"]*)"/i);
-      const groupMatch = extinf.match(/group-title="([^"]*)"/i);
-      channels.push({ name: name || "Unknown Channel", url, logo: logoMatch?.[1] || "", group: groupMatch?.[1] || "" });
+      const displayName = commaIdx >= 0 ? extinf.slice(commaIdx + 1).trim() : "";
+      const tvgName = extinf.match(/tvg-name="([^"]*)"/i)?.[1] || "";
+      const name = (displayName || tvgName || "Unknown Channel").replace(/\s+/g, " ").trim();
+      const logo = extinf.match(/tvg-logo="([^"]*)"/i)?.[1] || "";
+      const group = extinf.match(/group-title="([^"]*)"/i)?.[1] || "";
+      channels.push({ name: name || "Unknown Channel", url, logo, group });
     }
     return channels;
   }
 
-  async function fetchM3UPlaylist() {
-    if (!m3uUrl.trim()) return;
-    setM3uFetching(true); setM3uError(""); setM3uChannels([]); setM3uSelected(new Set()); setM3uPage(0); setM3uImportDone(null);
-    let text = "";
-    try {
-      const res = await fetch(m3uUrl.trim(), { signal: AbortSignal.timeout(15000) });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      text = await res.text();
-    } catch {
-      try {
-        const proxy = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(m3uUrl.trim())}`, { signal: AbortSignal.timeout(20000) });
-        const json = await proxy.json();
-        text = json.contents || "";
-      } catch {
-        setM3uError("Could not fetch the playlist. The URL may be invalid or blocked by CORS.");
-        setM3uFetching(false); return;
-      }
-    }
-    if (!text.includes("#EXTINF") && !text.includes("#EXTM3U")) {
+  // Tag channels against existing DB channels + against each other (dupe by URL or name).
+  function tagM3UChannels(channels) {
+    const existingUrls = new Set(channelList.map(c => (c.hls_url || "").trim().toLowerCase()).filter(Boolean));
+    const existingNames = new Set(channelList.map(c => (c.name || "").trim().toLowerCase()).filter(Boolean));
+    const seenUrls = new Set();
+    const seenNames = new Set();
+    return channels.map(ch => {
+      const u = ch.url.trim().toLowerCase();
+      const n = ch.name.trim().toLowerCase();
+      let duplicate = false, reason = "";
+      if (existingUrls.has(u) || existingNames.has(n)) { duplicate = true; reason = "Already exists"; }
+      else if (seenUrls.has(u) || seenNames.has(n)) { duplicate = true; reason = "Duplicate in file"; }
+      seenUrls.add(u); seenNames.add(n);
+      return { ...ch, duplicate, dupeReason: reason };
+    });
+  }
+
+  function ingestM3UText(text, sourceLabel) {
+    if (!text || (!text.includes("#EXTINF") && !text.includes("#EXTM3U"))) {
       setM3uError("This does not appear to be a valid M3U playlist."); setM3uFetching(false); return;
     }
     const channels = parseM3U(text);
     if (channels.length === 0) { setM3uError("No channels found in this playlist."); setM3uFetching(false); return; }
-    const existingUrls = new Set(liveList.map(s => s.stream_url).filter(Boolean));
-    const tagged = channels.map(ch => ({ ...ch, duplicate: existingUrls.has(ch.url) }));
+    const tagged = tagM3UChannels(channels);
     setM3uChannels(tagged);
-    setM3uSelected(new Set());
+    // Auto-select everything that isn't a duplicate.
+    const preselect = new Set();
+    tagged.forEach((ch, i) => { if (!ch.duplicate) preselect.add(i); });
+    setM3uSelected(preselect);
+    setM3uSourceLabel(sourceLabel);
+    setM3uCategoryFilter("All");
     setM3uFetching(false);
+  }
+
+  function resetM3UPreview() {
+    setM3uError(""); setM3uChannels([]); setM3uSelected(new Set()); setM3uPage(0);
+    setM3uImportResult(null); setM3uSearch(""); setM3uCategoryFilter("All");
+  }
+
+  async function fetchM3UPlaylist() {
+    if (!m3uUrl.trim()) return;
+    setM3uFetching(true); resetM3UPreview();
+    const target = m3uUrl.trim();
+    let text = "";
+    // Primary: our server-side proxy (no CORS limits, works with any source).
+    try {
+      const token = await getAdminToken();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/fetch-m3u?url=${encodeURIComponent(target)}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        signal: AbortSignal.timeout(30000),
+      });
+      if (res.ok) {
+        text = await res.text();
+      } else {
+        let msg = `Playlist fetch failed (HTTP ${res.status})`;
+        try { const j = await res.json(); if (j.error) msg = j.error; } catch {}
+        throw new Error(msg);
+      }
+    } catch (proxyErr) {
+      // Fallback: try a direct browser fetch (works for CORS-enabled sources even if the proxy is down).
+      try {
+        const res = await fetch(target, { signal: AbortSignal.timeout(15000) });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        text = await res.text();
+      } catch {
+        setM3uError(proxyErr?.message || "Could not reach that URL. It may be offline or invalid.");
+        setM3uFetching(false); return;
+      }
+    }
+    ingestM3UText(text, target);
+  }
+
+  async function loadM3UFromFile(file) {
+    if (!file) return;
+    const okExt = /\.(m3u|m3u8)$/i.test(file.name);
+    setM3uFetching(true); resetM3UPreview();
+    try {
+      const text = await file.text();
+      if (!okExt && !text.includes("#EXTM3U") && !text.includes("#EXTINF")) {
+        setM3uError("That file doesn't look like an M3U playlist."); setM3uFetching(false); return;
+      }
+      ingestM3UText(text, file.name);
+    } catch {
+      setM3uError("Could not read that file."); setM3uFetching(false);
+    }
+    if (m3uFileInputRef.current) m3uFileInputRef.current.value = "";
   }
 
   async function importM3USelected() {
     const toImport = m3uChannels.filter((ch, i) => m3uSelected.has(i) && !ch.duplicate);
+    const skippedDupes = m3uChannels.filter(ch => ch.duplicate).length;
     if (toImport.length === 0) { showToast("No new channels selected", "error"); return; }
     setM3uImporting(true);
-    const { error } = await supabase.from("live_streams").insert(
-      toImport.map(ch => ({ title: ch.name, description: ch.group || "", stream_url: ch.url, thumbnail: ch.logo || "", is_live: false, is_hero: false, badge_text: "LIVE", playlist_source: m3uUrl.trim() }))
-    );
-    if (error) { showToast("Import failed: " + error.message, "error"); }
-    else { setM3uImportDone(toImport.length); showToast(`Imported ${toImport.length} channel${toImport.length !== 1 ? "s" : ""}`); await loadLiveStreams(); }
+    setM3uImportProgress({ done: 0, total: toImport.length });
+    let imported = 0, failed = 0;
+    const usedSlugs = new Set(channelList.map(c => c.slug).filter(Boolean));
+    const baseOrder = channelList.reduce((max, c) => Math.max(max, c.sort_order || 0), 0);
+    const BATCH = 200;
+    for (let i = 0; i < toImport.length; i += BATCH) {
+      const batch = toImport.slice(i, i + BATCH);
+      const payload = batch.map((ch, bi) => {
+        let slug = (ch.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")) || "channel";
+        let unique = slug, n = 2;
+        while (usedSlugs.has(unique)) unique = `${slug}-${n++}`;
+        usedSlugs.add(unique);
+        return {
+          name: ch.name.trim(),
+          slug: unique,
+          description: "",
+          logo_url: ch.logo || "",
+          hero_url: "",
+          category: ch.group?.trim() || "general",
+          ingest_type: "hls",
+          hls_url: ch.url.trim(),
+          stream_uid: "",
+          is_active: true,
+          sort_order: baseOrder + i + bi + 1,
+          is_premium: false,
+        };
+      });
+      const { data, error } = await supabase.from("channels").insert(payload).select("id");
+      if (error) { failed += batch.length; }
+      else { imported += (data?.length ?? batch.length); }
+      setM3uImportProgress({ done: Math.min(i + BATCH, toImport.length), total: toImport.length });
+    }
+    setM3uImportResult({ imported, skipped: skippedDupes, failed });
+    if (imported > 0) {
+      logAudit("import", "channel", `${imported} via M3U (${m3uSourceLabel || "playlist"})`);
+      showToast(`Imported ${imported} channel${imported !== 1 ? "s" : ""}`);
+      await loadChannels();
+    } else {
+      showToast("Import failed — no channels were added", "error");
+    }
     setM3uImporting(false);
   }
 
@@ -3809,7 +4012,7 @@ export function CMS({ onExit, currentUser }) {
 
             {/* Header row with Add button */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#0f172a" }}>{({ home: "Home", shorts: "Movies", series: "Series", podcasts: "Podcasts", live: "Live TV" }[carouselPageTab])} rows ({carouselsOnPage(carouselPageTab).length}) <span style={{ color: "#6b7280", fontWeight: 400, fontSize: 13 }}>— ▲▼ to reorder</span></h2>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#0f172a" }}>{({ home: "Home", shorts: "Movies", series: "Series", podcasts: "Podcasts", live: "Live TV" }[carouselPageTab])} rows ({carouselsOnPage(carouselPageTab).length}) <span style={{ color: "#6b7280", fontWeight: 400, fontSize: 13 }}>— drag ⠿ or use ▲▼ to reorder</span></h2>
               <button
                 onClick={() => { setCarouselForm({ ...EMPTY_CAROUSEL, pages: carouselPageTab }); setEditingCarouselId(null); setDrawerOpen(true); }}
                 style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
@@ -3832,14 +4035,27 @@ export function CMS({ onExit, currentUser }) {
                   const t = carousel.type;
                   const ct = carousel.content_type;
                   const rowPages = (carousel.pages || "home").split(",").map(p => p.trim()).filter(Boolean);
-                  const contentLabel = t === "podcast" ? "Podcasts" : ct === "shorts" ? "Movies only" : ct === "shows" ? "Series only" : "All content";
+                  const contentLabel = t === "live_channels" ? "Live TV" : t === "creator_streams" ? "Creator Streams" : t === "podcast" ? "Podcasts" : ct === "shorts" ? "Movies only" : ct === "shows" ? "Series only" : "All content";
                   const handpickedCount = t === "handpicked" ? (() => { try { return JSON.parse(carousel.filter_value || "[]").length; } catch { return 0; } })() : 0;
-                  const orderLabel = t === "trending" ? "Recently Added" : t === "recommended" ? "Recommended" : t === "continue" ? "Continue Watching" : t === "handpicked" ? `${handpickedCount} hand-picked` : t === "category" ? `Genre: ${carousel.filter_value || "?"}` : t === "podcast" ? (carousel.filter_value ? `Tag: ${carousel.filter_value}` : "All podcasts") : "Default order";
-                  const contentColor = t === "podcast" ? "#a78bfa" : ct === "shorts" ? "#facc15" : ct === "shows" ? "#34d399" : "#f59e0b";
+                  const orderLabel = t === "trending" ? "Recently Added" : t === "recommended" ? "Recommended" : t === "continue" ? "Continue Watching" : t === "handpicked" ? `${handpickedCount} hand-picked` : t === "category" ? `Genre: ${carousel.filter_value || "?"}` : t === "podcast" ? (carousel.filter_value ? `Tag: ${carousel.filter_value}` : "All podcasts") : t === "live_channels" ? (carousel.filter_value ? `Category: ${carousel.filter_value}` : "All live channels") : t === "creator_streams" ? "Live creators" : "Default order";
+                  const contentColor = t === "live_channels" ? "#ef4444" : t === "creator_streams" ? "#ef4444" : t === "podcast" ? "#a78bfa" : ct === "shorts" ? "#facc15" : ct === "shows" ? "#34d399" : "#f59e0b";
                   const pageLabels = { home: "Home", shorts: "Movies", series: "Series", podcasts: "Podcasts", live: "Live TV" };
+                  const env = carousel.environment || "production";
+                  const isTest = env === "test";
 
+                  const isDragging = dragCarouselIdx === i;
+                  const isDragOver = dragOverCarouselIdx === i && dragCarouselIdx !== null && dragCarouselIdx !== i;
                   return (
-                    <div key={carousel.id} style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+                    <div key={carousel.id}
+                      onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (dragOverCarouselIdx !== i) setDragOverCarouselIdx(i); }}
+                      onDrop={e => { e.preventDefault(); dropReorderCarousel(dragCarouselIdx, i); }}
+                      style={{ background: isDragging ? "#eef2ff" : "#ffffff", border: `1px solid ${isDragOver ? "#4f46e5" : "#e2e8f0"}`, borderTop: isDragOver && dragCarouselIdx > i ? "2px solid #4f46e5" : undefined, borderBottom: isDragOver && dragCarouselIdx < i ? "2px solid #4f46e5" : undefined, borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, opacity: isDragging ? 0.4 : 1, transition: "opacity 0.15s, border-color 0.15s" }}>
+                      {/* Drag handle */}
+                      <div draggable
+                        onDragStart={e => { setDragCarouselIdx(i); e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", String(i)); } catch {} }}
+                        onDragEnd={() => { setDragCarouselIdx(null); setDragOverCarouselIdx(null); }}
+                        title="Drag to reorder"
+                        style={{ flexShrink: 0, cursor: "grab", color: "#cbd5e1", padding: "0 2px", display: "flex", alignItems: "center", fontSize: 16, lineHeight: 1, userSelect: "none" }}>⠿</div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
                         <button onClick={() => moveCarouselOnPage(carousel, -1)} disabled={i === 0} style={{ background: "transparent", border: "none", color: i === 0 ? "#e2e8f0" : "#6b7280", cursor: i === 0 ? "default" : "pointer", fontSize: 11, padding: "2px 5px", lineHeight: 1 }}>▲</button>
                         <button onClick={() => moveCarouselOnPage(carousel, 1)} disabled={i === pageCount - 1} style={{ background: "transparent", border: "none", color: i === pageCount - 1 ? "#e2e8f0" : "#6b7280", cursor: i === pageCount - 1 ? "default" : "pointer", fontSize: 11, padding: "2px 5px", lineHeight: 1 }}>▼</button>
@@ -3854,10 +4070,14 @@ export function CMS({ onExit, currentUser }) {
                           <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: `${contentColor}15`, color: contentColor, border: `1px solid ${contentColor}35` }}>{contentLabel}</span>
                           <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: "#f1f5f9", color: "#6b7280", border: "1px solid #e2e8f0" }}>{orderLabel}</span>
                           <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: carousel.enabled ? "rgba(16,185,129,0.1)" : "rgba(255,255,255,0.04)", color: carousel.enabled ? "#10b981" : "#555", border: `1px solid ${carousel.enabled ? "rgba(16,185,129,0.3)" : "#222"}` }}>{carousel.enabled ? "Live" : "Hidden"}</span>
+                          <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, textTransform: "uppercase", letterSpacing: 0.5, background: isTest ? "rgba(250,204,21,0.12)" : "rgba(34,197,94,0.12)", color: isTest ? "#a16207" : "#15803d", border: `1px solid ${isTest ? "rgba(250,204,21,0.4)" : "rgba(34,197,94,0.4)"}` }}>{isTest ? "Test" : "Production"}</span>
                         </div>
                       </div>
 
                       <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                        {isTest
+                          ? <button onClick={() => setCarouselEnvironment(carousel, "production")} title="Make this row live on watchpeep.tv" style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: 6, padding: "6px 12px", color: "#15803d", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>Publish →</button>
+                          : <button onClick={() => setCarouselEnvironment(carousel, "test")} title="Pull this row off watchpeep.tv back into Test" style={{ background: "rgba(250,204,21,0.1)", border: "1px solid rgba(250,204,21,0.35)", borderRadius: 6, padding: "6px 12px", color: "#a16207", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>Unpublish</button>}
                         <button onClick={() => startCarouselEdit(carousel)} style={{ background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.2)", borderRadius: 6, padding: "6px 12px", color: "#60a5fa", fontSize: 12, cursor: "pointer", fontWeight: 500 }}>Edit</button>
                         <button onClick={() => setDeleteCarouselConfirm(carousel)} style={{ background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 6, padding: "6px 12px", color: "#f87171", fontSize: 12, cursor: "pointer", fontWeight: 500 }}>Delete</button>
                       </div>
@@ -3924,10 +4144,21 @@ export function CMS({ onExit, currentUser }) {
                     <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Fast Channels ({channelList.length})</h2>
                     <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Always-on linear TV channels. Paste an HLS URL, or enter Cloudflare Stream / SRT ingest details.</p>
                   </div>
-                  <div style={{ display: "flex", gap: 8 }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    {testingFastChannels && <span style={{ fontSize: 12, color: "#6b7280" }}>Testing {fastTestProgress.done}/{fastTestProgress.total}…</span>}
+                    {channelList.length > 0 && (
+                      <button onClick={testFastChannels} disabled={testingFastChannels}
+                        style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 16px", color: "#374151", fontSize: 13, fontWeight: 600, cursor: testingFastChannels ? "wait" : "pointer", opacity: testingFastChannels ? 0.6 : 1 }}>
+                        {testingFastChannels ? "Testing…" : "Test all"}
+                      </button>
+                    )}
                     <button onClick={() => { setXmltvOpen(true); setXmltvParsed(null); setXmltvChannelMap({}); setXmltvError(""); setXmltvImportDone(null); setXmltvUrl(""); setXmltvFileName(""); setXmltvRawText(""); setXmltvRawOpen(false); }}
                       style={{ background: "#eef2ff", border: "1px solid #c7d2fe", borderRadius: 8, padding: "9px 16px", color: "#4f46e5", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                       Import EPG (XMLTV)
+                    </button>
+                    <button onClick={() => { setM3uOpen(true); setM3uUrl(""); setM3uSourceLabel(""); resetM3UPreview(); }}
+                      style={{ background: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: 8, padding: "9px 16px", color: "#059669", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                      Import M3U
                     </button>
                     <button onClick={() => { setChannelForm(EMPTY_CHANNEL); setEditingChannelId(null); setDrawerOpen(true); }}
                       style={{ background: "#ef4444", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
@@ -3942,14 +4173,23 @@ export function CMS({ onExit, currentUser }) {
                 ) : channelList.map(ch => (
                   <div key={ch.id} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 18px", marginBottom: 10, display: "flex", alignItems: "center", gap: 14 }}>
                     {ch.logo_url
-                      ? <img src={ch.logo_url} alt="" style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
+                      ? <img src={ch.logo_url} alt="" onError={e => { e.target.onerror = null; e.target.style.display = "none"; }} style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover", flexShrink: 0, background: "#f1f5f9" }} />
                       : <div style={{ width: 44, height: 44, borderRadius: 8, background: "#f1f5f9", border: "1px solid #e2e8f0", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, color: "#94a3b8" }}>📺</div>
                     }
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                        {(() => {
+                          const st = fastChannelStatuses[ch.id];
+                          if (!st) return null;
+                          const map = { testing: { c: "#f59e0b", t: "Testing…" }, ok: { c: "#22c55e", t: "Online" }, error: { c: "#ef4444", t: "Not responding" }, unknown: { c: "#9ca3af", t: "Couldn't test — service unavailable" } };
+                          const m = map[st];
+                          return <span title={m.t} style={{ width: 9, height: 9, borderRadius: "50%", background: m.c, flexShrink: 0, boxShadow: st === "ok" ? "0 0 0 3px rgba(34,197,94,0.15)" : st === "error" ? "0 0 0 3px rgba(239,68,68,0.15)" : "none", animation: st === "testing" ? "pulse 1s infinite" : "none" }} />;
+                        })()}
                         <span style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>{ch.name}</span>
                         <span style={{ fontSize: 11, fontWeight: 700, padding: "1px 8px", borderRadius: 20, background: ch.is_active ? "rgba(34,197,94,0.1)" : "rgba(100,100,100,0.1)", color: ch.is_active ? "#15803d" : "#888", border: `1px solid ${ch.is_active ? "rgba(34,197,94,0.3)" : "rgba(100,100,100,0.2)"}` }}>{ch.is_active ? "ACTIVE" : "INACTIVE"}</span>
                         <span style={{ fontSize: 11, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.5 }}>{ch.ingest_type}</span>
+                        {fastChannelStatuses[ch.id] === "error" && <span style={{ fontSize: 11, fontWeight: 600, color: "#ef4444" }}>· dead stream</span>}
+                        {fastChannelStatuses[ch.id] === "unknown" && <span style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af" }}>· couldn't test</span>}
                       </div>
                       <p style={{ margin: 0, fontSize: 12, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch.hls_url || "No playback URL set"}</p>
                     </div>
@@ -3961,7 +4201,7 @@ export function CMS({ onExit, currentUser }) {
                         style={{ background: selectedChannelForEpg?.id === ch.id ? "rgba(79,70,229,0.15)" : "#eef2ff", border: `1px solid ${selectedChannelForEpg?.id === ch.id ? "#4f46e5" : "#c7d2fe"}`, borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: selectedChannelForEpg?.id === ch.id ? 700 : 600, color: "#4f46e5", cursor: "pointer" }}>
                         {selectedChannelForEpg?.id === ch.id ? "Close" : "Schedule"}
                       </button>
-                      <button onClick={() => { setChannelForm({ name: ch.name, slug: ch.slug || "", description: ch.description || "", logo_url: ch.logo_url || "", hero_url: ch.hero_url || "", category: ch.category || "general", ingest_type: ch.ingest_type || "hls", hls_url: ch.hls_url || "", stream_uid: ch.stream_uid || "", is_active: ch.is_active ?? true, sort_order: ch.sort_order ?? 0, is_premium: ch.is_premium ?? false }); setEditingChannelId(ch.id); setDrawerOpen(true); }}
+                      <button onClick={() => { setChannelForm({ name: ch.name, slug: ch.slug || "", description: ch.description || "", logo_url: ch.logo_url || "", hero_url: ch.hero_url || "", category: ch.category || "general", ingest_type: ch.ingest_type || "hls", hls_url: ch.hls_url || "", stream_uid: ch.stream_uid || "", is_active: ch.is_active ?? true, sort_order: ch.sort_order ?? 0, is_premium: ch.is_premium ?? false, tile_size: ch.tile_size || "normal", is_live_hero: ch.is_live_hero ?? false }); setEditingChannelId(ch.id); setDrawerOpen(true); }}
                         style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, color: "#374151", cursor: "pointer" }}>
                         Edit
                       </button>
@@ -4152,136 +4392,7 @@ export function CMS({ onExit, currentUser }) {
               </div>
             ))}
 
-            {false && m3uOpen && (
-              <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-                <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 780, maxHeight: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 80px rgba(0,0,0,0.2)", overflow: "hidden" }}>
-
-                  {/* Header */}
-                  <div style={{ padding: "20px 24px", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", gap: 12 }}>
-                    <span style={{ fontSize: 20 }}>📋</span>
-                    <div>
-                      <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#0f172a" }}>Import from Playlist</h2>
-                      <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Paste an .m3u or .m3u8 playlist URL to bulk-import channels</p>
-                    </div>
-                    <button onClick={() => setM3uOpen(false)} style={{ marginLeft: "auto", background: "transparent", border: "none", fontSize: 20, color: "#9ca3af", cursor: "pointer", lineHeight: 1 }}>✕</button>
-                  </div>
-
-                  {/* URL input */}
-                  <div style={{ padding: "16px 24px", borderBottom: "1px solid #f1f5f9", display: "flex", gap: 10 }}>
-                    <input
-                      value={m3uUrl} onChange={e => setM3uUrl(e.target.value)}
-                      onKeyDown={e => e.key === "Enter" && !m3uFetching && fetchM3UPlaylist()}
-                      placeholder="https://example.com/playlist.m3u"
-                      style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#0f172a", outline: "none" }}
-                    />
-                    <button onClick={fetchM3UPlaylist} disabled={m3uFetching || !m3uUrl.trim()}
-                      style={{ background: "#0f172a", border: "none", borderRadius: 8, padding: "10px 20px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: m3uFetching ? "wait" : "pointer", opacity: !m3uUrl.trim() ? 0.5 : 1 }}>
-                      {m3uFetching ? "Fetching…" : "Fetch"}
-                    </button>
-                  </div>
-
-                  {/* Error */}
-                  {m3uError && <div style={{ padding: "12px 24px", background: "#fef2f2", borderBottom: "1px solid #fecaca", color: "#dc2626", fontSize: 13 }}>{m3uError}</div>}
-
-                  {/* Channel list */}
-                  {m3uChannels.length > 0 && (() => {
-                    const PAGE_SIZE = 50;
-                    const filtered = m3uChannels.filter(ch => !m3uSearch || ch.name.toLowerCase().includes(m3uSearch.toLowerCase()) || ch.group.toLowerCase().includes(m3uSearch.toLowerCase()));
-                    const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-                    const paginated = filtered.slice(m3uPage * PAGE_SIZE, (m3uPage + 1) * PAGE_SIZE);
-                    const selectedCount = [...m3uSelected].filter(i => !m3uChannels[i]?.duplicate).length;
-                    const allOnPageSelected = paginated.every(ch => {
-                      const idx = m3uChannels.indexOf(ch);
-                      return ch.duplicate || m3uSelected.has(idx);
-                    });
-                    return (
-                      <>
-                        {/* Toolbar */}
-                        <div style={{ padding: "10px 24px", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", gap: 10, background: "#f8fafc" }}>
-                          <input value={m3uSearch} onChange={e => { setM3uSearch(e.target.value); setM3uPage(0); }}
-                            placeholder="Search channels…"
-                            style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 7, padding: "7px 12px", fontSize: 12, outline: "none" }} />
-                          <span style={{ fontSize: 12, color: "#6b7280", whiteSpace: "nowrap" }}>{filtered.length} channel{filtered.length !== 1 ? "s" : ""}</span>
-                          <button onClick={() => {
-                            const newSel = new Set(m3uSelected);
-                            paginated.forEach(ch => { const idx = m3uChannels.indexOf(ch); if (!ch.duplicate) { if (allOnPageSelected) newSel.delete(idx); else newSel.add(idx); } });
-                            setM3uSelected(newSel);
-                          }} style={{ background: "transparent", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 12px", fontSize: 12, color: "#374151", cursor: "pointer", whiteSpace: "nowrap" }}>
-                            {allOnPageSelected ? "Deselect page" : "Select page"}
-                          </button>
-                          <button onClick={() => {
-                            const allNonDupe = new Set(m3uChannels.map((ch, i) => ch.duplicate ? null : i).filter(i => i !== null));
-                            const allSelected = allNonDupe.size === m3uSelected.size;
-                            setM3uSelected(allSelected ? new Set() : allNonDupe);
-                          }} style={{ background: "transparent", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 12px", fontSize: 12, color: "#374151", cursor: "pointer", whiteSpace: "nowrap" }}>
-                            Select all ({m3uChannels.filter(ch => !ch.duplicate).length})
-                          </button>
-                        </div>
-
-                        {/* Rows */}
-                        <div style={{ flex: 1, overflowY: "auto" }}>
-                          {paginated.map((ch) => {
-                            const idx = m3uChannels.indexOf(ch);
-                            const checked = m3uSelected.has(idx);
-                            return (
-                              <div key={idx} onClick={() => { if (ch.duplicate) return; const s = new Set(m3uSelected); checked ? s.delete(idx) : s.add(idx); setM3uSelected(s); }}
-                                style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 24px", borderBottom: "1px solid #f8fafc", background: ch.duplicate ? "#f8fafc" : checked ? "#f0fdf4" : "#fff", cursor: ch.duplicate ? "default" : "pointer" }}>
-                                <input type="checkbox" checked={checked} readOnly disabled={ch.duplicate} style={{ width: 15, height: 15, flexShrink: 0, accentColor: "#22c55e" }} />
-                                {ch.logo ? (
-                                  <img src={ch.logo} alt="" style={{ width: 36, height: 24, objectFit: "contain", borderRadius: 3, flexShrink: 0, background: "#f1f5f9" }} onError={e => { e.target.style.display = "none"; }} />
-                                ) : (
-                                  <div style={{ width: 36, height: 24, background: "#e2e8f0", borderRadius: 3, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#94a3b8" }}>CH</div>
-                                )}
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ fontSize: 13, fontWeight: 600, color: ch.duplicate ? "#9ca3af" : "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch.name}</div>
-                                  <div style={{ fontSize: 11, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch.url}</div>
-                                </div>
-                                {ch.group && <span style={{ fontSize: 11, color: "#6366f1", background: "#eef2ff", borderRadius: 4, padding: "2px 7px", whiteSpace: "nowrap", flexShrink: 0 }}>{ch.group}</span>}
-                                {ch.duplicate && <span style={{ fontSize: 11, color: "#f59e0b", background: "#fefce8", border: "1px solid #fde68a", borderRadius: 4, padding: "2px 7px", whiteSpace: "nowrap", flexShrink: 0 }}>Already exists</span>}
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {/* Pagination */}
-                        {totalPages > 1 && (
-                          <div style={{ padding: "10px 24px", borderTop: "1px solid #f1f5f9", display: "flex", alignItems: "center", gap: 8, background: "#f8fafc" }}>
-                            <button onClick={() => setM3uPage(p => Math.max(0, p - 1))} disabled={m3uPage === 0} style={{ background: "transparent", border: "1px solid #e2e8f0", borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", opacity: m3uPage === 0 ? 0.4 : 1 }}>← Prev</button>
-                            <span style={{ fontSize: 12, color: "#6b7280" }}>Page {m3uPage + 1} of {totalPages}</span>
-                            <button onClick={() => setM3uPage(p => Math.min(totalPages - 1, p + 1))} disabled={m3uPage === totalPages - 1} style={{ background: "transparent", border: "1px solid #e2e8f0", borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", opacity: m3uPage === totalPages - 1 ? 0.4 : 1 }}>Next →</button>
-                            <span style={{ marginLeft: "auto", fontSize: 12, color: "#6b7280" }}>Showing {m3uPage * PAGE_SIZE + 1}–{Math.min((m3uPage + 1) * PAGE_SIZE, filtered.length)} of {filtered.length}</span>
-                          </div>
-                        )}
-
-                        {/* Footer */}
-                        <div style={{ padding: "14px 24px", borderTop: "1px solid #e2e8f0", display: "flex", alignItems: "center", gap: 12, background: "#fff" }}>
-                          {m3uImportDone != null
-                            ? <span style={{ fontSize: 13, color: "#16a34a", fontWeight: 600 }}>✓ Imported {m3uImportDone} channel{m3uImportDone !== 1 ? "s" : ""} successfully</span>
-                            : <span style={{ fontSize: 13, color: "#6b7280" }}>{selectedCount} channel{selectedCount !== 1 ? "s" : ""} selected</span>}
-                          <div style={{ marginLeft: "auto", display: "flex", gap: 10 }}>
-                            <button onClick={() => setM3uOpen(false)} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 18px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Close</button>
-                            <button onClick={importM3USelected} disabled={m3uImporting || selectedCount === 0}
-                              style={{ background: "#22c55e", border: "none", borderRadius: 8, padding: "10px 22px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: selectedCount === 0 ? "not-allowed" : "pointer", opacity: selectedCount === 0 ? 0.5 : 1 }}>
-                              {m3uImporting ? "Importing…" : `Import ${selectedCount > 0 ? selectedCount : ""} Selected`}
-                            </button>
-                          </div>
-                        </div>
-                      </>
-                    );
-                  })()}
-
-                  {/* Empty state before fetch */}
-                  {!m3uFetching && m3uChannels.length === 0 && !m3uError && (
-                    <div style={{ padding: 48, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>
-                      Paste a playlist URL above and click Fetch to preview channels
-                    </div>
-                  )}
-                  {m3uFetching && (
-                    <div style={{ padding: 48, textAlign: "center", color: "#6b7280", fontSize: 13 }}>Fetching playlist…</div>
-                  )}
-                </div>
-              </div>
-            )}
+            {/* Import M3U modal is rendered at the top level (see M3U import modal below) so it works from any sub-tab */}
 
             {false && deletePlaylistConfirm && (
               <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -7041,27 +7152,27 @@ export function CMS({ onExit, currentUser }) {
                     <div style={{ height: 1, background: "#e2e8f0" }} />
 
                     <div>
-                      <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>2 · What's in this row</label>
-                      <p style={{ margin: "0 0 10px", fontSize: 11, color: "#6b7280" }}>Pick the kind of content — then how it's chosen, just below.</p>
+                      <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>2 · Type</label>
+                      <p style={{ margin: "0 0 10px", fontSize: 11, color: "#6b7280" }}>What kind of row is this?</p>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                         {[
-                          { ct: "shorts",       t: null,      icon: "🎬", label: "Movies only",    desc: "Only shorts" },
-                          { ct: "shows",        t: null,      icon: "📺", label: "Series only",   desc: "Only TV shows & series" },
-                          { ct: "all",          t: null,      icon: "⭐", label: "Everything",    desc: "Shorts + series mixed" },
-                          { ct: "all",          t: "podcast", icon: "🎙️", label: "Podcasts",      desc: "Podcast episodes" },
-                        ].map(({ ct, t, icon, label, desc }) => {
-                          const isPodcast = t === "podcast";
-                          const isActive = isPodcast
-                            ? carouselForm.type === "podcast"
-                            : carouselForm.content_type === ct && carouselForm.type !== "podcast";
+                          { k: "vod",     icon: "🎬", label: "VOD",             desc: "Movies & series" },
+                          { k: "live",    icon: "📡", label: "Live TV",         desc: "Your FAST channels" },
+                          { k: "creator", icon: "🎥", label: "Creator Streams", desc: "Live creators" },
+                          { k: "podcast", icon: "🎙️", label: "Podcasts",        desc: "Podcast shows" },
+                        ].map(({ k, icon, label, desc }) => {
+                          const curKind = carouselForm.type === "live_channels" ? "live" : carouselForm.type === "creator_streams" ? "creator" : carouselForm.type === "podcast" ? "podcast" : "vod";
+                          const isActive = curKind === k;
                           return (
-                            <button key={label} onClick={() => {
-                              if (isPodcast) setCarouselForm(f => ({ ...f, type: "podcast", content_type: "all" }));
-                              else setCarouselForm(f => ({ ...f, content_type: ct, type: f.type === "podcast" ? "custom" : f.type, filter_value: f.filter_value }));
+                            <button key={k} onClick={() => {
+                              if (k === "live") setCarouselForm(f => ({ ...f, type: "live_channels", content_type: "all", filter_value: "" }));
+                              else if (k === "creator") setCarouselForm(f => ({ ...f, type: "creator_streams", content_type: "all", filter_value: "" }));
+                              else if (k === "podcast") setCarouselForm(f => ({ ...f, type: "podcast", content_type: "all", filter_value: "" }));
+                              else setCarouselForm(f => ({ ...f, type: ["live_channels", "creator_streams", "podcast"].includes(f.type) ? "custom" : f.type, content_type: f.content_type || "all", filter_value: ["live_channels", "creator_streams", "podcast"].includes(f.type) ? "" : f.filter_value }));
                             }}
-                              style={{ background: isActive ? "rgba(79,70,229,0.08)" : "#f8fafc", border: `1.5px solid ${isActive ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 10, padding: "13px 12px", cursor: "pointer", textAlign: "left", transition: "border-color 0.15s, background 0.15s" }}>
-                              <div style={{ fontSize: 20, marginBottom: 5 }}>{icon}</div>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: isActive ? "#4f46e5" : "#374151", marginBottom: 2 }}>{label}</div>
+                              style={{ background: isActive ? "rgba(79,70,229,0.08)" : "#f8fafc", border: `1.5px solid ${isActive ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 10, padding: "14px 12px", cursor: "pointer", textAlign: "left", transition: "border-color 0.15s, background 0.15s" }}>
+                              <div style={{ fontSize: 22, marginBottom: 5 }}>{icon}</div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: isActive ? "#4f46e5" : "#374151", marginBottom: 2 }}>{label}</div>
                               <div style={{ fontSize: 11, color: "#6b7280" }}>{desc}</div>
                             </button>
                           );
@@ -7069,7 +7180,56 @@ export function CMS({ onExit, currentUser }) {
                       </div>
                     </div>
 
-                    {carouselForm.type !== "podcast" ? (
+                    {/* VOD: which content */}
+                    {!["podcast", "live_channels", "creator_streams"].includes(carouselForm.type) && (
+                      <div>
+                        <label style={{ display: "block", fontSize: 12, color: "#374151", fontWeight: 600, marginBottom: 8 }}>Which content?</label>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                          {[
+                            { ct: "shorts", icon: "🎬", label: "Movies" },
+                            { ct: "shows",  icon: "📺", label: "Series" },
+                            { ct: "all",    icon: "⭐", label: "Everything" },
+                          ].map(({ ct, icon, label }) => {
+                            const on = carouselForm.content_type === ct;
+                            return (
+                              <button key={ct} onClick={() => setCarouselForm(f => ({ ...f, content_type: ct }))}
+                                style={{ background: on ? "rgba(79,70,229,0.08)" : "#f8fafc", border: `1.5px solid ${on ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 9, padding: "11px 8px", cursor: "pointer", textAlign: "center", transition: "border-color 0.15s, background 0.15s" }}>
+                                <div style={{ fontSize: 18, marginBottom: 3 }}>{icon}</div>
+                                <div style={{ fontSize: 12, fontWeight: 600, color: on ? "#4f46e5" : "#374151" }}>{label}</div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {carouselForm.type === "live_channels" && (
+                      <div style={{ marginTop: 6, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 14 }}>
+                        <label style={{ display: "block", fontSize: 12, color: "#374151", fontWeight: 600, marginBottom: 8 }}>Which channels?</label>
+                        <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                          {[{ v: "", l: "All live channels" }, { v: "__cat__", l: "By category" }].map(o => {
+                            const on = o.v === "__cat__" ? (carouselForm.filter_value && carouselForm.filter_value !== "") : (!carouselForm.filter_value);
+                            return (
+                              <button key={o.l} onClick={() => setCarouselForm(f => ({ ...f, filter_value: o.v === "__cat__" ? (f.filter_value || "news") : "" }))}
+                                style={{ flex: 1, background: on ? "rgba(79,70,229,0.08)" : "#fff", border: `1.5px solid ${on ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 8, padding: "9px 10px", fontSize: 12, fontWeight: 600, color: on ? "#4f46e5" : "#374151", cursor: "pointer" }}>{o.l}</button>
+                            );
+                          })}
+                        </div>
+                        {carouselForm.filter_value && carouselForm.filter_value !== "" && (
+                          <input value={carouselForm.filter_value} onChange={e => setCarouselForm(f => ({ ...f, filter_value: e.target.value }))}
+                            placeholder="Category (e.g. news, sports, music) — matches the channel's Category field"
+                            style={{ width: "100%", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 6, padding: "9px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                        )}
+                      </div>
+                    )}
+
+                    {carouselForm.type === "creator_streams" && (
+                      <div style={{ marginTop: 6, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 14, fontSize: 12, color: "#6b7280" }}>
+                        Shows every creator who's currently live. Great as a "Live Now" row.
+                      </div>
+                    )}
+
+                    {!["podcast", "live_channels", "creator_streams"].includes(carouselForm.type) ? (
                       <div style={{ marginTop: 6 }}>
                         <label style={{ display: "block", fontSize: 12, color: "#374151", fontWeight: 600, marginBottom: 8 }}>…and how it's chosen</label>
                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -7217,7 +7377,7 @@ export function CMS({ onExit, currentUser }) {
                           );
                         })()}
                       </div>
-                    ) : (
+                    ) : carouselForm.type === "podcast" ? (
                       <div>
                         <label style={{ display: "block", fontSize: 12, color: "#374151", fontWeight: 600, marginBottom: 8 }}>…and filter by tag (optional)</label>
                         <input value={carouselForm.filter_value} onChange={e => setCarouselForm(f => ({ ...f, filter_value: e.target.value }))}
@@ -7225,7 +7385,7 @@ export function CMS({ onExit, currentUser }) {
                           style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }}
                           onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
                       </div>
-                    )}
+                    ) : null}
 
                     <div style={{ height: 1, background: "#e2e8f0" }} />
 
@@ -7259,7 +7419,22 @@ export function CMS({ onExit, currentUser }) {
                     {carouselForm.type !== "podcast" && <div style={{ height: 1, background: "#e2e8f0" }} />}
 
                     <div>
-                      <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>4 · Visibility</label>
+                      <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>4 · Region</label>
+                      <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+                        {[{ v: "test", l: "Test", d: "Only you (localhost / preview)" }, { v: "production", l: "Production", d: "Live on watchpeep.tv" }].map(o => {
+                          const on = (carouselForm.environment || "test") === o.v;
+                          return (
+                            <button key={o.v} onClick={() => setCarouselForm(f => ({ ...f, environment: o.v }))}
+                              style={{ flex: 1, background: on ? (o.v === "test" ? "rgba(250,204,21,0.12)" : "rgba(34,197,94,0.12)") : "#f8fafc", border: `1.5px solid ${on ? (o.v === "test" ? "#facc15" : "#22c55e") : "#e2e8f0"}`, borderRadius: 9, padding: "11px 10px", cursor: "pointer", textAlign: "left" }}>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: on ? (o.v === "test" ? "#a16207" : "#15803d") : "#374151" }}>{o.l}</div>
+                              <div style={{ fontSize: 11, color: "#6b7280", marginTop: 1 }}>{o.d}</div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p style={{ margin: "0 0 14px", fontSize: 11, color: "#9ca3af" }}>New rows start in Test. Publish to Production when you're ready for real viewers.</p>
+
+                      <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>5 · Visibility</label>
                       <button onClick={() => setCarouselForm(f => ({ ...f, enabled: !f.enabled }))}
                         style={{ width: "100%", background: carouselForm.enabled ? "rgba(16,185,129,0.1)" : "rgba(107,114,128,0.08)", border: `1px solid ${carouselForm.enabled ? "rgba(16,185,129,0.35)" : "#222"}`, borderRadius: 8, padding: "11px", color: carouselForm.enabled ? "#10b981" : "#555", fontSize: 13, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                         <span style={{ fontSize: 16 }}>{carouselForm.enabled ? "✓" : "○"}</span>
@@ -7302,6 +7477,23 @@ export function CMS({ onExit, currentUser }) {
                           <span style={{ fontSize: 13, color: "#374151" }}>Active (visible to users)</span>
                         </label>
                       </div>
+                      {/* Living Mosaic presentation controls */}
+                      <div>
+                        <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Mosaic tile size</label>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          {[{ k: "normal", l: "Normal" }, { k: "large", l: "Large" }, { k: "spotlight", l: "Spotlight" }].map(({ k, l }) => (
+                            <button key={k} onClick={() => setChannelForm(f => ({ ...f, tile_size: k }))}
+                              style={{ flex: 1, background: (channelForm.tile_size || "normal") === k ? "#facc15" : "#f1f5f9", border: `1px solid ${(channelForm.tile_size || "normal") === k ? "#facc15" : "#e2e8f0"}`, borderRadius: 7, padding: "8px 4px", color: (channelForm.tile_size || "normal") === k ? "#0a0a0a" : "#374151", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                              {l}
+                            </button>
+                          ))}
+                        </div>
+                        <p style={{ margin: "6px 0 0", fontSize: 11, color: "#9ca3af" }}>How big this channel appears on the Live TV wall.</p>
+                      </div>
+                      <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                        <input type="checkbox" checked={!!channelForm.is_live_hero} onChange={e => setChannelForm(f => ({ ...f, is_live_hero: e.target.checked }))} />
+                        <span style={{ fontSize: 13, color: "#374151" }}>Feature as Live TV hero (pins to the top of the wall)</span>
+                      </label>
                     </div>
 
                     <p style={{ margin: "0 0 10px", fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 1 }}>Ingest / Playback</p>
@@ -7339,18 +7531,46 @@ export function CMS({ onExit, currentUser }) {
                     </div>
 
                     <p style={{ margin: "0 0 10px", fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 1 }}>Media</p>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 28 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 20 }}>
                       <div>
                         <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Logo (square)</label>
                         <ImageUploader label="Upload Logo" folder="channels" onUploadSuccess={url => setChannelForm(f => ({ ...f, logo_url: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
                         <input type="text" value={channelForm.logo_url} onChange={e => setChannelForm(f => ({ ...f, logo_url: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                        {channelForm.logo_url && (
+                          <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 10 }}>
+                            <div style={{ width: 64, height: 64, borderRadius: 8, background: "radial-gradient(circle at 50% 40%, #26262b, #0a0a0c)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, border: "1px solid #e2e8f0", overflow: "hidden" }}>
+                              <img src={channelForm.logo_url} alt="" style={{ maxWidth: "78%", maxHeight: "78%", objectFit: "contain" }} onError={e => { e.currentTarget.parentElement.innerHTML = '<span style=\"color:#ef4444;font-size:11px\">broken</span>'; }} />
+                            </div>
+                            <span style={{ fontSize: 11, color: "#9ca3af" }}>Preview on dark (how it looks on the wall)</span>
+                          </div>
+                        )}
                       </div>
                       <div>
                         <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 2, textTransform: "uppercase", letterSpacing: 0.7 }}>Hero Image</label>
-                        <p style={{ margin: "0 0 6px", fontSize: 11, color: "#9ca3af" }}>1920×1080 recommended.</p>
+                        <p style={{ margin: "0 0 6px", fontSize: 11, color: "#9ca3af" }}>1920×1080 recommended. Optional — the logo carries the tile if this is empty.</p>
                         <ImageUploader label="Upload Hero" folder="channels" onUploadSuccess={url => setChannelForm(f => ({ ...f, hero_url: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
                         <input type="text" value={channelForm.hero_url} onChange={e => setChannelForm(f => ({ ...f, hero_url: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
-                        {channelForm.hero_url && <img src={channelForm.hero_url} alt="" style={{ marginTop: 8, width: "100%", height: 80, objectFit: "cover", borderRadius: 6, border: "1px solid #e2e8f0" }} onError={e => { e.target.style.display = "none"; }} />}
+                        {channelForm.hero_url && <img src={channelForm.hero_url} alt="" style={{ marginTop: 8, width: "100%", height: 90, objectFit: "cover", borderRadius: 6, border: "1px solid #e2e8f0" }} onError={e => { e.target.style.display = "none"; }} />}
+                      </div>
+
+                      {/* Live tile preview — exactly how this channel renders on the Live TV wall */}
+                      <div>
+                        <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Wall tile preview</label>
+                        <div style={{ position: "relative", width: (channelForm.tile_size === "large" || channelForm.tile_size === "spotlight") ? 320 : 240, aspectRatio: channelForm.tile_size === "spotlight" ? "3 / 2" : channelForm.tile_size === "large" ? "1 / 1" : "16 / 9", borderRadius: 12, overflow: "hidden", border: "1px solid #e2e8f0", background: "#0a0a0c" }}>
+                          {channelForm.hero_url
+                            ? <img src={channelForm.hero_url} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} onError={e => { e.target.style.display = "none"; }} />
+                            : <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at 50% 38%, #26262b 0%, #141417 55%, #0a0a0c 100%)" }} />}
+                          {!channelForm.hero_url && channelForm.logo_url && (
+                            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", paddingBottom: 34 }}>
+                              <img src={channelForm.logo_url} alt="" style={{ maxWidth: "52%", maxHeight: "52%", objectFit: "contain", filter: "drop-shadow(0 6px 18px rgba(0,0,0,0.5))" }} onError={e => { e.target.style.display = "none"; }} />
+                            </div>
+                          )}
+                          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.1) 45%, transparent 100%)" }} />
+                          <div style={{ position: "absolute", top: 8, left: 8, background: "#ef4444", borderRadius: 4, padding: "2px 7px", fontSize: 9, fontWeight: 800, color: "#fff", letterSpacing: 0.5 }}>● LIVE</div>
+                          {channelForm.is_live_hero && <div style={{ position: "absolute", top: 8, right: 8, background: "#facc15", borderRadius: 4, padding: "2px 7px", fontSize: 9, fontWeight: 800, color: "#0a0a0a" }}>HERO</div>}
+                          <div style={{ position: "absolute", left: 10, right: 10, bottom: 9, fontSize: 13, fontWeight: 700, color: "#fff", textShadow: "0 1px 6px rgba(0,0,0,0.6)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{channelForm.name || "Channel name"}</div>
+                        </div>
+                        <p style={{ margin: "6px 0 0", fontSize: 11, color: "#9ca3af" }}>Reflects your logo, hero, name & tile size. Live preview + real program art appear on the actual wall.</p>
                       </div>
                     </div>
 
@@ -7836,6 +8056,202 @@ export function CMS({ onExit, currentUser }) {
               </div>
             )}
           </div>
+        </div>
+      </div>
+    )}
+
+    {/* ── IMPORT M3U MODAL ── (top level so it opens from any sub-tab) */}
+    {m3uOpen && (
+      <div style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+        onClick={e => { if (e.target === e.currentTarget && !m3uImporting) setM3uOpen(false); }}>
+        <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 860, height: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 80px rgba(0,0,0,0.2)", overflow: "hidden" }}>
+
+          {/* Header */}
+          <div style={{ padding: "20px 24px", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ fontSize: 20 }}>📺</span>
+            <div>
+              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#0f172a" }}>Import M3U Playlist</h2>
+              <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Upload an .m3u/.m3u8 file or paste a playlist URL, then pick the channels to import.</p>
+            </div>
+            <button onClick={() => setM3uOpen(false)} style={{ marginLeft: "auto", background: "transparent", border: "none", fontSize: 20, color: "#9ca3af", cursor: "pointer", lineHeight: 1 }}>✕</button>
+          </div>
+
+          {/* Source: URL + file upload */}
+          <div style={{ padding: "16px 24px", borderBottom: "1px solid #f1f5f9", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <input
+              value={m3uUrl} onChange={e => setM3uUrl(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && !m3uFetching && fetchM3UPlaylist()}
+              placeholder="https://example.com/playlist.m3u"
+              style={{ flex: "1 1 260px", minWidth: 0, border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#0f172a", outline: "none" }}
+            />
+            <button onClick={fetchM3UPlaylist} disabled={m3uFetching || !m3uUrl.trim()}
+              style={{ background: "#0f172a", border: "none", borderRadius: 8, padding: "10px 20px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: m3uFetching ? "wait" : "pointer", opacity: !m3uUrl.trim() ? 0.5 : 1, whiteSpace: "nowrap" }}>
+              {m3uFetching ? "Loading…" : "Fetch URL"}
+            </button>
+            <span style={{ fontSize: 12, color: "#cbd5e1" }}>or</span>
+            <input ref={m3uFileInputRef} type="file" accept=".m3u,.m3u8,audio/x-mpegurl,application/vnd.apple.mpegurl,text/plain"
+              onChange={e => loadM3UFromFile(e.target.files?.[0])} style={{ display: "none" }} />
+            <button onClick={() => m3uFileInputRef.current?.click()} disabled={m3uFetching}
+              style={{ background: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: 8, padding: "10px 18px", color: "#059669", fontSize: 13, fontWeight: 600, cursor: m3uFetching ? "wait" : "pointer", whiteSpace: "nowrap" }}>
+              Upload File
+            </button>
+          </div>
+
+          {/* Source label */}
+          {m3uSourceLabel && m3uChannels.length > 0 && (
+            <div style={{ padding: "8px 24px", fontSize: 12, color: "#6b7280", borderBottom: "1px solid #f8fafc" }}>
+              Source: <span style={{ color: "#0f172a", fontWeight: 600 }}>{m3uSourceLabel}</span> · parsed <strong>{m3uChannels.length}</strong> · <span style={{ color: "#f59e0b" }}>{m3uChannels.filter(c => c.duplicate).length} duplicate{m3uChannels.filter(c => c.duplicate).length !== 1 ? "s" : ""} skipped</span>
+            </div>
+          )}
+
+          {/* Error */}
+          {m3uError && <div style={{ padding: "12px 24px", background: "#fef2f2", borderBottom: "1px solid #fecaca", color: "#dc2626", fontSize: 13 }}>{m3uError}</div>}
+
+          {/* Import summary (after import) */}
+          {m3uImportResult && (
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 18, padding: 40 }}>
+              <div style={{ fontSize: 40 }}>✅</div>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#0f172a" }}>Import complete</h3>
+              <div style={{ display: "flex", gap: 14 }}>
+                <div style={{ textAlign: "center", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: "16px 26px" }}>
+                  <div style={{ fontSize: 26, fontWeight: 800, color: "#16a34a" }}>{m3uImportResult.imported}</div>
+                  <div style={{ fontSize: 12, color: "#15803d" }}>Imported</div>
+                </div>
+                <div style={{ textAlign: "center", background: "#fefce8", border: "1px solid #fde68a", borderRadius: 10, padding: "16px 26px" }}>
+                  <div style={{ fontSize: 26, fontWeight: 800, color: "#ca8a04" }}>{m3uImportResult.skipped}</div>
+                  <div style={{ fontSize: 12, color: "#a16207" }}>Skipped duplicates</div>
+                </div>
+                <div style={{ textAlign: "center", background: m3uImportResult.failed ? "#fef2f2" : "#f8fafc", border: `1px solid ${m3uImportResult.failed ? "#fecaca" : "#e2e8f0"}`, borderRadius: 10, padding: "16px 26px" }}>
+                  <div style={{ fontSize: 26, fontWeight: 800, color: m3uImportResult.failed ? "#dc2626" : "#94a3b8" }}>{m3uImportResult.failed}</div>
+                  <div style={{ fontSize: 12, color: m3uImportResult.failed ? "#b91c1c" : "#94a3b8" }}>Failed</div>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
+                <button onClick={() => { setM3uUrl(""); setM3uSourceLabel(""); resetM3UPreview(); }}
+                  style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 18px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Import another</button>
+                <button onClick={() => setM3uOpen(false)}
+                  style={{ background: "#0f172a", border: "none", borderRadius: 8, padding: "10px 22px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Done</button>
+              </div>
+            </div>
+          )}
+
+          {/* Channel list */}
+          {!m3uImportResult && m3uChannels.length > 0 && (() => {
+            const PAGE_SIZE = 100;
+            const q = m3uSearch.trim().toLowerCase();
+            const cats = Array.from(new Set(m3uChannels.map(ch => ch.group).filter(Boolean))).sort();
+            const filtered = m3uChannels.filter(ch =>
+              (m3uCategoryFilter === "All" || ch.group === m3uCategoryFilter) &&
+              (!q || ch.name.toLowerCase().includes(q) || ch.group.toLowerCase().includes(q) || ch.url.toLowerCase().includes(q))
+            );
+            const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+            const page = Math.min(m3uPage, totalPages - 1);
+            const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+            const selectableFiltered = filtered.filter(ch => !ch.duplicate);
+            const selectedCount = m3uSelected.size;
+            const allVisibleSelected = selectableFiltered.length > 0 && selectableFiltered.every(ch => m3uSelected.has(m3uChannels.indexOf(ch)));
+            const btn = { background: "transparent", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 12px", fontSize: 12, color: "#374151", cursor: "pointer", whiteSpace: "nowrap" };
+            return (
+              <>
+                {/* Toolbar */}
+                <div style={{ padding: "10px 24px", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", gap: 8, background: "#f8fafc", flexWrap: "wrap" }}>
+                  <input value={m3uSearch} onChange={e => { setM3uSearch(e.target.value); setM3uPage(0); }}
+                    placeholder="Search name, category or URL…"
+                    style={{ flex: "1 1 200px", minWidth: 0, border: "1px solid #e2e8f0", borderRadius: 7, padding: "7px 12px", fontSize: 12, outline: "none" }} />
+                  <select value={m3uCategoryFilter} onChange={e => { setM3uCategoryFilter(e.target.value); setM3uPage(0); }}
+                    style={{ border: "1px solid #e2e8f0", borderRadius: 7, padding: "7px 10px", fontSize: 12, color: "#374151", background: "#fff", cursor: "pointer", maxWidth: 180 }}>
+                    <option value="All">All categories ({cats.length})</option>
+                    {cats.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <button style={btn} onClick={() => {
+                    const all = new Set(m3uChannels.map((ch, i) => ch.duplicate ? -1 : i).filter(i => i >= 0));
+                    setM3uSelected(all);
+                  }}>Select all ({m3uChannels.filter(ch => !ch.duplicate).length})</button>
+                  <button style={btn} onClick={() => {
+                    const s = new Set(m3uSelected);
+                    if (allVisibleSelected) selectableFiltered.forEach(ch => s.delete(m3uChannels.indexOf(ch)));
+                    else selectableFiltered.forEach(ch => s.add(m3uChannels.indexOf(ch)));
+                    setM3uSelected(s);
+                  }}>{allVisibleSelected ? "Deselect visible" : `Select visible (${selectableFiltered.length})`}</button>
+                  <button style={btn} onClick={() => setM3uSelected(new Set())}>Deselect all</button>
+                </div>
+
+                {/* Column header */}
+                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 24px", borderBottom: "1px solid #e2e8f0", fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                  <span style={{ width: 15, flexShrink: 0 }} />
+                  <span style={{ width: 36, flexShrink: 0 }}>Logo</span>
+                  <span style={{ flex: 1 }}>Channel</span>
+                  <span style={{ width: 140, flexShrink: 0 }}>Category</span>
+                </div>
+
+                {/* Rows */}
+                <div style={{ flex: 1, overflowY: "auto" }}>
+                  {paginated.map((ch) => {
+                    const idx = m3uChannels.indexOf(ch);
+                    const checked = m3uSelected.has(idx);
+                    return (
+                      <div key={idx} onClick={() => { if (ch.duplicate) return; const s = new Set(m3uSelected); checked ? s.delete(idx) : s.add(idx); setM3uSelected(s); }}
+                        style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 24px", borderBottom: "1px solid #f8fafc", background: ch.duplicate ? "#f8fafc" : checked ? "#f0fdf4" : "#fff", cursor: ch.duplicate ? "default" : "pointer", opacity: ch.duplicate ? 0.7 : 1 }}>
+                        <input type="checkbox" checked={checked} readOnly disabled={ch.duplicate} style={{ width: 15, height: 15, flexShrink: 0, accentColor: "#22c55e" }} />
+                        {ch.logo ? (
+                          <img src={ch.logo} alt="" style={{ width: 36, height: 24, objectFit: "contain", borderRadius: 3, flexShrink: 0, background: "#f1f5f9" }} onError={e => { e.target.style.visibility = "hidden"; }} />
+                        ) : (
+                          <div style={{ width: 36, height: 24, background: "#e2e8f0", borderRadius: 3, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#94a3b8" }}>CH</div>
+                        )}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: ch.duplicate ? "#9ca3af" : "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {ch.name}
+                            {ch.duplicate && <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, color: "#f59e0b" }}>· {ch.dupeReason}</span>}
+                          </div>
+                          <div style={{ fontSize: 11, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch.url}</div>
+                        </div>
+                        <span style={{ width: 140, flexShrink: 0, fontSize: 11, color: ch.group ? "#6366f1" : "#cbd5e1", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {ch.group ? <span style={{ background: "#eef2ff", borderRadius: 4, padding: "2px 7px" }}>{ch.group}</span> : "—"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div style={{ padding: "10px 24px", borderTop: "1px solid #f1f5f9", display: "flex", alignItems: "center", gap: 8, background: "#f8fafc" }}>
+                    <button onClick={() => setM3uPage(p => Math.max(0, p - 1))} disabled={page === 0} style={{ background: "transparent", border: "1px solid #e2e8f0", borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", opacity: page === 0 ? 0.4 : 1 }}>← Prev</button>
+                    <span style={{ fontSize: 12, color: "#6b7280" }}>Page {page + 1} of {totalPages}</span>
+                    <button onClick={() => setM3uPage(p => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1} style={{ background: "transparent", border: "1px solid #e2e8f0", borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer", opacity: page === totalPages - 1 ? 0.4 : 1 }}>Next →</button>
+                    <span style={{ marginLeft: "auto", fontSize: 12, color: "#6b7280" }}>Showing {filtered.length === 0 ? 0 : page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} of {filtered.length}</span>
+                  </div>
+                )}
+
+                {/* Footer */}
+                <div style={{ padding: "14px 24px", borderTop: "1px solid #e2e8f0", display: "flex", alignItems: "center", gap: 12, background: "#fff" }}>
+                  <span style={{ fontSize: 13, color: "#6b7280" }}>
+                    {m3uImporting
+                      ? `Importing ${m3uImportProgress.done} / ${m3uImportProgress.total}…`
+                      : `${selectedCount} channel${selectedCount !== 1 ? "s" : ""} selected`}
+                  </span>
+                  <div style={{ marginLeft: "auto", display: "flex", gap: 10 }}>
+                    <button onClick={() => setM3uOpen(false)} disabled={m3uImporting} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 18px", color: "#374151", fontSize: 13, cursor: m3uImporting ? "not-allowed" : "pointer", opacity: m3uImporting ? 0.6 : 1 }}>Cancel</button>
+                    <button onClick={importM3USelected} disabled={m3uImporting || selectedCount === 0}
+                      style={{ background: "#22c55e", border: "none", borderRadius: 8, padding: "10px 22px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: (m3uImporting || selectedCount === 0) ? "not-allowed" : "pointer", opacity: (m3uImporting || selectedCount === 0) ? 0.5 : 1 }}>
+                      {m3uImporting ? "Importing…" : `Import ${selectedCount > 0 ? selectedCount + " " : ""}Selected`}
+                    </button>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
+
+          {/* Empty / loading states */}
+          {!m3uImportResult && !m3uFetching && m3uChannels.length === 0 && !m3uError && (
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, color: "#9ca3af", fontSize: 13, textAlign: "center", padding: 40 }}>
+              <div style={{ fontSize: 32 }}>🗂️</div>
+              <div>Fetch a URL or upload an .m3u file to preview its channels.</div>
+            </div>
+          )}
+          {m3uFetching && (
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#6b7280", fontSize: 13 }}>Reading playlist…</div>
+          )}
         </div>
       </div>
     )}

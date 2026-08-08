@@ -17,10 +17,106 @@ import { Footer } from "./Footer";
 import { Spinner } from "../ui/Spinner";
 import { LiveTVPage } from "../../pages/LiveTV";
 
+// Curation regions: the live domain ALWAYS shows Production. Non-prod hosts
+// (localhost / *.pages.dev previews) default to Test and can toggle, so real
+// viewers never see test curation.
+const PROD_HOSTS = ["watchpeep.tv", "www.watchpeep.tv"];
+export function isProdHost() {
+  return typeof window !== "undefined" && PROD_HOSTS.includes(window.location.hostname);
+}
+export function resolveRegion() {
+  if (isProdHost()) return "production";
+  try { return localStorage.getItem("peep_region") || "test"; } catch { return "test"; }
+}
+
+// Admin-controlled "live" row — renders FAST channels and/or live creator streams
+// in a horizontal rail. Used for any carousel with type live_channels/creator_streams.
+function LiveRow({ title, channels = [], streams = [], nowByChannel = {}, onChannelPlay, isMobile }) {
+  const total = channels.length + streams.length;
+  if (total === 0) return null;
+  return (
+    <div style={{ padding: `24px clamp(16px, 5vw, 96px) 0` }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+        <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite" }} />
+        <span style={{ fontSize: 12, fontWeight: 700, color: "#ef4444", letterSpacing: "0.1em", textTransform: "uppercase" }}>{title || "Live Now"}</span>
+        <span style={{ fontSize: 12, color: "#333" }}>{total} live</span>
+      </div>
+      <div className="scroll-row" style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4 }}>
+        {channels.map(ch => {
+          const nowAiring = nowByChannel[ch.id];
+          const hero = ch.hero_url || "";
+          const logo = ch.logo_url || "";
+          return (
+            <div key={`ch-${ch.id}`} onClick={() => onChannelPlay?.(ch)}
+              style={{ flexShrink: 0, width: isMobile ? 180 : 220, cursor: "pointer", borderRadius: 10, overflow: "hidden", background: "#0f0f0f", border: "1px solid rgba(239,68,68,0.15)", transition: "transform 0.15s, border-color 0.15s, box-shadow 0.15s" }}
+              onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.borderColor = "rgba(239,68,68,0.4)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(239,68,68,0.1)"; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.borderColor = "rgba(239,68,68,0.15)"; e.currentTarget.style.boxShadow = "none"; }}>
+              <div style={{ position: "relative", aspectRatio: "16/9", overflow: "hidden", background: "linear-gradient(135deg, #0c1a2e, #12385f)" }}>
+                {hero
+                  ? <img src={hero} alt={ch.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => { e.target.style.display = "none"; }} />
+                  : logo
+                  ? <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+                      <img src={logo} alt={ch.name} style={{ maxWidth: "72%", maxHeight: "58%", objectFit: "contain" }} onError={e => { e.target.style.display = "none"; }} />
+                    </div>
+                  : <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2" opacity="0.4"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></svg>
+                    </div>}
+                <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 36, background: "linear-gradient(to bottom, rgba(0,0,0,0.5), transparent)", pointerEvents: "none" }} />
+                <div style={{ position: "absolute", top: 7, left: 7, display: "flex", alignItems: "center", gap: 4, background: "#ef4444", borderRadius: 4, padding: "2px 7px" }}>
+                  <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#fff", animation: "livepulse 1.5s infinite" }} />
+                  <span style={{ fontSize: 9, fontWeight: 800, color: "#fff", letterSpacing: 0.6 }}>LIVE</span>
+                </div>
+                <div style={{ position: "absolute", top: 7, right: 7, background: "rgba(0,0,0,0.6)", borderRadius: 4, padding: "2px 7px", fontSize: 9, fontWeight: 700, color: "#38bdf8", letterSpacing: 0.5 }}>TV</div>
+              </div>
+              <div style={{ padding: "9px 10px", minWidth: 0 }}>
+                <p style={{ margin: "0 0 1px", fontSize: 12, fontWeight: 700, color: "#e8e8e8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch.name}</p>
+                <p style={{ margin: 0, fontSize: 11, color: "#555", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{nowAiring ? nowAiring.title : (ch.description || "Live TV")}</p>
+              </div>
+            </div>
+          );
+        })}
+        {streams.map(s => {
+          const slug = s.username || (s.channel_name || s.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+          const name = s.channel_name || s.title || "";
+          return (
+            <a key={s.id} href={`/stream/${slug}`}
+              style={{ flexShrink: 0, width: isMobile ? 180 : 220, textDecoration: "none", color: "inherit", borderRadius: 10, overflow: "hidden", background: "#0f0f0f", border: "1px solid rgba(239,68,68,0.15)", transition: "transform 0.15s, border-color 0.15s, box-shadow 0.15s" }}
+              onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.borderColor = "rgba(239,68,68,0.4)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(239,68,68,0.1)"; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.borderColor = "rgba(239,68,68,0.15)"; e.currentTarget.style.boxShadow = "none"; }}>
+              <div style={{ position: "relative", aspectRatio: "16/9", overflow: "hidden", background: "#111" }}>
+                {s.thumbnail || s.hero_image
+                  ? <img src={s.thumbnail || s.hero_image} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => { e.target.style.display = "none"; }} />
+                  : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #1a0505, #3a0808)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="#ef4444" opacity="0.25"><polygon points="5,3 19,12 5,21"/></svg>
+                    </div>}
+                <div style={{ position: "absolute", top: 7, left: 7, display: "flex", alignItems: "center", gap: 4, background: "#ef4444", borderRadius: 4, padding: "2px 7px" }}>
+                  <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#fff", animation: "livepulse 1.5s infinite" }} />
+                  <span style={{ fontSize: 9, fontWeight: 800, color: "#fff", letterSpacing: 0.6 }}>LIVE</span>
+                </div>
+              </div>
+              <div style={{ padding: "9px 10px", display: "flex", gap: 8, alignItems: "center" }}>
+                <div style={{ width: 26, height: 26, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", flexShrink: 0, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: "#fff", outline: "2px solid #ef4444", outlineOffset: 1 }}>
+                  {s.avatar_url ? <img src={s.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : name[0]?.toUpperCase()}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ margin: "0 0 1px", fontSize: 12, fontWeight: 700, color: "#e8e8e8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</p>
+                  {s.stream_title && <p style={{ margin: 0, fontSize: 11, color: "#444", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.stream_title}</p>}
+                </div>
+              </div>
+            </a>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, userName, onGoLive, onExitStudio, studioContent, flags = {}, isPremiumUser = false }) {
   const [videos, setVideos] = useState([]);
   const [shows, setShows] = useState([]);
   const [carousels, setCarousels] = useState([]);
+  const [region, setRegion] = useState(resolveRegion); // "test" | "production"
+  const regionLocked = isProdHost(); // live domain can't be toggled off production
   const [podcasts, setPodcasts] = useState([]);
   const [watchRows, setWatchRows] = useState([]); // recent watch_progress, for Continue Watching / Recommended rows
   const [liveStreams, setLiveStreams] = useState([]);
@@ -178,6 +274,8 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
 
   const visibleCarousels = useMemo(() => carousels.filter(c => {
     if (!c.enabled) return false;
+    // Region gate: rows without an environment count as production (backward compatible).
+    if ((c.environment || "production") !== region) return false;
     const pages = (c.pages || "home").split(",").map(p => p.trim());
     if (activeNav === "Home") return pages.includes("home");
     if (activeNav === "Movies") return pages.includes("shorts");
@@ -185,7 +283,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
     if (activeNav === "Podcasts") return pages.includes("podcasts");
     if (activeNav === "Streams") return pages.includes("live");
     return false;
-  }), [carousels, activeNav]);
+  }), [carousels, activeNav, region]);
 
   // Continue Watching — in-progress movies from watch history (newest first)
   const continueItems = useMemo(() => {
@@ -213,11 +311,43 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
     return allContent.filter(v => v.category === seed.category && !(v.id === seed.id && v._type === seed._type));
   }, [watchRows, allContent, myList]);
 
+  // Live sources (used by both admin "live" rows and the sidebar badge). Defined
+  // above `sections` so the row builder can reference them.
+  const liveNow = liveStreams.filter(s => s.is_live);
+  const liveChannels = (channels || []).filter(c => c.is_active !== false);
+  const nowByChannel = {};
+  {
+    const t = Date.now();
+    (epgEntries || []).forEach(e => {
+      if (new Date(e.start_time).getTime() <= t && new Date(e.end_time).getTime() > t) nowByChannel[e.channel_id] = e;
+    });
+  }
+  const liveNowEnabled = flags.live_now_home !== false;
+
   const sections = useMemo(() => activeNav === "My List"
     ? []
     : visibleCarousels.length > 0
     ? visibleCarousels.map(c => {
         const filterVal = c.filter_value?.toLowerCase();
+        // Live TV channels row (admin-controlled): all live channels, by category, or handpicked.
+        if (c.type === "live_channels") {
+          let chans = liveChannels;
+          if (filterVal && filterVal !== "all") {
+            try {
+              const picks = JSON.parse(c.filter_value);
+              if (Array.isArray(picks)) chans = picks.flatMap(p => { const f = liveChannels.find(ch => String(ch.id) === String(p.id)); return f ? [f] : []; });
+            } catch { chans = liveChannels.filter(ch => (ch.category || "general").toLowerCase() === filterVal); }
+          }
+          return { id: String(c.id), title: c.title, isLiveRow: true, liveChannels: chans, liveStreams: [] };
+        }
+        // Creator streams row (admin-controlled): all live creators, or handpicked.
+        if (c.type === "creator_streams") {
+          let strms = liveNow;
+          if (filterVal && filterVal !== "all") {
+            try { const picks = JSON.parse(c.filter_value); if (Array.isArray(picks)) strms = picks.flatMap(p => { const f = liveNow.find(s => String(s.id) === String(p.id)); return f ? [f] : []; }); } catch { /* keep all */ }
+          }
+          return { id: String(c.id), title: c.title, isLiveRow: true, liveChannels: [], liveStreams: strms };
+        }
         if (c.type === "podcast") {
           const podItems = filterVal
             ? podcasts.filter(p => Array.isArray(p.tags) ? p.tags.some(t => t.toLowerCase() === filterVal) : p.tags?.toLowerCase().includes(filterVal))
@@ -239,7 +369,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
           : c.content_type === "shows" ? baseItems.filter(v => v._type === "show")
           : baseItems;
         return { id: String(c.id), title: c.title, videos: items, layout: c.layout || (c.type === "trending" ? "top10" : "standard"), numbered: c.type === "trending" };
-      }).filter(s => s.isPodcast ? s.podcastItems.length > 0 : s.videos.length > 0)
+      }).filter(s => s.isPodcast ? s.podcastItems.length > 0 : s.isLiveRow ? (s.liveChannels.length + s.liveStreams.length) > 0 : s.videos.length > 0)
     : activeNav === "Podcasts"
     ? [{ id: "all-podcasts", title: "All Podcasts", isPodcast: true, videos: [], podcastItems: podcasts }]
     : activeNav === "Streams"
@@ -251,7 +381,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
           id: cat, title: `${cat} Films`, videos: filteredContent.filter(v => v.category === cat),
         })),
       ],
-  [activeNav, allContent, filteredContent, visibleCarousels, podcasts, carousels, myList, continueItems, recommendedItems]);
+  [activeNav, allContent, filteredContent, visibleCarousels, podcasts, carousels, myList, continueItems, recommendedItems, liveChannels, liveNow]);
 
   const searchPool = useMemo(() => {
     const tagsStr = (tags) => Array.isArray(tags) ? tags.join(" ") : (tags || "");
@@ -315,18 +445,6 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
   const [sbExpanded, setSbExpanded] = useState(false);
   const SB_W = 76;
   const SB_EXPANDED = 210;
-  const liveNow = liveStreams.filter(s => s.is_live);
-  // Live TV channels for the unified "Live Now" row, with their current program
-  const liveChannels = (channels || []).filter(c => c.is_active !== false);
-  const nowByChannel = {};
-  {
-    const t = Date.now();
-    (epgEntries || []).forEach(e => {
-      if (new Date(e.start_time).getTime() <= t && new Date(e.end_time).getTime() > t) nowByChannel[e.channel_id] = e;
-    });
-  }
-  const liveNowEnabled = flags.live_now_home !== false;
-
   const SB_ITEMS = [
     { id: "Home",    label: "Home",    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
     { id: "Movies",  label: "Movies",  icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="2"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg> },
@@ -671,84 +789,8 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
         </>
       )}
 
-      {/* ── LIVE NOW STRIP (Home tab) — live TV channels + live streamers ── */}
-      {!studioContent && activeNav === "Home" && liveNowEnabled && (liveChannels.length > 0 || liveNow.length > 0) && !loading && (
-        <div style={{ padding: `24px ${PAD} 0` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-            <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite" }} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: "#ef4444", letterSpacing: "0.1em", textTransform: "uppercase" }}>Live Now</span>
-            <span style={{ fontSize: 12, color: "#333" }}>{liveChannels.length + liveNow.length} live</span>
-          </div>
-          <div className="scroll-row" style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4 }}>
-            {liveChannels.map(ch => {
-              const nowAiring = nowByChannel[ch.id];
-              const hero = ch.hero_url || "";
-              const logo = ch.logo_url || "";
-              return (
-                <div key={`ch-${ch.id}`} onClick={() => onChannelPlay?.(ch)}
-                  style={{ flexShrink: 0, width: isMobile ? 180 : 220, cursor: "pointer", borderRadius: 10, overflow: "hidden", background: "#0f0f0f", border: "1px solid rgba(239,68,68,0.15)", transition: "transform 0.15s, border-color 0.15s, box-shadow 0.15s" }}
-                  onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.borderColor = "rgba(239,68,68,0.4)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(239,68,68,0.1)"; }}
-                  onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.borderColor = "rgba(239,68,68,0.15)"; e.currentTarget.style.boxShadow = "none"; }}>
-                  <div style={{ position: "relative", aspectRatio: "16/9", overflow: "hidden", background: "linear-gradient(135deg, #0c1a2e, #12385f)" }}>
-                    {hero
-                      ? <img src={hero} alt={ch.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                      : logo
-                      ? <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-                          <img src={logo} alt={ch.name} style={{ maxWidth: "72%", maxHeight: "58%", objectFit: "contain" }} />
-                        </div>
-                      : <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2" opacity="0.4"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></svg>
-                        </div>}
-                    {/* top scrim keeps LIVE/TV badges legible over any art */}
-                    <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 36, background: "linear-gradient(to bottom, rgba(0,0,0,0.5), transparent)", pointerEvents: "none" }} />
-                    <div style={{ position: "absolute", top: 7, left: 7, display: "flex", alignItems: "center", gap: 4, background: "#ef4444", borderRadius: 4, padding: "2px 7px" }}>
-                      <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#fff", animation: "livepulse 1.5s infinite" }} />
-                      <span style={{ fontSize: 9, fontWeight: 800, color: "#fff", letterSpacing: 0.6 }}>LIVE</span>
-                    </div>
-                    <div style={{ position: "absolute", top: 7, right: 7, background: "rgba(0,0,0,0.6)", borderRadius: 4, padding: "2px 7px", fontSize: 9, fontWeight: 700, color: "#38bdf8", letterSpacing: 0.5 }}>TV</div>
-                  </div>
-                  <div style={{ padding: "9px 10px", minWidth: 0 }}>
-                    <p style={{ margin: "0 0 1px", fontSize: 12, fontWeight: 700, color: "#e8e8e8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch.name}</p>
-                    <p style={{ margin: 0, fontSize: 11, color: "#555", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{nowAiring ? nowAiring.title : (ch.description || "Live TV")}</p>
-                  </div>
-                </div>
-              );
-            })}
-            {liveNow.map(s => {
-              const slug = s.username || (s.channel_name || s.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-              const name = s.channel_name || s.title || "";
-              return (
-                <a key={s.id} href={`/stream/${slug}`}
-                  style={{ flexShrink: 0, width: isMobile ? 180 : 220, textDecoration: "none", color: "inherit", borderRadius: 10, overflow: "hidden", background: "#0f0f0f", border: "1px solid rgba(239,68,68,0.15)", transition: "transform 0.15s, border-color 0.15s, box-shadow 0.15s" }}
-                  onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.borderColor = "rgba(239,68,68,0.4)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(239,68,68,0.1)"; }}
-                  onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.borderColor = "rgba(239,68,68,0.15)"; e.currentTarget.style.boxShadow = "none"; }}>
-                  <div style={{ position: "relative", aspectRatio: "16/9", overflow: "hidden", background: "#111" }}>
-                    {s.thumbnail || s.hero_image
-                      ? <img src={s.thumbnail || s.hero_image} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                      : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #1a0505, #3a0808)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <svg width="24" height="24" viewBox="0 0 24 24" fill="#ef4444" opacity="0.25"><polygon points="5,3 19,12 5,21"/></svg>
-                        </div>
-                    }
-                    <div style={{ position: "absolute", top: 7, left: 7, display: "flex", alignItems: "center", gap: 4, background: "#ef4444", borderRadius: 4, padding: "2px 7px" }}>
-                      <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#fff", animation: "livepulse 1.5s infinite" }} />
-                      <span style={{ fontSize: 9, fontWeight: 800, color: "#fff", letterSpacing: 0.6 }}>LIVE</span>
-                    </div>
-                  </div>
-                  <div style={{ padding: "9px 10px", display: "flex", gap: 8, alignItems: "center" }}>
-                    <div style={{ width: 26, height: 26, borderRadius: "50%", background: "linear-gradient(135deg, #312e81, #6d28d9)", flexShrink: 0, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: "#fff", outline: "2px solid #ef4444", outlineOffset: 1 }}>
-                      {s.avatar_url ? <img src={s.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : name[0]?.toUpperCase()}
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <p style={{ margin: "0 0 1px", fontSize: 12, fontWeight: 700, color: "#e8e8e8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</p>
-                      {s.stream_title && <p style={{ margin: 0, fontSize: 11, color: "#444", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.stream_title}</p>}
-                    </div>
-                  </div>
-                </a>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {/* Live Now is now an admin-controlled row (carousel type live_channels / creator_streams),
+          rendered inline with the other content rows below — no longer hardcoded here. */}
 
       {/* Content rows (Home / Movies / Series / My List) */}
       {!studioContent && activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "My List" && activeNav !== "Podcasts" && activeNav !== "Streams" && !loading && allContent.length > 0 && (
@@ -757,7 +799,9 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
             <div style={{ padding: "100px 0", textAlign: "center", color: "#444", fontSize: 15 }}>
               No {activeNav.toLowerCase()} yet.
             </div>
-          ) : sections.map(section => section.videos.length > 0 ? (
+          ) : sections.map(section => section.isLiveRow ? (
+            <LiveRow key={section.id} title={section.title} channels={section.liveChannels} streams={section.liveStreams} nowByChannel={nowByChannel} onChannelPlay={onChannelPlay} isMobile={isMobile} />
+          ) : section.videos?.length > 0 ? (
             <ContentRow key={section.id} section={section} onPlay={onPlay} onShowSelect={onShowSelect} myList={myList} onToggleList={onToggleList} isPremiumUser={isPremiumUser} />
           ) : null)}
         </div>
@@ -767,6 +811,21 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
       </div>{/* end main area */}
 
       {isMobile && <div style={{ height: 72 }} />}
+
+      {/* Region toggle — only on non-production hosts (localhost / preview). Real viewers never see it. */}
+      {!regionLocked && (
+        <div style={{ position: "fixed", left: 16, bottom: isMobile ? 72 : 16, zIndex: 120, display: "flex", alignItems: "center", gap: 8, background: "rgba(15,15,18,0.95)", backdropFilter: "blur(12px)", border: `1px solid ${region === "test" ? "rgba(250,204,21,0.5)" : "rgba(34,197,94,0.5)"}`, borderRadius: 999, padding: "7px 10px 7px 12px", boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: "#666", textTransform: "uppercase", letterSpacing: 1 }}>Region</span>
+          {["test", "production"].map(r => (
+            <button key={r} onClick={() => { try { localStorage.setItem("peep_region", r); } catch {} setRegion(r); }}
+              style={{ border: "none", borderRadius: 999, padding: "4px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer", textTransform: "capitalize",
+                background: region === r ? (r === "test" ? "#facc15" : "#22c55e") : "transparent", color: region === r ? "#0a0a0a" : "#888" }}>
+              {r}
+            </button>
+          ))}
+        </div>
+      )}
+
       <Footer onNavChange={tab => { onExitStudio?.(); setActiveNav(tab); }} onProfileOpen={onProfileOpen} onOpenModal={setFooterModal} />
 
       {/* Mobile bottom tab bar */}

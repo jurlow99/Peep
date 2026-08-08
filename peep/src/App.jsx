@@ -149,7 +149,16 @@ export default function App() {
   const { goHome: navigateHome } = useAppNavigation({ page, setPage, selectedVideo, selectedShow, selectedPodcast, onClearSelection: clearSelection });
   const goHome = () => { navigateHome(); clearSelection(); };
 
-  const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true), onProfileOpen: () => setPage("profile"), userAvatarId, userName, isPremiumUser, onPodcastSelect: pod => { setSelectedPodcast(pod); setPage("podcast"); }, onViewProfile: () => setPage("profile"), onChannelPlay: ch => { if (isLocked(ch)) { openGate(ch); return; } setSelectedVideo({ id: `ch-${ch.id}`, title: ch.name, url: ch.hls_url, _type: "live", thumbnail: ch.hero_url || ch.logo_url || "", description: ch.description || "" }); setPage("player"); } };
+  // Resolve a channel's HLS playback URL. HLS-pull channels store it directly;
+  // RTMP/SRT (push) channels only have a Cloudflare live-input UID, so build the
+  // manifest URL from stream_uid as a fallback.
+  const channelPlaybackUrl = ch => {
+    if (ch.hls_url) return ch.hls_url;
+    if (ch.stream_uid) return `https://customer-x9w8t8qxjaf49jqb.cloudflarestream.com/${ch.stream_uid}/manifest/video.m3u8`;
+    return "";
+  };
+
+  const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true), onProfileOpen: () => setPage("profile"), userAvatarId, userName, isPremiumUser, onPodcastSelect: pod => { setSelectedPodcast(pod); setPage("podcast"); }, onViewProfile: () => setPage("profile"), onChannelPlay: ch => { if (isLocked(ch)) { openGate(ch); return; } setSelectedVideo({ id: `ch-${ch.id}`, title: ch.name, url: channelPlaybackUrl(ch), _type: "live", thumbnail: ch.hero_url || ch.logo_url || "", description: ch.description || "" }); setPage("player"); } };
 
 
   if (maintenanceMode) return (
@@ -295,33 +304,40 @@ export default function App() {
   return (
     <>
       {!betaAck && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(0,0,0,0.88)", backdropFilter: "blur(20px)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", padding: 24 }}>
-          <div style={{ position: "relative", background: "linear-gradient(160deg, #111 0%, #0d0d0d 100%)", border: "1px solid #222", borderRadius: 24, padding: "48px 40px 40px", maxWidth: 400, width: "100%", textAlign: "center", overflow: "hidden", boxShadow: "0 40px 100px rgba(0,0,0,0.6)" }}>
-            {/* Orb glow */}
-            <div style={{ position: "absolute", top: -60, left: "50%", transform: "translateX(-50%)", width: 300, height: 200, background: "radial-gradient(ellipse, rgba(250,204,21,0.1) 0%, transparent 70%)", pointerEvents: "none" }} />
+        <div style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(12,11,14,0.78)", backdropFilter: "blur(24px)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", padding: 24 }}>
+          <div style={{ position: "relative", background: "linear-gradient(165deg, #232019 0%, #1b1a1d 55%, #151417 100%)", border: "1px solid rgba(250,204,21,0.22)", borderRadius: 24, padding: "46px 40px 38px", maxWidth: 430, width: "100%", textAlign: "center", overflow: "hidden", boxShadow: "0 40px 120px rgba(0,0,0,0.5), 0 0 70px rgba(250,204,21,0.07)" }}>
+            {/* Warm orb glow */}
+            <div style={{ position: "absolute", top: -90, left: "50%", transform: "translateX(-50%)", width: 380, height: 280, background: "radial-gradient(ellipse, rgba(250,204,21,0.22) 0%, transparent 70%)", pointerEvents: "none" }} />
             {/* Top accent line */}
-            <div style={{ position: "absolute", top: 0, left: "20%", right: "20%", height: 1, background: "linear-gradient(90deg, transparent, rgba(250,204,21,0.4), transparent)" }} />
+            <div style={{ position: "absolute", top: 0, left: "15%", right: "15%", height: 1, background: "linear-gradient(90deg, transparent, rgba(250,204,21,0.6), transparent)" }} />
 
             <div style={{ position: "relative" }}>
-              <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 44, color: "#facc15", display: "block", marginBottom: 18, letterSpacing: "-0.01em" }}>peep.</span>
+              <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 46, color: "#facc15", display: "block", marginBottom: 16, letterSpacing: "-0.01em", textShadow: "0 0 32px rgba(250,204,21,0.35)" }}>peep.</span>
 
-              <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "rgba(250,204,21,0.07)", border: "1px solid rgba(250,204,21,0.18)", borderRadius: 100, padding: "6px 16px", marginBottom: 28 }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#facc15", display: "inline-block", boxShadow: "0 0 6px #facc15" }} />
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "rgba(250,204,21,0.13)", border: "1px solid rgba(250,204,21,0.32)", borderRadius: 100, padding: "6px 16px", marginBottom: 24 }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#facc15", display: "inline-block", boxShadow: "0 0 8px #facc15" }} />
                 <span style={{ fontSize: 10, color: "#facc15", fontWeight: 700, letterSpacing: 2, textTransform: "uppercase" }}>Early Access</span>
               </div>
 
-              <h2 style={{ margin: "0 0 14px", fontSize: 24, fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1.15 }}>We're still building.</h2>
-              <p style={{ margin: "0 0 36px", fontSize: 14, color: "#4a4a4a", lineHeight: 1.85 }}>
-                You might run into rough edges or missing features — we're working on it every day. Thanks for being here early.
+              <h2 style={{ margin: "0 0 14px", fontSize: 27, fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1.15, color: "#fff" }}>You're early.</h2>
+              <p style={{ margin: "0 0 24px", fontSize: 15, color: "#cbc9c2", lineHeight: 1.7 }}>
+                Welcome inside Peep — a hand-picked mix of films, series and always-on live channels you won't find on the big platforms. Some corners are still under construction, and fresh drops land every week.
               </p>
+
+              {/* What's inside */}
+              <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 30, flexWrap: "wrap" }}>
+                {["Live TV", "Films", "Series"].map(t => (
+                  <span key={t} style={{ fontSize: 12, fontWeight: 600, color: "#e8e6df", background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 100, padding: "6px 15px" }}>{t}</span>
+                ))}
+              </div>
 
               <button
                 onClick={() => { localStorage.setItem("peep_beta_ack", "true"); setBetaAck(true); }}
-                style={{ width: "100%", background: "#facc15", border: "none", borderRadius: 12, padding: "15px 0", color: "#0a0a0a", fontSize: 15, fontWeight: 700, cursor: "pointer", transition: "transform 0.15s, box-shadow 0.15s", letterSpacing: "-0.01em" }}
-                onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.02)"; e.currentTarget.style.boxShadow = "0 6px 28px rgba(250,204,21,0.3)"; }}
-                onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "none"; }}
+                style={{ width: "100%", background: "#facc15", border: "none", borderRadius: 12, padding: "15px 0", color: "#0a0a0a", fontSize: 15, fontWeight: 700, cursor: "pointer", transition: "transform 0.15s, box-shadow 0.15s", letterSpacing: "-0.01em", boxShadow: "0 4px 20px rgba(250,204,21,0.22)" }}
+                onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.02)"; e.currentTarget.style.boxShadow = "0 6px 30px rgba(250,204,21,0.4)"; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 20px rgba(250,204,21,0.22)"; }}
               >
-                Let's go →
+                Start watching →
               </button>
             </div>
           </div>
