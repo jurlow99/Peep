@@ -278,8 +278,8 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
       }
       if (cancelled || !window.google?.ima) return;
 
-      // Fetch best matching pre-roll tag
-      const contentScope = isEpisode ? "episode" : "movie";
+      // Fetch best matching pre-roll tag (live channels get their own scope, no SCTE-35 needed)
+      const contentScope = isLive ? "live" : isEpisode ? "episode" : "movie";
       const { data } = await supabase.from("vast_tags")
         .select("id, tag_url, scope, content_id")
         .eq("active", true)

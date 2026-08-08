@@ -5022,7 +5022,7 @@ export function CMS({ onExit, currentUser }) {
 
             {!adLoading && !adTableMissing && adList.length > 0 && (() => {
               const AD_TYPE_LABELS = { pre_roll: "Pre-roll", mid_roll: "Mid-roll", post_roll: "Post-roll" };
-              const SCOPE_LABELS = { global: "All content", movie: "Movies", show: "TV Shows", episode: "Episodes", podcast_episode: "Podcasts" };
+              const SCOPE_LABELS = { global: "All content", movie: "Movies", show: "TV Shows", episode: "Episodes", podcast_episode: "Podcasts", live: "Live Channels" };
               const AD_TYPE_COLORS = { pre_roll: "#6366f1", mid_roll: "#f59e0b", post_roll: "#ec4899" };
               return (
                 <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
@@ -7939,6 +7939,7 @@ export function CMS({ onExit, currentUser }) {
                         <option value="show">TV Shows</option>
                         <option value="episode">Episodes</option>
                         <option value="podcast_episode">Podcasts</option>
+                        <option value="live">Live Channels</option>
                       </select>
                     </div>
                     {adForm.scope !== "global" && (
