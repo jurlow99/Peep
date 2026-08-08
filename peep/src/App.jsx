@@ -171,7 +171,7 @@ export default function App() {
     return "";
   };
 
-  const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true), onProfileOpen: () => setPage("profile"), userAvatarId, userName, isPremiumUser, onPodcastSelect: pod => { setSelectedPodcast(pod); setPage("podcast"); }, onViewProfile: () => setPage("profile"), onChannelPlay: ch => { if (isLocked(ch)) { openGate(ch); return; } setSelectedVideo({ id: `ch-${ch.id}`, title: ch.name, url: channelPlaybackUrl(ch), _type: "live", thumbnail: ch.hero_url || ch.logo_url || "", description: ch.description || "" }); setPage("player"); } };
+  const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true), onProfileOpen: () => setPage("profile"), userAvatarId, userName, isPremiumUser, onPodcastSelect: pod => { setSelectedPodcast(pod); setPage("podcast"); }, onViewProfile: () => setPage("profile"), onChannelPlay: ch => { if (!user) { setAuthOpen(true); return; } if (isLocked(ch)) { openGate(ch); return; } setSelectedVideo({ id: `ch-${ch.id}`, title: ch.name, url: channelPlaybackUrl(ch), _type: "live", thumbnail: ch.hero_url || ch.logo_url || "", description: ch.description || "" }); setPage("player"); } };
 
 
   if (maintenanceMode) return (

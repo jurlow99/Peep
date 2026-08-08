@@ -468,7 +468,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
               const active = !studioContent && activeNav === item.id;
               return (
                 <div key={item.id} className="sb-item"
-                  onClick={() => { if (item.id === "My List" && !user) { onAuthOpen(); return; } onExitStudio?.(); setActiveNav(item.id); }}
+                  onClick={() => { if ((item.id === "My List" || item.id === "Streams") && !user) { onAuthOpen(); return; } onExitStudio?.(); setActiveNav(item.id); }}
                   style={{
                     display: "flex", flexDirection: sbExpanded ? "row" : "column", alignItems: "center", gap: sbExpanded ? 14 : 4,
                     padding: sbExpanded ? "11px 20px" : "10px 0",
@@ -758,16 +758,28 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
 
       {/* Streams tab — optional promo rows above the channel grid, then the guide */}
       {!studioContent && activeNav === "Streams" && !loading && (
-        <>
-          {sections.filter(s => !s.isPodcast && s.videos?.length > 0).length > 0 && (
-            <div style={{ paddingTop: isMobile ? "calc(max(env(safe-area-inset-top), 44px) + 48px)" : 90, paddingBottom: 4 }}>
-              {sections.filter(s => !s.isPodcast && s.videos?.length > 0).map(section => (
-                <ContentRow key={section.id} section={section} onPlay={onPlay} onShowSelect={onShowSelect} myList={myList} onToggleList={onToggleList} isPremiumUser={isPremiumUser} />
-              ))}
+        !user ? (
+          <div style={{ minHeight: "70vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "80px 24px", gap: 14 }}>
+            <div style={{ fontSize: 44 }}>📺</div>
+            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>Live TV is for members</h2>
+            <p style={{ margin: 0, fontSize: 14, color: "#888", maxWidth: 380, lineHeight: 1.6 }}>Create a free Peep account to watch always-on live channels and creator streams.</p>
+            <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
+              <button onClick={() => onAuthOpen?.()} style={{ background: "#facc15", border: "none", borderRadius: 10, padding: "12px 24px", color: "#0a0a0a", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Sign up free →</button>
+              <button onClick={() => onAuthOpen?.()} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 10, padding: "12px 22px", color: "#ddd", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Sign in</button>
             </div>
-          )}
-          <LiveTVPage streams={liveStreams} channels={channels} epgEntries={epgEntries} onChannelPlay={onChannelPlay} user={user} streamsLoading={loading} />
-        </>
+          </div>
+        ) : (
+          <>
+            {sections.filter(s => !s.isPodcast && s.videos?.length > 0).length > 0 && (
+              <div style={{ paddingTop: isMobile ? "calc(max(env(safe-area-inset-top), 44px) + 48px)" : 90, paddingBottom: 4 }}>
+                {sections.filter(s => !s.isPodcast && s.videos?.length > 0).map(section => (
+                  <ContentRow key={section.id} section={section} onPlay={onPlay} onShowSelect={onShowSelect} myList={myList} onToggleList={onToggleList} isPremiumUser={isPremiumUser} />
+                ))}
+              </div>
+            )}
+            <LiveTVPage streams={liveStreams} channels={channels} epgEntries={epgEntries} onChannelPlay={onChannelPlay} user={user} streamsLoading={loading} />
+          </>
+        )
       )}
 
       {/* Live Now is now an admin-controlled row (carousel type live_channels / creator_streams),
@@ -807,7 +819,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
         </div>
       )}
 
-      <Footer onNavChange={tab => { onExitStudio?.(); setActiveNav(tab); }} onProfileOpen={onProfileOpen} onOpenModal={setFooterModal} />
+      <Footer onNavChange={tab => { if (tab === "Streams" && !user) { onAuthOpen(); return; } onExitStudio?.(); setActiveNav(tab); }} onProfileOpen={onProfileOpen} onOpenModal={setFooterModal} />
 
       {/* Mobile bottom tab bar */}
       {isMobile && (
@@ -822,7 +834,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
             const active = activeNav === tab.id;
             return (
               <button key={tab.id}
-                onClick={() => { if (tab.id === "My List" && !user) { onAuthOpen(); return; } setActiveNav(tab.id); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                onClick={() => { if ((tab.id === "My List" || tab.id === "Streams") && !user) { onAuthOpen(); return; } setActiveNav(tab.id); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                 style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, background: "none", border: "none", color: active ? "#facc15" : "#555", cursor: "pointer", padding: "6px 0", fontSize: 9.5, fontWeight: active ? 700 : 400, letterSpacing: 0.3, transition: "color 0.15s" }}>
                 {tab.icon}
                 {tab.label}
