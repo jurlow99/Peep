@@ -128,6 +128,19 @@ export default function App() {
       .then(({ data }) => setStreamRecord(data ?? null));
   }, [user?.id]);
 
+  // When the session ends (sign-out here or in another tab), leave any logged-in-only
+  // view so we don't show a stale screen (e.g. the streamer "Application under review").
+  const prevUserRef = useRef(user);
+  useEffect(() => {
+    const wasSignedIn = !!prevUserRef.current;
+    prevUserRef.current = user;
+    if (wasSignedIn && !user) {
+      setProfileOpen(false);
+      setPaywallOpen(false);
+      setPage(p => (["studio", "settings", "profile", "creator"].includes(p) ? "home" : p));
+    }
+  }, [user]);
+
   // Presence heartbeat — mark this user online while browsing
   useEffect(() => {
     if (!user) return;
