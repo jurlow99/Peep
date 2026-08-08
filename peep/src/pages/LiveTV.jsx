@@ -514,8 +514,13 @@ function LiveMosaic({ channels, epgEntries, onChannelPlay }) {
   const active = channels.filter(c => c.is_active !== false);
 
   // Categories derived from the channels themselves — no hardcoded list.
-  const cats = Array.from(new Set(active.map(c => c.category || "general")));
-  const shown = activeCat === "all" ? active : active.filter(c => (c.category || "general") === activeCat);
+  // Split multi-value categories ("Auto;Outdoor;Sports") and dedupe case-insensitively
+  // ("Sports" and "sports" are the same pill), so nothing shows up more than once.
+  const catsOf = c => (c.category || "general").split(/[;,/]/).map(s => s.trim()).filter(Boolean);
+  const catMap = new Map(); // lowercased key -> display label
+  active.forEach(c => catsOf(c).forEach(t => { const k = t.toLowerCase(); if (!catMap.has(k)) catMap.set(k, prettyCategory(t)); }));
+  const cats = Array.from(catMap.entries()).sort((a, b) => a[1].localeCompare(b[1])); // [key, label]
+  const shown = activeCat === "all" ? active : active.filter(c => catsOf(c).some(t => t.toLowerCase() === activeCat));
 
   // Hero/spotlight first, then large, then normal, then admin sort_order.
   const rank = c => (c.is_live_hero ? 0 : c.tile_size === "spotlight" ? 1 : c.tile_size === "large" ? 2 : 3);
@@ -534,10 +539,10 @@ function LiveMosaic({ channels, epgEntries, onChannelPlay }) {
         <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: "#ef4444", letterSpacing: "0.12em", textTransform: "uppercase" }}>Live TV · On Now</p>
         {cats.length > 1 && (
           <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-            {["all", ...cats].map(cat => (
-              <button key={cat} onClick={() => setActiveCat(cat)}
-                style={{ background: activeCat === cat ? "#facc15" : "rgba(255,255,255,0.05)", border: `1px solid ${activeCat === cat ? "#facc15" : "rgba(255,255,255,0.08)"}`, borderRadius: 20, padding: "5px 15px", color: activeCat === cat ? "#0a0a0a" : "#888", fontSize: 12, fontWeight: activeCat === cat ? 700 : 500, cursor: "pointer", transition: "all 0.15s" }}>
-                {cat === "all" ? "All" : prettyCategory(cat)}
+            {[["all", "All"], ...cats].map(([key, label]) => (
+              <button key={key} onClick={() => setActiveCat(key)}
+                style={{ background: activeCat === key ? "#facc15" : "rgba(255,255,255,0.05)", border: `1px solid ${activeCat === key ? "#facc15" : "rgba(255,255,255,0.08)"}`, borderRadius: 20, padding: "5px 15px", color: activeCat === key ? "#0a0a0a" : "#888", fontSize: 12, fontWeight: activeCat === key ? 700 : 500, cursor: "pointer", transition: "all 0.15s" }}>
+                {label}
               </button>
             ))}
           </div>
