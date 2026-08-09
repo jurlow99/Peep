@@ -115,6 +115,9 @@ export function CMS({ onExit, currentUser }) {
   const [carousels, setCarousels] = useState([]);
   const [carouselLoading, setCarouselLoading] = useState(true);
   const [carouselPageTab, setCarouselPageTab] = useState("home"); // which screen's rows the carousel admin is showing
+  const [homeHeroForm, setHomeHeroForm] = useState({ enabled: false, image_url: "", video_url: "", title: "", subtitle: "", badge: "", cta_type: "none", cta_label: "", cta_value: "" });
+  const [homeHeroSaving, setHomeHeroSaving] = useState(false);
+  const [homeHeroOpen, setHomeHeroOpen] = useState(false);
   const carouselsOnPage = (page) => carousels.filter(c => (c.pages || "home").split(",").map(p => p.trim()).includes(page));
   const [editingCarouselId, setEditingCarouselId] = useState(null);
   const [carouselForm, setCarouselForm] = useState(EMPTY_CAROUSEL);
@@ -1022,6 +1025,20 @@ export function CMS({ onExit, currentUser }) {
       return;
     }
     setBossSettings(prev => ({ ...prev, [key]: value }));
+  }
+
+  // ── Home Hero (custom promo banner) ──
+  useEffect(() => {
+    supabase.from("app_settings").select("value").eq("key", "home_hero").maybeSingle()
+      .then(({ data }) => { if (data?.value) { try { setHomeHeroForm(f => ({ ...f, ...JSON.parse(data.value) })); } catch {} } });
+  }, []);
+
+  async function saveHomeHero() {
+    setHomeHeroSaving(true);
+    await saveSetting("home_hero", JSON.stringify(homeHeroForm));
+    logAudit("update", "home_hero", "home");
+    showToast(homeHeroForm.enabled ? "Home hero saved — live on the home screen" : "Home hero saved (currently off)");
+    setHomeHeroSaving(false);
   }
 
   async function grantAccessByEmail() {
@@ -4009,6 +4026,95 @@ export function CMS({ onExit, currentUser }) {
                 );
               })}
             </div>
+
+            {/* Home Hero (custom promo banner) — only relevant on the Home screen */}
+            {carouselPageTab === "home" && (() => {
+              const lbl = { display: "block", fontSize: 12, color: "#6b7280", marginBottom: 5, fontWeight: 600 };
+              const inp = { width: "100%", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "9px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" };
+              const list = homeHeroForm.cta_type === "movie" ? rows : homeHeroForm.cta_type === "show" ? showsList : homeHeroForm.cta_type === "channel" ? channelList : podcastsList;
+              return (
+                <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, marginBottom: 20, overflow: "hidden" }}>
+                  <button onClick={() => setHomeHeroOpen(o => !o)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "14px 18px", background: "transparent", border: "none", cursor: "pointer" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ fontSize: 18 }}>🎬</span>
+                      <div style={{ textAlign: "left" }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>Home Hero — custom banner</div>
+                        <div style={{ fontSize: 12, color: "#6b7280" }}>{homeHeroForm.enabled ? "On — overrides the ☆ featured movie/series" : "Off — home shows the ☆ featured movie/series"}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 10px", borderRadius: 20, background: homeHeroForm.enabled ? "rgba(34,197,94,0.12)" : "#f1f5f9", color: homeHeroForm.enabled ? "#15803d" : "#6b7280" }}>{homeHeroForm.enabled ? "LIVE" : "OFF"}</span>
+                      <span style={{ color: "#9ca3af", fontSize: 13 }}>{homeHeroOpen ? "▲" : "▼"}</span>
+                    </div>
+                  </button>
+                  {homeHeroOpen && (
+                    <div style={{ padding: "4px 18px 18px", display: "flex", flexDirection: "column", gap: 14, borderTop: "1px solid #f1f5f9" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", marginTop: 12 }}>
+                        <input type="checkbox" checked={homeHeroForm.enabled} onChange={e => setHomeHeroForm(f => ({ ...f, enabled: e.target.checked }))} />
+                        <span style={{ fontSize: 13, color: "#374151", fontWeight: 600 }}>Show this custom hero on the home screen</span>
+                      </label>
+                      <div>
+                        <label style={lbl}>Background image (1920×1080)</label>
+                        <ImageUploader label="Upload Hero Image" folder="hero" onUploadSuccess={url => setHomeHeroForm(f => ({ ...f, image_url: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
+                        <input value={homeHeroForm.image_url} onChange={e => setHomeHeroForm(f => ({ ...f, image_url: e.target.value }))} placeholder="or paste image URL…" style={{ ...inp, marginTop: 8 }} />
+                        {homeHeroForm.image_url && <img src={homeHeroForm.image_url} alt="" onError={e => { e.target.style.display = "none"; }} style={{ marginTop: 8, width: "100%", maxHeight: 130, objectFit: "cover", borderRadius: 8, border: "1px solid #e2e8f0" }} />}
+                      </div>
+                      <div>
+                        <label style={lbl}>Background video URL (optional — direct .mp4, autoplays muted)</label>
+                        <input value={homeHeroForm.video_url} onChange={e => setHomeHeroForm(f => ({ ...f, video_url: e.target.value }))} placeholder="https://…/loop.mp4" style={inp} />
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                        <div><label style={lbl}>Badge (small pill)</label><input value={homeHeroForm.badge} onChange={e => setHomeHeroForm(f => ({ ...f, badge: e.target.value }))} placeholder="NEW · LIVE EVENT" style={inp} /></div>
+                        <div><label style={lbl}>Title</label><input value={homeHeroForm.title} onChange={e => setHomeHeroForm(f => ({ ...f, title: e.target.value }))} placeholder="Big headline" style={inp} /></div>
+                      </div>
+                      <div><label style={lbl}>Subtitle</label><input value={homeHeroForm.subtitle} onChange={e => setHomeHeroForm(f => ({ ...f, subtitle: e.target.value }))} placeholder="One line of supporting text" style={inp} /></div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                        <div>
+                          <label style={lbl}>Button links to</label>
+                          <select value={homeHeroForm.cta_type} onChange={e => setHomeHeroForm(f => ({ ...f, cta_type: e.target.value, cta_value: "" }))} style={{ ...inp, cursor: "pointer" }}>
+                            <option value="none">No button</option>
+                            <option value="movie">A movie</option>
+                            <option value="show">A series</option>
+                            <option value="channel">A live channel</option>
+                            <option value="podcast">A podcast</option>
+                            <option value="tab">A section (tab)</option>
+                            <option value="url">External URL</option>
+                          </select>
+                        </div>
+                        {homeHeroForm.cta_type !== "none" && (
+                          <div><label style={lbl}>Button label</label><input value={homeHeroForm.cta_label} onChange={e => setHomeHeroForm(f => ({ ...f, cta_label: e.target.value }))} placeholder="Watch now" style={inp} /></div>
+                        )}
+                      </div>
+                      {homeHeroForm.cta_type !== "none" && (
+                        <div>
+                          <label style={lbl}>Button target</label>
+                          {homeHeroForm.cta_type === "url" ? (
+                            <input value={homeHeroForm.cta_value} onChange={e => setHomeHeroForm(f => ({ ...f, cta_value: e.target.value }))} placeholder="https://…" style={inp} />
+                          ) : homeHeroForm.cta_type === "tab" ? (
+                            <select value={homeHeroForm.cta_value} onChange={e => setHomeHeroForm(f => ({ ...f, cta_value: e.target.value }))} style={{ ...inp, cursor: "pointer" }}>
+                              <option value="">Choose…</option>
+                              <option value="Home">Home</option>
+                              <option value="Movies">Movies</option>
+                              <option value="Series">Series</option>
+                              <option value="Streams">Live TV</option>
+                              <option value="Podcasts">Podcasts</option>
+                            </select>
+                          ) : (
+                            <select value={homeHeroForm.cta_value} onChange={e => setHomeHeroForm(f => ({ ...f, cta_value: e.target.value }))} style={{ ...inp, cursor: "pointer" }}>
+                              <option value="">Choose…</option>
+                              {(list || []).map(item => <option key={item.id} value={item.id}>{item.title || item.name}</option>)}
+                            </select>
+                          )}
+                        </div>
+                      )}
+                      <button onClick={saveHomeHero} disabled={homeHeroSaving} style={{ alignSelf: "flex-start", background: "#4f46e5", border: "none", borderRadius: 8, padding: "11px 22px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: homeHeroSaving ? "not-allowed" : "pointer", opacity: homeHeroSaving ? 0.6 : 1 }}>
+                        {homeHeroSaving ? "Saving…" : "Save Home Hero"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Header row with Add button */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>

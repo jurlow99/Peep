@@ -111,6 +111,32 @@ function LiveRow({ title, channels = [], streams = [], nowByChannel = {}, onChan
   );
 }
 
+// Admin-composed promo hero for the home screen (image/video + text + CTA to anything).
+function CustomHero({ hero, isMobile, onCta }) {
+  return (
+    <div style={{ position: "relative", width: "100%", height: isMobile ? "72vh" : "82vh", minHeight: 420, overflow: "hidden", background: "#0a0a0a" }}>
+      {hero.image_url && <img src={hero.image_url} alt="" onError={e => { e.target.style.display = "none"; }}
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 20%" }} />}
+      {hero.video_url && <video src={hero.video_url} autoPlay muted loop playsInline
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />}
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, #0a0a0a 0%, rgba(10,10,10,0.25) 45%, transparent 78%)" }} />
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, rgba(10,10,10,0.85) 0%, rgba(10,10,10,0.3) 42%, transparent 72%)" }} />
+      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: isMobile ? "0 20px 40px" : "0 64px 76px", maxWidth: 760 }}>
+        {hero.badge && (
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "#facc15", borderRadius: 100, padding: "5px 14px", marginBottom: 16 }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: "#0a0a0a", letterSpacing: 1, textTransform: "uppercase" }}>{hero.badge}</span>
+          </div>
+        )}
+        {hero.title && <h1 style={{ margin: "0 0 14px", fontSize: isMobile ? "clamp(32px,9vw,48px)" : "clamp(44px,5.5vw,82px)", fontWeight: 900, color: "#fff", lineHeight: 1.02, letterSpacing: "-0.02em", textShadow: "0 2px 24px rgba(0,0,0,0.5)" }}>{hero.title}</h1>}
+        {hero.subtitle && <p style={{ margin: "0 0 24px", fontSize: isMobile ? 14 : 17, color: "#d5d5d5", lineHeight: 1.6, maxWidth: 560 }}>{hero.subtitle}</p>}
+        {hero.cta_type && hero.cta_type !== "none" && hero.cta_label && (
+          <button onClick={onCta} style={{ background: "#facc15", border: "none", borderRadius: 10, padding: isMobile ? "12px 26px" : "14px 34px", color: "#0a0a0a", fontSize: isMobile ? 15 : 16, fontWeight: 800, cursor: "pointer", boxShadow: "0 6px 24px rgba(250,204,21,0.25)" }}>{hero.cta_label}</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, userName, onGoLive, onExitStudio, studioContent, flags = {}, isPremiumUser = false, isStreamer = false }) {
   const [videos, setVideos] = useState([]);
   const [shows, setShows] = useState([]);
@@ -122,6 +148,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
   const [liveStreams, setLiveStreams] = useState([]);
   const [epgEntries, setEpgEntries] = useState([]);
   const [channels, setChannels] = useState([]);
+  const [homeHero, setHomeHero] = useState(null); // admin custom promo hero (from app_settings)
   const [loading, setLoading] = useState(true);
   const [scrolled, setScrolled] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -175,7 +202,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
   async function fetchAll() {
     const epgWindowStart = new Date(Date.now() - 60 * 60 * 1000);
     const epgWindowEnd = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    const [videosRes, showsRes, carouselsRes, podcastsRes, liveRes, epgRes, channelsRes] = await Promise.all([
+    const [videosRes, showsRes, carouselsRes, podcastsRes, liveRes, epgRes, channelsRes, heroRes] = await Promise.all([
       supabase.from("videos").select(contentSelect.videosBrowse).order("id", { ascending: true }),
       supabase.from("shows").select("*").order("id", { ascending: true }),
       supabase.from("carousels").select("*").eq("enabled", true).order("position", { ascending: true }),
@@ -183,7 +210,9 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
       supabase.from("live_streams").select("*").or("is_live.eq.true,listed.eq.true").order("id", { ascending: true }),
       supabase.from("epg_entries").select("*").gte("end_time", epgWindowStart.toISOString()).lte("start_time", epgWindowEnd.toISOString()).order("start_time", { ascending: true }),
       supabase.from("channels").select("*").eq("is_active", true).order("sort_order"),
+      supabase.from("app_settings").select("value").eq("key", "home_hero").maybeSingle(),
     ]);
+    try { setHomeHero(heroRes?.data?.value ? JSON.parse(heroRes.data.value) : null); } catch { setHomeHero(null); }
     if (videosRes.data) setVideos(videosRes.data);
     if (showsRes.data) setShows(showsRes.data);
     if (carouselsRes.data) setCarousels(carouselsRes.data);
@@ -452,7 +481,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
             position: "fixed", top: 0, left: 0, bottom: 0, zIndex: 200,
             width: SB_W,
             background: "#0a0a0a",
-            borderRight: "1px solid rgba(255,255,255,0.05)",
+            boxShadow: "2px 0 20px rgba(0,0,0,0.5)",
             display: "flex", flexDirection: "column",
             transition: "width 0.2s ease",
             overflow: "hidden",
@@ -551,9 +580,10 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
           position: "fixed", top: 0, left: isMobile ? 0 : SB_W, right: 0, zIndex: 100, height: 58,
           display: "flex", alignItems: "center", justifyContent: "space-between",
           paddingLeft: isMobile ? 16 : 24, paddingRight: isMobile ? 16 : 24,
-          background: "rgba(10,10,10,0.96)",
-          backdropFilter: "blur(12px)",
-          borderBottom: "1px solid rgba(255,255,255,0.05)",
+          background: scrolled ? "rgba(10,10,10,0.96)" : "transparent",
+          backdropFilter: scrolled ? "blur(12px)" : "none",
+          borderBottom: scrolled ? "1px solid rgba(255,255,255,0.06)" : "1px solid transparent",
+          transition: "background 0.25s ease, backdrop-filter 0.25s ease, border-color 0.25s ease",
         }}>
           {/* Mobile logo */}
           {isMobile && (
@@ -684,6 +714,16 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
       {!studioContent && activeNav === "Home" && (
         loading ? (
           <div style={{ height: "85vh", display: "flex", alignItems: "center", justifyContent: "center" }}><Spinner /></div>
+        ) : homeHero?.enabled ? (
+          <CustomHero hero={homeHero} isMobile={isMobile} onCta={() => {
+            const { cta_type, cta_value } = homeHero;
+            if (cta_type === "url" && cta_value) { window.open(cta_value, "_blank", "noopener"); return; }
+            if (cta_type === "tab" && cta_value) { if (cta_value === "Streams" && !user) { onAuthOpen?.(); return; } onExitStudio?.(); setActiveNav(cta_value); window.scrollTo({ top: 0 }); return; }
+            if (cta_type === "movie") { const v = videos.find(x => String(x.id) === String(cta_value)); if (v) onPlay?.({ ...v, _type: "movie" }); return; }
+            if (cta_type === "show") { const s = shows.find(x => String(x.id) === String(cta_value)); if (s) onShowSelect?.({ ...s, _type: "show" }); return; }
+            if (cta_type === "channel") { const c = channels.find(x => String(x.id) === String(cta_value)); if (c) onChannelPlay?.(c); return; }
+            if (cta_type === "podcast") { const p = podcasts.find(x => String(x.id) === String(cta_value)); if (p) onPodcastSelect?.(p); return; }
+          }} />
         ) : featured ? (
           <HeroBanner video={featured} onPlay={featuredIsShow ? onShowSelect : onPlay} isShow={featuredIsShow} myList={myList} onToggleList={onToggleList} categoryRank={featuredCategoryRank} />
         ) : (
