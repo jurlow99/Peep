@@ -91,6 +91,37 @@ export default function FeedsPanel({ showToast }) {
     setBusyId(null);
   }
 
+  async function testSource(feed) {
+    setBusyId(feed.id);
+    try {
+      const r = await edgeCall("relay-control", { action: "test", feed_id: feed.id });
+      if (r.status === "CONNECTED") {
+        showToast(`Connected · ${r.video || "?"} ${r.width || "?"}×${r.height || "?"}${r.fps ? " " + r.fps + "fps" : ""} · ${r.audio || "no audio"}${r.bitrate_kbps ? " · " + r.bitrate_kbps + "kbps" : ""}`);
+      } else {
+        showToast(`Test: ${r.status}${r.detail ? " — " + r.detail : ""}`, "error");
+      }
+      await load();
+    } catch (e) { showToast("Test failed: " + e.message, "error"); }
+    setBusyId(null);
+  }
+
+  async function refreshStatus(feed) {
+    setBusyId(feed.id);
+    try {
+      await edgeCall("cf-live-input", { action: "status", feed_id: feed.id });
+      await edgeCall("relay-control", { action: "status", feed_id: feed.id }).catch(() => {});
+      showToast("Status refreshed"); await load();
+    } catch (e) { showToast(e.message, "error"); }
+    setBusyId(null);
+  }
+
+  async function checkRelayServer() {
+    try {
+      const h = await edgeCall("relay-control", { action: "health" });
+      showToast(`Relay ONLINE · FFmpeg ${h.ffmpeg ? "ok" : "missing"} · ${h.activeRelays} active · CPU ${h.cpuLoadPct}% · Mem ${h.memUsedPct}%`);
+    } catch (e) { showToast("Relay unreachable: " + e.message, "error"); }
+  }
+
   async function del(feed) {
     if (!confirm(`Delete feed "${feed.name}"? This also removes its Cloudflare Live Input.`)) return;
     setBusyId(feed.id);
@@ -113,7 +144,10 @@ export default function FeedsPanel({ showToast }) {
           <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Live Feeds ({feeds.length})</h2>
           <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Incoming broadcast sources (SRT). Relayed by the Pi → Cloudflare → your channels.</p>
         </div>
-        <button onClick={openAdd} style={{ background: "#ef4444", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Feed</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={checkRelayServer} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 16px", color: "#374151", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Check relay server</button>
+          <button onClick={openAdd} style={{ background: "#ef4444", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Feed</button>
+        </div>
       </div>
 
       {loading ? (
@@ -145,10 +179,18 @@ export default function FeedsPanel({ showToast }) {
               </div>
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-              <button disabled={busy} onClick={() => showToast("Source testing runs on the Pi relay — coming in a later phase")} style={btn("#f8fafc", "#374151", "#e2e8f0")}>Test Source</button>
-              {!feed.cloudflare_live_input_uid
-                ? <button disabled={busy} onClick={() => act(feed, "cf-live-input", { action: "create", feed_id: feed.id }, "Cloudflare input created")} style={btn("rgba(59,130,246,0.08)", "#2563eb", "rgba(59,130,246,0.25)")}>{busy ? "…" : "Create Cloudflare Input"}</button>
-                : <button disabled={busy} onClick={() => act(feed, "cf-live-input", { action: "status", feed_id: feed.id }, "Status refreshed")} style={btn("rgba(59,130,246,0.08)", "#2563eb", "rgba(59,130,246,0.25)")}>{busy ? "…" : "Refresh Status"}</button>}
+              <button disabled={busy} onClick={() => testSource(feed)} style={btn("#f8fafc", "#374151", "#e2e8f0")}>{busy ? "…" : "Test Source"}</button>
+              {!feed.cloudflare_live_input_uid ? (
+                <button disabled={busy} onClick={() => act(feed, "cf-live-input", { action: "create", feed_id: feed.id }, "Cloudflare input created")} style={btn("rgba(59,130,246,0.08)", "#2563eb", "rgba(59,130,246,0.25)")}>{busy ? "…" : "Create Cloudflare Input"}</button>
+              ) : (
+                <>
+                  {feed.relay_status === "running"
+                    ? <button disabled={busy} onClick={() => act(feed, "relay-control", { action: "stop", feed_id: feed.id }, "Relay stopped")} style={btn("rgba(239,68,68,0.08)", "#dc2626", "rgba(239,68,68,0.25)")}>{busy ? "…" : "Stop"}</button>
+                    : <button disabled={busy} onClick={() => act(feed, "relay-control", { action: "start", feed_id: feed.id }, "Relay starting…")} style={btn("rgba(34,197,94,0.1)", "#15803d", "rgba(34,197,94,0.3)")}>{busy ? "…" : "Start"}</button>}
+                  <button disabled={busy} onClick={() => act(feed, "relay-control", { action: "restart", feed_id: feed.id }, "Relay restarting…")} style={btn("#f8fafc", "#374151", "#e2e8f0")}>Restart</button>
+                  <button disabled={busy} onClick={() => refreshStatus(feed)} style={btn("rgba(59,130,246,0.08)", "#2563eb", "rgba(59,130,246,0.25)")}>{busy ? "…" : "Refresh Status"}</button>
+                </>
+              )}
               <button disabled={busy} onClick={() => openEdit(feed)} style={btn("#f1f5f9", "#374151", "#e2e8f0")}>Edit</button>
               <button disabled={busy} onClick={() => del(feed)} style={btn("rgba(239,68,68,0.07)", "#dc2626", "rgba(239,68,68,0.2)")}>Delete</button>
             </div>
