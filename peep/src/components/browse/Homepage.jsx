@@ -15,6 +15,7 @@ import {
 } from "./BrowseWidgets";
 import { Footer } from "./Footer";
 import { Spinner } from "../ui/Spinner";
+import { Wordmark, EyesMark } from "../Wordmark";
 import { LiveTVPage } from "../../pages/LiveTV";
 
 // Curation regions: the live domain ALWAYS shows Production. Non-prod hosts
@@ -488,7 +489,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
           }}>
           {/* Logo area */}
           <div style={{ height: 58, display: "flex", alignItems: "center", paddingLeft: sbExpanded ? 20 : 0, justifyContent: sbExpanded ? "flex-start" : "center", flexShrink: 0, cursor: "pointer" }} onClick={() => { onExitStudio?.(); setActiveNav("Home"); }}>
-            <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 24, color: "#facc15", whiteSpace: "nowrap" }}>peep.</span>
+            {sbExpanded ? <Wordmark height={24} /> : <EyesMark height={30} />}
           </div>
 
           {/* Nav items */}
@@ -587,7 +588,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
         }}>
           {/* Mobile logo */}
           {isMobile && (
-            <span onClick={() => { onExitStudio?.(); setActiveNav("Home"); }} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 26, color: "#facc15", cursor: "pointer", userSelect: "none" }}>peep.</span>
+            <Wordmark height={26} onClick={() => { onExitStudio?.(); setActiveNav("Home"); }} />
           )}
           {!isMobile && <div />}
 

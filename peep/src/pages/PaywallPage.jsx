@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Wordmark } from "../components/Wordmark";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { supabase } from "../supabase";
@@ -152,7 +153,7 @@ export function PaywallPage({ user, onSubscribed, onSignOut, onBack }) {
           </button>
         )}
         <div style={{ textAlign: "center", marginBottom: 40 }}>
-          <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 42, color: "#facc15" }}>peep.</span>
+          <Wordmark height={44} />
         </div>
 
         <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 20, padding: "40px 36px" }}>

@@ -24,6 +24,7 @@ import { useIsMobile } from "./hooks/useIsMobile";
 import { rankRelated } from "./lib/recommendations";
 import { TrailerModal } from "./lib/playerUtils";
 import { Spinner } from "./components/ui/Spinner";
+import { Wordmark, LogoHorizontal } from "./components/Wordmark";
 import { loadFlags, getFlags } from "./lib/flags";
 import { contentSelect } from "./lib/contentQueries";
 import { contentKey } from "./lib/contentIds";
@@ -190,7 +191,7 @@ export default function App() {
 
   if (maintenanceMode) return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", gap: 16 }}>
-      <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 48, color: "#facc15" }}>peep.</span>
+      <Wordmark height={52} />
       <p style={{ color: "#fff", fontSize: 22, fontWeight: 600, margin: 0 }}>We'll be right back.</p>
       <p style={{ color: "#555", fontSize: 14, margin: 0 }}>We're doing some maintenance. Check back shortly.</p>
     </div>
@@ -198,7 +199,7 @@ export default function App() {
 
   if (!authChecked) return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 42, color: "#facc15", opacity: 0.8 }}>peep.</span>
+      <Wordmark height={44} style={{ opacity: 0.8 }} />
     </div>
   );
   if (passwordRecovery) return <PasswordResetPage isInvite={passwordRecovery === "invite"} onDone={() => { setPasswordRecovery(false); window.location.href = "/"; }} />;
@@ -341,7 +342,7 @@ export default function App() {
             <div style={{ position: "absolute", top: 0, left: "15%", right: "15%", height: 1, background: "linear-gradient(90deg, transparent, rgba(250,204,21,0.6), transparent)" }} />
 
             <div style={{ position: "relative" }}>
-              <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 46, color: "#facc15", display: "block", marginBottom: 16, letterSpacing: "-0.01em", textShadow: "0 0 32px rgba(250,204,21,0.35)" }}>peep.</span>
+              <LogoHorizontal height={54} style={{ margin: "0 auto 16px", filter: "drop-shadow(0 0 28px rgba(250,204,21,0.28))" }} />
 
               <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "rgba(250,204,21,0.13)", border: "1px solid rgba(250,204,21,0.32)", borderRadius: 100, padding: "6px 16px", marginBottom: 24 }}>
                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#facc15", display: "inline-block", boxShadow: "0 0 8px #facc15" }} />
@@ -481,7 +482,7 @@ function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
               Back
             </button>
-            <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
+            <Wordmark height={22} onClick={onGoHome} />
           </div>
           {(() => {
             const av = avatarForId(userAvatarId);
@@ -747,7 +748,7 @@ function PodcastDetail({ podcast, onBack, onGoHome, onPlay, onProfileOpen, userA
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
               Back
             </button>
-            <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
+            <Wordmark height={22} onClick={onGoHome} />
           </div>
           {(() => {
             const av = avatarForId(userAvatarId);
@@ -933,7 +934,7 @@ function PodcastPlayerView({ episode, podcast, onBack, onGoHome, onSelect, onPro
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
               Back
             </button>
-            <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
+            <Wordmark height={22} onClick={onGoHome} />
           </div>
           {(() => {
             const av = avatarForId(userAvatarId);
@@ -1082,7 +1083,7 @@ function ProfilePage({ user, userAvatarId, userName, onBack, onGoHome, onNameCha
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
           Back
         </button>
-        <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
+        <Wordmark height={22} onClick={onGoHome} />
       </nav>
 
       {/* Profile header */}
@@ -1245,7 +1246,7 @@ function CreatorPortalPage({ user, onBack, onGoHome }) {
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
           Back
         </button>
-        <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer", color: "#facc15" }}>peep.</span>
+        <Wordmark height={22} onClick={onGoHome} />
         <span style={{ fontSize: 12, color: "#444", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>Creator Portal</span>
       </nav>
 

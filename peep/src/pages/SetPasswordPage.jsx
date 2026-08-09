@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Wordmark } from "../components/Wordmark";
 import { supabase } from "../supabase";
 
 const YELLOW = "#facc15";
@@ -93,7 +94,7 @@ export function SetPasswordPage() {
       <div style={{ width: "min(420px, 100%)" }}>
         <div style={{ textAlign: "center", marginBottom: 36 }}>
           <a href="/" style={{ textDecoration: "none" }}>
-            <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 36, color: YELLOW }}>peep.</span>
+            <Wordmark height={38} />
           </a>
         </div>
 

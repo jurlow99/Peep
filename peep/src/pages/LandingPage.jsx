@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { Wordmark, LogoHorizontal } from "../components/Wordmark";
 
 const YELLOW = "#facc15";
 const PAD = "clamp(20px, 6vw, 80px)";
@@ -89,7 +90,7 @@ export function LandingPage({ onBrowse }) {
 
       {/* Nav */}
       <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: "max(env(safe-area-inset-top), 44px)", paddingBottom: 14, paddingLeft: PAD, paddingRight: PAD, background: "rgba(10,10,10,0.88)", backdropFilter: "blur(18px)", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-        <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 26, color: YELLOW, animation: "flicker 12s ease-in-out infinite" }}>peep.</span>
+        <LogoHorizontal height={34} style={{ animation: "flicker 12s ease-in-out infinite" }} />
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <a href="/signin" className="lp-nav-link" style={{ color: "#555", fontSize: 13, fontWeight: 500, textDecoration: "none", padding: "8px 12px", transition: "color 0.15s", whiteSpace: "nowrap" }}>Sign In</a>
           <button onClick={onBrowse} className="lp-cta-btn" style={{ background: YELLOW, color: "#0a0a0a", fontSize: 13, fontWeight: 700, border: "none", padding: "9px 16px", borderRadius: 8, transition: "transform 0.2s, box-shadow 0.2s", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>Watch Free</button>
@@ -257,7 +258,7 @@ export function LandingPage({ onBrowse }) {
       {/* Footer */}
       <footer style={{ borderTop: "1px solid #111", padding: `36px ${PAD}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <div>
-          <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 20, color: YELLOW, display: "block", marginBottom: 4 }}>peep.</span>
+          <Wordmark height={22} style={{ marginBottom: 8 }} />
           <p style={{ margin: 0, fontSize: 12, color: "#2a2a2a" }}>Movies, series, live TV &amp; podcasts. Free to watch.</p>
         </div>
         <p style={{ margin: 0, fontSize: 12, color: "#2a2a2a" }}>© {new Date().getFullYear()} Peep. All rights reserved.</p>

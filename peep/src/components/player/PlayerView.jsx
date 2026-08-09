@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import Hls from "hls.js";
+import { Wordmark } from "../Wordmark";
 import { supabase } from "../../supabase";
 import { avatarForId } from "../ProfileScreen";
 import { PAD, SAFE_TOP } from "../../lib/theme";
@@ -686,7 +687,7 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
             Back
           </button>
-          <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
+          <Wordmark height={22} onClick={onGoHome} />
         </div>
         {(() => {
           const av = avatarForId(userAvatarId);

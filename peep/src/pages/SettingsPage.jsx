@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { Wordmark } from "../components/Wordmark";
 import { supabase } from "../supabase";
 import { SUPABASE_URL } from "../lib/config";
 import {
@@ -285,7 +286,7 @@ export function SettingsPage({ user, isOwner, isStreamer = false, onApplyToStrea
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
           Back
         </button>
-        <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer", color: YELLOW }}>peep.</span>
+        <Wordmark height={22} onClick={onGoHome} />
         <span style={{ fontSize: 15, fontWeight: 600, color: "#555", marginLeft: 4 }}>Settings</span>
       </nav>
 

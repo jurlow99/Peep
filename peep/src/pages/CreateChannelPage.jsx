@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Wordmark } from "../components/Wordmark";
 import { supabase } from "../supabase";
 
 const BG = "#0a0a0a";
@@ -81,7 +82,7 @@ export function CreateChannelPage() {
 
         <div style={{ textAlign: "center", marginBottom: 40 }}>
           <a href="/" style={{ textDecoration: "none" }}>
-            <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 42, color: YELLOW }}>peep.</span>
+            <Wordmark height={44} />
           </a>
         </div>
 

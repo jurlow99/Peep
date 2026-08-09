@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 650" width="800" height="650">
+
+<rect x="135.0" y="85.0" width="530" height="270" rx="54" fill="#000000" stroke="#FFD600" stroke-width="30"/>
+<g>
+  <circle cx="355.2" cy="298" r="58" fill="#FFFFFF"/>
+  <circle cx="467.2" cy="298" r="58" fill="#FFFFFF"/>
+  <circle cx="370.2" cy="300" r="30" fill="#000000"/>
+  <circle cx="482.2" cy="300" r="30" fill="#000000"/>
+  <circle cx="359.2" cy="288" r="11" fill="#FFD600"/>
+  <circle cx="471.2" cy="288" r="11" fill="#FFD600"/>
+  <circle cx="377.2" cy="285" r="8" fill="#FFFFFF"/>
+  <circle cx="489.2" cy="285" r="8" fill="#FFFFFF"/>
+</g><text x="400" y="565" text-anchor="middle" fill="#FFFFFF"
+font-family="Arial Rounded MT Bold, Arial, Helvetica, sans-serif"
+font-size="190" font-weight="700" letter-spacing="-10">peep</text>
+</svg>
