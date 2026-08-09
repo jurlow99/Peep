@@ -29,6 +29,10 @@ class ErrorBoundary extends Component {
 
 const path = window.location.pathname
 
+// Admin lives on its own subdomain (admin.watchpeep.tv). The /admin path is kept
+// as a temporary fallback until the subdomain is confirmed live, then removed.
+const isAdminHost = window.location.hostname === 'admin.watchpeep.tv'
+
 // Legacy streamer-only routes → redirect to unified flow
 if (path === '/streamer-signin' || path === '/apply-to-stream' || path === '/create-channel') {
   window.location.replace('/signin?redirect=/streamer');
@@ -37,7 +41,7 @@ if (path === '/streamer-signin' || path === '/apply-to-stream' || path === '/cre
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ErrorBoundary>
-      {path === '/admin'          ? <AdminPage />         :
+      {isAdminHost || path === '/admin' ? <AdminPage />    :
        path === '/signup'         ? <SignupPage />        :
        path === '/signin'         ? <SigninPage />        :
        path === '/set-password'   ? <SetPasswordPage />   :
