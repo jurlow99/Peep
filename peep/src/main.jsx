@@ -28,10 +28,15 @@ class ErrorBoundary extends Component {
 }
 
 const path = window.location.pathname
+const host = window.location.hostname
+const isLocal = host === 'localhost' || host === '127.0.0.1'
 
-// Admin is served ONLY on its own subdomain (admin.watchpeep.tv). The public
-// domain has no admin route — watchpeep.tv/admin leads to the normal site.
-const isAdminHost = window.location.hostname === 'admin.watchpeep.tv'
+// Admin: production = admin.watchpeep.tv subdomain only; local dev = /admin path
+// (localhost can't be the subdomain). Public watchpeep.tv/admin leads to the site.
+const isAdminHost = host === 'admin.watchpeep.tv' || (isLocal && path === '/admin')
+
+// Distinguish browser tabs by environment: peep / local peep / admin / local admin
+document.title = (isLocal ? 'local ' : '') + (isAdminHost ? 'admin' : 'peep')
 
 // Legacy streamer-only routes → redirect to unified flow
 if (path === '/streamer-signin' || path === '/apply-to-stream' || path === '/create-channel') {
