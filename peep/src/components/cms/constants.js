@@ -67,6 +67,7 @@ export const EMPTY_CHANNEL = {
   is_premium: false,
   tile_size: "normal",
   is_live_hero: false,
+  live_feed_id: null,
 };
 
 export const EMPTY_LIVE_STREAM = {
