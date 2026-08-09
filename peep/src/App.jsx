@@ -162,10 +162,24 @@ export default function App() {
   const { goHome: navigateHome } = useAppNavigation({ page, setPage, selectedVideo, selectedShow, selectedPodcast, onClearSelection: clearSelection });
   const goHome = () => { navigateHome(); clearSelection(); };
 
-  // Resolve a channel's HLS playback URL. HLS-pull channels store it directly;
-  // RTMP/SRT (push) channels only have a Cloudflare live-input UID, so build the
-  // manifest URL from stream_uid as a fallback.
+  // Live Feed HLS map (from the public_live_feeds view) — lets a channel play a
+  // linked feed's Cloudflare stream without exposing any source details.
+  const [feedHlsMap, setFeedHlsMap] = useState({});
+  useEffect(() => {
+    supabase.from("public_live_feeds").select("id, cloudflare_hls_url, playback_status")
+      .then(({ data }) => {
+        const m = {};
+        (data || []).forEach(f => { if (f.cloudflare_hls_url) m[f.id] = f.cloudflare_hls_url; });
+        setFeedHlsMap(m);
+      });
+  }, []);
+
+  // Resolve a channel's HLS playback URL. Priority:
+  //   1. linked Live Feed -> its Cloudflare HLS
+  //   2. direct hls_url (HLS-pull channels)
+  //   3. Cloudflare live-input UID (RTMP/SRT push channels)
   const channelPlaybackUrl = ch => {
+    if (ch.live_feed_id && feedHlsMap[ch.live_feed_id]) return feedHlsMap[ch.live_feed_id];
     if (ch.hls_url) return ch.hls_url;
     if (ch.stream_uid) return `https://customer-x9w8t8qxjaf49jqb.cloudflarestream.com/${ch.stream_uid}/manifest/video.m3u8`;
     return "";

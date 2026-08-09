@@ -12,6 +12,7 @@ import {
   EMPTY_PODCAST_EPISODE,
 } from "./cms/constants";
 import { FEATURE_FLAGS, loadFlags, setFlag } from "../lib/flags";
+import FeedsPanel from "./cms/FeedsPanel";
 
 const EMPTY_AD = {
   name: "",
@@ -50,6 +51,7 @@ function PremiumToggleButton({ on, onToggle }) {
 // Top-level admin categories. Each maps to existing internal render state (tab + sub-tab),
 // so the underlying feature blocks stay untouched — only the navigation is reorganized.
 const ADMIN_NAV = [
+  { key: "feeds", label: "Feeds", color: "#ef4444", target: { tab: "live", liveSubTab: "feeds" } },
   { key: "channels", label: "Channels", color: "#ef4444", target: { tab: "live", liveSubTab: "channels" } },
   { key: "epg", label: "EPG", color: "#f59e0b", target: { tab: "live", liveSubTab: "channels" } },
   { key: "shows", label: "Shows", color: "#3b82f6", sections: [
@@ -188,6 +190,7 @@ export function CMS({ onExit, currentUser }) {
   const [editingLiveId, setEditingLiveId] = useState(null);
   const [liveForm, setLiveForm] = useState(EMPTY_LIVE_STREAM);
   const [channelList, setChannelList] = useState([]);
+  const [channelFeeds, setChannelFeeds] = useState([]); // live_feeds for the "Linked Feed" dropdown
   const [channelLoading, setChannelLoading] = useState(false);
   const [editingChannelId, setEditingChannelId] = useState(null);
   const [channelForm, setChannelForm] = useState(EMPTY_CHANNEL);
@@ -2672,8 +2675,12 @@ export function CMS({ onExit, currentUser }) {
   // ──── Channels ────
   async function loadChannels() {
     setChannelLoading(true);
-    const { data } = await supabase.from("channels").select("*").order("sort_order");
+    const [{ data }, feedsRes] = await Promise.all([
+      supabase.from("channels").select("*").order("sort_order"),
+      supabase.from("live_feeds").select("id, name, cloudflare_hls_url, playback_status, relay_status").order("name"),
+    ]);
     setChannelList(data || []);
+    setChannelFeeds(feedsRes.data || []);
     setChannelLoading(false);
   }
 
@@ -4242,6 +4249,9 @@ export function CMS({ onExit, currentUser }) {
             </div>
             )}
 
+            {/* Feeds sub-tab */}
+            {liveSubTab === "feeds" && <FeedsPanel showToast={showToast} />}
+
             {/* Channels sub-tab */}
             {liveSubTab === "channels" && (
               <div>
@@ -4307,7 +4317,7 @@ export function CMS({ onExit, currentUser }) {
                         style={{ background: selectedChannelForEpg?.id === ch.id ? "rgba(79,70,229,0.15)" : "#eef2ff", border: `1px solid ${selectedChannelForEpg?.id === ch.id ? "#4f46e5" : "#c7d2fe"}`, borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: selectedChannelForEpg?.id === ch.id ? 700 : 600, color: "#4f46e5", cursor: "pointer" }}>
                         {selectedChannelForEpg?.id === ch.id ? "Close" : "Schedule"}
                       </button>
-                      <button onClick={() => { setChannelForm({ name: ch.name, slug: ch.slug || "", description: ch.description || "", logo_url: ch.logo_url || "", hero_url: ch.hero_url || "", category: ch.category || "general", ingest_type: ch.ingest_type || "hls", hls_url: ch.hls_url || "", stream_uid: ch.stream_uid || "", is_active: ch.is_active ?? true, sort_order: ch.sort_order ?? 0, is_premium: ch.is_premium ?? false, tile_size: ch.tile_size || "normal", is_live_hero: ch.is_live_hero ?? false }); setEditingChannelId(ch.id); setDrawerOpen(true); }}
+                      <button onClick={() => { setChannelForm({ name: ch.name, slug: ch.slug || "", description: ch.description || "", logo_url: ch.logo_url || "", hero_url: ch.hero_url || "", category: ch.category || "general", ingest_type: ch.ingest_type || "hls", hls_url: ch.hls_url || "", stream_uid: ch.stream_uid || "", is_active: ch.is_active ?? true, sort_order: ch.sort_order ?? 0, is_premium: ch.is_premium ?? false, tile_size: ch.tile_size || "normal", is_live_hero: ch.is_live_hero ?? false, live_feed_id: ch.live_feed_id ?? null }); setEditingChannelId(ch.id); setDrawerOpen(true); }}
                         style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, color: "#374151", cursor: "pointer" }}>
                         Edit
                       </button>
@@ -7602,8 +7612,17 @@ export function CMS({ onExit, currentUser }) {
                       </label>
                     </div>
 
-                    <p style={{ margin: "0 0 10px", fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 1 }}>Ingest / Playback</p>
+                    <p style={{ margin: "0 0 10px", fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 1 }}>Source</p>
                     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Linked Live Feed</label>
+                        <select value={channelForm.live_feed_id || ""} onChange={e => setChannelForm(f => ({ ...f, live_feed_id: e.target.value || null }))}
+                          style={{ width: "100%", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", cursor: "pointer" }}>
+                          <option value="">None — use the playback URL below</option>
+                          {channelFeeds.map(fd => <option key={fd.id} value={fd.id}>{fd.name}{fd.playback_status === "available" ? " · live" : ""}</option>)}
+                        </select>
+                        <p style={{ margin: "6px 0 0", fontSize: 11, color: "#9ca3af" }}>When a feed is linked, this channel plays the feed's Cloudflare stream — the fields below are ignored.</p>
+                      </div>
                       <div>
                         <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Protocol</label>
                         <div style={{ display: "flex", gap: 6 }}>
