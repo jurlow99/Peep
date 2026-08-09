@@ -12,6 +12,7 @@ import {
   EMPTY_PODCAST_EPISODE,
 } from "./cms/constants";
 import { FEATURE_FLAGS, loadFlags, setFlag } from "../lib/flags";
+import FeedsPanel from "./cms/FeedsPanel";
 
 const EMPTY_AD = {
   name: "",
@@ -50,6 +51,7 @@ function PremiumToggleButton({ on, onToggle }) {
 // Top-level admin categories. Each maps to existing internal render state (tab + sub-tab),
 // so the underlying feature blocks stay untouched — only the navigation is reorganized.
 const ADMIN_NAV = [
+  { key: "feeds", label: "Feeds", color: "#ef4444", target: { tab: "live", liveSubTab: "feeds" } },
   { key: "channels", label: "Channels", color: "#ef4444", target: { tab: "live", liveSubTab: "channels" } },
   { key: "epg", label: "EPG", color: "#f59e0b", target: { tab: "live", liveSubTab: "channels" } },
   { key: "shows", label: "Shows", color: "#3b82f6", sections: [
@@ -4241,6 +4243,9 @@ export function CMS({ onExit, currentUser }) {
               ))}
             </div>
             )}
+
+            {/* Feeds sub-tab */}
+            {liveSubTab === "feeds" && <FeedsPanel showToast={showToast} />}
 
             {/* Channels sub-tab */}
             {liveSubTab === "channels" && (
