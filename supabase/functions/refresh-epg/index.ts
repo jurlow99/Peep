@@ -3,10 +3,12 @@ import { handleCors, jsonResponse } from "../_shared/cors.ts";
 
 // Daily EPG refresh. For every channel whose guide was imported from a URL feed
 // (epg_channel_sources.source_url + xmltv_channel_id), re-fetch the feed and
-// replace that channel's upcoming programs.
+// replace that channel's programs.
 //
-// The actual work runs in the background (EdgeRuntime.waitUntil) and the request
-// returns immediately, so a cron caller with a short HTTP timeout never times out.
+// Feeds are STREAMED + decompressed on the fly and scanned for only the target
+// channels' programmes, so huge aggregate feeds (e.g. epgshare01 US2 is ~70MB /
+// 77k programmes) never get loaded whole into memory. Runs in the background
+// (EdgeRuntime.waitUntil) so a cron caller with a short HTTP timeout is fine.
 
 function clean(s: string | undefined): string {
   if (!s) return "";
@@ -28,39 +30,51 @@ function parseXmltvDate(s: string | undefined): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
-function parseProgrammesByChannel(xml: string): Record<string, any[]> {
+// Stream a (optionally gzipped) XMLTV feed and collect programmes for the given
+// channel ids only. Memory stays bounded no matter how large the feed is.
+async function streamExtract(url: string, ids: string[]): Promise<Record<string, any[]>> {
+  const idSet = new Set(ids);
   const out: Record<string, any[]> = {};
-  const re = /<programme\b([^>]*)>([\s\S]*?)<\/programme>/gi;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(xml)) !== null) {
-    const attrs = m[1], inner = m[2];
-    const channel = (attrs.match(/channel="([^"]+)"/) || [])[1];
-    const start = parseXmltvDate((attrs.match(/start="([^"]+)"/) || [])[1]);
-    const stop = parseXmltvDate((attrs.match(/stop="([^"]+)"/) || [])[1]);
-    if (!channel || !start || !stop) continue;
-    const title = clean((inner.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1]) || "(Untitled)";
-    const desc = clean((inner.match(/<desc[^>]*>([\s\S]*?)<\/desc>/i) || [])[1]);
-    const icon = (inner.match(/<icon[^>]*src="([^"]+)"/i) || [])[1] || "";
-    (out[channel] ||= []).push({
-      start_time: start.toISOString(),
-      end_time: stop.toISOString(),
-      title,
-      description: desc || null,
-      thumbnail: icon || null,
-    });
+  const seen: Record<string, Set<string>> = {};
+  for (const id of ids) { out[id] = []; seen[id] = new Set(); }
+
+  const res = await fetch(url, { headers: { "User-Agent": "Peep-EPG-Refresh/1.0" } });
+  if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+  let stream: ReadableStream<Uint8Array> = res.body;
+  if (url.endsWith(".gz")) stream = stream.pipeThrough(new DecompressionStream("gzip"));
+  const reader = stream.pipeThrough(new TextDecoderStream()).getReader();
+
+  const progRe = /<programme\b([^>]*)>([\s\S]*?)<\/programme>/g;
+  let buf = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (value) buf += value;
+
+    progRe.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    let lastEnd = 0;
+    while ((m = progRe.exec(buf)) !== null) {
+      lastEnd = progRe.lastIndex;
+      const attrs = m[1], inner = m[2];
+      const ch = (attrs.match(/channel="([^"]+)"/) || [])[1];
+      if (!ch || !idSet.has(ch)) continue;
+      const start = parseXmltvDate((attrs.match(/start="([^"]+)"/) || [])[1]);
+      const stop = parseXmltvDate((attrs.match(/stop="([^"]+)"/) || [])[1]);
+      if (!start || !stop) continue;
+      const st = start.toISOString();
+      if (seen[ch].has(st)) continue;
+      seen[ch].add(st);
+      const title = clean((inner.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1]) || "(Untitled)";
+      const desc = clean((inner.match(/<desc[^>]*>([\s\S]*?)<\/desc>/i) || [])[1]);
+      const icon = (inner.match(/<icon[^>]*src="([^"]+)"/i) || [])[1] || "";
+      out[ch].push({ start_time: st, end_time: stop.toISOString(), title, description: desc || null, thumbnail: icon || null });
+    }
+
+    if (done) break;
+    if (lastEnd > 0) buf = buf.slice(lastEnd);                 // drop fully-consumed programmes
+    if (buf.length > 4_000_000) buf = buf.slice(-1_000_000);   // safety cap for pathological input
   }
   return out;
-}
-
-async function fetchXml(url: string): Promise<string> {
-  const res = await fetch(url, { headers: { "User-Agent": "Peep-EPG-Refresh/1.0" }, signal: AbortSignal.timeout(25000) });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  let bytes = new Uint8Array(await res.arrayBuffer());
-  if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
-    bytes = new Uint8Array(await new Response(stream).arrayBuffer());
-  }
-  return new TextDecoder().decode(bytes);
 }
 
 async function doRefresh() {
@@ -87,14 +101,14 @@ async function doRefresh() {
   for (const [url, rows] of Object.entries(byUrl)) {
     let byChan: Record<string, any[]>;
     try {
-      byChan = parseProgrammesByChannel(await fetchXml(url));
+      byChan = await streamExtract(url, rows.map(r => r.xmltv_channel_id!));
     } catch (e) {
       failures.push(`${url}: ${e instanceof Error ? e.message : "fetch failed"}`);
       continue;
     }
     for (const row of rows) {
       const progs = byChan[row.xmltv_channel_id!] || [];
-      if (!progs.length) continue;
+      if (!progs.length) { failures.push(`channel ${row.channel_id}: no programmes for ${row.xmltv_channel_id}`); continue; }
       const entries = progs.map(p => ({ channel_id: row.channel_id, ...p }));
       const starts = entries.map(e => e.start_time).sort();
       const ends = entries.map(e => e.end_time).sort();
