@@ -426,6 +426,25 @@ export function CMS({ onExit, currentUser }) {
     setTimeout(() => setToast(null), 3000);
   }
 
+  const [refreshingEpg, setRefreshingEpg] = useState(false);
+  async function refreshEpgNow() {
+    setRefreshingEpg(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/refresh-epg`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
+        body: "{}",
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      showToast("EPG refresh started — guides update in ~30s");
+    } catch (e) {
+      showToast("Refresh failed: " + (e?.message || e), "error");
+    } finally {
+      setRefreshingEpg(false);
+    }
+  }
+
   function closeDrawer() {
     setDrawerOpen(false);
     setDrawerFormType(null);
@@ -4273,6 +4292,10 @@ export function CMS({ onExit, currentUser }) {
                     <button onClick={() => { setXmltvOpen(true); setXmltvParsed(null); setXmltvChannelMap({}); setXmltvError(""); setXmltvImportDone(null); setXmltvUrl(""); setXmltvFileName(""); setXmltvRawText(""); setXmltvRawOpen(false); }}
                       style={{ background: "#eef2ff", border: "1px solid #c7d2fe", borderRadius: 8, padding: "9px 16px", color: "#4f46e5", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                       Import EPG (XMLTV)
+                    </button>
+                    <button onClick={refreshEpgNow} disabled={refreshingEpg} title="Re-fetch guides for channels with an EPG source URL"
+                      style={{ background: "#eef2ff", border: "1px solid #c7d2fe", borderRadius: 8, padding: "9px 16px", color: "#4f46e5", fontSize: 13, fontWeight: 600, cursor: refreshingEpg ? "wait" : "pointer", opacity: refreshingEpg ? 0.6 : 1 }}>
+                      {refreshingEpg ? "Refreshing…" : "↻ Refresh guides"}
                     </button>
                     <button onClick={() => { setM3uOpen(true); setM3uUrl(""); setM3uSourceLabel(""); resetM3UPreview(); }}
                       style={{ background: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: 8, padding: "9px 16px", color: "#059669", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
