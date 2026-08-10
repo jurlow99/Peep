@@ -518,9 +518,14 @@ function FeaturedChannelHero({ channel, epgEntries, onPlay, isMobile }) {
       style={{ position: "relative", borderRadius: 16, overflow: "hidden", cursor: "pointer",
         height: isMobile ? 230 : "clamp(300px, 32vw, 430px)", marginBottom: isMobile ? 10 : 14,
         background: "#0d0d0d", border: "1px solid rgba(239,68,68,0.22)", boxShadow: "0 12px 44px rgba(0,0,0,0.5)" }}>
-      {hasArt
-        ? <img src={art} alt="" onError={() => setImgFailed(true)} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
-        : <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at 35% 40%, #26262b, #141417 55%, #0a0a0c)" }} />}
+      {hasArt ? (
+        <>
+          {/* Blurred fill so the wide hero never letterboxes or crops the subject */}
+          <img src={art} alt="" aria-hidden="true" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "blur(28px) brightness(0.45)", transform: "scale(1.12)" }} />
+          {/* Full art, uncropped, anchored right (left side is reserved for the text overlay) */}
+          <img src={art} alt="" onError={() => setImgFailed(true)} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", objectPosition: isMobile ? "center" : "right center" }} />
+        </>
+      ) : <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at 35% 40%, #26262b, #141417 55%, #0a0a0c)" }} />}
 
       {!hasArt && channel.logo_url && (
         <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", paddingBottom: 90 }}>
