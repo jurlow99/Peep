@@ -3,7 +3,8 @@ import { useLocation } from "react-router-dom";
 import { supabase } from "./supabase";
 import { AuthModal } from "./components/AuthModal";
 import { LandingPage } from "./pages/LandingPage";
-import { ProfileScreen, avatarForId, PRESET_AVATARS } from "./components/ProfileScreen";
+import { ProfileScreen } from "./components/ProfileScreen";
+import { Avatar } from "./components/Avatar";
 import { CreatorDashboard } from "./pages/CreatorDashboard";
 import { LiveTVPage } from "./pages/LiveTV";
 import { StreamerDashboard } from "./pages/StreamerDashboard";
@@ -18,7 +19,6 @@ import { useSubscription, hasActiveSubscription } from "./hooks/useSubscription"
 import { PaywallPage } from "./pages/PaywallPage";
 import { isOwnerEmail } from "./lib/auth";
 import { PAD, CARD_W, SAFE_TOP } from "./lib/theme";
-import { AvatarThumb } from "./pages/settingsHelpers";
 import { useAppNavigation } from "./app/useAppNavigation";
 import { useIsMobile } from "./hooks/useIsMobile";
 import { rankRelated } from "./lib/recommendations";
@@ -81,6 +81,8 @@ export default function App() {
     authChecked,
     userAvatarId,
     setUserAvatarId,
+    userAvatarUrl,
+    setUserAvatarUrl,
     userName,
     setUserName,
     userRole,
@@ -186,7 +188,7 @@ export default function App() {
     return "";
   };
 
-  const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true), onProfileOpen: () => setPage("profile"), userAvatarId, userName, isPremiumUser, onPodcastSelect: pod => { setSelectedPodcast(pod); setPage("podcast"); }, onViewProfile: () => setPage("profile"), onChannelPlay: ch => { if (!user) { setAuthOpen(true); return; } if (isLocked(ch)) { openGate(ch); return; } setSelectedVideo({ id: `ch-${ch.id}`, title: ch.name, url: channelPlaybackUrl(ch), _type: "live", thumbnail: ch.hero_url || ch.logo_url || "", description: ch.description || "" }); setPage("player"); } };
+  const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true), onProfileOpen: () => setPage("profile"), userAvatarId, userAvatarUrl, userName, isPremiumUser, onPodcastSelect: pod => { setSelectedPodcast(pod); setPage("podcast"); }, onViewProfile: () => setPage("profile"), onChannelPlay: ch => { if (!user) { setAuthOpen(true); return; } if (isLocked(ch)) { openGate(ch); return; } setSelectedVideo({ id: `ch-${ch.id}`, title: ch.name, url: channelPlaybackUrl(ch), _type: "live", thumbnail: ch.hero_url || ch.logo_url || "", description: ch.description || "" }); setPage("player"); } };
 
 
   if (maintenanceMode) return (
@@ -209,7 +211,7 @@ export default function App() {
   if (paywallOpen) return <PaywallPage user={user} onBack={() => setPaywallOpen(false)} onSubscribed={() => setPaywallOpen(false)} onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }} />;
 
   const goToStudio = () => { setProfileOpen(false); setPage("studio"); };
-  const profileScreenEl = profileOpen && <ProfileScreen user={user} userAvatarId={userAvatarId} userName={userName} onClose={() => setProfileOpen(false)} onAvatarChange={id => setUserAvatarId(id)} onNameChange={n => setUserName(n)} onViewProfile={() => { setProfileOpen(false); setPage("profile"); }} onOpenSettings={() => { setProfileOpen(false); setPage("settings"); }} onCreatorDash={creatorRecord ? () => { setProfileOpen(false); setPage("creator"); } : null} onStreamerDash={streamRecord ? goToStudio : null} />;
+  const profileScreenEl = profileOpen && <ProfileScreen user={user} userAvatarId={userAvatarId} userAvatarUrl={userAvatarUrl} userName={userName} onClose={() => setProfileOpen(false)} onAvatarChange={id => { setUserAvatarId(id); setUserAvatarUrl(null); }} onNameChange={n => setUserName(n)} onViewProfile={() => { setProfileOpen(false); setPage("profile"); }} onOpenSettings={() => { setProfileOpen(false); setPage("settings"); }} onCreatorDash={creatorRecord ? () => { setProfileOpen(false); setPage("creator"); } : null} onStreamerDash={streamRecord ? goToStudio : null} />;
 
   if (page === "player" && selectedVideo) {
     const isLiveVideo = selectedVideo._type === "live" || selectedVideo._type === "live_epg";
@@ -295,7 +297,12 @@ export default function App() {
           onApplyToStream={() => setPage("studio")}
           onBack={() => setPage("home")}
           onGoHome={goHome}
-          onAvatarChange={id => setUserAvatarId(id)}
+          onProfileUpdate={p => {
+            if (!p) return;
+            if ("avatarId" in p) setUserAvatarId(p.avatarId);
+            if ("avatarUrl" in p) setUserAvatarUrl(p.avatarUrl);
+            if (p.fullName != null) setUserName(p.fullName);
+          }}
           onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }}
         />
       </>
@@ -308,12 +315,12 @@ export default function App() {
         <ProfilePage
           user={user}
           userAvatarId={userAvatarId}
+          userAvatarUrl={userAvatarUrl}
           userName={userName}
           onBack={() => setPage("home")}
           onGoHome={goHome}
           onNameChange={n => setUserName(n)}
           onOpenSettings={() => setPage("settings")}
-          onAvatarChange={id => setUserAvatarId(id)}
           onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }}
         />
       </>
@@ -394,7 +401,7 @@ export default function App() {
 // ─── Homepage ─────────────────────────────────────────────────────────────────
 
 
-function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, userName }) {
+function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, userAvatarUrl, userName }) {
   const [episodes, setEpisodes] = useState([]);
   const [selectedSeason, setSelectedSeason] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -484,16 +491,10 @@ function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList
             </button>
             <Wordmark height={22} onClick={onGoHome} />
           </div>
-          {(() => {
-            const av = avatarForId(userAvatarId);
-            return user ? (
-              <div onClick={onProfileOpen} title={userName ?? "Profile"} style={{ width: 34, height: 34, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? 15 : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
-                onMouseEnter={e => e.currentTarget.style.borderColor = "#facc15"}
-                onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}>
-                {av ? av.emoji : (userName?.[0] || user.email[0]).toUpperCase()}
-              </div>
-            ) : null;
-          })()}
+          {user ? (
+            <Avatar size={34} avatarUrl={userAvatarUrl} avatarId={userAvatarId} name={userName} email={user.email}
+              onClick={onProfileOpen} title={userName ?? "Profile"} border="2px solid rgba(255,255,255,0.12)" />
+          ) : null}
         </div>
 
         {/* Hero content */}
@@ -693,7 +694,7 @@ function EpisodeCard({ episode, show, onPlay, progress }) {
 
 // ─── Podcast Detail ───────────────────────────────────────────────────────────
 
-function PodcastDetail({ podcast, onBack, onGoHome, onPlay, onProfileOpen, userAvatarId, user, userName }) {
+function PodcastDetail({ podcast, onBack, onGoHome, onPlay, onProfileOpen, userAvatarId, userAvatarUrl, user, userName }) {
   const [episodes, setEpisodes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [watchProgress, setWatchProgress] = useState({});
@@ -750,16 +751,10 @@ function PodcastDetail({ podcast, onBack, onGoHome, onPlay, onProfileOpen, userA
             </button>
             <Wordmark height={22} onClick={onGoHome} />
           </div>
-          {(() => {
-            const av = avatarForId(userAvatarId);
-            return user ? (
-              <div onClick={onProfileOpen} title={userName ?? "Profile"} style={{ width: 34, height: 34, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? 15 : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
-                onMouseEnter={e => e.currentTarget.style.borderColor = "#facc15"}
-                onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}>
-                {av ? av.emoji : (userName?.[0] || user.email[0]).toUpperCase()}
-              </div>
-            ) : null;
-          })()}
+          {user ? (
+            <Avatar size={34} avatarUrl={userAvatarUrl} avatarId={userAvatarId} name={userName} email={user.email}
+              onClick={onProfileOpen} title={userName ?? "Profile"} border="2px solid rgba(255,255,255,0.12)" />
+          ) : null}
         </div>
 
         {/* Artwork + info */}
@@ -862,7 +857,7 @@ function PodcastEpisodeRow({ episode, podcast, onPlay, progress }) {
 
 // ─── Podcast Player ────────────────────────────────────────────────────────────
 
-function PodcastPlayerView({ episode, podcast, onBack, onGoHome, onSelect, onProfileOpen, userAvatarId, user, userName }) {
+function PodcastPlayerView({ episode, podcast, onBack, onGoHome, onSelect, onProfileOpen, userAvatarId, userAvatarUrl, user, userName }) {
   const audioRef = useRef(null);
   const saveProgressRef = useRef(null);
   const progressTimerRef = useRef(null);
@@ -936,16 +931,10 @@ function PodcastPlayerView({ episode, podcast, onBack, onGoHome, onSelect, onPro
             </button>
             <Wordmark height={22} onClick={onGoHome} />
           </div>
-          {(() => {
-            const av = avatarForId(userAvatarId);
-            return user ? (
-              <div onClick={onProfileOpen} title={userName ?? "Profile"} style={{ width: 34, height: 34, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? 15 : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
-                onMouseEnter={e => e.currentTarget.style.borderColor = "#facc15"}
-                onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}>
-                {av ? av.emoji : (userName?.[0] || user.email[0]).toUpperCase()}
-              </div>
-            ) : null;
-          })()}
+          {user ? (
+            <Avatar size={34} avatarUrl={userAvatarUrl} avatarId={userAvatarId} name={userName} email={user.email}
+              onClick={onProfileOpen} title={userName ?? "Profile"} border="2px solid rgba(255,255,255,0.12)" />
+          ) : null}
         </nav>
 
         {/* Player content */}
@@ -1011,30 +1000,29 @@ function PodcastPlayerView({ episode, podcast, onBack, onGoHome, onSelect, onPro
 
 // ─── Profile Page ─────────────────────────────────────────────────────────────
 
-function ProfilePage({ user, userAvatarId, userName, onBack, onGoHome, onNameChange, onOpenSettings, onAvatarChange, onSignOut }) {
+function ProfilePage({ user, userAvatarId, userAvatarUrl, userName, onBack, onGoHome, onOpenSettings, onSignOut }) {
   const [history, setHistory] = useState([]);
   const [contentMap, setContentMap] = useState({});
   const [showsMap, setShowsMap] = useState({});
+  const [profile, setProfile] = useState(null);
+  const [followingCount, setFollowingCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(userName || "");
-  const [avatarId, setAvatarId] = useState(userAvatarId || null);
-  const [saving, setSaving] = useState(false);
   const isMobile = useIsMobile();
   const memberSince = user?.created_at ? new Date(user.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : null;
-  const av = avatarForId(editing ? avatarId : userAvatarId);
 
   useEffect(() => { fetchData(); }, [user?.id]);
 
   async function fetchData() {
     setLoading(true);
-    const [progressRes, videosRes, showsRes, episodesRes, podEpRes, podRes] = await Promise.all([
+    const [progressRes, videosRes, showsRes, episodesRes, podEpRes, podRes, profileRes, followRes] = await Promise.all([
       supabase.from("watch_progress").select("*").eq("user_id", user.id).order("last_watched_at", { ascending: false }),
       supabase.from("videos").select("id, title, thumbnail, poster, category, year"),
       supabase.from("shows").select("id, title, thumbnail, poster, category"),
       supabase.from("episodes").select("id, title, thumbnail, show_id, season, episode_number"),
       supabase.from("podcast_episodes").select("id, title, thumbnail, podcast_id, episode_number"),
       supabase.from("podcasts").select("id, title, artwork_url"),
+      supabase.from("profiles").select("username, full_name, bio").eq("id", user.id).maybeSingle(),
+      supabase.from("streamer_follows").select("*", { count: "exact", head: true }).eq("follower_id", user.id),
     ]);
     const map = {};
     const sMap = {};
@@ -1047,16 +1035,9 @@ function ProfilePage({ user, userAvatarId, userName, onBack, onGoHome, onNameCha
     setContentMap(map);
     setShowsMap(sMap);
     setHistory(progressRes.data || []);
+    setProfile(profileRes.data || null);
+    setFollowingCount(followRes.count || 0);
     setLoading(false);
-  }
-
-  async function saveProfile() {
-    setSaving(true);
-    await supabase.from("profiles").update({ full_name: name.trim(), avatar_id: avatarId }).eq("id", user.id);
-    setSaving(false);
-    setEditing(false);
-    onAvatarChange?.(avatarId);
-    onNameChange?.(name.trim());
   }
 
   const enriched = history.map(h => ({ ...h, content: contentMap[h.content_id] || null })).filter(h => h.content);
@@ -1069,10 +1050,58 @@ function ProfilePage({ user, userAvatarId, userName, onBack, onGoHome, onNameCha
   enriched.forEach(h => { const g = h.content?.category; if (g) genreCounts[g] = (genreCounts[g] || 0) + 1; });
   const favoriteGenre = Object.entries(genreCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
 
-  const showCounts = {};
-  enriched.forEach(h => { if (h.content?._type === "episode" && h.content.show_id) showCounts[h.content.show_id] = (showCounts[h.content.show_id] || 0) + 1; });
-  const topShowId = Object.entries(showCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
-  const topShow = topShowId ? showsMap[topShowId] : null;
+  // Most watched: title seen most often (episodes grouped by show); ties break on watch time.
+  const titleAgg = {};
+  enriched.forEach(h => {
+    const c = h.content;
+    const key = c._type === "episode" && c.show_id ? `show:${c.show_id}` : `c:${h.content_id}`;
+    const label = c._type === "episode" && c.show_id ? (showsMap[c.show_id]?.title || c.title) : c.title;
+    if (!titleAgg[key]) titleAgg[key] = { label, count: 0, seconds: 0 };
+    titleAgg[key].count += 1;
+    titleAgg[key].seconds += h.progress_seconds || 0;
+  });
+  const topWatched = Object.values(titleAgg).sort((a, b) => b.count - a.count || b.seconds - a.seconds)[0]?.label || null;
+
+  const displayName = userName || profile?.full_name || user?.email;
+  const inProgress = enriched.filter(h => !h.completed && h.duration_seconds > 0 && (h.progress_seconds / h.duration_seconds) > 0.02 && (h.progress_seconds / h.duration_seconds) < 0.95);
+
+  const renderRow = (h) => {
+    const c = h.content;
+    const pct = h.duration_seconds > 0 ? Math.min(100, Math.round((h.progress_seconds / h.duration_seconds) * 100)) : 0;
+    const thumb = c.poster || c.thumbnail;
+    const subtitle = c._type === "episode"
+      ? `S${c.season} E${c.episode_number}`
+      : c._type === "podcast_episode"
+      ? `Podcast · ${c.category || ""}`
+      : c._type === "movie" ? `${c.year || ""} · ${c.category || ""}` : "";
+    return (
+      <div key={h.id} style={{ display: "flex", gap: isMobile ? 12 : 16, padding: "14px 0", borderBottom: "1px solid #111", alignItems: "center" }}>
+        <div style={{ flexShrink: 0, width: isMobile ? 80 : 112, aspectRatio: "16/9", borderRadius: 7, overflow: "hidden", background: "#1a1a1a" }}>
+          {thumb
+            ? <img src={thumb} alt={c.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            : <div style={{ width: "100%", height: "100%", background: "#1a1a1a" }} />
+          }
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ margin: "0 0 3px", fontSize: isMobile ? 13 : 15, fontWeight: 600, color: h.completed ? "#555" : "#e5e5e5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.title}</p>
+          <p style={{ margin: "0 0 8px", fontSize: 12, color: "#444" }}>{subtitle}</p>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {h.completed ? (
+              <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 600 }}>✓ Watched</span>
+            ) : pct > 0 ? (
+              <>
+                <div style={{ width: 80, height: 3, background: "#1a1a1a", borderRadius: 2, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${pct}%`, background: "#facc15" }} />
+                </div>
+                <span style={{ fontSize: 11, color: "#555" }}>{pct}%</span>
+              </>
+            ) : null}
+            <span style={{ fontSize: 11, color: "#333", marginLeft: "auto" }}>{timeAgo(h.last_watched_at)}</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
@@ -1088,25 +1117,23 @@ function ProfilePage({ user, userAvatarId, userName, onBack, onGoHome, onNameCha
 
       {/* Profile header */}
       <div style={{ paddingTop: 68 + 40, paddingLeft: PAD, paddingRight: PAD, paddingBottom: 0, maxWidth: 860, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 24, marginBottom: 28, flexWrap: "wrap" }}>
-          <div style={{ width: isMobile ? 80 : 96, height: isMobile ? 80 : 96, borderRadius: "50%", background: av?.svg ? "none" : (av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)"), display: "flex", alignItems: "center", justifyContent: "center", fontSize: isMobile ? 30 : 38, border: "3px solid #222", flexShrink: 0, overflow: "hidden" }}>
-            {av?.svg ? <div style={{ width: "100%", height: "100%" }} dangerouslySetInnerHTML={{ __html: av.svg }} /> : (av?.emoji ?? (userName?.[0] ?? user?.email?.[0] ?? "?").toUpperCase())}
-          </div>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 24, marginBottom: 28, flexWrap: "wrap" }}>
+          <Avatar size={isMobile ? 80 : 96} avatarUrl={userAvatarUrl} avatarId={userAvatarId} name={displayName} email={user?.email} border="3px solid #222" />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h1 style={{ margin: "0 0 4px", fontSize: isMobile ? 20 : 26, fontWeight: 700, color: "#fff" }}>{editing ? name : (userName || user?.email)}</h1>
-            <p style={{ margin: 0, fontSize: 12, color: "#333" }}>{memberSince ? `Member since ${memberSince}` : user?.email}</p>
+            <h1 style={{ margin: "0 0 4px", fontSize: isMobile ? 20 : 26, fontWeight: 700, color: "#fff" }}>{displayName}</h1>
+            {profile?.username && <p style={{ margin: "0 0 8px", fontSize: 14, color: "#facc15", fontWeight: 600 }}>@{profile.username}</p>}
+            {profile?.bio && <p style={{ margin: "0 0 10px", fontSize: 14, color: "#aaa", lineHeight: 1.5, maxWidth: 520 }}>{profile.bio}</p>}
+            <p style={{ margin: 0, fontSize: 12, color: "#555", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+              {memberSince && <span>Member since {memberSince}</span>}
+              {memberSince && <span style={{ color: "#2a2a2a" }}>·</span>}
+              <span><strong style={{ color: "#ccc" }}>{followingCount}</strong> Following</span>
+            </p>
           </div>
           <div style={{ display: "flex", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
-            {onOpenSettings && !editing && (
-              <button onClick={onOpenSettings} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid #2a2a2a", borderRadius: 8, padding: "8px 14px", color: "#aaa", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                Settings
-              </button>
-            )}
-            <button onClick={() => { setEditing(e => !e); setName(userName || ""); setAvatarId(userAvatarId || null); }}
-              style={{ background: editing ? "rgba(250,204,21,0.12)" : "rgba(255,255,255,0.06)", border: `1px solid ${editing ? "rgba(250,204,21,0.3)" : "#2a2a2a"}`, borderRadius: 8, padding: "8px 18px", color: editing ? "#facc15" : "#aaa", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-              {editing ? "Cancel" : "Edit Profile"}
+            <button onClick={onOpenSettings} style={{ background: "rgba(250,204,21,0.12)", border: "1px solid rgba(250,204,21,0.3)", borderRadius: 8, padding: "8px 18px", color: "#facc15", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              Edit Profile
             </button>
-            {onSignOut && !editing && (
+            {onSignOut && (
               <button onClick={onSignOut} style={{ background: "transparent", border: "1px solid #2a2a2a", borderRadius: 8, padding: "8px 14px", color: "#f87171", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
                 onMouseEnter={e => e.currentTarget.style.background = "rgba(248,113,113,0.08)"}
                 onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
@@ -1115,26 +1142,6 @@ function ProfilePage({ user, userAvatarId, userName, onBack, onGoHome, onNameCha
             )}
           </div>
         </div>
-
-        {/* Edit form */}
-        {editing && (
-          <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, padding: 24, marginBottom: 32 }}>
-            <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>Choose an avatar</p>
-            <div style={{ display: "grid", gridTemplateColumns: `repeat(${isMobile ? 4 : 6}, 1fr)`, gap: 8, marginBottom: 24 }}>
-              {PRESET_AVATARS.map(a => (
-                <AvatarThumb key={a.id} av={a} size={isMobile ? 56 : 64} selected={avatarId === a.id} onClick={() => setAvatarId(a.id)} />
-              ))}
-            </div>
-            <div style={{ height: 1, background: "#1a1a1a", marginBottom: 20 }} />
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: "block", fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Display Name</label>
-              <input type="text" value={name} onChange={e => setName(e.target.value)} maxLength={40} placeholder="Your name" style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 8, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box", fontFamily: "inherit" }} />
-            </div>
-            <button onClick={saveProfile} disabled={saving} style={{ background: "#facc15", border: "none", borderRadius: 8, padding: "10px 28px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
-              {saving ? "Saving…" : "Save Changes"}
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Stats */}
@@ -1144,7 +1151,7 @@ function ProfilePage({ user, userAvatarId, userName, onBack, onGoHome, onNameCha
             { label: "Hours Watched", value: totalHours > 0 ? `${totalHours}h ${totalMinutes}m` : totalMinutes > 0 ? `${totalMinutes}m` : "0m" },
             { label: "Titles Watched", value: enriched.length > 0 ? enriched.length.toString() : "0" },
             { label: "Favorite Genre", value: favoriteGenre || "—" },
-            { label: "Most Watched", value: topShow?.title || "—" },
+            { label: "Most Watched", value: topWatched || "—" },
           ].map(({ label, value }) => (
             <div key={label} style={{ background: "#111", border: "1px solid #1a1a1a", borderRadius: 12, padding: "18px 20px" }}>
               <p style={{ margin: "0 0 6px", fontSize: 11, color: "#444", textTransform: "uppercase", letterSpacing: 0.8 }}>{label}</p>
@@ -1154,50 +1161,22 @@ function ProfilePage({ user, userAvatarId, userName, onBack, onGoHome, onNameCha
         </div>
       </div>
 
+      {/* Continue Watching */}
+      {!loading && inProgress.length > 0 && (
+        <div style={{ padding: `0 ${PAD} 8px`, maxWidth: 860, margin: "0 auto" }}>
+          <h2 style={{ margin: "0 0 12px", fontSize: 18, fontWeight: 600, color: "#e5e5e5" }}>Continue Watching</h2>
+          {inProgress.slice(0, 6).map(renderRow)}
+        </div>
+      )}
+
       {/* Watch History */}
-      <div style={{ padding: `0 ${PAD} 80px`, maxWidth: 860, margin: "0 auto" }}>
+      <div style={{ padding: `${inProgress.length ? 24 : 0}px ${PAD} 80px`, maxWidth: 860, margin: "0 auto" }}>
         <h2 style={{ margin: "0 0 20px", fontSize: 18, fontWeight: 600, color: "#e5e5e5" }}>Watch History</h2>
         {loading ? (
           <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Spinner /></div>
         ) : enriched.length === 0 ? (
           <p style={{ color: "#444", fontSize: 14 }}>Nothing watched yet.</p>
-        ) : enriched.map(h => {
-          const c = h.content;
-          const pct = h.duration_seconds > 0 ? Math.min(100, Math.round((h.progress_seconds / h.duration_seconds) * 100)) : 0;
-          const thumb = c.poster || c.thumbnail;
-          const subtitle = c._type === "episode"
-            ? `S${c.season} E${c.episode_number}`
-            : c._type === "podcast_episode"
-            ? `Podcast · ${c.category || ""}`
-            : c._type === "movie" ? `${c.year || ""} · ${c.category || ""}` : "";
-          return (
-            <div key={h.id} style={{ display: "flex", gap: isMobile ? 12 : 16, padding: "14px 0", borderBottom: "1px solid #111", alignItems: "center" }}>
-              <div style={{ flexShrink: 0, width: isMobile ? 80 : 112, aspectRatio: "16/9", borderRadius: 7, overflow: "hidden", background: "#1a1a1a" }}>
-                {thumb
-                  ? <img src={thumb} alt={c.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  : <div style={{ width: "100%", height: "100%", background: "#1a1a1a" }} />
-                }
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ margin: "0 0 3px", fontSize: isMobile ? 13 : 15, fontWeight: 600, color: h.completed ? "#555" : "#e5e5e5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.title}</p>
-                <p style={{ margin: "0 0 8px", fontSize: 12, color: "#444" }}>{subtitle}</p>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  {h.completed ? (
-                    <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 600 }}>✓ Watched</span>
-                  ) : pct > 0 ? (
-                    <>
-                      <div style={{ width: 80, height: 3, background: "#1a1a1a", borderRadius: 2, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${pct}%`, background: "#facc15" }} />
-                      </div>
-                      <span style={{ fontSize: 11, color: "#555" }}>{pct}%</span>
-                    </>
-                  ) : null}
-                  <span style={{ fontSize: 11, color: "#333", marginLeft: "auto" }}>{timeAgo(h.last_watched_at)}</span>
-                </div>
-              </div>
-            </div>
-          );
-        })}
+        ) : enriched.map(renderRow)}
       </div>
     </div>
   );

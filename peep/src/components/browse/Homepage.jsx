@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "../../supabase";
-import { avatarForId } from "../ProfileScreen";
 import { PAD, CARD_W, SAFE_TOP } from "../../lib/theme";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { contentSelect } from "../../lib/contentQueries";
@@ -16,6 +15,7 @@ import {
 import { Footer } from "./Footer";
 import { Spinner } from "../ui/Spinner";
 import { Wordmark, EyesMark } from "../Wordmark";
+import { Avatar } from "../Avatar";
 import { LiveTVPage } from "../../pages/LiveTV";
 
 // Curation regions: the live domain ALWAYS shows Production. Non-prod hosts
@@ -138,7 +138,7 @@ function CustomHero({ hero, isMobile, onCta }) {
   );
 }
 
-export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, userName, onGoLive, onExitStudio, studioContent, flags = {}, isPremiumUser = false, isStreamer = false }) {
+export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, userAvatarUrl, userName, onGoLive, onExitStudio, studioContent, flags = {}, isPremiumUser = false, isStreamer = false }) {
   const [videos, setVideos] = useState([]);
   const [shows, setShows] = useState([]);
   const [carousels, setCarousels] = useState([]);
@@ -605,16 +605,10 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
               />
             </div>
             <NotifBell user={user} />
-            {user ? (() => {
-              const av = avatarForId(userAvatarId);
-              return (
-                <div onClick={onProfileOpen} style={{ width: 34, height: 34, borderRadius: "50%", background: av?.svg ? "none" : (av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)"), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s", overflow: "hidden" }}
-                  onMouseEnter={e => e.currentTarget.style.borderColor = "#facc15"}
-                  onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}>
-                  {av?.svg ? <div style={{ width: "100%", height: "100%" }} dangerouslySetInnerHTML={{ __html: av.svg }} /> : (av ? av.emoji : (userName?.[0] || user.email?.[0] || "?").toUpperCase())}
-                </div>
-              );
-            })() : (
+            {user ? (
+              <Avatar size={34} avatarUrl={userAvatarUrl} avatarId={userAvatarId} name={userName} email={user.email}
+                onClick={onProfileOpen} title={userName ?? "Profile"} border="2px solid rgba(255,255,255,0.12)" />
+            ) : (
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <button onClick={onAuthOpen} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 6, padding: "7px 14px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Sign In</button>
                 <button onClick={() => { window.location.href = "/signup"; }} style={{ background: "#facc15", border: "none", borderRadius: 6, padding: "7px 16px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>Sign Up</button>
