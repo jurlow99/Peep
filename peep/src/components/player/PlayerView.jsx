@@ -852,23 +852,33 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
           )}
         </div>
 
-        {(video._type === "live" || video._type === "live_epg") && (video.now_airing || video.up_next) && (
+        {(video._type === "live" || video._type === "live_epg") && (() => {
+          // Compute now/next live from the guide for whatever channel is playing —
+          // works whether the channel was opened from the grid or the in-player strip.
+          const cid = Number(String(video.id || "").replace("ch-", ""));
+          const _now = new Date();
+          const liveNow = liveEpg.find(e => e.channel_id === cid && new Date(e.start_time) <= _now && new Date(e.end_time) > _now);
+          const liveNext = liveEpg.filter(e => e.channel_id === cid && new Date(e.start_time) > _now).sort((a, b) => new Date(a.start_time) - new Date(b.start_time))[0];
+          const nowAiring = video.now_airing || liveNow?.title;
+          const upNext = video.up_next || liveNext?.title;
+          if (!nowAiring && !upNext) return null;
+          return (
           <div style={{ marginBottom: 24, background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: 12, padding: "14px 20px", display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap" }}>
-            {video.now_airing && (
+            {nowAiring && (
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite", flexShrink: 0 }} />
                 <div>
                   <p style={{ margin: "0 0 2px", fontSize: 10, color: "#555", textTransform: "uppercase", letterSpacing: 0.7, fontWeight: 700 }}>Now Airing</p>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#e5e5e5" }}>{video.now_airing}</p>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#e5e5e5" }}>{nowAiring}</p>
                 </div>
               </div>
             )}
-            {video.up_next && (
+            {upNext && (
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#333", flexShrink: 0 }} />
                 <div>
                   <p style={{ margin: "0 0 2px", fontSize: 10, color: "#444", textTransform: "uppercase", letterSpacing: 0.7, fontWeight: 700 }}>Up Next</p>
-                  <p style={{ margin: 0, fontSize: 13, color: "#6b7280" }}>{video.up_next}</p>
+                  <p style={{ margin: 0, fontSize: 13, color: "#6b7280" }}>{upNext}</p>
                 </div>
               </div>
             )}
@@ -879,7 +889,8 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
               </div>
             )}
           </div>
-        )}
+          );
+        })()}
 
         {/* Live chat — Cloudflare-managed streams only */}
         {video.stream_uid && (
