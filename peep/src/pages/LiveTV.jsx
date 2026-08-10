@@ -505,6 +505,65 @@ function MosaicTile({ channel, epgEntries, onPlay, previewActive, onHoverStart, 
   );
 }
 
+// Cinematic featured channel at the top of Live TV — shows the current programme's
+// art + now/next straight from the guide, like a real FAST service's front page.
+function FeaturedChannelHero({ channel, epgEntries, onPlay, isMobile }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const { current, next, progress } = channelNowNext(epgEntries, channel.id);
+  const art = current?.thumbnail || channel.hero_url;
+  const hasArt = art && !imgFailed;
+
+  return (
+    <div onClick={() => onPlay(channel)} className="stream-card"
+      style={{ position: "relative", borderRadius: 16, overflow: "hidden", cursor: "pointer",
+        height: isMobile ? 230 : "clamp(300px, 32vw, 430px)", marginBottom: isMobile ? 10 : 14,
+        background: "#0d0d0d", border: "1px solid rgba(239,68,68,0.22)", boxShadow: "0 12px 44px rgba(0,0,0,0.5)" }}>
+      {hasArt
+        ? <img src={art} alt="" onError={() => setImgFailed(true)} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+        : <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at 35% 40%, #26262b, #141417 55%, #0a0a0c)" }} />}
+
+      {!hasArt && channel.logo_url && (
+        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", paddingBottom: 90 }}>
+          <img src={channel.logo_url} alt="" style={{ maxWidth: "34%", maxHeight: "40%", objectFit: "contain", filter: "drop-shadow(0 8px 24px rgba(0,0,0,0.6))" }} />
+        </div>
+      )}
+
+      {/* legibility gradients */}
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.55) 42%, rgba(0,0,0,0.12) 72%, transparent 100%)" }} />
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.7), transparent 55%)" }} />
+
+      <div style={{ position: "absolute", left: 0, bottom: 0, padding: isMobile ? "18px" : "clamp(24px, 3vw, 40px)", maxWidth: isMobile ? "100%" : 620, display: "flex", flexDirection: "column", gap: isMobile ? 9 : 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <LiveBadge size="lg" />
+          {channel.category && channel.category !== "general" && (
+            <span style={{ fontSize: 11, fontWeight: 600, color: "#ddd", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)", borderRadius: 5, padding: "3px 10px" }}>{prettyCategory(channel.category)}</span>
+          )}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {channel.logo_url && !imgFailed && (
+            <img src={channel.logo_url} alt="" onError={e => { e.target.style.display = "none"; }} style={{ width: isMobile ? 40 : 52, height: isMobile ? 40 : 52, borderRadius: 10, objectFit: "cover", background: "#000", border: "1px solid rgba(255,255,255,0.15)", flexShrink: 0 }} />
+          )}
+          <h2 style={{ margin: 0, fontSize: isMobile ? 22 : "clamp(26px, 3.4vw, 40px)", fontWeight: 800, color: "#fff", textShadow: "0 2px 12px rgba(0,0,0,0.6)", lineHeight: 1.05 }}>{channel.name}</h2>
+        </div>
+        {current && (
+          <div style={{ maxWidth: 460 }}>
+            <p style={{ margin: "0 0 6px", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "#ef4444" }}>Now Airing</p>
+            <p style={{ margin: "0 0 8px", fontSize: isMobile ? 15 : 18, fontWeight: 600, color: "#fff", textShadow: "0 1px 6px rgba(0,0,0,0.6)" }}>{current.title}</p>
+            <div style={{ height: 3, borderRadius: 2, background: "rgba(255,255,255,0.22)", overflow: "hidden", maxWidth: 320 }}>
+              <div style={{ height: "100%", width: `${Math.max(2, Math.min(100, progress * 100))}%`, background: "#ef4444" }} />
+            </div>
+            {next && <p style={{ margin: "8px 0 0", fontSize: 12, color: "#aaa" }}>Up next · {next.title}</p>}
+          </div>
+        )}
+        <button onClick={e => { e.stopPropagation(); onPlay(channel); }}
+          style={{ alignSelf: "flex-start", display: "inline-flex", alignItems: "center", gap: 8, background: "#fff", color: "#0a0a0a", border: "none", borderRadius: 8, padding: isMobile ? "10px 20px" : "12px 28px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginTop: 4 }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="#0a0a0a"><polygon points="5,3 19,12 5,21" /></svg> Watch Live
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function LiveMosaic({ channels, epgEntries, onChannelPlay }) {
   const isMobile = useIsMobile();
   const [activeCat, setActiveCat] = useState("all");
@@ -525,6 +584,11 @@ function LiveMosaic({ channels, epgEntries, onChannelPlay }) {
   // Hero/spotlight first, then large, then normal, then admin sort_order.
   const rank = c => (c.is_live_hero ? 0 : c.tile_size === "spotlight" ? 1 : c.tile_size === "large" ? 2 : 3);
   const ordered = [...shown].sort((a, b) => rank(a) - rank(b) || (a.sort_order ?? 0) - (b.sort_order ?? 0));
+
+  // Featured hero: highest-ranked channel that has a live guide entry (so the hero
+  // shows a real "now airing"), else just the top-ranked one. Pulled out of the grid.
+  const hero = ordered.find(c => channelNowNext(epgEntries, c.id).current) || ordered[0];
+  const gridChannels = ordered.filter(c => c.id !== hero?.id);
 
   // Hover previews are desktop-only (no hover on touch; also saves mobile data).
   const startHover = id => { if (isMobile) return; clearTimeout(hoverTimer.current); hoverTimer.current = setTimeout(() => setPreviewId(id), 350); };
@@ -548,13 +612,18 @@ function LiveMosaic({ channels, epgEntries, onChannelPlay }) {
           </div>
         )}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fill, minmax(230px, 1fr))", gridAutoRows: isMobile ? "112px" : "150px", gridAutoFlow: "dense", gap: isMobile ? 8 : 12 }}>
-        {ordered.map(ch => (
+
+      {hero && <FeaturedChannelHero channel={hero} epgEntries={epgEntries} onPlay={onChannelPlay} isMobile={isMobile} />}
+
+      {gridChannels.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fill, minmax(230px, 1fr))", gridAutoRows: isMobile ? "112px" : "150px", gridAutoFlow: "dense", gap: isMobile ? 8 : 12 }}>
+        {gridChannels.map(ch => (
           <MosaicTile key={ch.id} channel={ch} epgEntries={epgEntries} onPlay={onChannelPlay} isMobile={isMobile}
             previewActive={previewId === ch.id}
             onHoverStart={() => startHover(ch.id)} onHoverEnd={endHover} />
         ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
