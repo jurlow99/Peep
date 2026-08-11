@@ -49,7 +49,6 @@ export const EMPTY_CAROUSEL = {
   enabled: true,
   position: 0,
   pages: "home",
-  environment: "test", // new rows start in Test; publish to Production when ready
 };
 
 export const EMPTY_CHANNEL = {

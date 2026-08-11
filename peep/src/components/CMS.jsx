@@ -1988,7 +1988,6 @@ export function CMS({ onExit, currentUser }) {
       enabled: carousel.enabled ?? true,
       position: carousel.position ?? 0,
       pages: carousel.pages ?? "home",
-      environment: carousel.environment ?? "production",
     });
     if (carousel.type === "handpicked") {
       try {
@@ -2115,15 +2114,6 @@ export function CMS({ onExit, currentUser }) {
     if (swapIdx < 0 || swapIdx >= next.length) return;
     [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
     await reorderCarousels(next);
-  }
-  // Move a row between Test and Production regions.
-  async function setCarouselEnvironment(carousel, env) {
-    suppressCarouselRT.current = true;
-    setCarousels(prev => prev.map(c => c.id === carousel.id ? { ...c, environment: env } : c));
-    const { error } = await supabase.from("carousels").update({ environment: env }).eq("id", carousel.id);
-    if (error) { showToast("Failed: " + error.message, "error"); loadCarousels(); }
-    else { showToast(env === "production" ? "Published to Production ✓" : "Moved to Test"); logAudit("update", "carousel", carousel.id, `region → ${env}`); }
-    setTimeout(() => { suppressCarouselRT.current = false; }, 1000);
   }
 
   // Drag-to-reorder within the selected screen. `from`/`to` are indices in the page list.
@@ -4174,8 +4164,6 @@ export function CMS({ onExit, currentUser }) {
                   const orderLabel = t === "trending" ? "Recently Added" : t === "recommended" ? "Recommended" : t === "continue" ? "Continue Watching" : t === "handpicked" ? `${handpickedCount} hand-picked` : t === "category" ? `Genre: ${carousel.filter_value || "?"}` : t === "podcast" ? (carousel.filter_value ? `Tag: ${carousel.filter_value}` : "All podcasts") : t === "live_channels" ? (carousel.filter_value ? `Category: ${carousel.filter_value}` : "All live channels") : t === "creator_streams" ? "Live creators" : "Default order";
                   const contentColor = t === "live_channels" ? "#ef4444" : t === "creator_streams" ? "#ef4444" : t === "podcast" ? "#a78bfa" : ct === "shorts" ? "#facc15" : ct === "shows" ? "#34d399" : "#f59e0b";
                   const pageLabels = { home: "Home", shorts: "Movies", series: "Series", podcasts: "Podcasts", live: "Live TV" };
-                  const env = carousel.environment || "production";
-                  const isTest = env === "test";
 
                   const isDragging = dragCarouselIdx === i;
                   const isDragOver = dragOverCarouselIdx === i && dragCarouselIdx !== null && dragCarouselIdx !== i;
@@ -4204,14 +4192,10 @@ export function CMS({ onExit, currentUser }) {
                           <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: `${contentColor}15`, color: contentColor, border: `1px solid ${contentColor}35` }}>{contentLabel}</span>
                           <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: "#f1f5f9", color: "#6b7280", border: "1px solid #e2e8f0" }}>{orderLabel}</span>
                           <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: carousel.enabled ? "rgba(16,185,129,0.1)" : "rgba(255,255,255,0.04)", color: carousel.enabled ? "#10b981" : "#555", border: `1px solid ${carousel.enabled ? "rgba(16,185,129,0.3)" : "#222"}` }}>{carousel.enabled ? "Live" : "Hidden"}</span>
-                          <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, textTransform: "uppercase", letterSpacing: 0.5, background: isTest ? "rgba(250,204,21,0.12)" : "rgba(34,197,94,0.12)", color: isTest ? "#a16207" : "#15803d", border: `1px solid ${isTest ? "rgba(250,204,21,0.4)" : "rgba(34,197,94,0.4)"}` }}>{isTest ? "Test" : "Production"}</span>
                         </div>
                       </div>
 
                       <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                        {isTest
-                          ? <button onClick={() => setCarouselEnvironment(carousel, "production")} title="Make this row live on watchpeep.tv" style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: 6, padding: "6px 12px", color: "#15803d", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>Publish →</button>
-                          : <button onClick={() => setCarouselEnvironment(carousel, "test")} title="Pull this row off watchpeep.tv back into Test" style={{ background: "rgba(250,204,21,0.1)", border: "1px solid rgba(250,204,21,0.35)", borderRadius: 6, padding: "6px 12px", color: "#a16207", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>Unpublish</button>}
                         <button onClick={() => startCarouselEdit(carousel)} style={{ background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.2)", borderRadius: 6, padding: "6px 12px", color: "#60a5fa", fontSize: 12, cursor: "pointer", fontWeight: 500 }}>Edit</button>
                         <button onClick={() => setDeleteCarouselConfirm(carousel)} style={{ background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 6, padding: "6px 12px", color: "#f87171", fontSize: 12, cursor: "pointer", fontWeight: 500 }}>Delete</button>
                       </div>
@@ -7560,22 +7544,7 @@ export function CMS({ onExit, currentUser }) {
                     {carouselForm.type !== "podcast" && <div style={{ height: 1, background: "#e2e8f0" }} />}
 
                     <div>
-                      <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>4 · Region</label>
-                      <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
-                        {[{ v: "test", l: "Test", d: "Only you (localhost / preview)" }, { v: "production", l: "Production", d: "Live on watchpeep.tv" }].map(o => {
-                          const on = (carouselForm.environment || "test") === o.v;
-                          return (
-                            <button key={o.v} onClick={() => setCarouselForm(f => ({ ...f, environment: o.v }))}
-                              style={{ flex: 1, background: on ? (o.v === "test" ? "rgba(250,204,21,0.12)" : "rgba(34,197,94,0.12)") : "#f8fafc", border: `1.5px solid ${on ? (o.v === "test" ? "#facc15" : "#22c55e") : "#e2e8f0"}`, borderRadius: 9, padding: "11px 10px", cursor: "pointer", textAlign: "left" }}>
-                              <div style={{ fontSize: 13, fontWeight: 700, color: on ? (o.v === "test" ? "#a16207" : "#15803d") : "#374151" }}>{o.l}</div>
-                              <div style={{ fontSize: 11, color: "#6b7280", marginTop: 1 }}>{o.d}</div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <p style={{ margin: "0 0 14px", fontSize: 11, color: "#9ca3af" }}>New rows start in Test. Publish to Production when you're ready for real viewers.</p>
-
-                      <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>5 · Visibility</label>
+                      <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>4 · Visibility</label>
                       <button onClick={() => setCarouselForm(f => ({ ...f, enabled: !f.enabled }))}
                         style={{ width: "100%", background: carouselForm.enabled ? "rgba(16,185,129,0.1)" : "rgba(107,114,128,0.08)", border: `1px solid ${carouselForm.enabled ? "rgba(16,185,129,0.35)" : "#222"}`, borderRadius: 8, padding: "11px", color: carouselForm.enabled ? "#10b981" : "#555", fontSize: 13, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                         <span style={{ fontSize: 16 }}>{carouselForm.enabled ? "✓" : "○"}</span>

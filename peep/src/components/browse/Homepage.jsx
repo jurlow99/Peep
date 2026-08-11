@@ -18,18 +18,6 @@ import { Wordmark, EyesMark } from "../Wordmark";
 import { Avatar } from "../Avatar";
 import { LiveTVPage } from "../../pages/LiveTV";
 
-// Curation regions: the live domain ALWAYS shows Production. Non-prod hosts
-// (localhost / *.pages.dev previews) default to Test and can toggle, so real
-// viewers never see test curation.
-const PROD_HOSTS = ["watchpeep.tv", "www.watchpeep.tv"];
-export function isProdHost() {
-  return typeof window !== "undefined" && PROD_HOSTS.includes(window.location.hostname);
-}
-export function resolveRegion() {
-  if (isProdHost()) return "production";
-  try { return localStorage.getItem("peep_region") || "test"; } catch { return "test"; }
-}
-
 // Admin-controlled "live" row — renders FAST channels and/or live creator streams
 // in a horizontal rail. Used for any carousel with type live_channels/creator_streams.
 function LiveRow({ title, channels = [], streams = [], nowByChannel = {}, onChannelPlay, isMobile }) {
@@ -142,8 +130,6 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
   const [videos, setVideos] = useState([]);
   const [shows, setShows] = useState([]);
   const [carousels, setCarousels] = useState([]);
-  const [region, setRegion] = useState(resolveRegion); // "test" | "production"
-  const regionLocked = isProdHost(); // live domain can't be toggled off production
   const [podcasts, setPodcasts] = useState([]);
   const [watchRows, setWatchRows] = useState([]); // recent watch_progress, for Continue Watching / Recommended rows
   const [liveStreams, setLiveStreams] = useState([]);
@@ -287,8 +273,6 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
 
   const visibleCarousels = useMemo(() => carousels.filter(c => {
     if (!c.enabled) return false;
-    // Region gate: rows without an environment count as production (backward compatible).
-    if ((c.environment || "production") !== region) return false;
     const pages = (c.pages || "home").split(",").map(p => p.trim());
     if (activeNav === "Home") return pages.includes("home");
     if (activeNav === "Movies") return pages.includes("shorts");
@@ -296,7 +280,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
     if (activeNav === "Podcasts") return pages.includes("podcasts");
     if (activeNav === "Streams") return pages.includes("live");
     return false;
-  }), [carousels, activeNav, region]);
+  }), [carousels, activeNav]);
 
   // Continue Watching — in-progress movies from watch history (newest first)
   const continueItems = useMemo(() => {
@@ -842,19 +826,6 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
 
       {isMobile && <div style={{ height: 72 }} />}
 
-      {/* Region toggle — only on non-production hosts (localhost / preview). Real viewers never see it. */}
-      {!regionLocked && (
-        <div style={{ position: "fixed", left: 16, bottom: isMobile ? 72 : 16, zIndex: 120, display: "flex", alignItems: "center", gap: 8, background: "rgba(15,15,18,0.95)", backdropFilter: "blur(12px)", border: `1px solid ${region === "test" ? "rgba(250,204,21,0.5)" : "rgba(34,197,94,0.5)"}`, borderRadius: 999, padding: "7px 10px 7px 12px", boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
-          <span style={{ fontSize: 10, fontWeight: 700, color: "#666", textTransform: "uppercase", letterSpacing: 1 }}>Region</span>
-          {["test", "production"].map(r => (
-            <button key={r} onClick={() => { try { localStorage.setItem("peep_region", r); } catch {} setRegion(r); }}
-              style={{ border: "none", borderRadius: 999, padding: "4px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer", textTransform: "capitalize",
-                background: region === r ? (r === "test" ? "#facc15" : "#22c55e") : "transparent", color: region === r ? "#0a0a0a" : "#888" }}>
-              {r}
-            </button>
-          ))}
-        </div>
-      )}
 
       <Footer onNavChange={tab => { if (tab === "Streams" && !user) { onAuthOpen(); return; } onExitStudio?.(); setActiveNav(tab); }} onProfileOpen={onProfileOpen} onOpenModal={setFooterModal} />
 
