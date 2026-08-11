@@ -166,6 +166,8 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
   const isMobile = useIsMobile();
 
   useEffect(() => { sessionStorage.setItem("peep_nav", activeNav); }, [activeNav]);
+  // Always land at the top when switching tabs (covers sidebar, mobile bar, CTAs).
+  useEffect(() => { window.scrollTo(0, 0); }, [activeNav]);
 
 
 
@@ -498,7 +500,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
               const active = !studioContent && activeNav === item.id;
               return (
                 <div key={item.id} className="sb-item"
-                  onClick={() => { if ((item.id === "My List" || item.id === "Streams") && !user) { onAuthOpen(); return; } onExitStudio?.(); setActiveNav(item.id); }}
+                  onClick={() => { if ((item.id === "My List" || item.id === "Streams") && !user) { onAuthOpen(); return; } onExitStudio?.(); setActiveNav(item.id); window.scrollTo(0, 0); }}
                   style={{
                     display: "flex", flexDirection: sbExpanded ? "row" : "column", alignItems: "center", gap: sbExpanded ? 14 : 4,
                     padding: sbExpanded ? "11px 20px" : "10px 0",
