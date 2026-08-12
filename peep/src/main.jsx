@@ -1,4 +1,4 @@
-import { StrictMode, Component } from 'react'
+import { Component } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import './index.css'
@@ -43,8 +43,10 @@ if (path === '/streamer-signin' || path === '/apply-to-stream' || path === '/cre
   window.location.replace('/signin?redirect=/streamer');
 }
 
+// Note: React.StrictMode intentionally left OFF — it double-renders every
+// component in dev, which made typing/dragging laggy on this large app. It has
+// no effect on the production build, so this only changes local dev speed.
 createRoot(document.getElementById('root')).render(
-  <StrictMode>
     <ErrorBoundary>
       {isAdminHost              ? <AdminPage />         :
        path === '/signup'         ? <SignupPage />        :
@@ -58,6 +60,5 @@ createRoot(document.getElementById('root')).render(
            <App />
          </QueryProvider>
        </BrowserRouter>}
-    </ErrorBoundary>
-  </StrictMode>,
+    </ErrorBoundary>,
 )
