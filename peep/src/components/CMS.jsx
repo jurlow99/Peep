@@ -997,7 +997,7 @@ export function CMS({ onExit, currentUser }) {
 
   async function loadStorageFiles() {
     setStorageLoading(true);
-    const BUCKET = "peep-media";
+    const BUCKET = "content";
     const VIDEO_EXTS = [".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"];
     const AUDIO_EXTS = [".mp3", ".wav", ".aac", ".m4a", ".ogg"];
     const FOLDER_TYPE = { shorts: "short", trailers: "trailer", episodes: "episode", "episodes ": "episode", podcasts: "podcast_episode" };
