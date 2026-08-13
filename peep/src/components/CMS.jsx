@@ -418,6 +418,7 @@ export function CMS({ onExit, currentUser }) {
   const [bossSettings, setBossSettings] = useState({ maintenance_mode: "false", banner_active: "false", banner_text: "", banner_expires_at: "" });
   const [storageFiles, setStorageFiles] = useState([]);
   const [storageLoading, setStorageLoading] = useState(false);
+  const [bulkPublishing, setBulkPublishing] = useState(false);
   const [storageFilter, setStorageFilter] = useState("pending");
   const [storageAddModal, setStorageAddModal] = useState(null);
   const [storageAddForm, setStorageAddForm] = useState({ title: "", type: "movie", show_id: "", podcast_id: "", description: "", year: new Date().getFullYear(), genre: "", artist: "", episode_number: 1, season_number: 1, linked_id: "", linked_table: "videos", url: "" });
@@ -1061,9 +1062,27 @@ export function CMS({ onExit, currentUser }) {
     if (!error) {
       showToast(`"${f.title}" published to Peep`);
       setStorageAddModal(null);
+      loadStorageFiles();
     } else {
       showToast("Error: " + error.message);
     }
+  }
+
+  // One-click: turn every un-published VIDEO file in the bucket into a Movie entry.
+  async function publishAllPending() {
+    const pending = storageFiles.filter(f => !f.ingested && (f.typeHint === "movie" || f.typeHint === "short"));
+    if (pending.length === 0) { showToast("No new video files to publish", "error"); return; }
+    if (!window.confirm(`Publish ${pending.length} file${pending.length !== 1 ? "s" : ""} as Movies? (title comes from the filename — you can rename them after)`)) return;
+    setBulkPublishing(true);
+    const clean = name => name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+    let ok = 0, fail = 0;
+    for (const file of pending) {
+      const { error } = await supabase.from("videos").insert({ title: clean(file.name) || file.name, url: file.url });
+      if (error) { fail++; } else { ok++; logAudit?.("create", "video", null, `bulk-ingested ${file.name}`); }
+    }
+    setBulkPublishing(false);
+    showToast(fail ? `Published ${ok}, ${fail} failed` : `Published ${ok} movie${ok !== 1 ? "s" : ""} ✓`, fail ? "error" : "success");
+    loadStorageFiles();
   }
 
   async function loadBossSettings() {
@@ -9218,6 +9237,7 @@ export function CMS({ onExit, currentUser }) {
                 <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Files in your Supabase bucket. Click "Publish" to make them watchable on Peep.</p>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={publishAllPending} disabled={bulkPublishing} style={{ padding: "10px 18px", background: "#059669", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: bulkPublishing ? "wait" : "pointer", opacity: bulkPublishing ? 0.7 : 1 }}>{bulkPublishing ? "Publishing…" : "↑ Publish all new"}</button>
                 <button onClick={() => { setStorageAddForm({ title: "", type: "movie", show_id: "", podcast_id: "", description: "", year: new Date().getFullYear(), genre: "", artist: "", episode_number: 1, season_number: 1, linked_id: "", linked_table: "videos", url: "" }); setStorageAddModal({ name: "External URL", folder: "", url: "" }); }} style={{ padding: "10px 18px", background: "#4f46e5", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add from URL</button>
                 <button onClick={loadStorageFiles} style={{ padding: "10px 20px", background: "#0f172a", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{storageLoading ? "Scanning…" : "Refresh"}</button>
               </div>
