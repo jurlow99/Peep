@@ -2,55 +2,41 @@
 
 Specs for every image and video asset on Peep.
 
+> **Current scope:** VOD (shorts & series) and podcasts only. Live streaming is not active.
+
 ---
 
 ## Poster
 
-Used as the card artwork in all browse rows and grids.
+Used as the card artwork in all browse rows and grids. The platform displays the poster as a pure image — **no text is overlaid by the app**. Your title treatment, logo, and any text must be baked directly into the poster.
 
-- **Dimensions:** 400 × 600px (2:3 ratio)
-- **Safe zone:** keep faces/text inside the center 320 × 460 area
-  - 40px margin left/right
-  - 70px margin from top
-  - 100px margin from bottom — the platform overlays the title here, anything in that zone gets covered
-- **Format:** JPG or PNG
-- **Tips:** Subject should be framed in the upper-center. Dark or busy bottom edges are fine since the title sits on top.
+- **Dimensions:** 600 × 900px minimum · 1200 × 1800px preferred (2:3 ratio)
+- **Format:** JPG or WebP
+- **Tips:** Design it like a film or VHS poster — self-contained, with the title/logo built in. The card shows the full image with no cropping on desktop. Treat it as a standalone piece of art.
 
 ---
 
 ## Hero / Thumbnail
 
-Full-screen banner image shown at the top of the home screen for featured content.
+Full-screen banner image shown at the top of the home screen for featured content. The platform does **not** overlay a title — your title/logo treatment must be baked into the image. The app only overlays Play, Trailer, and My List buttons at the bottom-left.
 
-- **Dimensions:** 1920 × 1080px (16:9)
-- **Safe zone:** keep key subjects inside the center 1400 × 800 area
-  - 260px margin left/right
-  - 140px margin top/bottom
-- **Format:** JPG or PNG
-- **Tips:** The image is cropped to show the top 20% first (`objectPosition: center 20%`), so frame subjects toward the upper half. Left side is where the title/buttons overlay — keep that area darker or free of competing detail.
-
----
-
-## Hero Trailer (background autoplay)
-
-Short clip that plays silently behind the hero banner after 3 seconds.
-
-- **Aspect ratio:** 16:9 (matches the hero image)
-- **Format:** Direct `.mp4` file — must be hosted in Supabase storage
-  - YouTube/Vimeo links are **not** supported for background autoplay; those open in a modal instead
-- **Duration:** Plays for 25 seconds, then pauses 25 seconds, then loops
-- **Behavior:** Muted by default. Viewer can unmute with the button in the corner.
-- **Tips:** Keep the most compelling part in the first 25 seconds. Avoid hard cuts at the very start — the fade-in takes ~1.4s.
+- **Dimensions:** 1920 × 1080px minimum · 2560 × 1440px preferred (16:9)
+- **Format:** JPG or WebP (under 500KB for fast load)
+- **Tips:**
+  - Bake your title/logo into the image — the app shows no text on top
+  - Frame the main subject on the right half of the image — the bottom-left has the action buttons
+  - Keep the bottom-left area relatively clear or dark so the buttons read cleanly
+  - The image is cropped to show the top 20% first (`objectPosition: center 20%`), so frame subjects toward the upper half
 
 ---
 
-## Card Hover Trailer (preview on hover)
+## Video File
 
-Same file as the hero trailer. When a viewer hovers a card for 400ms, it expands into a 16:9 preview overlay and plays the trailer.
+The actual content file for shorts, series episodes, and trailers.
 
-- **Requirements:** Must be a direct `.mp4` — same file used for the hero trailer works
-- **Cloudflare Stream videos are excluded** — only direct file uploads get the hover preview
-- **Overlay size:** ~560 × 315px at 16:9
+- **Format:** MP4 (H.264 video, AAC stereo audio)
+- **Resolution:** 1080p minimum · 4K welcome
+- **Trailer:** MP4 or YouTube link, 60–180 seconds ideal
 
 ---
 
@@ -59,17 +45,23 @@ Same file as the hero trailer. When a viewer hovers a card for 400ms, it expands
 Square image shown in podcast rows and on the podcast detail page.
 
 - **Dimensions:** 1400 × 1400px (square)
-- **Format:** JPG or PNG
-- **Tips:** Standard podcast cover art dimensions — same file you'd submit to Apple Podcasts or Spotify works here.
+- **Format:** JPG or WebP
+- **Tips:** Standard podcast cover art — same file you'd submit to Apple Podcasts or Spotify works here.
 
 ---
 
-## Music / Album Artwork
+## Metadata
 
-Square image shown in the music section.
+Send this alongside your assets:
 
-- **Dimensions:** 1400 × 1400px (square)
-- **Format:** JPG or PNG
+| Field | Notes |
+|---|---|
+| Title | |
+| Year | |
+| Runtime | e.g. "42 min" or "1h 24m" |
+| Rating | TV-MA, NR, R, etc. |
+| Description | 1–2 sentences |
+| Genre / Tags | comma-separated, e.g. "Horror, Dark Comedy, Indie" |
 
 ---
 
@@ -77,9 +69,8 @@ Square image shown in the music section.
 
 | Asset | Dimensions | Format | Notes |
 |---|---|---|---|
-| Poster | 400 × 600px | JPG/PNG | Bottom 100px covered by title |
-| Hero / Thumbnail | 1920 × 1080px | JPG/PNG | Subject upper-half, left side stays dark |
-| Hero Trailer | 16:9, any resolution | .mp4 (direct) | No YouTube/Vimeo for bg autoplay |
-| Card Hover Trailer | same file as hero trailer | .mp4 (direct) | Cloudflare Stream excluded |
-| Podcast Artwork | 1400 × 1400px | JPG/PNG | Standard podcast cover art |
-| Music / Album Art | 1400 × 1400px | JPG/PNG | |
+| Poster | 1200 × 1800px preferred | JPG/WebP | Title baked in — no app text overlay |
+| Hero / Thumbnail | 2560 × 1440px preferred | JPG/WebP | Title baked in, subject right-of-frame, bottom-left clear for buttons |
+| Video | 1080p+ | MP4 (H.264/AAC) | |
+| Trailer | any | MP4 or YouTube | 60–180s ideal |
+| Podcast Artwork | 1400 × 1400px | JPG/WebP | Standard podcast cover art |
