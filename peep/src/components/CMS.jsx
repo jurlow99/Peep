@@ -54,8 +54,7 @@ function PremiumToggleButton({ on, onToggle }) {
 function TierSelect({ value, onChange }) {
   const opts = [
     { v: "production", l: "Production", d: "All users", c: "#22c55e" },
-    { v: "stage", l: "Stage", d: "Stage + Test", c: "#3b82f6" },
-    { v: "test", l: "Test", d: "Test only", c: "#a855f7" },
+    { v: "test", l: "Test", d: "Test accounts only", c: "#a855f7" },
   ];
   return (
     <div style={{ marginBottom: 16 }}>
@@ -6116,7 +6115,6 @@ export function CMS({ onExit, currentUser }) {
                           <select value={u.access_tier || "production"} onChange={e => setUserAccessTier(u.id, e.target.value)}
                             style={{ fontSize: 12, padding: "4px 8px", borderRadius: 6, border: "1px solid #e2e8f0", background: "#fff", color: (u.access_tier && u.access_tier !== "production") ? "#7c3aed" : "#374151", fontWeight: (u.access_tier && u.access_tier !== "production") ? 700 : 400, cursor: "pointer" }}>
                             <option value="production">Production</option>
-                            <option value="stage">Stage</option>
                             <option value="test">Test</option>
                           </select>
                         </td>
@@ -7607,8 +7605,7 @@ export function CMS({ onExit, currentUser }) {
                       <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
                         {[
                           { v: "production", l: "Production", d: "All real users", c: "#22c55e" },
-                          { v: "stage", l: "Stage", d: "Stage + Test accts", c: "#3b82f6" },
-                          { v: "test", l: "Test", d: "Test accts only", c: "#a855f7" },
+                          { v: "test", l: "Test", d: "Test accounts only", c: "#a855f7" },
                         ].map(o => {
                           const on = (carouselForm.visibility_tier || "production") === o.v;
                           return (
@@ -7620,7 +7617,7 @@ export function CMS({ onExit, currentUser }) {
                           );
                         })}
                       </div>
-                      <p style={{ margin: "0 0 4px", fontSize: 11, color: "#9ca3af" }}>Production = live for everyone. Stage/Test = only accounts at that tier or higher see this row.</p>
+                      <p style={{ margin: "0 0 4px", fontSize: 11, color: "#9ca3af" }}>Production = live for everyone. Test = only Test accounts see this row (preview it before going public).</p>
                     </div>
 
                     <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
