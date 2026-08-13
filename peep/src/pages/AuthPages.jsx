@@ -228,13 +228,13 @@ export function SignupPage() {
     }
 
     if (data.user) {
-      await supabase.from("profiles").insert({
+      await supabase.from("profiles").upsert({
         id: data.user.id,
         username: name.trim().toLowerCase().replace(/\s+/g, "_"),
         email: email.toLowerCase(),
         full_name: name.trim(),
         ...(refCode ? { referred_by: refCode } : {}),
-      });
+      }, { onConflict: "id", ignoreDuplicates: true });
     }
 
     await supabase.auth.signInWithPassword({ email, password });

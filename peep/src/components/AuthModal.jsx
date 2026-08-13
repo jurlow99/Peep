@@ -95,11 +95,11 @@ export function AuthModal({ onClose }) {
       if (signUpError) { setError(signUpError.message); setLoading(false); return; }
 
       if (data.user) {
-        const { error: profileError } = await supabase.from("profiles").insert({
+        const { error: profileError } = await supabase.from("profiles").upsert({
           id: data.user.id,
           username: username.toLowerCase(),
           full_name: "",
-        });
+        }, { onConflict: "id", ignoreDuplicates: true });
         if (profileError) setError(profileError.message);
         else setMessage("Account created! Check your email to confirm, then sign in.");
       }
