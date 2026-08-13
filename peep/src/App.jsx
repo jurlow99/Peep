@@ -3,7 +3,8 @@ import { useLocation } from "react-router-dom";
 import { supabase } from "./supabase";
 import { AuthModal } from "./components/AuthModal";
 import { LandingPage } from "./pages/LandingPage";
-import { ProfileScreen, avatarForId, PRESET_AVATARS } from "./components/ProfileScreen";
+import { ProfileScreen } from "./components/ProfileScreen";
+import { Avatar } from "./components/Avatar";
 import { CreatorDashboard } from "./pages/CreatorDashboard";
 import { LiveTVPage } from "./pages/LiveTV";
 import { StreamerDashboard } from "./pages/StreamerDashboard";
@@ -18,12 +19,12 @@ import { useSubscription, hasActiveSubscription } from "./hooks/useSubscription"
 import { PaywallPage } from "./pages/PaywallPage";
 import { isOwnerEmail } from "./lib/auth";
 import { PAD, CARD_W, SAFE_TOP } from "./lib/theme";
-import { AvatarThumb } from "./pages/settingsHelpers";
 import { useAppNavigation } from "./app/useAppNavigation";
 import { useIsMobile } from "./hooks/useIsMobile";
 import { rankRelated } from "./lib/recommendations";
 import { TrailerModal } from "./lib/playerUtils";
 import { Spinner } from "./components/ui/Spinner";
+import { Wordmark, LogoHorizontal } from "./components/Wordmark";
 import { loadFlags, getFlags } from "./lib/flags";
 import { contentSelect } from "./lib/contentQueries";
 import { contentKey } from "./lib/contentIds";
@@ -80,6 +81,8 @@ export default function App() {
     authChecked,
     userAvatarId,
     setUserAvatarId,
+    userAvatarUrl,
+    setUserAvatarUrl,
     userName,
     setUserName,
     userRole,
@@ -128,6 +131,19 @@ export default function App() {
       .then(({ data }) => setStreamRecord(data ?? null));
   }, [user?.id]);
 
+  // When the session ends (sign-out here or in another tab), leave any logged-in-only
+  // view so we don't show a stale screen (e.g. the streamer "Application under review").
+  const prevUserRef = useRef(user);
+  useEffect(() => {
+    const wasSignedIn = !!prevUserRef.current;
+    prevUserRef.current = user;
+    if (wasSignedIn && !user) {
+      setProfileOpen(false);
+      setPaywallOpen(false);
+      setPage(p => (["studio", "settings", "profile", "creator"].includes(p) ? "home" : p));
+    }
+  }, [user]);
+
   // Presence heartbeat — mark this user online while browsing
   useEffect(() => {
     if (!user) return;
@@ -149,12 +165,35 @@ export default function App() {
   const { goHome: navigateHome } = useAppNavigation({ page, setPage, selectedVideo, selectedShow, selectedPodcast, onClearSelection: clearSelection });
   const goHome = () => { navigateHome(); clearSelection(); };
 
-  const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true), onProfileOpen: () => setPage("profile"), userAvatarId, userName, isPremiumUser, onPodcastSelect: pod => { setSelectedPodcast(pod); setPage("podcast"); }, onViewProfile: () => setPage("profile"), onChannelPlay: ch => { if (isLocked(ch)) { openGate(ch); return; } setSelectedVideo({ id: `ch-${ch.id}`, title: ch.name, url: ch.hls_url, _type: "live", thumbnail: ch.hero_url || ch.logo_url || "", description: ch.description || "" }); setPage("player"); } };
+  // Live Feed HLS map (from the public_live_feeds view) — lets a channel play a
+  // linked feed's Cloudflare stream without exposing any source details.
+  const [feedHlsMap, setFeedHlsMap] = useState({});
+  useEffect(() => {
+    supabase.from("public_live_feeds").select("id, cloudflare_hls_url, playback_status")
+      .then(({ data }) => {
+        const m = {};
+        (data || []).forEach(f => { if (f.cloudflare_hls_url) m[f.id] = f.cloudflare_hls_url; });
+        setFeedHlsMap(m);
+      });
+  }, []);
+
+  // Resolve a channel's HLS playback URL. Priority:
+  //   1. linked Live Feed -> its Cloudflare HLS
+  //   2. direct hls_url (HLS-pull channels)
+  //   3. Cloudflare live-input UID (RTMP/SRT push channels)
+  const channelPlaybackUrl = ch => {
+    if (ch.live_feed_id && feedHlsMap[ch.live_feed_id]) return feedHlsMap[ch.live_feed_id];
+    if (ch.hls_url) return ch.hls_url;
+    if (ch.stream_uid) return `https://customer-x9w8t8qxjaf49jqb.cloudflarestream.com/${ch.stream_uid}/manifest/video.m3u8`;
+    return "";
+  };
+
+  const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true), onProfileOpen: () => setPage("profile"), userAvatarId, userAvatarUrl, userName, isPremiumUser, onPodcastSelect: pod => { setSelectedPodcast(pod); setPage("podcast"); }, onViewProfile: () => setPage("profile"), onChannelPlay: ch => { if (!user) { setAuthOpen(true); return; } if (isLocked(ch)) { openGate(ch); return; } setSelectedVideo({ id: `ch-${ch.id}`, title: ch.name, url: channelPlaybackUrl(ch), _type: "live", thumbnail: ch.hero_url || ch.logo_url || "", description: ch.description || "" }); setPage("player"); } };
 
 
   if (maintenanceMode) return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", gap: 16 }}>
-      <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 48, color: "#facc15" }}>peep.</span>
+      <Wordmark height={52} />
       <p style={{ color: "#fff", fontSize: 22, fontWeight: 600, margin: 0 }}>We'll be right back.</p>
       <p style={{ color: "#555", fontSize: 14, margin: 0 }}>We're doing some maintenance. Check back shortly.</p>
     </div>
@@ -162,7 +201,7 @@ export default function App() {
 
   if (!authChecked) return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 42, color: "#facc15", opacity: 0.8 }}>peep.</span>
+      <Wordmark height={44} style={{ opacity: 0.8 }} />
     </div>
   );
   if (passwordRecovery) return <PasswordResetPage isInvite={passwordRecovery === "invite"} onDone={() => { setPasswordRecovery(false); window.location.href = "/"; }} />;
@@ -172,7 +211,7 @@ export default function App() {
   if (paywallOpen) return <PaywallPage user={user} onBack={() => setPaywallOpen(false)} onSubscribed={() => setPaywallOpen(false)} onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }} />;
 
   const goToStudio = () => { setProfileOpen(false); setPage("studio"); };
-  const profileScreenEl = profileOpen && <ProfileScreen user={user} userAvatarId={userAvatarId} userName={userName} onClose={() => setProfileOpen(false)} onAvatarChange={id => setUserAvatarId(id)} onNameChange={n => setUserName(n)} onViewProfile={() => { setProfileOpen(false); setPage("profile"); }} onOpenSettings={() => { setProfileOpen(false); setPage("settings"); }} onCreatorDash={creatorRecord ? () => { setProfileOpen(false); setPage("creator"); } : null} onStreamerDash={streamRecord ? goToStudio : null} />;
+  const profileScreenEl = profileOpen && <ProfileScreen user={user} userAvatarId={userAvatarId} userAvatarUrl={userAvatarUrl} userName={userName} onClose={() => setProfileOpen(false)} onAvatarChange={id => { setUserAvatarId(id); setUserAvatarUrl(null); }} onNameChange={n => setUserName(n)} onViewProfile={() => { setProfileOpen(false); setPage("profile"); }} onOpenSettings={() => { setProfileOpen(false); setPage("settings"); }} onCreatorDash={creatorRecord ? () => { setProfileOpen(false); setPage("creator"); } : null} onStreamerDash={streamRecord ? goToStudio : null} />;
 
   if (page === "player" && selectedVideo) {
     const isLiveVideo = selectedVideo._type === "live" || selectedVideo._type === "live_epg";
@@ -254,9 +293,16 @@ export default function App() {
         <SettingsPage
           user={user}
           isOwner={isOwnerEmail(user?.email)}
+          isStreamer={!!streamRecord}
+          onApplyToStream={() => setPage("studio")}
           onBack={() => setPage("home")}
           onGoHome={goHome}
-          onAvatarChange={id => setUserAvatarId(id)}
+          onProfileUpdate={p => {
+            if (!p) return;
+            if ("avatarId" in p) setUserAvatarId(p.avatarId);
+            if ("avatarUrl" in p) setUserAvatarUrl(p.avatarUrl);
+            if (p.fullName != null) setUserName(p.fullName);
+          }}
           onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }}
         />
       </>
@@ -269,12 +315,12 @@ export default function App() {
         <ProfilePage
           user={user}
           userAvatarId={userAvatarId}
+          userAvatarUrl={userAvatarUrl}
           userName={userName}
           onBack={() => setPage("home")}
           onGoHome={goHome}
           onNameChange={n => setUserName(n)}
           onOpenSettings={() => setPage("settings")}
-          onAvatarChange={id => setUserAvatarId(id)}
           onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }}
         />
       </>
@@ -295,33 +341,40 @@ export default function App() {
   return (
     <>
       {!betaAck && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(0,0,0,0.88)", backdropFilter: "blur(20px)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", padding: 24 }}>
-          <div style={{ position: "relative", background: "linear-gradient(160deg, #111 0%, #0d0d0d 100%)", border: "1px solid #222", borderRadius: 24, padding: "48px 40px 40px", maxWidth: 400, width: "100%", textAlign: "center", overflow: "hidden", boxShadow: "0 40px 100px rgba(0,0,0,0.6)" }}>
-            {/* Orb glow */}
-            <div style={{ position: "absolute", top: -60, left: "50%", transform: "translateX(-50%)", width: 300, height: 200, background: "radial-gradient(ellipse, rgba(250,204,21,0.1) 0%, transparent 70%)", pointerEvents: "none" }} />
+        <div style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(12,11,14,0.78)", backdropFilter: "blur(24px)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", padding: 24 }}>
+          <div style={{ position: "relative", background: "linear-gradient(165deg, #232019 0%, #1b1a1d 55%, #151417 100%)", border: "1px solid rgba(250,204,21,0.22)", borderRadius: 24, padding: "46px 40px 38px", maxWidth: 430, width: "100%", textAlign: "center", overflow: "hidden", boxShadow: "0 40px 120px rgba(0,0,0,0.5), 0 0 70px rgba(250,204,21,0.07)" }}>
+            {/* Warm orb glow */}
+            <div style={{ position: "absolute", top: -90, left: "50%", transform: "translateX(-50%)", width: 380, height: 280, background: "radial-gradient(ellipse, rgba(250,204,21,0.22) 0%, transparent 70%)", pointerEvents: "none" }} />
             {/* Top accent line */}
-            <div style={{ position: "absolute", top: 0, left: "20%", right: "20%", height: 1, background: "linear-gradient(90deg, transparent, rgba(250,204,21,0.4), transparent)" }} />
+            <div style={{ position: "absolute", top: 0, left: "15%", right: "15%", height: 1, background: "linear-gradient(90deg, transparent, rgba(250,204,21,0.6), transparent)" }} />
 
             <div style={{ position: "relative" }}>
-              <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 44, color: "#facc15", display: "block", marginBottom: 18, letterSpacing: "-0.01em" }}>peep.</span>
+              <LogoHorizontal height={54} style={{ margin: "0 auto 16px", filter: "drop-shadow(0 0 28px rgba(250,204,21,0.28))" }} />
 
-              <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "rgba(250,204,21,0.07)", border: "1px solid rgba(250,204,21,0.18)", borderRadius: 100, padding: "6px 16px", marginBottom: 28 }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#facc15", display: "inline-block", boxShadow: "0 0 6px #facc15" }} />
-                <span style={{ fontSize: 10, color: "#facc15", fontWeight: 700, letterSpacing: 2, textTransform: "uppercase" }}>Early Access</span>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "rgba(250,204,21,0.13)", border: "1px solid rgba(250,204,21,0.32)", borderRadius: 100, padding: "6px 16px", marginBottom: 24 }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#facc15", display: "inline-block", boxShadow: "0 0 8px #facc15" }} />
+                <span style={{ fontSize: 10, color: "#facc15", fontWeight: 700, letterSpacing: 2, textTransform: "uppercase" }}>Pre-Beta · Early Access</span>
               </div>
 
-              <h2 style={{ margin: "0 0 14px", fontSize: 24, fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1.15 }}>We're still building.</h2>
-              <p style={{ margin: "0 0 36px", fontSize: 14, color: "#4a4a4a", lineHeight: 1.85 }}>
-                You might run into rough edges or missing features — we're working on it every day. Thanks for being here early.
+              <h2 style={{ margin: "0 0 14px", fontSize: 27, fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1.15, color: "#fff" }}>You're early.</h2>
+              <p style={{ margin: "0 0 24px", fontSize: 15, color: "#cbc9c2", lineHeight: 1.7 }}>
+                Welcome inside Peep — we're in <span style={{ color: "#e8e6df", fontWeight: 600 }}>pre-beta</span>, the very beginning stages, so expect rough edges, missing pieces, and things changing fast. It's a growing mix of films, series and always-on live channels, with fresh drops landing every week. Thanks for being here this early.
               </p>
+
+              {/* What's inside */}
+              <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 30, flexWrap: "wrap" }}>
+                {["Live TV", "Films", "Series"].map(t => (
+                  <span key={t} style={{ fontSize: 12, fontWeight: 600, color: "#e8e6df", background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 100, padding: "6px 15px" }}>{t}</span>
+                ))}
+              </div>
 
               <button
                 onClick={() => { localStorage.setItem("peep_beta_ack", "true"); setBetaAck(true); }}
-                style={{ width: "100%", background: "#facc15", border: "none", borderRadius: 12, padding: "15px 0", color: "#0a0a0a", fontSize: 15, fontWeight: 700, cursor: "pointer", transition: "transform 0.15s, box-shadow 0.15s", letterSpacing: "-0.01em" }}
-                onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.02)"; e.currentTarget.style.boxShadow = "0 6px 28px rgba(250,204,21,0.3)"; }}
-                onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "none"; }}
+                style={{ width: "100%", background: "#facc15", border: "none", borderRadius: 12, padding: "15px 0", color: "#0a0a0a", fontSize: 15, fontWeight: 700, cursor: "pointer", transition: "transform 0.15s, box-shadow 0.15s", letterSpacing: "-0.01em", boxShadow: "0 4px 20px rgba(250,204,21,0.22)" }}
+                onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.02)"; e.currentTarget.style.boxShadow = "0 6px 30px rgba(250,204,21,0.4)"; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 20px rgba(250,204,21,0.22)"; }}
               >
-                Let's go →
+                Start watching →
               </button>
             </div>
           </div>
@@ -336,6 +389,7 @@ export default function App() {
         onExitStudio={() => setPage("home")}
         studioContent={page === "studio" ? <StreamerDashboard embedded preloadedUser={user} /> : null}
         flags={flags}
+        isStreamer={!!streamRecord}
         {...listProps}
       />
     </>
@@ -347,7 +401,7 @@ export default function App() {
 // ─── Homepage ─────────────────────────────────────────────────────────────────
 
 
-function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, userName }) {
+function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, userAvatarUrl, userName }) {
   const [episodes, setEpisodes] = useState([]);
   const [selectedSeason, setSelectedSeason] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -435,18 +489,12 @@ function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
               Back
             </button>
-            <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
+            <Wordmark height={22} onClick={onGoHome} />
           </div>
-          {(() => {
-            const av = avatarForId(userAvatarId);
-            return user ? (
-              <div onClick={onProfileOpen} title={userName ?? "Profile"} style={{ width: 34, height: 34, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? 15 : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
-                onMouseEnter={e => e.currentTarget.style.borderColor = "#facc15"}
-                onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}>
-                {av ? av.emoji : (userName?.[0] || user.email[0]).toUpperCase()}
-              </div>
-            ) : null;
-          })()}
+          {user ? (
+            <Avatar size={34} avatarUrl={userAvatarUrl} avatarId={userAvatarId} name={userName} email={user.email}
+              onClick={onProfileOpen} title={userName ?? "Profile"} border="2px solid rgba(255,255,255,0.12)" />
+          ) : null}
         </div>
 
         {/* Hero content */}
@@ -646,7 +694,7 @@ function EpisodeCard({ episode, show, onPlay, progress }) {
 
 // ─── Podcast Detail ───────────────────────────────────────────────────────────
 
-function PodcastDetail({ podcast, onBack, onGoHome, onPlay, onProfileOpen, userAvatarId, user, userName }) {
+function PodcastDetail({ podcast, onBack, onGoHome, onPlay, onProfileOpen, userAvatarId, userAvatarUrl, user, userName }) {
   const [episodes, setEpisodes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [watchProgress, setWatchProgress] = useState({});
@@ -701,18 +749,12 @@ function PodcastDetail({ podcast, onBack, onGoHome, onPlay, onProfileOpen, userA
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
               Back
             </button>
-            <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
+            <Wordmark height={22} onClick={onGoHome} />
           </div>
-          {(() => {
-            const av = avatarForId(userAvatarId);
-            return user ? (
-              <div onClick={onProfileOpen} title={userName ?? "Profile"} style={{ width: 34, height: 34, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? 15 : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
-                onMouseEnter={e => e.currentTarget.style.borderColor = "#facc15"}
-                onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}>
-                {av ? av.emoji : (userName?.[0] || user.email[0]).toUpperCase()}
-              </div>
-            ) : null;
-          })()}
+          {user ? (
+            <Avatar size={34} avatarUrl={userAvatarUrl} avatarId={userAvatarId} name={userName} email={user.email}
+              onClick={onProfileOpen} title={userName ?? "Profile"} border="2px solid rgba(255,255,255,0.12)" />
+          ) : null}
         </div>
 
         {/* Artwork + info */}
@@ -815,7 +857,7 @@ function PodcastEpisodeRow({ episode, podcast, onPlay, progress }) {
 
 // ─── Podcast Player ────────────────────────────────────────────────────────────
 
-function PodcastPlayerView({ episode, podcast, onBack, onGoHome, onSelect, onProfileOpen, userAvatarId, user, userName }) {
+function PodcastPlayerView({ episode, podcast, onBack, onGoHome, onSelect, onProfileOpen, userAvatarId, userAvatarUrl, user, userName }) {
   const audioRef = useRef(null);
   const saveProgressRef = useRef(null);
   const progressTimerRef = useRef(null);
@@ -887,18 +929,12 @@ function PodcastPlayerView({ episode, podcast, onBack, onGoHome, onSelect, onPro
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
               Back
             </button>
-            <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
+            <Wordmark height={22} onClick={onGoHome} />
           </div>
-          {(() => {
-            const av = avatarForId(userAvatarId);
-            return user ? (
-              <div onClick={onProfileOpen} title={userName ?? "Profile"} style={{ width: 34, height: 34, borderRadius: "50%", background: av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: av ? 15 : 13, fontWeight: 700, cursor: "pointer", color: "#fff", flexShrink: 0, border: "2px solid transparent", transition: "border-color 0.15s" }}
-                onMouseEnter={e => e.currentTarget.style.borderColor = "#facc15"}
-                onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}>
-                {av ? av.emoji : (userName?.[0] || user.email[0]).toUpperCase()}
-              </div>
-            ) : null;
-          })()}
+          {user ? (
+            <Avatar size={34} avatarUrl={userAvatarUrl} avatarId={userAvatarId} name={userName} email={user.email}
+              onClick={onProfileOpen} title={userName ?? "Profile"} border="2px solid rgba(255,255,255,0.12)" />
+          ) : null}
         </nav>
 
         {/* Player content */}
@@ -964,30 +1000,29 @@ function PodcastPlayerView({ episode, podcast, onBack, onGoHome, onSelect, onPro
 
 // ─── Profile Page ─────────────────────────────────────────────────────────────
 
-function ProfilePage({ user, userAvatarId, userName, onBack, onGoHome, onNameChange, onOpenSettings, onAvatarChange, onSignOut }) {
+function ProfilePage({ user, userAvatarId, userAvatarUrl, userName, onBack, onGoHome, onOpenSettings, onSignOut }) {
   const [history, setHistory] = useState([]);
   const [contentMap, setContentMap] = useState({});
   const [showsMap, setShowsMap] = useState({});
+  const [profile, setProfile] = useState(null);
+  const [followingCount, setFollowingCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(userName || "");
-  const [avatarId, setAvatarId] = useState(userAvatarId || null);
-  const [saving, setSaving] = useState(false);
   const isMobile = useIsMobile();
   const memberSince = user?.created_at ? new Date(user.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : null;
-  const av = avatarForId(editing ? avatarId : userAvatarId);
 
   useEffect(() => { fetchData(); }, [user?.id]);
 
   async function fetchData() {
     setLoading(true);
-    const [progressRes, videosRes, showsRes, episodesRes, podEpRes, podRes] = await Promise.all([
+    const [progressRes, videosRes, showsRes, episodesRes, podEpRes, podRes, profileRes, followRes] = await Promise.all([
       supabase.from("watch_progress").select("*").eq("user_id", user.id).order("last_watched_at", { ascending: false }),
       supabase.from("videos").select("id, title, thumbnail, poster, category, year"),
       supabase.from("shows").select("id, title, thumbnail, poster, category"),
       supabase.from("episodes").select("id, title, thumbnail, show_id, season, episode_number"),
       supabase.from("podcast_episodes").select("id, title, thumbnail, podcast_id, episode_number"),
       supabase.from("podcasts").select("id, title, artwork_url"),
+      supabase.from("profiles").select("username, full_name, bio").eq("id", user.id).maybeSingle(),
+      supabase.from("streamer_follows").select("*", { count: "exact", head: true }).eq("follower_id", user.id),
     ]);
     const map = {};
     const sMap = {};
@@ -1000,16 +1035,9 @@ function ProfilePage({ user, userAvatarId, userName, onBack, onGoHome, onNameCha
     setContentMap(map);
     setShowsMap(sMap);
     setHistory(progressRes.data || []);
+    setProfile(profileRes.data || null);
+    setFollowingCount(followRes.count || 0);
     setLoading(false);
-  }
-
-  async function saveProfile() {
-    setSaving(true);
-    await supabase.from("profiles").update({ full_name: name.trim(), avatar_id: avatarId }).eq("id", user.id);
-    setSaving(false);
-    setEditing(false);
-    onAvatarChange?.(avatarId);
-    onNameChange?.(name.trim());
   }
 
   const enriched = history.map(h => ({ ...h, content: contentMap[h.content_id] || null })).filter(h => h.content);
@@ -1022,10 +1050,58 @@ function ProfilePage({ user, userAvatarId, userName, onBack, onGoHome, onNameCha
   enriched.forEach(h => { const g = h.content?.category; if (g) genreCounts[g] = (genreCounts[g] || 0) + 1; });
   const favoriteGenre = Object.entries(genreCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
 
-  const showCounts = {};
-  enriched.forEach(h => { if (h.content?._type === "episode" && h.content.show_id) showCounts[h.content.show_id] = (showCounts[h.content.show_id] || 0) + 1; });
-  const topShowId = Object.entries(showCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
-  const topShow = topShowId ? showsMap[topShowId] : null;
+  // Most watched: title seen most often (episodes grouped by show); ties break on watch time.
+  const titleAgg = {};
+  enriched.forEach(h => {
+    const c = h.content;
+    const key = c._type === "episode" && c.show_id ? `show:${c.show_id}` : `c:${h.content_id}`;
+    const label = c._type === "episode" && c.show_id ? (showsMap[c.show_id]?.title || c.title) : c.title;
+    if (!titleAgg[key]) titleAgg[key] = { label, count: 0, seconds: 0 };
+    titleAgg[key].count += 1;
+    titleAgg[key].seconds += h.progress_seconds || 0;
+  });
+  const topWatched = Object.values(titleAgg).sort((a, b) => b.count - a.count || b.seconds - a.seconds)[0]?.label || null;
+
+  const displayName = userName || profile?.full_name || user?.email;
+  const inProgress = enriched.filter(h => !h.completed && h.duration_seconds > 0 && (h.progress_seconds / h.duration_seconds) > 0.02 && (h.progress_seconds / h.duration_seconds) < 0.95);
+
+  const renderRow = (h) => {
+    const c = h.content;
+    const pct = h.duration_seconds > 0 ? Math.min(100, Math.round((h.progress_seconds / h.duration_seconds) * 100)) : 0;
+    const thumb = c.poster || c.thumbnail;
+    const subtitle = c._type === "episode"
+      ? `S${c.season} E${c.episode_number}`
+      : c._type === "podcast_episode"
+      ? `Podcast · ${c.category || ""}`
+      : c._type === "movie" ? `${c.year || ""} · ${c.category || ""}` : "";
+    return (
+      <div key={h.id} style={{ display: "flex", gap: isMobile ? 12 : 16, padding: "14px 0", borderBottom: "1px solid #111", alignItems: "center" }}>
+        <div style={{ flexShrink: 0, width: isMobile ? 80 : 112, aspectRatio: "16/9", borderRadius: 7, overflow: "hidden", background: "#1a1a1a" }}>
+          {thumb
+            ? <img src={thumb} alt={c.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            : <div style={{ width: "100%", height: "100%", background: "#1a1a1a" }} />
+          }
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ margin: "0 0 3px", fontSize: isMobile ? 13 : 15, fontWeight: 600, color: h.completed ? "#555" : "#e5e5e5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.title}</p>
+          <p style={{ margin: "0 0 8px", fontSize: 12, color: "#444" }}>{subtitle}</p>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {h.completed ? (
+              <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 600 }}>✓ Watched</span>
+            ) : pct > 0 ? (
+              <>
+                <div style={{ width: 80, height: 3, background: "#1a1a1a", borderRadius: 2, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${pct}%`, background: "#facc15" }} />
+                </div>
+                <span style={{ fontSize: 11, color: "#555" }}>{pct}%</span>
+              </>
+            ) : null}
+            <span style={{ fontSize: 11, color: "#333", marginLeft: "auto" }}>{timeAgo(h.last_watched_at)}</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
@@ -1036,30 +1112,28 @@ function ProfilePage({ user, userAvatarId, userName, onBack, onGoHome, onNameCha
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
           Back
         </button>
-        <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
+        <Wordmark height={22} onClick={onGoHome} />
       </nav>
 
       {/* Profile header */}
       <div style={{ paddingTop: 68 + 40, paddingLeft: PAD, paddingRight: PAD, paddingBottom: 0, maxWidth: 860, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 24, marginBottom: 28, flexWrap: "wrap" }}>
-          <div style={{ width: isMobile ? 80 : 96, height: isMobile ? 80 : 96, borderRadius: "50%", background: av?.svg ? "none" : (av?.gradient ?? "linear-gradient(135deg,#6366f1,#8b5cf6)"), display: "flex", alignItems: "center", justifyContent: "center", fontSize: isMobile ? 30 : 38, border: "3px solid #222", flexShrink: 0, overflow: "hidden" }}>
-            {av?.svg ? <div style={{ width: "100%", height: "100%" }} dangerouslySetInnerHTML={{ __html: av.svg }} /> : (av?.emoji ?? (userName?.[0] ?? user?.email?.[0] ?? "?").toUpperCase())}
-          </div>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 24, marginBottom: 28, flexWrap: "wrap" }}>
+          <Avatar size={isMobile ? 80 : 96} avatarUrl={userAvatarUrl} avatarId={userAvatarId} name={displayName} email={user?.email} border="3px solid #222" />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h1 style={{ margin: "0 0 4px", fontSize: isMobile ? 20 : 26, fontWeight: 700, color: "#fff" }}>{editing ? name : (userName || user?.email)}</h1>
-            <p style={{ margin: 0, fontSize: 12, color: "#333" }}>{memberSince ? `Member since ${memberSince}` : user?.email}</p>
+            <h1 style={{ margin: "0 0 4px", fontSize: isMobile ? 20 : 26, fontWeight: 700, color: "#fff" }}>{displayName}</h1>
+            {profile?.username && <p style={{ margin: "0 0 8px", fontSize: 14, color: "#facc15", fontWeight: 600 }}>@{profile.username}</p>}
+            {profile?.bio && <p style={{ margin: "0 0 10px", fontSize: 14, color: "#aaa", lineHeight: 1.5, maxWidth: 520 }}>{profile.bio}</p>}
+            <p style={{ margin: 0, fontSize: 12, color: "#555", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+              {memberSince && <span>Member since {memberSince}</span>}
+              {memberSince && <span style={{ color: "#2a2a2a" }}>·</span>}
+              <span><strong style={{ color: "#ccc" }}>{followingCount}</strong> Following</span>
+            </p>
           </div>
           <div style={{ display: "flex", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
-            {onOpenSettings && !editing && (
-              <button onClick={onOpenSettings} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid #2a2a2a", borderRadius: 8, padding: "8px 14px", color: "#aaa", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                Settings
-              </button>
-            )}
-            <button onClick={() => { setEditing(e => !e); setName(userName || ""); setAvatarId(userAvatarId || null); }}
-              style={{ background: editing ? "rgba(250,204,21,0.12)" : "rgba(255,255,255,0.06)", border: `1px solid ${editing ? "rgba(250,204,21,0.3)" : "#2a2a2a"}`, borderRadius: 8, padding: "8px 18px", color: editing ? "#facc15" : "#aaa", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-              {editing ? "Cancel" : "Edit Profile"}
+            <button onClick={onOpenSettings} style={{ background: "rgba(250,204,21,0.12)", border: "1px solid rgba(250,204,21,0.3)", borderRadius: 8, padding: "8px 18px", color: "#facc15", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              Edit Profile
             </button>
-            {onSignOut && !editing && (
+            {onSignOut && (
               <button onClick={onSignOut} style={{ background: "transparent", border: "1px solid #2a2a2a", borderRadius: 8, padding: "8px 14px", color: "#f87171", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
                 onMouseEnter={e => e.currentTarget.style.background = "rgba(248,113,113,0.08)"}
                 onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
@@ -1068,26 +1142,6 @@ function ProfilePage({ user, userAvatarId, userName, onBack, onGoHome, onNameCha
             )}
           </div>
         </div>
-
-        {/* Edit form */}
-        {editing && (
-          <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, padding: 24, marginBottom: 32 }}>
-            <p style={{ margin: "0 0 16px", fontSize: 13, fontWeight: 600, color: "#e5e5e5" }}>Choose an avatar</p>
-            <div style={{ display: "grid", gridTemplateColumns: `repeat(${isMobile ? 4 : 6}, 1fr)`, gap: 8, marginBottom: 24 }}>
-              {PRESET_AVATARS.map(a => (
-                <AvatarThumb key={a.id} av={a} size={isMobile ? 56 : 64} selected={avatarId === a.id} onClick={() => setAvatarId(a.id)} />
-              ))}
-            </div>
-            <div style={{ height: 1, background: "#1a1a1a", marginBottom: 20 }} />
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: "block", fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Display Name</label>
-              <input type="text" value={name} onChange={e => setName(e.target.value)} maxLength={40} placeholder="Your name" style={{ width: "100%", background: "#0a0a0a", border: "1px solid #2a2a2a", borderRadius: 8, padding: "10px 12px", color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box", fontFamily: "inherit" }} />
-            </div>
-            <button onClick={saveProfile} disabled={saving} style={{ background: "#facc15", border: "none", borderRadius: 8, padding: "10px 28px", color: "#0a0a0a", fontSize: 13, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
-              {saving ? "Saving…" : "Save Changes"}
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Stats */}
@@ -1097,7 +1151,7 @@ function ProfilePage({ user, userAvatarId, userName, onBack, onGoHome, onNameCha
             { label: "Hours Watched", value: totalHours > 0 ? `${totalHours}h ${totalMinutes}m` : totalMinutes > 0 ? `${totalMinutes}m` : "0m" },
             { label: "Titles Watched", value: enriched.length > 0 ? enriched.length.toString() : "0" },
             { label: "Favorite Genre", value: favoriteGenre || "—" },
-            { label: "Most Watched", value: topShow?.title || "—" },
+            { label: "Most Watched", value: topWatched || "—" },
           ].map(({ label, value }) => (
             <div key={label} style={{ background: "#111", border: "1px solid #1a1a1a", borderRadius: 12, padding: "18px 20px" }}>
               <p style={{ margin: "0 0 6px", fontSize: 11, color: "#444", textTransform: "uppercase", letterSpacing: 0.8 }}>{label}</p>
@@ -1107,50 +1161,22 @@ function ProfilePage({ user, userAvatarId, userName, onBack, onGoHome, onNameCha
         </div>
       </div>
 
+      {/* Continue Watching */}
+      {!loading && inProgress.length > 0 && (
+        <div style={{ padding: `0 ${PAD} 8px`, maxWidth: 860, margin: "0 auto" }}>
+          <h2 style={{ margin: "0 0 12px", fontSize: 18, fontWeight: 600, color: "#e5e5e5" }}>Continue Watching</h2>
+          {inProgress.slice(0, 6).map(renderRow)}
+        </div>
+      )}
+
       {/* Watch History */}
-      <div style={{ padding: `0 ${PAD} 80px`, maxWidth: 860, margin: "0 auto" }}>
+      <div style={{ padding: `${inProgress.length ? 24 : 0}px ${PAD} 80px`, maxWidth: 860, margin: "0 auto" }}>
         <h2 style={{ margin: "0 0 20px", fontSize: 18, fontWeight: 600, color: "#e5e5e5" }}>Watch History</h2>
         {loading ? (
           <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Spinner /></div>
         ) : enriched.length === 0 ? (
           <p style={{ color: "#444", fontSize: 14 }}>Nothing watched yet.</p>
-        ) : enriched.map(h => {
-          const c = h.content;
-          const pct = h.duration_seconds > 0 ? Math.min(100, Math.round((h.progress_seconds / h.duration_seconds) * 100)) : 0;
-          const thumb = c.poster || c.thumbnail;
-          const subtitle = c._type === "episode"
-            ? `S${c.season} E${c.episode_number}`
-            : c._type === "podcast_episode"
-            ? `Podcast · ${c.category || ""}`
-            : c._type === "movie" ? `${c.year || ""} · ${c.category || ""}` : "";
-          return (
-            <div key={h.id} style={{ display: "flex", gap: isMobile ? 12 : 16, padding: "14px 0", borderBottom: "1px solid #111", alignItems: "center" }}>
-              <div style={{ flexShrink: 0, width: isMobile ? 80 : 112, aspectRatio: "16/9", borderRadius: 7, overflow: "hidden", background: "#1a1a1a" }}>
-                {thumb
-                  ? <img src={thumb} alt={c.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  : <div style={{ width: "100%", height: "100%", background: "#1a1a1a" }} />
-                }
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ margin: "0 0 3px", fontSize: isMobile ? 13 : 15, fontWeight: 600, color: h.completed ? "#555" : "#e5e5e5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.title}</p>
-                <p style={{ margin: "0 0 8px", fontSize: 12, color: "#444" }}>{subtitle}</p>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  {h.completed ? (
-                    <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 600 }}>✓ Watched</span>
-                  ) : pct > 0 ? (
-                    <>
-                      <div style={{ width: 80, height: 3, background: "#1a1a1a", borderRadius: 2, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${pct}%`, background: "#facc15" }} />
-                      </div>
-                      <span style={{ fontSize: 11, color: "#555" }}>{pct}%</span>
-                    </>
-                  ) : null}
-                  <span style={{ fontSize: 11, color: "#333", marginLeft: "auto" }}>{timeAgo(h.last_watched_at)}</span>
-                </div>
-              </div>
-            </div>
-          );
-        })}
+        ) : enriched.map(renderRow)}
       </div>
     </div>
   );
@@ -1199,7 +1225,7 @@ function CreatorPortalPage({ user, onBack, onGoHome }) {
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
           Back
         </button>
-        <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer", color: "#facc15" }}>peep.</span>
+        <Wordmark height={22} onClick={onGoHome} />
         <span style={{ fontSize: 12, color: "#444", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>Creator Portal</span>
       </nav>
 

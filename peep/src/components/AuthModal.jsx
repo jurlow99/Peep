@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabase";
+import { Wordmark } from "./Wordmark";
 
 function getStrength(pw) {
   let score = 0;
@@ -94,11 +95,11 @@ export function AuthModal({ onClose }) {
       if (signUpError) { setError(signUpError.message); setLoading(false); return; }
 
       if (data.user) {
-        const { error: profileError } = await supabase.from("profiles").insert({
+        const { error: profileError } = await supabase.from("profiles").upsert({
           id: data.user.id,
           username: username.toLowerCase(),
           full_name: "",
-        });
+        }, { onConflict: "id", ignoreDuplicates: true });
         if (profileError) setError(profileError.message);
         else setMessage("Account created! Check your email to confirm, then sign in.");
       }
@@ -112,9 +113,7 @@ export function AuthModal({ onClose }) {
         <button onClick={onClose} style={{ position: "absolute", top: 18, right: 18, background: "none", border: "none", color: "#555", fontSize: 22, cursor: "pointer", lineHeight: 1, padding: "2px 6px" }}>×</button>
 
         <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 30 }}>
-            <span style={{ color: "#facc15" }}>peep.</span>
-          </span>
+          <Wordmark height={32} style={{ margin: "0 auto" }} />
           <p style={{ margin: "8px 0 0", fontSize: 13, color: "#555" }}>
             {mode === "signin" ? "Welcome back" : "Create your account"}
           </p>

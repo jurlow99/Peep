@@ -1,4 +1,4 @@
-import { StrictMode, Component } from 'react'
+import { Component } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import './index.css'
@@ -10,6 +10,7 @@ import { SetPasswordPage } from './pages/SetPasswordPage.jsx'
 import { StreamerDashboard } from './pages/StreamerDashboard.jsx'
 import { StreamerProfile } from './pages/StreamerProfile.jsx'
 import { SupportPage } from './pages/SupportPage.jsx'
+import { EnvBadge } from './components/EnvBadge.jsx'
 
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null }; }
@@ -28,16 +29,28 @@ class ErrorBoundary extends Component {
 }
 
 const path = window.location.pathname
+const host = window.location.hostname
+const isLocal = host === 'localhost' || host === '127.0.0.1'
+
+// Admin: production = admin.watchpeep.tv subdomain only; local dev = /admin path
+// (localhost can't be the subdomain). Public watchpeep.tv/admin leads to the site.
+const isAdminHost = host === 'admin.watchpeep.tv' || (isLocal && path === '/admin')
+
+// Distinguish browser tabs by environment: peep / local peep / admin / local admin
+document.title = (isLocal ? 'local ' : '') + (isAdminHost ? 'admin' : 'peep')
 
 // Legacy streamer-only routes → redirect to unified flow
 if (path === '/streamer-signin' || path === '/apply-to-stream' || path === '/create-channel') {
   window.location.replace('/signin?redirect=/streamer');
 }
 
+// Note: React.StrictMode intentionally left OFF — it double-renders every
+// component in dev, which made typing/dragging laggy on this large app. It has
+// no effect on the production build, so this only changes local dev speed.
 createRoot(document.getElementById('root')).render(
-  <StrictMode>
     <ErrorBoundary>
-      {path === '/admin'          ? <AdminPage />         :
+      <EnvBadge />
+      {isAdminHost              ? <AdminPage />         :
        path === '/signup'         ? <SignupPage />        :
        path === '/signin'         ? <SigninPage />        :
        path === '/set-password'   ? <SetPasswordPage />   :
@@ -49,6 +62,5 @@ createRoot(document.getElementById('root')).render(
            <App />
          </QueryProvider>
        </BrowserRouter>}
-    </ErrorBoundary>
-  </StrictMode>,
+    </ErrorBoundary>,
 )

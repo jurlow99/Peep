@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { Wordmark } from "./Wordmark";
 import { supabase } from "../supabase";
 import { PRESET_AVATARS } from "./ProfileScreen";
 
@@ -99,7 +100,7 @@ export function ProfileSelect({ user, onSelect }) {
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       <div style={{ position: "absolute", top: 28, left: 40 }}>
-        <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 28, color: YELLOW }}>peep.</span>
+        <Wordmark height={30} />
       </div>
 
       <h1 style={{ margin: "0 0 52px", fontFamily: "'DM Serif Display', serif", fontSize: "clamp(26px, 5vw, 40px)", fontWeight: 400, textAlign: "center" }}>

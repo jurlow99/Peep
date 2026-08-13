@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from "react";
+import { Wordmark } from "../components/Wordmark";
+import { Avatar, PRESET_AVATARS } from "../components/Avatar";
 import { supabase } from "../supabase";
 import { SUPABASE_URL } from "../lib/config";
 import {
@@ -9,6 +11,7 @@ import {
   setPref,
   SettingRow,
   DeleteAccountSection,
+  AvatarThumb,
 } from "./settingsHelpers";
 
 const BG = "#0a0a0a";
@@ -68,17 +71,19 @@ function ProfileTab({ user, onProfileUpdate }) {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
   const [avatarUrl, setAvatarUrl] = useState(user?.user_metadata?.avatar_url || "");
+  const [avatarId, setAvatarId] = useState(null);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef(null);
 
   useEffect(() => {
-    supabase.from("profiles").select("username, full_name, bio, avatar_url").eq("id", user.id).maybeSingle()
+    supabase.from("profiles").select("username, full_name, bio, avatar_url, avatar_id").eq("id", user.id).maybeSingle()
       .then(({ data }) => {
         if (data) {
           setUsername(data.username || "");
           setDisplayName(data.full_name || user?.user_metadata?.full_name || "");
           setBio(data.bio || "");
           setAvatarUrl(data.avatar_url || user?.user_metadata?.avatar_url || "");
+          setAvatarId(data.avatar_id || null);
         }
       });
   }, [user.id]);
@@ -91,12 +96,24 @@ function ProfileTab({ user, onProfileUpdate }) {
     const { error } = await supabase.storage.from("avatars").upload(path, file, { upsert: true, contentType: file.type });
     if (error) { setMsg({ type: "error", text: "Photo upload failed: " + error.message }); setUploading(false); return; }
     const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(path);
-    setAvatarUrl(publicUrl);
-    await supabase.from("profiles").update({ avatar_url: publicUrl }).eq("id", user.id);
-    await supabase.auth.updateUser({ data: { avatar_url: publicUrl } });
+    // Same storage path is reused (upsert), so cache-bust to show the new photo now.
+    const bustUrl = `${publicUrl}?v=${Date.now()}`;
+    setAvatarUrl(bustUrl);
+    await supabase.from("profiles").update({ avatar_url: bustUrl }).eq("id", user.id);
+    await supabase.auth.updateUser({ data: { avatar_url: bustUrl } });
     setMsg({ type: "ok", text: "Profile photo updated!" });
-    onProfileUpdate?.();
+    onProfileUpdate?.({ avatarUrl: bustUrl });
     setUploading(false);
+  }
+
+  // Picking a preset clears the uploaded photo, so a user has exactly one avatar.
+  async function pickPreset(id) {
+    setAvatarId(id);
+    setAvatarUrl("");
+    await supabase.from("profiles").update({ avatar_id: id, avatar_url: null }).eq("id", user.id);
+    await supabase.auth.updateUser({ data: { avatar_url: null } });
+    setMsg({ type: "ok", text: "Avatar updated!" });
+    onProfileUpdate?.({ avatarId: id, avatarUrl: null });
   }
 
   async function saveProfile() {
@@ -105,10 +122,9 @@ function ProfileTab({ user, onProfileUpdate }) {
     await supabase.auth.updateUser({ data: { full_name: displayName.trim() } });
     setSaving(false);
     setMsg({ type: "ok", text: "Profile saved!" });
-    onProfileUpdate?.();
+    onProfileUpdate?.({ fullName: displayName.trim() });
   }
 
-  const initials = (displayName || user?.email || "?")[0].toUpperCase();
   const memberSince = user?.created_at ? new Date(user.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : null;
 
   return (
@@ -117,11 +133,7 @@ function ProfileTab({ user, onProfileUpdate }) {
       <Section title="Profile Photo">
         <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
           <div style={{ position: "relative", flexShrink: 0 }}>
-            <div style={{ width: 80, height: 80, borderRadius: "50%", background: "linear-gradient(135deg,#312e81,#6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30, fontWeight: 700, color: "#fff", overflow: "hidden", border: `3px solid ${BORDER}` }}>
-              {avatarUrl
-                ? <img src={avatarUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                : initials}
-            </div>
+            <Avatar size={80} avatarUrl={avatarUrl || undefined} avatarId={avatarId} name={displayName} email={user?.email} border={`3px solid ${BORDER}`} />
             <button onClick={() => fileRef.current?.click()}
               style={{ position: "absolute", bottom: 0, right: 0, width: 26, height: 26, borderRadius: "50%", background: YELLOW, border: "2px solid #0a0a0a", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
               <svg width="11" height="11" viewBox="0 0 24 24" fill="#0a0a0a"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 000-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
@@ -137,6 +149,16 @@ function ProfileTab({ user, onProfileUpdate }) {
             </button>
           </div>
         </div>
+
+        <Divider />
+
+        <p style={{ margin: "0 0 12px", fontSize: 12, color: "#666" }}>Or pick an avatar</p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10, justifyItems: "center" }}>
+          {PRESET_AVATARS.map(a => (
+            <AvatarThumb key={a.id} av={a} size={52} selected={!avatarUrl && avatarId === a.id} onClick={() => pickPreset(a.id)} />
+          ))}
+        </div>
+
         <Msg msg={msg} />
       </Section>
 
@@ -272,7 +294,7 @@ const TABS = [
   { id: "preferences", label: "Preferences", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3v1m0 16v1M3 12h1m16 0h1M5.6 5.6l.7.7m11.4-.7-.7.7M5.6 18.4l.7-.7m11.4.7-.7-.7"/><circle cx="12" cy="12" r="4"/></svg> },
 ];
 
-export function SettingsPage({ user, isOwner, onBack, onGoHome, onProfileUpdate, onSignOut }) {
+export function SettingsPage({ user, isOwner, isStreamer = false, onApplyToStream, onBack, onGoHome, onProfileUpdate, onSignOut }) {
   const [activeTab, setActiveTab] = useState("profile");
   const isMobile = typeof window !== "undefined" && window.innerWidth < 700;
 
@@ -285,7 +307,7 @@ export function SettingsPage({ user, isOwner, onBack, onGoHome, onProfileUpdate,
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
           Back
         </button>
-        <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer", color: YELLOW }}>peep.</span>
+        <Wordmark height={22} onClick={onGoHome} />
         <span style={{ fontSize: 15, fontWeight: 600, color: "#555", marginLeft: 4 }}>Settings</span>
       </nav>
 
@@ -320,6 +342,20 @@ export function SettingsPage({ user, isOwner, onBack, onGoHome, onProfileUpdate,
           {activeTab === "profile" && <ProfileTab user={user} onProfileUpdate={onProfileUpdate} />}
           {activeTab === "account" && <AccountTab user={user} />}
           {activeTab === "preferences" && <PreferencesTab />}
+
+          {/* Stream on Peep — apply (non-streamers) or open studio (approved) */}
+          {onApplyToStream && (
+            <div style={{ marginTop: 32, padding: "14px 18px", background: "rgba(250,204,21,0.04)", border: "1px solid rgba(250,204,21,0.12)", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <div>
+                <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 600, color: "#e0e0e0" }}>{isStreamer ? "Creator Studio" : "Stream on Peep"}</p>
+                <p style={{ margin: 0, fontSize: 12, color: "#555" }}>{isStreamer ? "Manage your channel, go live, and see analytics" : "Peep Live is a curated lineup — apply for your own live channel."}</p>
+              </div>
+              <button onClick={onApplyToStream}
+                style={{ background: "transparent", border: "1px solid rgba(250,204,21,0.2)", borderRadius: 8, padding: "8px 16px", color: YELLOW, fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                {isStreamer ? "Open →" : "Apply →"}
+              </button>
+            </div>
+          )}
 
           {/* Admin shortcut */}
           {isOwner && (

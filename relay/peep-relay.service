@@ -1,0 +1,21 @@
+[Unit]
+Description=Peep SRT Relay
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=peep
+WorkingDirectory=/opt/peep-relay
+EnvironmentFile=/opt/peep-relay/.env
+ExecStart=/usr/bin/node /opt/peep-relay/server.js
+Restart=always
+RestartSec=3
+# Let it write its state file
+StateDirectory=peep-relay
+# Basic hardening
+NoNewPrivileges=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

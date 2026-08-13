@@ -1,4 +1,5 @@
 import { PAD } from "../../lib/theme";
+import { Wordmark } from "../Wordmark";
 import { useIsMobile } from "../../hooks/useIsMobile";
 
 const FOOTER_MODALS = {
@@ -165,7 +166,7 @@ export function Footer({ onNavChange, onProfileOpen, onOpenModal }) {
         ))}
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 24, borderTop: "1px solid rgba(255,255,255,0.05)" }}>
-        <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, color: "#2e2e2e" }}><span style={{ color: "#facc15" }}>peep.</span></span>
+        <Wordmark height={22} />
         <div style={{ textAlign: "right" }}>
           <p style={{ margin: "0 0 4px", fontSize: 11, color: "#333" }}>© {new Date().getFullYear()} Peep Media, Inc. All rights reserved.</p>
           <p style={{ margin: 0, fontSize: 11, color: "#2a2a2a" }}>All content sourced from the public domain. Free to watch, forever.</p>

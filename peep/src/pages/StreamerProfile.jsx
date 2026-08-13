@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { Wordmark } from "../components/Wordmark";
 import Hls from "hls.js";
 import { supabase } from "../supabase";
 
@@ -533,7 +534,7 @@ export function StreamerProfile() {
     return (
       <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", padding: "40px 16px" }}>
         <a href="/" style={{ textDecoration: "none", marginBottom: 36 }}>
-          <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 36, color: YELLOW }}>peep.</span>
+          <Wordmark height={38} />
         </a>
         <p style={{ color: "#aaa", fontSize: 15, margin: "0 0 20px" }}>Channel not found.</p>
         <a href="/" style={{ color: YELLOW, fontSize: 13, textDecoration: "none" }}>← Back to Peep</a>
@@ -725,7 +726,7 @@ export function StreamerProfile() {
       {/* Nav */}
       <nav style={{ position: "sticky", top: 0, zIndex: 100, height: 50, display: "flex", alignItems: "center", padding: "0 16px", background: "rgba(10,10,10,0.95)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(255,255,255,0.06)", justifyContent: "space-between" }}>
         <a href="/" style={{ textDecoration: "none" }}>
-          <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, color: YELLOW }}>peep.</span>
+          <Wordmark height={22} />
         </a>
         <a href="/?nav=Streams" style={{ display: "flex", alignItems: "center", gap: 6, color: "#555", fontSize: 13, textDecoration: "none", transition: "color 0.15s" }}
           onMouseEnter={e => e.currentTarget.style.color = "#888"}

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { Wordmark } from "../components/Wordmark";
 import Hls from "hls.js";
 import { supabase } from "../supabase";
 import { CloudflareVideoUploader } from "../components/CloudflareVideoUploader";
@@ -742,7 +743,7 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
 
   if (!user) return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: embedded ? 300 : "100vh", padding: "40px 16px", background: embedded ? "transparent" : BG, fontFamily: "'Space Grotesk', sans-serif" }}>
-      {!embedded && <a href="/" style={{ textDecoration: "none", marginBottom: 40 }}><span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 42, color: YELLOW }}>peep.</span></a>}
+      {!embedded && <a href="/" style={{ textDecoration: "none", marginBottom: 40 }}><Wordmark height={44} /></a>}
       <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 16, padding: "40px 36px", width: "min(400px,100%)", textAlign: "center" }}>
         <h2 style={{ margin: "0 0 10px", fontSize: 20, fontWeight: 700, color: "#fff" }}>Creator Dashboard</h2>
         <p style={{ margin: "0 0 28px", fontSize: 14, color: "#555", lineHeight: 1.6 }}>Sign in to go live and manage your channel.</p>
@@ -894,7 +895,7 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
 
     return (
       <div style={{ background: embedded ? "transparent" : BG, minHeight: embedded ? 0 : "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 16px", fontFamily: "'Space Grotesk', sans-serif" }}>
-        {!embedded && <a href="/" style={{ textDecoration: "none", marginBottom: 40 }}><span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 42, color: YELLOW }}>peep.</span></a>}
+        {!embedded && <a href="/" style={{ textDecoration: "none", marginBottom: 40 }}><Wordmark height={44} /></a>}
         {card}
         {toast && <Toast msg={toast} />}
       </div>
@@ -943,7 +944,7 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
       {!embedded && (
         <nav className="dash-nav" style={{ position: "sticky", top: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "space-between", padding: `0 ${PAD}`, height: 56, background: "rgba(10,10,10,0.97)", backdropFilter: "blur(12px)", borderBottom: `1px solid ${BORDER}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <a href="/" style={{ textDecoration: "none" }}><span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, color: YELLOW }}>peep.</span></a>
+            <a href="/" style={{ textDecoration: "none" }}><Wordmark height={22} /></a>
             <span className="dash-nav-hide-mobile" style={{ color: "#222", fontSize: 14 }}>|</span>
             <span className="dash-nav-hide-mobile" style={{ fontSize: 12, color: "#444", fontWeight: 600, letterSpacing: 0.3 }}>Creator Studio</span>
           </div>

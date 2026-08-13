@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Wordmark } from "../components/Wordmark";
 import { CMS } from "../components/CMS";
 import { supabase } from "../supabase";
 import { isAdminProfile } from "../lib/auth";
@@ -52,7 +53,7 @@ export function AdminPage() {
       <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif" }}>
         <div style={{ width: 360, padding: "48px 40px", background: "#111", border: "1px solid #1e1e1e", borderRadius: 16 }}>
           <div style={{ textAlign: "center", marginBottom: 32 }}>
-            <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 28, color: "#facc15" }}>peep.</span>
+            <Wordmark height={30} />
             <p style={{ color: "#555", fontSize: 13, margin: "8px 0 0" }}>Admin</p>
           </div>
           <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 14 }}>

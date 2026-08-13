@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import Hls from "hls.js";
+import { Wordmark } from "../Wordmark";
 import { supabase } from "../../supabase";
 import { avatarForId } from "../ProfileScreen";
 import { PAD, SAFE_TOP } from "../../lib/theme";
@@ -47,6 +48,9 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
   const [currentViewers, setCurrentViewers] = useState(0);
   const guideHideRef = useRef(null);
   const [streamEnded, setStreamEnded] = useState(false);
+  const [playbackError, setPlaybackError] = useState(false);
+  const [retryNonce, setRetryNonce] = useState(0);
+  const netRetryRef = useRef(0);
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
@@ -171,11 +175,15 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
   }, [video.id, user]);
 
 
-  // HLS.js setup for .m3u8 streams
+  // HLS.js setup for .m3u8 streams — with fatal-error recovery + dead-stream fallback
   useEffect(() => {
     const videoEl = videoRef.current;
     if (!videoEl || !isHlsUrl(video.url) || getEmbedUrl(video.url)) return;
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
+    setPlaybackError(false);
+    netRetryRef.current = 0;
+    const MAX_NET_RETRY = 4;
+
     if (Hls.isSupported()) {
       const hlsConfig = isLive
         ? {
@@ -198,18 +206,38 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
       hls.loadSource(video.url);
       hls.attachMedia(videoEl);
       hls.on(Hls.Events.MANIFEST_PARSED, () => { videoEl.play().catch(() => {}); });
-      if (isLive) {
-        hls.on(Hls.Events.ERROR, (_, d) => {
-          if (!d.fatal && d.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
-        });
-      }
+      hls.on(Hls.Events.FRAG_BUFFERED, () => { netRetryRef.current = 0; }); // healthy again → reset
+      hls.on(Hls.Events.ERROR, (_, d) => {
+        if (!d.fatal) {
+          // Non-fatal media hiccup — nudge recovery, keep playing.
+          if (d.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+          return;
+        }
+        // Fatal error — try to recover before giving up.
+        if (d.type === Hls.ErrorTypes.NETWORK_ERROR) {
+          if (netRetryRef.current < MAX_NET_RETRY) {
+            netRetryRef.current += 1;
+            setTimeout(() => { try { hls.startLoad(); } catch {} }, 1000 * netRetryRef.current);
+          } else {
+            setPlaybackError(true);
+          }
+        } else if (d.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          try { hls.recoverMediaError(); } catch { setPlaybackError(true); }
+        } else {
+          try { hls.destroy(); } catch {}
+          hlsRef.current = null;
+          setPlaybackError(true);
+        }
+      });
       hlsRef.current = hls;
     } else if (videoEl.canPlayType("application/vnd.apple.mpegurl")) {
       videoEl.src = video.url;
       videoEl.play().catch(() => {});
+    } else {
+      setPlaybackError(true);
     }
     return () => { if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; } };
-  }, [video.url]);
+  }, [video.url, retryNonce]);
 
   useEffect(() => {
     if (!user || getEmbedUrl(video.url) || video._type === "live" || video._type === "live_epg") return;
@@ -251,8 +279,8 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
       }
       if (cancelled || !window.google?.ima) return;
 
-      // Fetch best matching pre-roll tag
-      const contentScope = isEpisode ? "episode" : "movie";
+      // Fetch best matching pre-roll tag (live channels get their own scope, no SCTE-35 needed)
+      const contentScope = isLive ? "live" : isEpisode ? "episode" : "movie";
       const { data } = await supabase.from("vast_tags")
         .select("id, tag_url, scope, content_id")
         .eq("active", true)
@@ -659,7 +687,7 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
             Back
           </button>
-          <span onClick={onGoHome} style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, cursor: "pointer" }}><span style={{ color: "#facc15" }}>peep.</span></span>
+          <Wordmark height={22} onClick={onGoHome} />
         </div>
         {(() => {
           const av = avatarForId(userAvatarId);
@@ -686,11 +714,25 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
             ) : (
               <video ref={videoRef} controls controlsList="nofullscreen" autoPlay style={{ width: "100%", height: "100%", display: "block", cursor: isFullscreen ? "pointer" : "default" }} poster={video.thumbnail}
                 onClick={isFullscreen ? togglePlayPause : undefined}
+                onError={() => { if (!Hls.isSupported() || !isHlsUrl(video.url)) setPlaybackError(true); }}
                 onTimeUpdate={handleTimeUpdate} onEnded={handleEnded} onLoadedMetadata={handleLoadedMetadata}>
                 {!isHlsUrl(video.url) && <source src={video.url} type="video/mp4" />}
               </video>
             )}
             <div ref={adContainerRef} style={{ position: "absolute", inset: 0, zIndex: 10, pointerEvents: adPlaying ? "auto" : "none" }} />
+            {playbackError && !streamEnded && (
+              <div style={{ position: "absolute", inset: 0, zIndex: 20, background: "rgba(0,0,0,0.94)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, padding: 24, textAlign: "center" }}>
+                <div style={{ fontSize: 46, lineHeight: 1 }}>📡</div>
+                <p style={{ margin: 0, fontSize: 19, fontWeight: 700, color: "#fff" }}>{isLive ? "Channel unavailable" : "Can't play this video"}</p>
+                <p style={{ margin: 0, fontSize: 13, color: "#9ca3af", maxWidth: 360, lineHeight: 1.6 }}>
+                  {isLive ? "This channel isn't responding right now. It may be temporarily offline." : "The video stream couldn't be loaded. Please try again."}
+                </p>
+                <button onClick={() => { setPlaybackError(false); setRetryNonce(n => n + 1); }}
+                  style={{ marginTop: 4, background: "#ef4444", border: "none", borderRadius: 8, padding: "10px 22px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  Try again
+                </button>
+              </div>
+            )}
             {streamEnded && (
               <div style={{ position: "absolute", inset: 0, zIndex: 20, background: "rgba(0,0,0,0.92)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
                 <div style={{ fontSize: 52, lineHeight: 1 }}>📺</div>
@@ -799,7 +841,8 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
                     const now = new Date();
                     const cur = liveEpg.find(e => e.channel_id === ch.id && new Date(e.start_time) <= now && new Date(e.end_time) > now);
                     const upNext = liveEpg.filter(e => e.channel_id === ch.id && new Date(e.start_time) > now).sort((a, b) => new Date(a.start_time) - new Date(b.start_time))[0];
-                    onSelect({ ...ch, id: `ch-${ch.id}`, title: ch.name, url: ch.hls_url, _type: "live", thumbnail: ch.hero_url || ch.logo_url || "", now_airing: cur?.title, up_next: upNext?.title, badge_text: "LIVE" });
+                    const chUrl = ch.hls_url || (ch.stream_uid ? `https://customer-x9w8t8qxjaf49jqb.cloudflarestream.com/${ch.stream_uid}/manifest/video.m3u8` : "");
+                    onSelect({ ...ch, id: `ch-${ch.id}`, title: ch.name, url: chUrl, _type: "live", thumbnail: ch.hero_url || ch.logo_url || "", now_airing: cur?.title, up_next: upNext?.title, badge_text: "LIVE" });
                     setGuideVisible(false);
                     setGuideExpanded(false);
                   }}
@@ -809,23 +852,33 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
           )}
         </div>
 
-        {(video._type === "live" || video._type === "live_epg") && (video.now_airing || video.up_next) && (
+        {(video._type === "live" || video._type === "live_epg") && (() => {
+          // Compute now/next live from the guide for whatever channel is playing —
+          // works whether the channel was opened from the grid or the in-player strip.
+          const cid = Number(String(video.id || "").replace("ch-", ""));
+          const _now = new Date();
+          const liveNow = liveEpg.find(e => e.channel_id === cid && new Date(e.start_time) <= _now && new Date(e.end_time) > _now);
+          const liveNext = liveEpg.filter(e => e.channel_id === cid && new Date(e.start_time) > _now).sort((a, b) => new Date(a.start_time) - new Date(b.start_time))[0];
+          const nowAiring = video.now_airing || liveNow?.title;
+          const upNext = video.up_next || liveNext?.title;
+          if (!nowAiring && !upNext) return null;
+          return (
           <div style={{ marginBottom: 24, background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: 12, padding: "14px 20px", display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap" }}>
-            {video.now_airing && (
+            {nowAiring && (
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#ef4444", animation: "livepulse 1.5s infinite", flexShrink: 0 }} />
                 <div>
                   <p style={{ margin: "0 0 2px", fontSize: 10, color: "#555", textTransform: "uppercase", letterSpacing: 0.7, fontWeight: 700 }}>Now Airing</p>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#e5e5e5" }}>{video.now_airing}</p>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#e5e5e5" }}>{nowAiring}</p>
                 </div>
               </div>
             )}
-            {video.up_next && (
+            {upNext && (
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#333", flexShrink: 0 }} />
                 <div>
                   <p style={{ margin: "0 0 2px", fontSize: 10, color: "#444", textTransform: "uppercase", letterSpacing: 0.7, fontWeight: 700 }}>Up Next</p>
-                  <p style={{ margin: 0, fontSize: 13, color: "#6b7280" }}>{video.up_next}</p>
+                  <p style={{ margin: 0, fontSize: 13, color: "#6b7280" }}>{upNext}</p>
                 </div>
               </div>
             )}
@@ -836,7 +889,8 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
               </div>
             )}
           </div>
-        )}
+          );
+        })()}
 
         {/* Live chat — Cloudflare-managed streams only */}
         {video.stream_uid && (

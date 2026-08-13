@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Wordmark } from "../components/Wordmark";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -35,7 +36,7 @@ export function SupportPage() {
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", padding: "40px 16px" }}>
       <a href="/" style={{ textDecoration: "none", marginBottom: 48 }}>
-        <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 36, color: YELLOW }}>peep.</span>
+        <Wordmark height={38} />
       </a>
 
       {success ? (

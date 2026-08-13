@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Wordmark } from "../Wordmark";
 import { supabase } from "../../supabase";
 import { SUPABASE_URL } from "../../lib/config";
 
@@ -24,7 +25,7 @@ export function PasswordResetPage({ onDone, isInvite = false }) {
     <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", padding: 24 }}>
       <div style={{ width: "min(420px, 100%)" }}>
         <div style={{ textAlign: "center", marginBottom: 36 }}>
-          <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 36, color: "#facc15" }}>peep.</span>
+          <Wordmark height={38} />
         </div>
         <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 16, padding: "36px clamp(20px, 6vw, 40px)" }}>
           {done ? (
@@ -96,7 +97,7 @@ export function EmailVerificationGate({ user }) {
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk', sans-serif", padding: 24 }}>
       <div style={{ width: "min(420px, 100%)", textAlign: "center" }}>
-        <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 32, color: "#facc15", display: "block", marginBottom: 36 }}>peep.</span>
+        <Wordmark height={34} style={{ marginBottom: 36 }} />
 
         <div style={{ fontSize: 48, marginBottom: 20 }}>✉️</div>
         <h1 style={{ margin: "0 0 12px", fontSize: 22, fontWeight: 700, color: "#fff" }}>Check your inbox</h1>

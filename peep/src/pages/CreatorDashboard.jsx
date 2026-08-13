@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Wordmark } from "../components/Wordmark";
 import { supabase } from "../supabase";
 import { uploadVideo } from "../lib/storageUtils";
 import { VideoUploader } from "../components/VideoUploader";
@@ -53,7 +54,7 @@ export function CreatorDashboard({ user, onSignOut }) {
 
       {/* Nav */}
       <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 50, display: "flex", alignItems: "center", padding: "0 clamp(16px,5vw,64px)", height: 64, gap: 16, background: "rgba(10,10,10,0.95)", backdropFilter: "blur(16px)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-        <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 24, color: "#facc15" }}>peep.</span>
+        <Wordmark height={26} />
         <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.18)", borderRadius: 100, padding: "4px 12px", fontSize: 11, fontWeight: 700, color: "#facc15", letterSpacing: 0.5 }}>
           <span style={{ width: 5, height: 5, background: "#facc15", borderRadius: "50%", boxShadow: "0 0 6px #facc15" }} />
           CREATOR
