@@ -173,7 +173,9 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
     return () => {
       window.removeEventListener("scroll", handler);
     };
-  }, []);
+    // Re-run when the viewer's tier resolves (production → test/stage), so tiered
+    // content that was filtered out on the first pass gets loaded in.
+  }, [userTier]);
 
 
   useEffect(() => {
