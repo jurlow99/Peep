@@ -115,6 +115,34 @@ const ADMIN_NAV = [
   ] },
 ];
 
+// Uploads a file to the public "content" storage bucket and returns its URL.
+function UploadButton({ onUploaded, accept = "image/*", label = "Upload" }) {
+  const ref = useRef(null);
+  const [busy, setBusy] = useState(false);
+  async function pick(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy(true);
+    const ext = (file.name.split(".").pop() || "bin").toLowerCase();
+    const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const { error } = await supabase.storage.from("content").upload(path, file, { upsert: true, contentType: file.type });
+    if (error) { alert("Upload failed: " + error.message + "\n\n(Did you create the 'content' bucket yet?)"); setBusy(false); e.target.value = ""; return; }
+    const { data: { publicUrl } } = supabase.storage.from("content").getPublicUrl(path);
+    onUploaded(publicUrl);
+    setBusy(false);
+    e.target.value = "";
+  }
+  return (
+    <>
+      <button type="button" onClick={() => ref.current?.click()} disabled={busy}
+        style={{ background: "#eef2ff", border: "1px solid #c7d2fe", borderRadius: 7, padding: "0 14px", color: "#4f46e5", fontSize: 12, fontWeight: 600, cursor: busy ? "wait" : "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
+        {busy ? "Uploading…" : `↑ ${label}`}
+      </button>
+      <input ref={ref} type="file" accept={accept} style={{ display: "none" }} onChange={pick} />
+    </>
+  );
+}
+
 export function CMS({ onExit, currentUser }) {
   const [tab, setTab] = useState("content");
   const [videoSubTab, setVideoSubTab] = useState("shorts"); // "shorts" | "series" | "episodes" | "carousels" | "podcasts" | "music"
@@ -7126,7 +7154,10 @@ export function CMS({ onExit, currentUser }) {
                         <span style={{ fontSize: 11, color: "#9ca3af" }}>or paste URL</span>
                         <div style={{ flex: 1, height: 1, background: "#e2e8f0" }} />
                       </div>
-                      <input type="text" value={form.thumbnail} onChange={e => setForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="https://..." style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <input type="text" value={form.thumbnail} onChange={e => setForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="https://… or upload →" style={{ flex: 1, minWidth: 0, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                        <UploadButton onUploaded={url => setForm(f => ({ ...f, thumbnail: url }))} />
+                      </div>
                       {form.thumbnail && (
                         <div style={{ marginTop: 10, borderRadius: 6, overflow: "hidden", border: "1px solid #e2e8f0" }}>
                           <img src={form.thumbnail} alt="Hero preview" style={{ width: "100%", height: 110, objectFit: "cover" }} onError={e => { e.target.style.display = "none"; }} />
@@ -7142,7 +7173,10 @@ export function CMS({ onExit, currentUser }) {
                         <span style={{ fontSize: 11, color: "#9ca3af" }}>or paste URL</span>
                         <div style={{ flex: 1, height: 1, background: "#e2e8f0" }} />
                       </div>
-                      <input type="text" value={form.poster} onChange={e => setForm(f => ({ ...f, poster: e.target.value }))} placeholder="https://..." style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <input type="text" value={form.poster} onChange={e => setForm(f => ({ ...f, poster: e.target.value }))} placeholder="https://… or upload →" style={{ flex: 1, minWidth: 0, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                        <UploadButton onUploaded={url => setForm(f => ({ ...f, poster: url }))} />
+                      </div>
                       {form.poster && (
                         <div style={{ marginTop: 10, borderRadius: 6, overflow: "hidden", border: "1px solid #e2e8f0", width: 80 }}>
                           <img src={form.poster} alt="Poster preview" style={{ width: "100%", aspectRatio: "2/3", objectFit: "cover" }} onError={e => { e.target.style.display = "none"; }} />
