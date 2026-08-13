@@ -20,16 +20,29 @@ npm install
 
 **2. Set up environment variables**
 
-Create a `.env` file in the `peep/` directory:
+```bash
+cp .env.example .env.local
 ```
-VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-```
+
+Then fill in the values. `.env.local` is gitignored, so it does **not** sync
+between machines — each machine needs it set up by hand, and pointing one
+machine at dev while another sits on prod is the usual cause of "it works on
+my other computer."
+
+Point it at the **dev** Supabase project for local work. A purple `DEV` badge
+appears bottom-left whenever you're on a non-prod database. **No badge means
+you're on the real production database.**
 
 **3. Start the dev server**
 ```bash
 npm run dev
 ```
+
+- App — http://localhost:5173
+- Admin — http://localhost:5173/admin
+
+In production the admin is served from `admin.watchpeep.tv` instead; the
+`/admin` path only works on localhost.
 
 ## Deployment
 
