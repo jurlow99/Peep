@@ -577,11 +577,11 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
           transition: "background 0.25s ease, backdrop-filter 0.25s ease, border-color 0.25s ease",
         }}>
           {/* Mobile logo */}
-          {isMobile && (
-            {IS_DEV_DB
-              ? <span onClick={() => { onExitStudio?.(); setActiveNav("Home"); }} style={{ fontWeight: 800, color: "#a855f7", fontSize: 18, letterSpacing: 2, cursor: "pointer", fontFamily: "ui-monospace, Menlo, monospace" }}>FARRIS</span>
-              : <Wordmark height={26} onClick={() => { onExitStudio?.(); setActiveNav("Home"); }} />}
-          )}
+          {isMobile && (IS_DEV_DB ? (
+            <span onClick={() => { onExitStudio?.(); setActiveNav("Home"); }} style={{ fontWeight: 800, color: "#a855f7", fontSize: 18, letterSpacing: 2, cursor: "pointer", fontFamily: "ui-monospace, Menlo, monospace" }}>FARRIS</span>
+          ) : (
+            <Wordmark height={26} onClick={() => { onExitStudio?.(); setActiveNav("Home"); }} />
+          ))}
           {!isMobile && <div />}
 
           <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 12 : 18 }}>
