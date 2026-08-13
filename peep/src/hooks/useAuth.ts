@@ -10,6 +10,7 @@ export function useAuth() {
   const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<ProfileRole | null>(null);
+  const [userTier, setUserTier] = useState<string>("production");
   const [passwordRecovery, setPasswordRecovery] = useState<false | "invite" | true>(() => {
     const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
     return hash.get("type") === "invite" ? "invite" : false;
@@ -35,13 +36,14 @@ export function useAuth() {
         userIdRef.current = activeUser.id;
         const { data: profile } = await supabase
           .from("profiles")
-          .select("avatar_id, avatar_url, role, full_name, username")
+          .select("avatar_id, avatar_url, role, full_name, username, access_tier")
           .eq("id", activeUser.id)
           .maybeSingle();
         if (profile?.avatar_id) setUserAvatarId(profile.avatar_id);
         if (profile?.avatar_url) setUserAvatarUrl(profile.avatar_url);
         if (profile?.full_name || profile?.username) setUserName(profile.full_name || profile.username);
         setUserRole((profile?.role as ProfileRole) || "viewer");
+        setUserTier(profile?.access_tier || "production");
         setUser(activeUser);
       } else {
         setUser(null);
@@ -65,7 +67,7 @@ export function useAuth() {
         if (session?.user) {
           supabase
             .from("profiles")
-            .select("avatar_id, avatar_url, role, full_name, username")
+            .select("avatar_id, avatar_url, role, full_name, username, access_tier")
             .eq("id", session.user.id)
             .maybeSingle()
             .then(({ data }) => {
@@ -73,6 +75,7 @@ export function useAuth() {
               if (data?.avatar_url) setUserAvatarUrl(data.avatar_url);
               if (data?.full_name || data?.username) setUserName(data.full_name || data.username);
               setUserRole((data?.role as ProfileRole) || "viewer");
+              setUserTier(data?.access_tier || "production");
             });
         }
       }
@@ -98,6 +101,7 @@ export function useAuth() {
     userName,
     setUserName,
     userRole,
+    userTier,
     passwordRecovery,
     setPasswordRecovery,
     userIdRef,

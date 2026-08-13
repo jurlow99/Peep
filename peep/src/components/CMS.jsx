@@ -49,6 +49,33 @@ function PremiumToggleButton({ on, onToggle }) {
   );
 }
 
+// Preview-tier picker for content forms. Production = live for all; Stage/Test = only
+// accounts at that tier (or higher) see it.
+function TierSelect({ value, onChange }) {
+  const opts = [
+    { v: "production", l: "Production", d: "All users", c: "#22c55e" },
+    { v: "stage", l: "Stage", d: "Stage + Test", c: "#3b82f6" },
+    { v: "test", l: "Test", d: "Test only", c: "#a855f7" },
+  ];
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <label style={{ display: "block", fontSize: 11, color: "#6b7280", fontWeight: 600, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Tier</label>
+      <div style={{ display: "flex", gap: 8 }}>
+        {opts.map(o => {
+          const active = (value || "production") === o.v;
+          return (
+            <button key={o.v} type="button" onClick={() => onChange(o.v)}
+              style={{ flex: 1, background: active ? `${o.c}1f` : "#f8fafc", border: `1.5px solid ${active ? o.c : "#e2e8f0"}`, borderRadius: 9, padding: "9px 8px", cursor: "pointer", textAlign: "left" }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: active ? o.c : "#374151" }}>{o.l}</div>
+              <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 1 }}>{o.d}</div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // Top-level admin categories. Each maps to existing internal render state (tab + sub-tab),
 // so the underlying feature blocks stay untouched — only the navigation is reorganized.
 const ADMIN_NAV = [
@@ -647,9 +674,16 @@ export function CMS({ onExit, currentUser }) {
     showToast("Subscription revoked");
   }
 
+  async function setUserAccessTier(userId, tier) {
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, access_tier: tier } : u));
+    const { error } = await supabase.from("profiles").update({ access_tier: tier }).eq("id", userId);
+    if (error) { showToast("Failed: " + error.message, "error"); loadUsers(); }
+    else { showToast(`Tier → ${tier}`); logAudit?.("update", "profile", userId, `access_tier → ${tier}`); }
+  }
+
   async function loadUsers() {
     setUsersLoading(true);
-    const { data: profileData } = await supabase.from("profiles").select("id, full_name, email, username, created_at").order("created_at", { ascending: false });
+    const { data: profileData } = await supabase.from("profiles").select("id, full_name, email, username, created_at, access_tier").order("created_at", { ascending: false });
     const profiles = profileData || [];
     if (!profiles.length) { setUsers([]); setUsersLoading(false); return; }
     const ids = profiles.map(p => p.id);
@@ -1826,6 +1860,7 @@ export function CMS({ onExit, currentUser }) {
     setForm({
       title: row.title ?? "",
       is_premium: row.is_premium ?? false,
+      visibility_tier: row.visibility_tier ?? "production",
       category: row.category ?? "Horror",
       rating: row.rating ?? "NR",
       score: row.score ?? "",
@@ -1988,6 +2023,7 @@ export function CMS({ onExit, currentUser }) {
       enabled: carousel.enabled ?? true,
       position: carousel.position ?? 0,
       pages: carousel.pages ?? "home",
+      visibility_tier: carousel.visibility_tier ?? "production",
     });
     if (carousel.type === "handpicked") {
       try {
@@ -2160,7 +2196,7 @@ export function CMS({ onExit, currentUser }) {
   function startShowEdit(show) {
     setEditingShowId(show.id);
     setDrawerOpen(true);
-    setShowForm({ title: show.title ?? "", category: show.category ?? "Horror", rating: show.rating ?? "NR", year: show.year ?? "", score: show.score ?? "", thumbnail: show.thumbnail ?? "", poster: show.poster ?? "", description: show.description ?? "", tags: Array.isArray(show.tags) ? show.tags.join(", ") : (show.tags ?? ""), trailer_url: show.trailer_url ?? "", is_premium: show.is_premium ?? false });
+    setShowForm({ title: show.title ?? "", category: show.category ?? "Horror", rating: show.rating ?? "NR", year: show.year ?? "", score: show.score ?? "", thumbnail: show.thumbnail ?? "", poster: show.poster ?? "", description: show.description ?? "", tags: Array.isArray(show.tags) ? show.tags.join(", ") : (show.tags ?? ""), trailer_url: show.trailer_url ?? "", is_premium: show.is_premium ?? false, visibility_tier: show.visibility_tier ?? "production" });
   }
 
   function cancelShowEdit() { setEditingShowId(null); setShowForm(EMPTY_SHOW); setDrawerOpen(false); }
@@ -2272,7 +2308,7 @@ export function CMS({ onExit, currentUser }) {
   function startPodcastEdit(p) {
     setEditingPodcastId(p.id);
     setDrawerOpen(true);
-    setPodcastForm({ title: p.title ?? "", host: p.host ?? "", description: p.description ?? "", artwork_url: p.artwork_url ?? "", link_url: p.link_url ?? "", episode_count: p.episode_count ?? "", tags: Array.isArray(p.tags) ? p.tags.join(", ") : (p.tags ?? ""), enabled: p.enabled ?? true });
+    setPodcastForm({ title: p.title ?? "", host: p.host ?? "", description: p.description ?? "", artwork_url: p.artwork_url ?? "", link_url: p.link_url ?? "", episode_count: p.episode_count ?? "", tags: Array.isArray(p.tags) ? p.tags.join(", ") : (p.tags ?? ""), enabled: p.enabled ?? true, visibility_tier: p.visibility_tier ?? "production" });
   }
 
   function cancelPodcastEdit() { setEditingPodcastId(null); setPodcastForm(EMPTY_PODCAST); setDrawerOpen(false); }
@@ -4192,6 +4228,9 @@ export function CMS({ onExit, currentUser }) {
                           <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: `${contentColor}15`, color: contentColor, border: `1px solid ${contentColor}35` }}>{contentLabel}</span>
                           <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: "#f1f5f9", color: "#6b7280", border: "1px solid #e2e8f0" }}>{orderLabel}</span>
                           <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: carousel.enabled ? "rgba(16,185,129,0.1)" : "rgba(255,255,255,0.04)", color: carousel.enabled ? "#10b981" : "#555", border: `1px solid ${carousel.enabled ? "rgba(16,185,129,0.3)" : "#222"}` }}>{carousel.enabled ? "Live" : "Hidden"}</span>
+                          {carousel.visibility_tier && carousel.visibility_tier !== "production" && (
+                            <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, textTransform: "uppercase", letterSpacing: 0.5, background: carousel.visibility_tier === "test" ? "rgba(168,85,247,0.12)" : "rgba(59,130,246,0.12)", color: carousel.visibility_tier === "test" ? "#7c3aed" : "#2563eb", border: `1px solid ${carousel.visibility_tier === "test" ? "rgba(168,85,247,0.4)" : "rgba(59,130,246,0.4)"}` }}>{carousel.visibility_tier}</span>
+                          )}
                         </div>
                       </div>
 
@@ -4326,7 +4365,7 @@ export function CMS({ onExit, currentUser }) {
                         style={{ background: selectedChannelForEpg?.id === ch.id ? "rgba(79,70,229,0.15)" : "#eef2ff", border: `1px solid ${selectedChannelForEpg?.id === ch.id ? "#4f46e5" : "#c7d2fe"}`, borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: selectedChannelForEpg?.id === ch.id ? 700 : 600, color: "#4f46e5", cursor: "pointer" }}>
                         {selectedChannelForEpg?.id === ch.id ? "Close" : "Schedule"}
                       </button>
-                      <button onClick={() => { setChannelForm({ name: ch.name, slug: ch.slug || "", description: ch.description || "", logo_url: ch.logo_url || "", hero_url: ch.hero_url || "", category: ch.category || "general", ingest_type: ch.ingest_type || "hls", hls_url: ch.hls_url || "", stream_uid: ch.stream_uid || "", is_active: ch.is_active ?? true, sort_order: ch.sort_order ?? 0, is_premium: ch.is_premium ?? false, tile_size: ch.tile_size || "normal", is_live_hero: ch.is_live_hero ?? false, live_feed_id: ch.live_feed_id ?? null }); setEditingChannelId(ch.id); setDrawerOpen(true); }}
+                      <button onClick={() => { setChannelForm({ name: ch.name, slug: ch.slug || "", description: ch.description || "", logo_url: ch.logo_url || "", hero_url: ch.hero_url || "", category: ch.category || "general", ingest_type: ch.ingest_type || "hls", hls_url: ch.hls_url || "", stream_uid: ch.stream_uid || "", is_active: ch.is_active ?? true, sort_order: ch.sort_order ?? 0, is_premium: ch.is_premium ?? false, tile_size: ch.tile_size || "normal", is_live_hero: ch.is_live_hero ?? false, live_feed_id: ch.live_feed_id ?? null, visibility_tier: ch.visibility_tier ?? "production" }); setEditingChannelId(ch.id); setDrawerOpen(true); }}
                         style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, color: "#374151", cursor: "pointer" }}>
                         Edit
                       </button>
@@ -6057,7 +6096,7 @@ export function CMS({ onExit, currentUser }) {
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                   <thead>
                     <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-                      {["Name", "Email", "Type", "Subscription", "Joined", ""].map(h => (
+                      {["Name", "Email", "Type", "Tier", "Subscription", "Joined", ""].map(h => (
                         <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{h}</th>
                       ))}
                     </tr>
@@ -6072,6 +6111,14 @@ export function CMS({ onExit, currentUser }) {
                             ? <span style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 600, color: "#dc2626" }}>User + Streamer</span>
                             : <span style={{ background: "rgba(79,70,229,0.08)", border: "1px solid rgba(79,70,229,0.2)", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 600, color: "#4f46e5" }}>User</span>
                           }
+                        </td>
+                        <td style={{ padding: "14px 16px" }}>
+                          <select value={u.access_tier || "production"} onChange={e => setUserAccessTier(u.id, e.target.value)}
+                            style={{ fontSize: 12, padding: "4px 8px", borderRadius: 6, border: "1px solid #e2e8f0", background: "#fff", color: (u.access_tier && u.access_tier !== "production") ? "#7c3aed" : "#374151", fontWeight: (u.access_tier && u.access_tier !== "production") ? 700 : 400, cursor: "pointer" }}>
+                            <option value="production">Production</option>
+                            <option value="stage">Stage</option>
+                            <option value="test">Test</option>
+                          </select>
                         </td>
                         <td style={{ padding: "14px 16px" }}>
                           {u.subscription ? (
@@ -7062,6 +7109,7 @@ export function CMS({ onExit, currentUser }) {
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <FieldInput label="Title *" value={form.title} onChange={v => setForm(f => ({ ...f, title: v }))} placeholder="e.g. Metropolis" />
                     <PremiumToggleButton on={form.is_premium} onToggle={() => setForm(f => ({ ...f, is_premium: !f.is_premium }))} />
+                    <TierSelect value={form.visibility_tier} onChange={v => setForm(f => ({ ...f, visibility_tier: v }))} />
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                       <FieldCombo label="Category" value={form.category} onChange={v => setForm(f => ({ ...f, category: v }))} options={categories} />
                       <FieldSelect label="Rating" value={form.rating} onChange={v => setForm(f => ({ ...f, rating: v }))} options={["NR", "G", "PG", "PG-13", "R"]} />
@@ -7124,6 +7172,7 @@ export function CMS({ onExit, currentUser }) {
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <FieldInput label="Title *" value={showForm.title} onChange={v => setShowForm(f => ({ ...f, title: v }))} placeholder="e.g. The Twilight Zone" />
                     <PremiumToggleButton on={showForm.is_premium} onToggle={() => setShowForm(f => ({ ...f, is_premium: !f.is_premium }))} />
+                    <TierSelect value={showForm.visibility_tier} onChange={v => setShowForm(f => ({ ...f, visibility_tier: v }))} />
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                       <FieldCombo label="Category" value={showForm.category} onChange={v => setShowForm(f => ({ ...f, category: v }))} options={categories} />
                       <FieldSelect label="Rating" value={showForm.rating} onChange={v => setShowForm(f => ({ ...f, rating: v }))} options={["NR", "G", "PG", "PG-13", "R"]} />
@@ -7234,6 +7283,9 @@ export function CMS({ onExit, currentUser }) {
                         style={{ width: "100%", background: podcastForm.enabled ? "rgba(79,70,229,0.08)" : "rgba(107,114,128,0.08)", border: `1px solid ${podcastForm.enabled ? "rgba(79,70,229,0.3)" : "#e2e8f0"}`, borderRadius: 7, padding: "10px 12px", color: podcastForm.enabled ? "#4f46e5" : "#6b7280", fontSize: 13, cursor: "pointer", fontWeight: 500 }}>
                         {podcastForm.enabled ? "✓ Enabled" : "○ Disabled"}
                       </button>
+                      <div style={{ marginTop: 16 }}>
+                        <TierSelect value={podcastForm.visibility_tier} onChange={v => setPodcastForm(f => ({ ...f, visibility_tier: v }))} />
+                      </div>
                     </div>
                     <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
                       <button onClick={savePodcast} disabled={podcastSaving} style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: podcastSaving ? "not-allowed" : "pointer", opacity: podcastSaving ? 0.7 : 1 }}>
@@ -7550,6 +7602,25 @@ export function CMS({ onExit, currentUser }) {
                         <span style={{ fontSize: 16 }}>{carouselForm.enabled ? "✓" : "○"}</span>
                         {carouselForm.enabled ? "Live — visible to users" : "Hidden — not shown to users"}
                       </button>
+
+                      <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, margin: "18px 0 8px", textTransform: "uppercase", letterSpacing: 0.8 }}>5 · Tier</label>
+                      <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
+                        {[
+                          { v: "production", l: "Production", d: "All real users", c: "#22c55e" },
+                          { v: "stage", l: "Stage", d: "Stage + Test accts", c: "#3b82f6" },
+                          { v: "test", l: "Test", d: "Test accts only", c: "#a855f7" },
+                        ].map(o => {
+                          const on = (carouselForm.visibility_tier || "production") === o.v;
+                          return (
+                            <button key={o.v} onClick={() => setCarouselForm(f => ({ ...f, visibility_tier: o.v }))}
+                              style={{ flex: 1, background: on ? `${o.c}1f` : "#f8fafc", border: `1.5px solid ${on ? o.c : "#e2e8f0"}`, borderRadius: 9, padding: "10px 8px", cursor: "pointer", textAlign: "left" }}>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: on ? o.c : "#374151" }}>{o.l}</div>
+                              <div style={{ fontSize: 10, color: "#6b7280", marginTop: 1 }}>{o.d}</div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p style={{ margin: "0 0 4px", fontSize: 11, color: "#9ca3af" }}>Production = live for everyone. Stage/Test = only accounts at that tier or higher see this row.</p>
                     </div>
 
                     <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
@@ -7572,6 +7643,7 @@ export function CMS({ onExit, currentUser }) {
                     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
                       <FieldInput label="Name *" value={channelForm.name} onChange={v => setChannelForm(f => ({ ...f, name: v }))} placeholder="e.g. Peep Classics" />
                       <PremiumToggleButton on={channelForm.is_premium} onToggle={() => setChannelForm(f => ({ ...f, is_premium: !f.is_premium }))} />
+                      <TierSelect value={channelForm.visibility_tier} onChange={v => setChannelForm(f => ({ ...f, visibility_tier: v }))} />
                       <FieldInput label="Slug" value={channelForm.slug} onChange={v => setChannelForm(f => ({ ...f, slug: v }))} placeholder="auto-generated from name" />
                       <FieldInput label="Description" value={channelForm.description} onChange={v => setChannelForm(f => ({ ...f, description: v }))} placeholder="What's on this channel?" />
                       <div>

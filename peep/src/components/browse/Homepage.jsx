@@ -16,6 +16,7 @@ import { Footer } from "./Footer";
 import { Spinner } from "../ui/Spinner";
 import { Wordmark, EyesMark } from "../Wordmark";
 import { Avatar } from "../Avatar";
+import { filterByTier, canSeeTier } from "../../lib/tiers";
 import { LiveTVPage } from "../../pages/LiveTV";
 
 // Admin-controlled "live" row — renders FAST channels and/or live creator streams
@@ -126,7 +127,7 @@ function CustomHero({ hero, isMobile, onCta }) {
   );
 }
 
-export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, userAvatarUrl, userName, onGoLive, onExitStudio, studioContent, flags = {}, isPremiumUser = false, isStreamer = false }) {
+export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, userAvatarUrl, userName, userTier = "production", onGoLive, onExitStudio, studioContent, flags = {}, isPremiumUser = false, isStreamer = false }) {
   const [videos, setVideos] = useState([]);
   const [shows, setShows] = useState([]);
   const [carousels, setCarousels] = useState([]);
@@ -202,10 +203,10 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
       supabase.from("app_settings").select("value").eq("key", "home_hero").maybeSingle(),
     ]);
     try { setHomeHero(heroRes?.data?.value ? JSON.parse(heroRes.data.value) : null); } catch { setHomeHero(null); }
-    if (videosRes.data) setVideos(videosRes.data);
-    if (showsRes.data) setShows(showsRes.data);
-    if (carouselsRes.data) setCarousels(carouselsRes.data);
-    if (podcastsRes.data) setPodcasts(podcastsRes.data.filter(p => p.enabled !== false));
+    if (videosRes.data) setVideos(filterByTier(videosRes.data, userTier));
+    if (showsRes.data) setShows(filterByTier(showsRes.data, userTier));
+    if (carouselsRes.data) setCarousels(filterByTier(carouselsRes.data, userTier));
+    if (podcastsRes.data) setPodcasts(filterByTier(podcastsRes.data.filter(p => p.enabled !== false), userTier));
     if (liveRes.error) {
       const { data: fallback } = await supabase.from("live_streams").select("*").order("id", { ascending: true });
       if (fallback) setLiveStreams(fallback);
@@ -213,7 +214,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
       setLiveStreams(liveRes.data);
     }
     if (epgRes.data) setEpgEntries(epgRes.data);
-    if (channelsRes.data) setChannels(channelsRes.data);
+    if (channelsRes.data) setChannels(filterByTier(channelsRes.data, userTier));
     setLoading(false);
 
     // Resolve deep link (from URL params, using this component's own handlers)
@@ -480,7 +481,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
 
           {/* Nav items */}
           <nav style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "8px 0" }}>
-            {SB_ITEMS.filter(item => item.id !== "Podcasts" || flags.show_podcasts !== false).map(item => {
+            {SB_ITEMS.filter(item => (item.id !== "Podcasts" || flags.show_podcasts !== false) && canSeeTier(item.tier, userTier)).map(item => {
               const active = !studioContent && activeNav === item.id;
               return (
                 <div key={item.id} className="sb-item"
@@ -838,7 +839,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
             { id: "Series", label: "Series", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></svg> },
             { id: "Streams", label: "Live TV", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49"/><path d="M7.76 7.76a6 6 0 0 0 0 8.49"/><path d="M20.66 3.34a12 12 0 0 1 0 17.32"/><path d="M3.34 3.34a12 12 0 0 0 0 17.32"/></svg> },
             { id: "My List", label: "My List", icon: <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg> },
-          ].map(tab => {
+          ].filter(tab => canSeeTier(tab.tier, userTier)).map(tab => {
             const active = activeNav === tab.id;
             return (
               <button key={tab.id}
