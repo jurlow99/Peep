@@ -10,7 +10,7 @@ import { SetPasswordPage } from './pages/SetPasswordPage.jsx'
 import { StreamerDashboard } from './pages/StreamerDashboard.jsx'
 import { StreamerProfile } from './pages/StreamerProfile.jsx'
 import { SupportPage } from './pages/SupportPage.jsx'
-import { EnvBadge } from './components/EnvBadge.jsx'
+import { EnvBadge, DevSplash } from './components/EnvBadge.jsx'
 
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null }; }
@@ -49,6 +49,7 @@ if (path === '/streamer-signin' || path === '/apply-to-stream' || path === '/cre
 // no effect on the production build, so this only changes local dev speed.
 createRoot(document.getElementById('root')).render(
     <ErrorBoundary>
+      <DevSplash />
       <EnvBadge />
       {isAdminHost              ? <AdminPage />         :
        path === '/signup'         ? <SignupPage />        :
