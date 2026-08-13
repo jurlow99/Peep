@@ -50,7 +50,7 @@ export function EnvBadge() {
       }}
     >
       <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#fff", boxShadow: "0 0 6px #fff" }} />
-      DEV · peep-dev
+      FARRIS · DEV
     </div>
   );
 }
