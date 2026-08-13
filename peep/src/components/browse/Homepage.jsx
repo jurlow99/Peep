@@ -17,6 +17,7 @@ import { Spinner } from "../ui/Spinner";
 import { Wordmark, EyesMark } from "../Wordmark";
 import { Avatar } from "../Avatar";
 import { filterByTier, canSeeTier } from "../../lib/tiers";
+import { IS_DEV_DB } from "../EnvBadge";
 import { LiveTVPage } from "../../pages/LiveTV";
 
 // Admin-controlled "live" row — renders FAST channels and/or live creator streams
@@ -476,7 +477,9 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
           }}>
           {/* Logo area */}
           <div style={{ height: 58, display: "flex", alignItems: "center", paddingLeft: sbExpanded ? 20 : 0, justifyContent: sbExpanded ? "flex-start" : "center", flexShrink: 0, cursor: "pointer" }} onClick={() => { onExitStudio?.(); setActiveNav("Home"); }}>
-            {sbExpanded ? <Wordmark height={24} /> : <EyesMark height={30} />}
+            {IS_DEV_DB
+              ? <span style={{ fontWeight: 800, color: "#a855f7", fontSize: sbExpanded ? 17 : 13, letterSpacing: sbExpanded ? 2 : 0.5, fontFamily: "ui-monospace, Menlo, monospace" }}>{sbExpanded ? "FARRIS" : "F"}</span>
+              : (sbExpanded ? <Wordmark height={24} /> : <EyesMark height={30} />)}
           </div>
 
           {/* Nav items */}
@@ -575,7 +578,9 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
         }}>
           {/* Mobile logo */}
           {isMobile && (
-            <Wordmark height={26} onClick={() => { onExitStudio?.(); setActiveNav("Home"); }} />
+            {IS_DEV_DB
+              ? <span onClick={() => { onExitStudio?.(); setActiveNav("Home"); }} style={{ fontWeight: 800, color: "#a855f7", fontSize: 18, letterSpacing: 2, cursor: "pointer", fontFamily: "ui-monospace, Menlo, monospace" }}>FARRIS</span>
+              : <Wordmark height={26} onClick={() => { onExitStudio?.(); setActiveNav("Home"); }} />}
           )}
           {!isMobile && <div />}
 
