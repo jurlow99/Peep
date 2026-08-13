@@ -44,9 +44,35 @@ npm run dev
 In production the admin is served from `admin.watchpeep.tv` instead; the
 `/admin` path only works on localhost.
 
+## Branches
+
+| Branch | Role |
+|--------|------|
+| `develop` | Day-to-day work. Push freely — nothing deploys. |
+| `main` | What's live. Merging here **deploys to production.** |
+
+Work on `develop`. To move work between machines, push and pull `develop` —
+it's safe to push unfinished code there.
+
+```bash
+git add -A && git commit -m "..." && git push   # machine A
+git pull                                         # machine B
+```
+
 ## Deployment
 
-Deployed automatically to Cloudflare Pages on every push to `main`.
+Cloudflare Pages deploys automatically on every push to `main`. Nothing else
+triggers it — so shipping is an explicit, deliberate merge:
+
+```bash
+git checkout main
+git merge develop
+git push          # this is the deploy
+git checkout develop
+```
+
+Note that `main` deploying is independent of which database you're on. The
+`DEV` badge protects your *data*, not production's *code*.
 
 ## Project structure
 
