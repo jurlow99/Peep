@@ -3592,9 +3592,9 @@ export function CMS({ onExit, currentUser }) {
       {/* Header */}
       <div style={{ borderBottom: "1px solid #e2e8f0", padding: `0 ${PAD}`, display: "flex", alignItems: "center", justifyContent: "space-between", height: "auto", minHeight: 68, flexWrap: "wrap", gap: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
-          <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <Wordmark height={24} variant="yellow" />
-            <span style={{ color: "#4f46e5", fontSize: 13, fontFamily: "sans-serif", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>admin</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 9 }}>
+            <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#4f46e5", flexShrink: 0 }} />
+            <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: 3, color: "#0f172a" }}>FARRIS</span>
           </span>
         </div>
         <div style={{ display: "flex", gap: 8 }}>

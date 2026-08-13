@@ -37,7 +37,7 @@ const isLocal = host === 'localhost' || host === '127.0.0.1'
 const isAdminHost = host === 'admin.watchpeep.tv' || (isLocal && path === '/admin')
 
 // Distinguish browser tabs by environment: peep / local peep / admin / local admin
-document.title = (isLocal ? 'local ' : '') + (isAdminHost ? 'admin' : 'peep')
+document.title = (isLocal ? 'local ' : '') + (isAdminHost ? 'FARRIS' : 'peep')
 
 // Legacy streamer-only routes → redirect to unified flow
 if (path === '/streamer-signin' || path === '/apply-to-stream' || path === '/create-channel') {
