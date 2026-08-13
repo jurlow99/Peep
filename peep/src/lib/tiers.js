@@ -7,6 +7,10 @@
 // This is client-side gating for a *preview* feature (not a security boundary) —
 // unreleased content simply isn't shown to lower tiers.
 
+// On the local/dev build we DON'T gate by tier — you see everything while building.
+// Tiers only matter on prod (the live preview-ring feature).
+const IS_DEV_DB = !(import.meta.env.VITE_SUPABASE_URL || "").includes("iuozujwtuzuwubhsnhix");
+
 export const TIERS = ["production", "stage", "test"];
 
 export const TIER_LEVEL = { production: 0, stage: 1, test: 2 };
@@ -17,12 +21,14 @@ export function tierLevel(t) {
 }
 
 // Can a viewer at `userTier` see an item at `itemTier`? (missing tier = production)
+// Always true on the local/dev build — no gating locally.
 export function canSeeTier(itemTier, userTier) {
+  if (IS_DEV_DB) return true;
   return tierLevel(itemTier || "production") <= tierLevel(userTier || "production");
 }
 
 // Filter a list of rows by their `visibility_tier` for the given viewer tier.
 export function filterByTier(items, userTier, key = "visibility_tier") {
-  if (!Array.isArray(items)) return items;
+  if (IS_DEV_DB || !Array.isArray(items)) return items;
   return items.filter(i => canSeeTier(i?.[key], userTier));
 }
