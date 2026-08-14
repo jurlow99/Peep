@@ -1,5 +1,16 @@
 # Peep — Codebase Guide
 
+## What Peep Is
+
+A **broad, free streaming platform** (watchpeep.tv) with two distinct lanes that share the same video tech but nothing else:
+
+- **Content lane (current focus):** on-demand movies (`videos`), series (`shows`/`episodes`), podcasts, and always-on **FAST channels** (`channels`) with a live EPG guide. Lean-back, anonymous, ad-supported. No creators onboarded yet, so this lane is where the effort goes.
+- **Social lane (built, dormant):** creators go live (RTMP→Cloudflare) and viewers **follow + chat** — this is why users get usernames. Waiting on real creators.
+
+Keep the lanes separate: don't add chat/follow to FAST channels, and don't treat a creator's stream as a channel.
+
+**Brand:** *peep* — an eyes-peeping mark + rounded "peep" wordmark (yellow/black/white). **FARRIS** is the internal/dev brand and appears **only on the local/dev build** (splash, corner badge, top-left logo, local admin) so you can tell dev from prod at a glance. Prod is always *peep*.
+
 ## Stack
 
 | Layer | Tech |
@@ -15,7 +26,7 @@
 No React Router. `peep/src/main.jsx` does manual path matching:
 
 ```
-/admin              → AdminPage
+admin (prod: admin.watchpeep.tv · dev: localhost/admin) → AdminPage (CMS)
 /signup /signin     → AuthPages
 /set-password       → SetPasswordPage
 /streamer-signin    → StreamerSignInPage
@@ -117,3 +128,25 @@ Cloudflare credentials are in Supabase secrets: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDF
 ## Carousel / Handpicked Rows
 
 Carousels store `filter_value` as JSON when `type = "handpicked"`: `[{id, type}]` (no titles). On edit, `startEditCarousel()` enriches from the in-memory pool (`rows`, `showsList`, etc.) to restore `title` and `thumbnail` for display.
+
+## Environments (dev / prod)
+
+Two **separate Supabase projects**:
+- **prod** `iuozujwtuzuwubhsnhix` (peep) → serves watchpeep.tv; creds come from Cloudflare Pages env vars.
+- **dev** `fzrfevzrfurmszdjauov` (peep-dev) → local `npm run dev` via `peep/.env` (gitignored). Schema was copied from prod; content seeded, no user data.
+
+`IS_DEV_DB` (`components/EnvBadge.jsx`, also inlined in `lib/tiers.js`) = "app is pointed at a non-prod DB." It drives all the FARRIS/dev-only UI. Browser tab titles (main.jsx): prod = `peep`/`admin`, local = `local`/`local admin`.
+- **Copy schema/data prod→dev:** Docker Desktop running + `supabase db dump` → `supabase db push` (see the *env-setup* memory for the exact dance; migration history is messy so move `supabase/migrations/*` aside first).
+- **Apply a schema change to prod:** run the SQL directly in the prod Supabase SQL editor (safest given the migration history).
+
+## Content Tiers (preview rings)
+
+`profiles.access_tier` + `<content>.visibility_tier` on `videos/shows/channels/podcasts/carousels` — both default `'production'`; values are `test` / `production` (`stage` exists in code, dropped from the UI). A viewer sees their tier **and everything below** (test → sees all; production → production only). Purpose: preview unreleased content live on prod with a Test account before real users see it. **Filtering is disabled on dev** (`lib/tiers.js` `canSeeTier`/`filterByTier` no-op when `IS_DEV_DB`) — dev shows everything. CMS: `TierSelect` on content/carousel forms + a **Tier** dropdown per user in the Users panel. Client-side gating (not a security boundary). See the *content-tiers* memory.
+
+## FAST Channels + EPG
+
+The **Streams** tab (`LiveTV.jsx`) opens with a cinematic hero + a data-driven "Living Mosaic" of channels showing now/next from the guide. Channels live in `channels`; guide entries in `epg_entries`. **The EPG auto-refreshes daily**: the `refresh-epg` edge function (streams XMLTV from each channel's `epg_channel_sources.source_url` — i.mjh.nz for Plex/Roku, epgshare01 for others — and rebuilds `epg_entries`) is triggered by a `pg_cron` job and a CMS "↻ Refresh guides" button. See the *epg-automation* memory.
+
+## Storage / Content Ingest
+
+Public **`content`** storage bucket holds uploaded media. The CMS **Storage** tab lists **video/audio** files in the bucket (not images) and turns them into content: **"↑ Publish all new"** bulk-creates a Movie (`videos` row) per un-published video file (title from filename); single **Publish** does one with a form. Image fields (poster/thumbnail) in the content forms have an **↑ Upload** button (`UploadButton`) that uploads to `content` and fills the URL. Uploading a file to the bucket alone does nothing — it must be published into a DB row to appear in the app.
