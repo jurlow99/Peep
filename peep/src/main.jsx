@@ -1,3 +1,5 @@
+/* eslint-disable react-refresh/only-export-components -- entry module:
+   it exports nothing, so it is never a fast-refresh boundary. */
 import { Component, lazy, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
@@ -18,7 +20,7 @@ const AdminPage = lazy(() =>
   import('./pages/AdminPage.jsx').then(m => ({ default: m.AdminPage })))
 
 // Matches the app's background so the swap reads as a beat, not a white flash.
-const AdminLoading = () => <div style={{ background: '#0a0a0a', minHeight: '100vh' }} />
+const adminFallback = <div style={{ background: '#0a0a0a', minHeight: '100vh' }} />
 
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null }; }
@@ -62,7 +64,7 @@ createRoot(document.getElementById('root')).render(
     <ErrorBoundary>
       <DevSplash />
       <EnvBadge />
-      {isAdminHost              ? <Suspense fallback={<AdminLoading />}><AdminPage /></Suspense> :
+      {isAdminHost              ? <Suspense fallback={adminFallback}><AdminPage /></Suspense> :
        path === '/signup'         ? <SignupPage />        :
        path === '/signin'         ? <SigninPage />        :
        path === '/set-password'   ? <SetPasswordPage />   :

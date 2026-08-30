@@ -14,8 +14,8 @@ import {
   EMPTY_PODCAST,
   EMPTY_PODCAST_EPISODE,
 } from "./cms/constants";
-import { FEATURE_FLAGS, loadFlags, setFlag } from "../lib/flags";
 import FeedsPanel from "./cms/FeedsPanel";
+import FlagsPanel from "./cms/FlagsPanel";
 
 const EMPTY_AD = {
   name: "",
@@ -2860,8 +2860,6 @@ export function CMS({ onExit, currentUser }) {
   }
 
   // ──── Feature flags + audit log ────
-  const [flagStates, setFlagStates] = useState({});
-  const [flagsLoading, setFlagsLoading] = useState(false);
   const [auditRows, setAuditRows] = useState([]);
   const [auditLoading, setAuditLoading] = useState(false);
 
@@ -2878,18 +2876,6 @@ export function CMS({ onExit, currentUser }) {
     } catch { /* audit is best-effort — never block the action */ }
   }
 
-  async function loadFlagStates() {
-    setFlagsLoading(true);
-    setFlagStates(await loadFlags());
-    setFlagsLoading(false);
-  }
-  async function toggleFlag(key, on) {
-    setFlagStates(s => ({ ...s, [key]: on }));
-    const { error } = await setFlag(key, on);
-    if (error) { showToast("Failed to save flag: " + error.message, "error"); setFlagStates(s => ({ ...s, [key]: !on })); return; }
-    logAudit("flag.toggle", "feature_flag", key, { on });
-    showToast(`"${key}" turned ${on ? "on" : "off"}`);
-  }
   async function loadAudit() {
     setAuditLoading(true);
     const { data } = await supabase.from("audit_log").select("*").order("created_at", { ascending: false }).limit(200);
@@ -2898,7 +2884,6 @@ export function CMS({ onExit, currentUser }) {
   }
 
   useEffect(() => {
-    if (tab === "flags") loadFlagStates();
     if (tab === "audit") loadAudit();
   }, [tab]);
 
@@ -3740,31 +3725,7 @@ export function CMS({ onExit, currentUser }) {
         })()}
 
         {/* ────── FEATURE FLAGS ────── */}
-        {tab === "flags" && (
-          <div>
-            <div style={{ marginBottom: 20 }}>
-              <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Feature Flags</h2>
-              <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Turn features on or off instantly — no redeploy. Changes apply on each visitor's next load.</p>
-            </div>
-            {flagsLoading ? <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>Loading…</div> : (
-              FEATURE_FLAGS.map(f => {
-                const on = flagStates[f.key] ?? f.default;
-                return (
-                  <div key={f.key} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 18px", marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
-                    <div style={{ minWidth: 0 }}>
-                      <p style={{ margin: "0 0 3px", fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{f.label} <span style={{ fontSize: 11, color: "#9ca3af", fontWeight: 400 }}>({f.key})</span></p>
-                      <p style={{ margin: 0, fontSize: 12, color: "#6b7280", lineHeight: 1.5 }}>{f.description}</p>
-                    </div>
-                    <button onClick={() => toggleFlag(f.key, !on)} aria-label={on ? "On" : "Off"}
-                      style={{ flexShrink: 0, width: 46, height: 26, borderRadius: 999, border: "none", cursor: "pointer", background: on ? "#22c55e" : "#cbd5e1", position: "relative", transition: "background 0.15s" }}>
-                      <span style={{ position: "absolute", top: 3, left: on ? 23 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.15s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
-                    </button>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        )}
+        {tab === "flags" && <FlagsPanel showToast={showToast} logAudit={logAudit} />}
 
         {/* ────── AUDIT LOG ────── */}
         {tab === "audit" && (
