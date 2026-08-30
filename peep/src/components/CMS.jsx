@@ -532,6 +532,7 @@ export function CMS({ onExit, currentUser }) {
     if (tab === "storage") {
       supabase.from("videos").select("id, title").order("title").then(({ data }) => setVideosList(data || []));
       supabase.from("shows").select("id, title").order("title").then(({ data }) => setShowsList(prev => prev.length ? prev : (data || [])));
+      supabase.from("podcasts").select("id, title").order("title").then(({ data }) => setPodcastsList(prev => prev.length ? prev : (data || [])));
     }
   }, [tab]);
 
