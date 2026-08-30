@@ -1,16 +1,24 @@
-import { Component } from 'react'
+import { Component, lazy, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.jsx'
 import { QueryProvider } from './providers/QueryProvider.jsx'
-import { AdminPage } from './pages/AdminPage.jsx'
 import { SignupPage, SigninPage } from './pages/AuthPages.jsx'
 import { SetPasswordPage } from './pages/SetPasswordPage.jsx'
 import { StreamerDashboard } from './pages/StreamerDashboard.jsx'
 import { StreamerProfile } from './pages/StreamerProfile.jsx'
 import { SupportPage } from './pages/SupportPage.jsx'
 import { EnvBadge, DevSplash } from './components/EnvBadge.jsx'
+
+// The CMS behind AdminPage is ~9.6k lines and only admins ever open it, so it
+// loads on demand instead of riding along in every viewer's bundle.
+// AdminPage is a named export, so unwrap it into the default lazy() expects.
+const AdminPage = lazy(() =>
+  import('./pages/AdminPage.jsx').then(m => ({ default: m.AdminPage })))
+
+// Matches the app's background so the swap reads as a beat, not a white flash.
+const AdminLoading = () => <div style={{ background: '#0a0a0a', minHeight: '100vh' }} />
 
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null }; }
@@ -54,7 +62,7 @@ createRoot(document.getElementById('root')).render(
     <ErrorBoundary>
       <DevSplash />
       <EnvBadge />
-      {isAdminHost              ? <AdminPage />         :
+      {isAdminHost              ? <Suspense fallback={<AdminLoading />}><AdminPage /></Suspense> :
        path === '/signup'         ? <SignupPage />        :
        path === '/signin'         ? <SigninPage />        :
        path === '/set-password'   ? <SetPasswordPage />   :
