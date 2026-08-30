@@ -18,6 +18,7 @@ import {
 import FeedsPanel from "./cms/FeedsPanel";
 import FlagsPanel from "./cms/FlagsPanel";
 import StoragePanel from "./cms/StoragePanel";
+import AuditPanel from "./cms/AuditPanel";
 
 const EMPTY_AD = {
   name: "",
@@ -2765,8 +2766,6 @@ export function CMS({ onExit, currentUser }) {
   }
 
   // ──── Feature flags + audit log ────
-  const [auditRows, setAuditRows] = useState([]);
-  const [auditLoading, setAuditLoading] = useState(false);
 
   async function logAudit(action, entity, entityId, details) {
     try {
@@ -2781,16 +2780,6 @@ export function CMS({ onExit, currentUser }) {
     } catch { /* audit is best-effort — never block the action */ }
   }
 
-  async function loadAudit() {
-    setAuditLoading(true);
-    const { data } = await supabase.from("audit_log").select("*").order("created_at", { ascending: false }).limit(200);
-    setAuditRows(data || []);
-    setAuditLoading(false);
-  }
-
-  useEffect(() => {
-    if (tab === "audit") loadAudit();
-  }, [tab]);
 
   // ──── Admin navigation ────
   function applyTarget(t) {
@@ -3632,30 +3621,7 @@ export function CMS({ onExit, currentUser }) {
         {tab === "flags" && <FlagsPanel showToast={showToast} logAudit={logAudit} />}
 
         {/* ────── AUDIT LOG ────── */}
-        {tab === "audit" && (
-          <div>
-            <div style={{ marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
-              <div>
-                <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Audit Log</h2>
-                <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Recent admin actions — who did what, and when. Last 200 events.</p>
-              </div>
-              <button onClick={loadAudit} disabled={auditLoading} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, color: "#374151", cursor: "pointer", flexShrink: 0 }}>{auditLoading ? "…" : "↻ Refresh"}</button>
-            </div>
-            {auditLoading ? <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>Loading…</div>
-              : auditRows.length === 0 ? <div style={{ color: "#6b7280", padding: 40, textAlign: "center", border: "1px dashed #e2e8f0", borderRadius: 10 }}>No audit entries yet. Deletes, approvals, and flag changes will show up here.</div>
-              : (
-                <div style={{ border: "1px solid #e2e8f0", borderRadius: 10, overflow: "hidden" }}>
-                  {auditRows.map(r => (
-                    <div key={r.id} style={{ display: "grid", gridTemplateColumns: "180px 1fr 150px", gap: 12, padding: "10px 16px", borderBottom: "1px solid #f1f5f9", fontSize: 13, alignItems: "center" }}>
-                      <span style={{ fontWeight: 600, color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.action}{r.entity ? ` · ${r.entity}` : ""}</span>
-                      <span style={{ color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.entity_id ? `#${r.entity_id} · ` : ""}{r.actor_email || r.actor_id || "—"}{r.details ? ` · ${JSON.stringify(r.details)}` : ""}</span>
-                      <span style={{ color: "#9ca3af", textAlign: "right" }}>{new Date(r.created_at).toLocaleString()}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-          </div>
-        )}
+        {tab === "audit" && <AuditPanel />}
 
         {/* ────── CONTENT SUB-TAB BAR (retired — replaced by section nav) ────── */}
         {false && tab === "content" && (
