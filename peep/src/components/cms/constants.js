@@ -13,6 +13,7 @@ export const EMPTY_ROW = {
   description: "",
   tags: "",
   is_premium: false,
+  visibility_tier: "production",
 };
 
 export const EMPTY_SHOW = {
@@ -27,6 +28,7 @@ export const EMPTY_SHOW = {
   tags: "",
   trailer_url: "",
   is_premium: false,
+  visibility_tier: "production",
 };
 
 export const EMPTY_EPISODE = {
@@ -49,6 +51,7 @@ export const EMPTY_CAROUSEL = {
   enabled: true,
   position: 0,
   pages: "home",
+  visibility_tier: "production",
 };
 
 export const EMPTY_CHANNEL = {
@@ -67,6 +70,7 @@ export const EMPTY_CHANNEL = {
   tile_size: "normal",
   is_live_hero: false,
   live_feed_id: null,
+  visibility_tier: "production",
 };
 
 export const EMPTY_LIVE_STREAM = {
@@ -88,6 +92,7 @@ export const EMPTY_PODCAST = {
   episode_count: "",
   tags: "",
   enabled: true,
+  visibility_tier: "production",
 };
 
 export const EMPTY_PODCAST_EPISODE = {

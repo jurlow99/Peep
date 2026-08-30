@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { Wordmark } from "../components/Wordmark";
+import { SUPABASE_URL, SUPABASE_ANON_KEY as ANON_KEY } from "../lib/config";
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const YELLOW = "#facc15";
 const PRESETS = [3, 5, 10, 25];
 

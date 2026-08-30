@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "../supabase";
 import { Wordmark } from "./Wordmark";
+import { IS_DEV_DB } from "./EnvBadge";
+import { SUPABASE_URL } from "../lib/config";
 import { ImageUploader } from "./ImageUploader";
 import {
   EMPTY_ROW,
@@ -12,8 +14,8 @@ import {
   EMPTY_PODCAST,
   EMPTY_PODCAST_EPISODE,
 } from "./cms/constants";
-import { FEATURE_FLAGS, loadFlags, setFlag } from "../lib/flags";
 import FeedsPanel from "./cms/FeedsPanel";
+import FlagsPanel from "./cms/FlagsPanel";
 
 const EMPTY_AD = {
   name: "",
@@ -24,7 +26,7 @@ const EMPTY_AD = {
   active: true,
 };
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+// SUPABASE_URL comes from lib/config — see the import at the top of this file.
 
 async function getAdminToken() {
   await supabase.auth.getUser(); // validates + auto-refreshes if expired
@@ -46,6 +48,32 @@ function PremiumToggleButton({ on, onToggle }) {
         <span style={{ position: "absolute", top: 2, left: on ? 20 : 2, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left 0.15s" }} />
       </div>
     </button>
+  );
+}
+
+// Preview-tier picker for content forms. Production = live for all; Stage/Test = only
+// accounts at that tier (or higher) see it.
+function TierSelect({ value, onChange }) {
+  const opts = [
+    { v: "production", l: "Production", d: "All users", c: "#22c55e" },
+    { v: "test", l: "Test", d: "Test accounts only", c: "#a855f7" },
+  ];
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <label style={{ display: "block", fontSize: 11, color: "#6b7280", fontWeight: 600, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Tier</label>
+      <div style={{ display: "flex", gap: 8 }}>
+        {opts.map(o => {
+          const active = (value || "production") === o.v;
+          return (
+            <button key={o.v} type="button" onClick={() => onChange(o.v)}
+              style={{ flex: 1, background: active ? `${o.c}1f` : "#f8fafc", border: `1.5px solid ${active ? o.c : "#e2e8f0"}`, borderRadius: 9, padding: "9px 8px", cursor: "pointer", textAlign: "left" }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: active ? o.c : "#374151" }}>{o.l}</div>
+              <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 1 }}>{o.d}</div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -88,6 +116,34 @@ const ADMIN_NAV = [
     { key: "security", label: "Security", target: { tab: "security" } },
   ] },
 ];
+
+// Uploads a file to the public "content" storage bucket and returns its URL.
+function UploadButton({ onUploaded, accept = "image/*", label = "Upload" }) {
+  const ref = useRef(null);
+  const [busy, setBusy] = useState(false);
+  async function pick(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy(true);
+    const ext = (file.name.split(".").pop() || "bin").toLowerCase();
+    const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const { error } = await supabase.storage.from("content").upload(path, file, { upsert: true, contentType: file.type });
+    if (error) { alert("Upload failed: " + error.message + "\n\n(Did you create the 'content' bucket yet?)"); setBusy(false); e.target.value = ""; return; }
+    const { data: { publicUrl } } = supabase.storage.from("content").getPublicUrl(path);
+    onUploaded(publicUrl);
+    setBusy(false);
+    e.target.value = "";
+  }
+  return (
+    <>
+      <button type="button" onClick={() => ref.current?.click()} disabled={busy}
+        style={{ background: "#eef2ff", border: "1px solid #c7d2fe", borderRadius: 7, padding: "0 14px", color: "#4f46e5", fontSize: 12, fontWeight: 600, cursor: busy ? "wait" : "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
+        {busy ? "Uploading…" : `↑ ${label}`}
+      </button>
+      <input ref={ref} type="file" accept={accept} style={{ display: "none" }} onChange={pick} />
+    </>
+  );
+}
 
 export function CMS({ onExit, currentUser }) {
   const [tab, setTab] = useState("content");
@@ -364,6 +420,7 @@ export function CMS({ onExit, currentUser }) {
   const [bossSettings, setBossSettings] = useState({ maintenance_mode: "false", banner_active: "false", banner_text: "", banner_expires_at: "" });
   const [storageFiles, setStorageFiles] = useState([]);
   const [storageLoading, setStorageLoading] = useState(false);
+  const [bulkPublishing, setBulkPublishing] = useState(false);
   const [storageFilter, setStorageFilter] = useState("pending");
   const [storageAddModal, setStorageAddModal] = useState(null);
   const [storageAddForm, setStorageAddForm] = useState({ title: "", type: "movie", show_id: "", podcast_id: "", description: "", year: new Date().getFullYear(), genre: "", artist: "", episode_number: 1, season_number: 1, linked_id: "", linked_table: "videos", url: "" });
@@ -647,9 +704,16 @@ export function CMS({ onExit, currentUser }) {
     showToast("Subscription revoked");
   }
 
+  async function setUserAccessTier(userId, tier) {
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, access_tier: tier } : u));
+    const { error } = await supabase.from("profiles").update({ access_tier: tier }).eq("id", userId);
+    if (error) { showToast("Failed: " + error.message, "error"); loadUsers(); }
+    else { showToast(`Tier → ${tier}`); logAudit?.("update", "profile", userId, `access_tier → ${tier}`); }
+  }
+
   async function loadUsers() {
     setUsersLoading(true);
-    const { data: profileData } = await supabase.from("profiles").select("id, full_name, email, username, created_at").order("created_at", { ascending: false });
+    const { data: profileData } = await supabase.from("profiles").select("id, full_name, email, username, created_at, access_tier").order("created_at", { ascending: false });
     const profiles = profileData || [];
     if (!profiles.length) { setUsers([]); setUsersLoading(false); return; }
     const ids = profiles.map(p => p.id);
@@ -936,7 +1000,7 @@ export function CMS({ onExit, currentUser }) {
 
   async function loadStorageFiles() {
     setStorageLoading(true);
-    const BUCKET = "peep-media";
+    const BUCKET = "content";
     const VIDEO_EXTS = [".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"];
     const AUDIO_EXTS = [".mp3", ".wav", ".aac", ".m4a", ".ogg"];
     const FOLDER_TYPE = { shorts: "short", trailers: "trailer", episodes: "episode", "episodes ": "episode", podcasts: "podcast_episode" };
@@ -1000,9 +1064,27 @@ export function CMS({ onExit, currentUser }) {
     if (!error) {
       showToast(`"${f.title}" published to Peep`);
       setStorageAddModal(null);
+      loadStorageFiles();
     } else {
       showToast("Error: " + error.message);
     }
+  }
+
+  // One-click: turn every un-published VIDEO file in the bucket into a Movie entry.
+  async function publishAllPending() {
+    const pending = storageFiles.filter(f => !f.ingested && (f.typeHint === "movie" || f.typeHint === "short"));
+    if (pending.length === 0) { showToast("No new video files to publish", "error"); return; }
+    if (!window.confirm(`Publish ${pending.length} file${pending.length !== 1 ? "s" : ""} as Movies? (title comes from the filename — you can rename them after)`)) return;
+    setBulkPublishing(true);
+    const clean = name => name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+    let ok = 0, fail = 0;
+    for (const file of pending) {
+      const { error } = await supabase.from("videos").insert({ title: clean(file.name) || file.name, url: file.url });
+      if (error) { fail++; } else { ok++; logAudit?.("create", "video", null, `bulk-ingested ${file.name}`); }
+    }
+    setBulkPublishing(false);
+    showToast(fail ? `Published ${ok}, ${fail} failed` : `Published ${ok} movie${ok !== 1 ? "s" : ""} ✓`, fail ? "error" : "success");
+    loadStorageFiles();
   }
 
   async function loadBossSettings() {
@@ -1070,7 +1152,7 @@ export function CMS({ onExit, currentUser }) {
     setGrantResult(null);
     try {
       const token = await getAdminToken();
-      const res = await fetch("https://iuozujwtuzuwubhsnhix.supabase.co/functions/v1/grant-access", {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/grant-access`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({ email: grantEmail.trim() }),
@@ -1826,6 +1908,7 @@ export function CMS({ onExit, currentUser }) {
     setForm({
       title: row.title ?? "",
       is_premium: row.is_premium ?? false,
+      visibility_tier: row.visibility_tier ?? "production",
       category: row.category ?? "Horror",
       rating: row.rating ?? "NR",
       score: row.score ?? "",
@@ -1988,6 +2071,7 @@ export function CMS({ onExit, currentUser }) {
       enabled: carousel.enabled ?? true,
       position: carousel.position ?? 0,
       pages: carousel.pages ?? "home",
+      visibility_tier: carousel.visibility_tier ?? "production",
     });
     if (carousel.type === "handpicked") {
       try {
@@ -2160,7 +2244,7 @@ export function CMS({ onExit, currentUser }) {
   function startShowEdit(show) {
     setEditingShowId(show.id);
     setDrawerOpen(true);
-    setShowForm({ title: show.title ?? "", category: show.category ?? "Horror", rating: show.rating ?? "NR", year: show.year ?? "", score: show.score ?? "", thumbnail: show.thumbnail ?? "", poster: show.poster ?? "", description: show.description ?? "", tags: Array.isArray(show.tags) ? show.tags.join(", ") : (show.tags ?? ""), trailer_url: show.trailer_url ?? "", is_premium: show.is_premium ?? false });
+    setShowForm({ title: show.title ?? "", category: show.category ?? "Horror", rating: show.rating ?? "NR", year: show.year ?? "", score: show.score ?? "", thumbnail: show.thumbnail ?? "", poster: show.poster ?? "", description: show.description ?? "", tags: Array.isArray(show.tags) ? show.tags.join(", ") : (show.tags ?? ""), trailer_url: show.trailer_url ?? "", is_premium: show.is_premium ?? false, visibility_tier: show.visibility_tier ?? "production" });
   }
 
   function cancelShowEdit() { setEditingShowId(null); setShowForm(EMPTY_SHOW); setDrawerOpen(false); }
@@ -2272,7 +2356,7 @@ export function CMS({ onExit, currentUser }) {
   function startPodcastEdit(p) {
     setEditingPodcastId(p.id);
     setDrawerOpen(true);
-    setPodcastForm({ title: p.title ?? "", host: p.host ?? "", description: p.description ?? "", artwork_url: p.artwork_url ?? "", link_url: p.link_url ?? "", episode_count: p.episode_count ?? "", tags: Array.isArray(p.tags) ? p.tags.join(", ") : (p.tags ?? ""), enabled: p.enabled ?? true });
+    setPodcastForm({ title: p.title ?? "", host: p.host ?? "", description: p.description ?? "", artwork_url: p.artwork_url ?? "", link_url: p.link_url ?? "", episode_count: p.episode_count ?? "", tags: Array.isArray(p.tags) ? p.tags.join(", ") : (p.tags ?? ""), enabled: p.enabled ?? true, visibility_tier: p.visibility_tier ?? "production" });
   }
 
   function cancelPodcastEdit() { setEditingPodcastId(null); setPodcastForm(EMPTY_PODCAST); setDrawerOpen(false); }
@@ -2776,8 +2860,6 @@ export function CMS({ onExit, currentUser }) {
   }
 
   // ──── Feature flags + audit log ────
-  const [flagStates, setFlagStates] = useState({});
-  const [flagsLoading, setFlagsLoading] = useState(false);
   const [auditRows, setAuditRows] = useState([]);
   const [auditLoading, setAuditLoading] = useState(false);
 
@@ -2794,18 +2876,6 @@ export function CMS({ onExit, currentUser }) {
     } catch { /* audit is best-effort — never block the action */ }
   }
 
-  async function loadFlagStates() {
-    setFlagsLoading(true);
-    setFlagStates(await loadFlags());
-    setFlagsLoading(false);
-  }
-  async function toggleFlag(key, on) {
-    setFlagStates(s => ({ ...s, [key]: on }));
-    const { error } = await setFlag(key, on);
-    if (error) { showToast("Failed to save flag: " + error.message, "error"); setFlagStates(s => ({ ...s, [key]: !on })); return; }
-    logAudit("flag.toggle", "feature_flag", key, { on });
-    showToast(`"${key}" turned ${on ? "on" : "off"}`);
-  }
   async function loadAudit() {
     setAuditLoading(true);
     const { data } = await supabase.from("audit_log").select("*").order("created_at", { ascending: false }).limit(200);
@@ -2814,7 +2884,6 @@ export function CMS({ onExit, currentUser }) {
   }
 
   useEffect(() => {
-    if (tab === "flags") loadFlagStates();
     if (tab === "audit") loadAudit();
   }, [tab]);
 
@@ -3557,10 +3626,17 @@ export function CMS({ onExit, currentUser }) {
       {/* Header */}
       <div style={{ borderBottom: "1px solid #e2e8f0", padding: `0 ${PAD}`, display: "flex", alignItems: "center", justifyContent: "space-between", height: "auto", minHeight: 68, flexWrap: "wrap", gap: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
-          <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <Wordmark height={24} variant="yellow" />
-            <span style={{ color: "#4f46e5", fontSize: 13, fontFamily: "sans-serif", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>admin</span>
-          </span>
+          {IS_DEV_DB ? (
+            <span style={{ display: "flex", alignItems: "center", gap: 9 }}>
+              <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#a855f7", flexShrink: 0 }} />
+              <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: 3, color: "#0f172a" }}>FARRIS</span>
+            </span>
+          ) : (
+            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <Wordmark height={24} variant="yellow" />
+              <span style={{ color: "#4f46e5", fontSize: 13, fontFamily: "sans-serif", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>admin</span>
+            </span>
+          )}
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button
@@ -3649,31 +3725,7 @@ export function CMS({ onExit, currentUser }) {
         })()}
 
         {/* ────── FEATURE FLAGS ────── */}
-        {tab === "flags" && (
-          <div>
-            <div style={{ marginBottom: 20 }}>
-              <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Feature Flags</h2>
-              <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Turn features on or off instantly — no redeploy. Changes apply on each visitor's next load.</p>
-            </div>
-            {flagsLoading ? <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>Loading…</div> : (
-              FEATURE_FLAGS.map(f => {
-                const on = flagStates[f.key] ?? f.default;
-                return (
-                  <div key={f.key} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 18px", marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
-                    <div style={{ minWidth: 0 }}>
-                      <p style={{ margin: "0 0 3px", fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{f.label} <span style={{ fontSize: 11, color: "#9ca3af", fontWeight: 400 }}>({f.key})</span></p>
-                      <p style={{ margin: 0, fontSize: 12, color: "#6b7280", lineHeight: 1.5 }}>{f.description}</p>
-                    </div>
-                    <button onClick={() => toggleFlag(f.key, !on)} aria-label={on ? "On" : "Off"}
-                      style={{ flexShrink: 0, width: 46, height: 26, borderRadius: 999, border: "none", cursor: "pointer", background: on ? "#22c55e" : "#cbd5e1", position: "relative", transition: "background 0.15s" }}>
-                      <span style={{ position: "absolute", top: 3, left: on ? 23 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.15s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
-                    </button>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        )}
+        {tab === "flags" && <FlagsPanel showToast={showToast} logAudit={logAudit} />}
 
         {/* ────── AUDIT LOG ────── */}
         {tab === "audit" && (
@@ -4192,6 +4244,9 @@ export function CMS({ onExit, currentUser }) {
                           <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: `${contentColor}15`, color: contentColor, border: `1px solid ${contentColor}35` }}>{contentLabel}</span>
                           <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: "#f1f5f9", color: "#6b7280", border: "1px solid #e2e8f0" }}>{orderLabel}</span>
                           <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: carousel.enabled ? "rgba(16,185,129,0.1)" : "rgba(255,255,255,0.04)", color: carousel.enabled ? "#10b981" : "#555", border: `1px solid ${carousel.enabled ? "rgba(16,185,129,0.3)" : "#222"}` }}>{carousel.enabled ? "Live" : "Hidden"}</span>
+                          {carousel.visibility_tier && carousel.visibility_tier !== "production" && (
+                            <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, textTransform: "uppercase", letterSpacing: 0.5, background: carousel.visibility_tier === "test" ? "rgba(168,85,247,0.12)" : "rgba(59,130,246,0.12)", color: carousel.visibility_tier === "test" ? "#7c3aed" : "#2563eb", border: `1px solid ${carousel.visibility_tier === "test" ? "rgba(168,85,247,0.4)" : "rgba(59,130,246,0.4)"}` }}>{carousel.visibility_tier}</span>
+                          )}
                         </div>
                       </div>
 
@@ -4326,7 +4381,7 @@ export function CMS({ onExit, currentUser }) {
                         style={{ background: selectedChannelForEpg?.id === ch.id ? "rgba(79,70,229,0.15)" : "#eef2ff", border: `1px solid ${selectedChannelForEpg?.id === ch.id ? "#4f46e5" : "#c7d2fe"}`, borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: selectedChannelForEpg?.id === ch.id ? 700 : 600, color: "#4f46e5", cursor: "pointer" }}>
                         {selectedChannelForEpg?.id === ch.id ? "Close" : "Schedule"}
                       </button>
-                      <button onClick={() => { setChannelForm({ name: ch.name, slug: ch.slug || "", description: ch.description || "", logo_url: ch.logo_url || "", hero_url: ch.hero_url || "", category: ch.category || "general", ingest_type: ch.ingest_type || "hls", hls_url: ch.hls_url || "", stream_uid: ch.stream_uid || "", is_active: ch.is_active ?? true, sort_order: ch.sort_order ?? 0, is_premium: ch.is_premium ?? false, tile_size: ch.tile_size || "normal", is_live_hero: ch.is_live_hero ?? false, live_feed_id: ch.live_feed_id ?? null }); setEditingChannelId(ch.id); setDrawerOpen(true); }}
+                      <button onClick={() => { setChannelForm({ name: ch.name, slug: ch.slug || "", description: ch.description || "", logo_url: ch.logo_url || "", hero_url: ch.hero_url || "", category: ch.category || "general", ingest_type: ch.ingest_type || "hls", hls_url: ch.hls_url || "", stream_uid: ch.stream_uid || "", is_active: ch.is_active ?? true, sort_order: ch.sort_order ?? 0, is_premium: ch.is_premium ?? false, tile_size: ch.tile_size || "normal", is_live_hero: ch.is_live_hero ?? false, live_feed_id: ch.live_feed_id ?? null, visibility_tier: ch.visibility_tier ?? "production" }); setEditingChannelId(ch.id); setDrawerOpen(true); }}
                         style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, color: "#374151", cursor: "pointer" }}>
                         Edit
                       </button>
@@ -6057,7 +6112,7 @@ export function CMS({ onExit, currentUser }) {
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                   <thead>
                     <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-                      {["Name", "Email", "Type", "Subscription", "Joined", ""].map(h => (
+                      {["Name", "Email", "Type", "Tier", "Subscription", "Joined", ""].map(h => (
                         <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{h}</th>
                       ))}
                     </tr>
@@ -6072,6 +6127,13 @@ export function CMS({ onExit, currentUser }) {
                             ? <span style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 600, color: "#dc2626" }}>User + Streamer</span>
                             : <span style={{ background: "rgba(79,70,229,0.08)", border: "1px solid rgba(79,70,229,0.2)", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 600, color: "#4f46e5" }}>User</span>
                           }
+                        </td>
+                        <td style={{ padding: "14px 16px" }}>
+                          <select value={u.access_tier || "production"} onChange={e => setUserAccessTier(u.id, e.target.value)}
+                            style={{ fontSize: 12, padding: "4px 8px", borderRadius: 6, border: "1px solid #e2e8f0", background: "#fff", color: (u.access_tier && u.access_tier !== "production") ? "#7c3aed" : "#374151", fontWeight: (u.access_tier && u.access_tier !== "production") ? 700 : 400, cursor: "pointer" }}>
+                            <option value="production">Production</option>
+                            <option value="test">Test</option>
+                          </select>
                         </td>
                         <td style={{ padding: "14px 16px" }}>
                           {u.subscription ? (
@@ -7062,6 +7124,7 @@ export function CMS({ onExit, currentUser }) {
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <FieldInput label="Title *" value={form.title} onChange={v => setForm(f => ({ ...f, title: v }))} placeholder="e.g. Metropolis" />
                     <PremiumToggleButton on={form.is_premium} onToggle={() => setForm(f => ({ ...f, is_premium: !f.is_premium }))} />
+                    <TierSelect value={form.visibility_tier} onChange={v => setForm(f => ({ ...f, visibility_tier: v }))} />
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                       <FieldCombo label="Category" value={form.category} onChange={v => setForm(f => ({ ...f, category: v }))} options={categories} />
                       <FieldSelect label="Rating" value={form.rating} onChange={v => setForm(f => ({ ...f, rating: v }))} options={["NR", "G", "PG", "PG-13", "R"]} />
@@ -7080,7 +7143,10 @@ export function CMS({ onExit, currentUser }) {
                         <span style={{ fontSize: 11, color: "#9ca3af" }}>or paste URL</span>
                         <div style={{ flex: 1, height: 1, background: "#e2e8f0" }} />
                       </div>
-                      <input type="text" value={form.thumbnail} onChange={e => setForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="https://..." style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <input type="text" value={form.thumbnail} onChange={e => setForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="https://… or upload →" style={{ flex: 1, minWidth: 0, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                        <UploadButton onUploaded={url => setForm(f => ({ ...f, thumbnail: url }))} />
+                      </div>
                       {form.thumbnail && (
                         <div style={{ marginTop: 10, borderRadius: 6, overflow: "hidden", border: "1px solid #e2e8f0" }}>
                           <img src={form.thumbnail} alt="Hero preview" style={{ width: "100%", height: 110, objectFit: "cover" }} onError={e => { e.target.style.display = "none"; }} />
@@ -7096,7 +7162,10 @@ export function CMS({ onExit, currentUser }) {
                         <span style={{ fontSize: 11, color: "#9ca3af" }}>or paste URL</span>
                         <div style={{ flex: 1, height: 1, background: "#e2e8f0" }} />
                       </div>
-                      <input type="text" value={form.poster} onChange={e => setForm(f => ({ ...f, poster: e.target.value }))} placeholder="https://..." style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <input type="text" value={form.poster} onChange={e => setForm(f => ({ ...f, poster: e.target.value }))} placeholder="https://… or upload →" style={{ flex: 1, minWidth: 0, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
+                        <UploadButton onUploaded={url => setForm(f => ({ ...f, poster: url }))} />
+                      </div>
                       {form.poster && (
                         <div style={{ marginTop: 10, borderRadius: 6, overflow: "hidden", border: "1px solid #e2e8f0", width: 80 }}>
                           <img src={form.poster} alt="Poster preview" style={{ width: "100%", aspectRatio: "2/3", objectFit: "cover" }} onError={e => { e.target.style.display = "none"; }} />
@@ -7124,6 +7193,7 @@ export function CMS({ onExit, currentUser }) {
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <FieldInput label="Title *" value={showForm.title} onChange={v => setShowForm(f => ({ ...f, title: v }))} placeholder="e.g. The Twilight Zone" />
                     <PremiumToggleButton on={showForm.is_premium} onToggle={() => setShowForm(f => ({ ...f, is_premium: !f.is_premium }))} />
+                    <TierSelect value={showForm.visibility_tier} onChange={v => setShowForm(f => ({ ...f, visibility_tier: v }))} />
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                       <FieldCombo label="Category" value={showForm.category} onChange={v => setShowForm(f => ({ ...f, category: v }))} options={categories} />
                       <FieldSelect label="Rating" value={showForm.rating} onChange={v => setShowForm(f => ({ ...f, rating: v }))} options={["NR", "G", "PG", "PG-13", "R"]} />
@@ -7234,6 +7304,9 @@ export function CMS({ onExit, currentUser }) {
                         style={{ width: "100%", background: podcastForm.enabled ? "rgba(79,70,229,0.08)" : "rgba(107,114,128,0.08)", border: `1px solid ${podcastForm.enabled ? "rgba(79,70,229,0.3)" : "#e2e8f0"}`, borderRadius: 7, padding: "10px 12px", color: podcastForm.enabled ? "#4f46e5" : "#6b7280", fontSize: 13, cursor: "pointer", fontWeight: 500 }}>
                         {podcastForm.enabled ? "✓ Enabled" : "○ Disabled"}
                       </button>
+                      <div style={{ marginTop: 16 }}>
+                        <TierSelect value={podcastForm.visibility_tier} onChange={v => setPodcastForm(f => ({ ...f, visibility_tier: v }))} />
+                      </div>
                     </div>
                     <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
                       <button onClick={savePodcast} disabled={podcastSaving} style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: podcastSaving ? "not-allowed" : "pointer", opacity: podcastSaving ? 0.7 : 1 }}>
@@ -7550,6 +7623,24 @@ export function CMS({ onExit, currentUser }) {
                         <span style={{ fontSize: 16 }}>{carouselForm.enabled ? "✓" : "○"}</span>
                         {carouselForm.enabled ? "Live — visible to users" : "Hidden — not shown to users"}
                       </button>
+
+                      <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, margin: "18px 0 8px", textTransform: "uppercase", letterSpacing: 0.8 }}>5 · Tier</label>
+                      <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
+                        {[
+                          { v: "production", l: "Production", d: "All real users", c: "#22c55e" },
+                          { v: "test", l: "Test", d: "Test accounts only", c: "#a855f7" },
+                        ].map(o => {
+                          const on = (carouselForm.visibility_tier || "production") === o.v;
+                          return (
+                            <button key={o.v} onClick={() => setCarouselForm(f => ({ ...f, visibility_tier: o.v }))}
+                              style={{ flex: 1, background: on ? `${o.c}1f` : "#f8fafc", border: `1.5px solid ${on ? o.c : "#e2e8f0"}`, borderRadius: 9, padding: "10px 8px", cursor: "pointer", textAlign: "left" }}>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: on ? o.c : "#374151" }}>{o.l}</div>
+                              <div style={{ fontSize: 10, color: "#6b7280", marginTop: 1 }}>{o.d}</div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p style={{ margin: "0 0 4px", fontSize: 11, color: "#9ca3af" }}>Production = live for everyone. Test = only Test accounts see this row (preview it before going public).</p>
                     </div>
 
                     <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
@@ -7572,6 +7663,7 @@ export function CMS({ onExit, currentUser }) {
                     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
                       <FieldInput label="Name *" value={channelForm.name} onChange={v => setChannelForm(f => ({ ...f, name: v }))} placeholder="e.g. Peep Classics" />
                       <PremiumToggleButton on={channelForm.is_premium} onToggle={() => setChannelForm(f => ({ ...f, is_premium: !f.is_premium }))} />
+                      <TierSelect value={channelForm.visibility_tier} onChange={v => setChannelForm(f => ({ ...f, visibility_tier: v }))} />
                       <FieldInput label="Slug" value={channelForm.slug} onChange={v => setChannelForm(f => ({ ...f, slug: v }))} placeholder="auto-generated from name" />
                       <FieldInput label="Description" value={channelForm.description} onChange={v => setChannelForm(f => ({ ...f, description: v }))} placeholder="What's on this channel?" />
                       <div>
@@ -9115,6 +9207,7 @@ export function CMS({ onExit, currentUser }) {
                 <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Files in your Supabase bucket. Click "Publish" to make them watchable on Peep.</p>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={publishAllPending} disabled={bulkPublishing} style={{ padding: "10px 18px", background: "#059669", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: bulkPublishing ? "wait" : "pointer", opacity: bulkPublishing ? 0.7 : 1 }}>{bulkPublishing ? "Publishing…" : "↑ Publish all new"}</button>
                 <button onClick={() => { setStorageAddForm({ title: "", type: "movie", show_id: "", podcast_id: "", description: "", year: new Date().getFullYear(), genre: "", artist: "", episode_number: 1, season_number: 1, linked_id: "", linked_table: "videos", url: "" }); setStorageAddModal({ name: "External URL", folder: "", url: "" }); }} style={{ padding: "10px 18px", background: "#4f46e5", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add from URL</button>
                 <button onClick={loadStorageFiles} style={{ padding: "10px 20px", background: "#0f172a", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{storageLoading ? "Scanning…" : "Refresh"}</button>
               </div>

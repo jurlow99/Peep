@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../../supabase";
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+import { SUPABASE_URL } from "../../lib/config";
 const EMPTY_FEED = { name: "", source_type: "srt", source_host: "", source_port: "", source_mode: "caller", source_stream_id: "", source_latency: 200, notes: "", enabled: true, passphrase: "" };
 
 const STATUS = {

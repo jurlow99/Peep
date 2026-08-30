@@ -1,9 +1,9 @@
 import { useState, useRef } from "react";
 import * as tus from "tus-js-client";
 import { supabase } from "../supabase";
+import { SUPABASE_URL } from "../lib/config";
 
 const CF_CUSTOMER = "https://customer-x9w8t8qxjaf49jqb.cloudflarestream.com";
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
 // Poll until Cloudflare marks the video ready (transcoding complete)
 async function pollReady(uid, token, onProgress) {

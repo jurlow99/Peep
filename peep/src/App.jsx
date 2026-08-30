@@ -25,9 +25,11 @@ import { rankRelated } from "./lib/recommendations";
 import { TrailerModal } from "./lib/playerUtils";
 import { Spinner } from "./components/ui/Spinner";
 import { Wordmark, LogoHorizontal } from "./components/Wordmark";
+import { filterByTier } from "./lib/tiers";
 import { loadFlags, getFlags } from "./lib/flags";
 import { contentSelect } from "./lib/contentQueries";
 import { contentKey } from "./lib/contentIds";
+import { SUPABASE_URL } from "./lib/config";
 
 function timeAgo(dateStr) {
   if (!dateStr) return "";
@@ -86,6 +88,7 @@ export default function App() {
     userName,
     setUserName,
     userRole,
+    userTier,
     passwordRecovery,
     setPasswordRecovery,
   } = useAuth();
@@ -188,7 +191,7 @@ export default function App() {
     return "";
   };
 
-  const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true), onProfileOpen: () => setPage("profile"), userAvatarId, userAvatarUrl, userName, isPremiumUser, onPodcastSelect: pod => { setSelectedPodcast(pod); setPage("podcast"); }, onViewProfile: () => setPage("profile"), onChannelPlay: ch => { if (!user) { setAuthOpen(true); return; } if (isLocked(ch)) { openGate(ch); return; } setSelectedVideo({ id: `ch-${ch.id}`, title: ch.name, url: channelPlaybackUrl(ch), _type: "live", thumbnail: ch.hero_url || ch.logo_url || "", description: ch.description || "" }); setPage("player"); } };
+  const listProps = { user, myList, onToggleList: toggleList, onAuthOpen: () => setAuthOpen(true), onProfileOpen: () => setPage("profile"), userAvatarId, userAvatarUrl, userName, userTier, isPremiumUser, onPodcastSelect: pod => { setSelectedPodcast(pod); setPage("podcast"); }, onViewProfile: () => setPage("profile"), onChannelPlay: ch => { if (!user) { setAuthOpen(true); return; } if (isLocked(ch)) { openGate(ch); return; } setSelectedVideo({ id: `ch-${ch.id}`, title: ch.name, url: channelPlaybackUrl(ch), _type: "live", thumbnail: ch.hero_url || ch.logo_url || "", description: ch.description || "" }); setPage("player"); } };
 
 
   if (maintenanceMode) return (
@@ -401,7 +404,7 @@ export default function App() {
 // ─── Homepage ─────────────────────────────────────────────────────────────────
 
 
-function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, userAvatarUrl, userName }) {
+function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, userAvatarUrl, userName, userTier = "production" }) {
   const [episodes, setEpisodes] = useState([]);
   const [selectedSeason, setSelectedSeason] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -430,12 +433,12 @@ function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList
       });
 
     Promise.all([
-      supabase.from("shows").select("id,title,category,tags,year,score,rating,thumbnail,poster").neq("id", show.id),
-      supabase.from("videos").select("id,title,category,tags,year,score,rating,thumbnail,poster,duration"),
+      supabase.from("shows").select("id,title,category,tags,year,score,rating,thumbnail,poster,visibility_tier").neq("id", show.id),
+      supabase.from("videos").select("id,title,category,tags,year,score,rating,thumbnail,poster,duration,visibility_tier"),
     ]).then(([sRes, vRes]) => {
       const pool = [
-        ...(sRes.data || []).map(s => ({ ...s, _type: "show" })),
-        ...(vRes.data || []).map(v => ({ ...v, _type: "movie" })),
+        ...filterByTier(sRes.data || [], userTier).map(s => ({ ...s, _type: "show" })),
+        ...filterByTier(vRes.data || [], userTier).map(v => ({ ...v, _type: "movie" })),
       ];
       setRelated(rankRelated(show, pool));
     });
@@ -1184,8 +1187,6 @@ function ProfilePage({ user, userAvatarId, userAvatarUrl, userName, onBack, onGo
 
 // ─── CreatorPortalPage ────────────────────────────────────────────────────────
 
-const SUPABASE_URL_CREATOR = "https://iuozujwtuzuwubhsnhix.supabase.co";
-
 function CreatorPortalPage({ user, onBack, onGoHome }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1194,7 +1195,7 @@ function CreatorPortalPage({ user, onBack, onGoHome }) {
   useEffect(() => {
     async function load() {
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`${SUPABASE_URL_CREATOR}/functions/v1/get-creator-dashboard`, {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/get-creator-dashboard`, {
         headers: { "Authorization": `Bearer ${session.access_token}` },
       });
       const json = await res.json();

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Wordmark } from "../components/Wordmark";
 import Hls from "hls.js";
 import { supabase } from "../supabase";
+import { SUPABASE_URL } from "../lib/config";
 
 const YELLOW = "#facc15";
 const CHAT_WIDTH = 320;
@@ -328,7 +329,7 @@ export function StreamerProfile() {
     if (!stream?.id || !stream?.stream_uid) return;
     const check = async () => {
       try {
-        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/check-live-status?stream_uid=${stream.stream_uid}&stream_id=${stream.id}`);
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/check-live-status?stream_uid=${stream.stream_uid}&stream_id=${stream.id}`);
         const json = await res.json();
         if (typeof json.is_live === "boolean") setStream(prev => ({ ...prev, is_live: json.is_live }));
       } catch (_) {
@@ -493,7 +494,7 @@ export function StreamerProfile() {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
       const prevParam = previousUids.length ? `&previous_uids=${previousUids.join(",")}` : "";
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-vods?stream_uid=${streamUid}${prevParam}`, {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/get-vods?stream_uid=${streamUid}${prevParam}`, {
         headers: { "Authorization": `Bearer ${token}` },
       });
       const json = await res.json();

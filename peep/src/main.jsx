@@ -1,16 +1,26 @@
-import { Component } from 'react'
+/* eslint-disable react-refresh/only-export-components -- entry module:
+   it exports nothing, so it is never a fast-refresh boundary. */
+import { Component, lazy, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.jsx'
 import { QueryProvider } from './providers/QueryProvider.jsx'
-import { AdminPage } from './pages/AdminPage.jsx'
 import { SignupPage, SigninPage } from './pages/AuthPages.jsx'
 import { SetPasswordPage } from './pages/SetPasswordPage.jsx'
 import { StreamerDashboard } from './pages/StreamerDashboard.jsx'
 import { StreamerProfile } from './pages/StreamerProfile.jsx'
 import { SupportPage } from './pages/SupportPage.jsx'
-import { EnvBadge } from './components/EnvBadge.jsx'
+import { EnvBadge, DevSplash } from './components/EnvBadge.jsx'
+
+// The CMS behind AdminPage is ~9.6k lines and only admins ever open it, so it
+// loads on demand instead of riding along in every viewer's bundle.
+// AdminPage is a named export, so unwrap it into the default lazy() expects.
+const AdminPage = lazy(() =>
+  import('./pages/AdminPage.jsx').then(m => ({ default: m.AdminPage })))
+
+// Matches the app's background so the swap reads as a beat, not a white flash.
+const adminFallback = <div style={{ background: '#0a0a0a', minHeight: '100vh' }} />
 
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null }; }
@@ -37,7 +47,10 @@ const isLocal = host === 'localhost' || host === '127.0.0.1'
 const isAdminHost = host === 'admin.watchpeep.tv' || (isLocal && path === '/admin')
 
 // Distinguish browser tabs by environment: peep / local peep / admin / local admin
-document.title = (isLocal ? 'local ' : '') + (isAdminHost ? 'admin' : 'peep')
+// Browser-tab distinguisher: prod = "peep" / "admin", local = "local" / "local admin"
+document.title = isAdminHost
+  ? (isLocal ? 'local admin' : 'admin')
+  : (isLocal ? 'local' : 'peep')
 
 // Legacy streamer-only routes → redirect to unified flow
 if (path === '/streamer-signin' || path === '/apply-to-stream' || path === '/create-channel') {
@@ -49,8 +62,9 @@ if (path === '/streamer-signin' || path === '/apply-to-stream' || path === '/cre
 // no effect on the production build, so this only changes local dev speed.
 createRoot(document.getElementById('root')).render(
     <ErrorBoundary>
+      <DevSplash />
       <EnvBadge />
-      {isAdminHost              ? <AdminPage />         :
+      {isAdminHost              ? <Suspense fallback={adminFallback}><AdminPage /></Suspense> :
        path === '/signup'         ? <SignupPage />        :
        path === '/signin'         ? <SigninPage />        :
        path === '/set-password'   ? <SetPasswordPage />   :
