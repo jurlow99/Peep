@@ -3,8 +3,7 @@ import { Wordmark } from "../components/Wordmark";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { supabase } from "../supabase";
-
-const SUPABASE_URL = "https://iuozujwtuzuwubhsnhix.supabase.co";
+import { SUPABASE_URL } from "../lib/config";
 const stripePromise = loadStripe("pk_live_51TYZ17RgQH3TYy3Q51H1NPxizg1dHKpdRx0Vzes5cFI1jdrkCctrYp1ulMTuZL1Obxe9QBq0oKSEAHN7QNAvSSq700rFAyMhZn");
 const FOUNDING_PRICE_ID = "price_1TafqJRgQH3TYy3QOCovduJf";
 const FOUNDING_ANNUAL_PRICE_ID = "price_1Tag3FRgQH3TYy3Ql0KuQNeA";

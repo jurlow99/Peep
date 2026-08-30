@@ -3,8 +3,7 @@ import { Wordmark } from "../components/Wordmark";
 import { supabase } from "../supabase";
 import { uploadVideo } from "../lib/storageUtils";
 import { VideoUploader } from "../components/VideoUploader";
-
-const SUPABASE_URL = "https://iuozujwtuzuwubhsnhix.supabase.co";
+import { SUPABASE_URL } from "../lib/config";
 
 const STATUS_BADGE = {
   approved: { label: "Live", bg: "rgba(74,222,128,0.1)", color: "#4ade80", border: "rgba(74,222,128,0.2)" },

@@ -1,14 +1,13 @@
 // Persistent "which database am I on?" indicator. Keys off the Supabase URL, not
 // the hostname — so it reflects the DATA you're touching. It shows on dev, and is
 // deliberately INVISIBLE on prod (so its absence = "you're on the real database").
+//
+// IS_DEV_DB lives in lib/config alongside the URL it's derived from; it's re-exported
+// here because that's where the rest of the app has always imported it from.
 import { useState, useEffect } from "react";
+import { IS_DEV_DB } from "../lib/config";
 
-const PROD_REF = "iuozujwtuzuwubhsnhix";
-const URL = import.meta.env.VITE_SUPABASE_URL || "";
-
-// Dev = anything not pointed at the prod project (localhost, previews, or if you
-// swap .env back to prod the badge vanishes as a live "careful, this is real" cue).
-export const IS_DEV_DB = !URL.includes(PROD_REF);
+export { IS_DEV_DB };
 
 // Brief FARRIS splash on dev load — instantly signals "this is the dev build."
 // Shows once per tab session so it doesn't nag on every reload; click to dismiss.

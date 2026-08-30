@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { Wordmark } from "../components/Wordmark";
 import { supabase } from "../supabase";
+import { SUPABASE_URL } from "../lib/config";
 
 const YELLOW = "#facc15";
 const BG = "#0a0a0a";
 const CARD = "#111";
 const BORDER = "#1e1e1e";
-const SUPABASE_URL = "https://iuozujwtuzuwubhsnhix.supabase.co";
 const TURNSTILE_SITE_KEY = "0x4AAAAAADlZlihNdneLgny1";
 
 function useTurnstile() {

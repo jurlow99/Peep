@@ -9,7 +9,7 @@
 
 // On the local/dev build we DON'T gate by tier — you see everything while building.
 // Tiers only matter on prod (the live preview-ring feature).
-const IS_DEV_DB = !(import.meta.env.VITE_SUPABASE_URL || "").includes("iuozujwtuzuwubhsnhix");
+import { IS_DEV_DB } from "./config";
 
 export const TIERS = ["production", "stage", "test"];
 

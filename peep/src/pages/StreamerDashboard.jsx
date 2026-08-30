@@ -3,6 +3,7 @@ import { Wordmark } from "../components/Wordmark";
 import Hls from "hls.js";
 import { supabase } from "../supabase";
 import { CloudflareVideoUploader } from "../components/CloudflareVideoUploader";
+import { SUPABASE_URL } from "../lib/config";
 
 const BG = "#0a0a0a";
 const YELLOW = "#facc15";
@@ -314,7 +315,7 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { setApplication(null); return; }
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/my-streamer-application`, {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/my-streamer-application`, {
         headers: { "Authorization": `Bearer ${session.access_token}` },
       });
       const json = await res.json();
@@ -417,7 +418,7 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
       const { data: { session } } = await supabase.auth.getSession();
       const prevParam = previousUids.length ? `&previous_uids=${previousUids.join(",")}` : "";
       const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-vods?stream_uid=${streamUid}${prevParam}`,
+        `${SUPABASE_URL}/functions/v1/get-vods?stream_uid=${streamUid}${prevParam}`,
         { headers: session?.access_token ? { "Authorization": `Bearer ${session.access_token}` } : {} }
       );
       const json = await res.json();
@@ -430,7 +431,7 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
       const expired = allVods.filter(v => new Date(v.created).getTime() < cutoff);
       if (expired.length > 0 && session?.access_token) {
         expired.forEach(v => {
-          fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-vod`, {
+          fetch(`${SUPABASE_URL}/functions/v1/delete-vod`, {
             method: "POST",
             headers: { "Authorization": `Bearer ${session.access_token}`, "Content-Type": "application/json" },
             body: JSON.stringify({ uid: v.uid }),
@@ -447,7 +448,7 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
     setSavingVod(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-vod`, {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/delete-vod`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${session.access_token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ uid }),
@@ -465,7 +466,7 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
     setSavingVod(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/rename-vod`, {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/rename-vod`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${session.access_token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ uid, title }),
@@ -496,7 +497,7 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
       .subscribe();
     async function pollLive() {
       try {
-        const res  = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/check-live-status?stream_uid=${stream.stream_uid}&stream_id=${stream.id}`);
+        const res  = await fetch(`${SUPABASE_URL}/functions/v1/check-live-status?stream_uid=${stream.stream_uid}&stream_id=${stream.id}`);
         const json = await res.json();
         if (typeof json.is_live === "boolean") setStream(s => s.is_live !== json.is_live ? { ...s, is_live: json.is_live } : s);
         if (json.health) setStreamHealth(json.health);
@@ -652,7 +653,7 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
     setRotatingKey(true); setConfirmRotate(false);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/rotate-stream-key`, { method: "POST", headers: { "Authorization": `Bearer ${session.access_token}`, "Content-Type": "application/json" } });
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/rotate-stream-key`, { method: "POST", headers: { "Authorization": `Bearer ${session.access_token}`, "Content-Type": "application/json" } });
       const json = await res.json();
       if (json.error) throw new Error(json.error);
       setStream(s => ({ ...s, stream_key: json.stream_key, stream_uid: json.stream_uid }));
@@ -757,7 +758,7 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
       setEnablingStream(true);
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/enable-streaming`, {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/enable-streaming`, {
           method: "POST",
           headers: { "Authorization": `Bearer ${session.access_token}`, "Content-Type": "application/json" },
         });
@@ -788,7 +789,7 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
       setAppError(null);
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/my-streamer-application`, {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/my-streamer-application`, {
           method: "POST",
           headers: { "Authorization": `Bearer ${session.access_token}`, "Content-Type": "application/json" },
           body: JSON.stringify({ name: appName.trim(), why: appWhy.trim(), social_links: appSocial.trim() }),

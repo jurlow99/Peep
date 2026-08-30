@@ -1,4 +1,5 @@
 import { supabase } from "../supabase";
+import { SUPABASE_URL } from "./config";
 
 const BUCKET_NAME = "peep-media";
 
@@ -114,7 +115,6 @@ export async function uploadVideo(file, path, onProgress) {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
-      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://iuozujwtuzuwubhsnhix.supabase.co";
       const uploadUrl = `${SUPABASE_URL}/storage/v1/object/${BUCKET_NAME}/${path}`;
 
       const xhr = new XMLHttpRequest();

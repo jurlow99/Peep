@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "../supabase";
 import { Wordmark } from "./Wordmark";
 import { IS_DEV_DB } from "./EnvBadge";
+import { SUPABASE_URL } from "../lib/config";
 import { ImageUploader } from "./ImageUploader";
 import {
   EMPTY_ROW,
@@ -25,7 +26,7 @@ const EMPTY_AD = {
   active: true,
 };
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+// SUPABASE_URL comes from lib/config — see the import at the top of this file.
 
 async function getAdminToken() {
   await supabase.auth.getUser(); // validates + auto-refreshes if expired
@@ -1151,7 +1152,7 @@ export function CMS({ onExit, currentUser }) {
     setGrantResult(null);
     try {
       const token = await getAdminToken();
-      const res = await fetch("https://iuozujwtuzuwubhsnhix.supabase.co/functions/v1/grant-access", {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/grant-access`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({ email: grantEmail.trim() }),

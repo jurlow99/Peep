@@ -29,6 +29,7 @@ import { filterByTier } from "./lib/tiers";
 import { loadFlags, getFlags } from "./lib/flags";
 import { contentSelect } from "./lib/contentQueries";
 import { contentKey } from "./lib/contentIds";
+import { SUPABASE_URL } from "./lib/config";
 
 function timeAgo(dateStr) {
   if (!dateStr) return "";
@@ -1186,8 +1187,6 @@ function ProfilePage({ user, userAvatarId, userAvatarUrl, userName, onBack, onGo
 
 // ─── CreatorPortalPage ────────────────────────────────────────────────────────
 
-const SUPABASE_URL_CREATOR = "https://iuozujwtuzuwubhsnhix.supabase.co";
-
 function CreatorPortalPage({ user, onBack, onGoHome }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1196,7 +1195,7 @@ function CreatorPortalPage({ user, onBack, onGoHome }) {
   useEffect(() => {
     async function load() {
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`${SUPABASE_URL_CREATOR}/functions/v1/get-creator-dashboard`, {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/get-creator-dashboard`, {
         headers: { "Authorization": `Bearer ${session.access_token}` },
       });
       const json = await res.json();
