@@ -20,6 +20,7 @@ import FlagsPanel from "./cms/FlagsPanel";
 import StoragePanel from "./cms/StoragePanel";
 import AuditPanel from "./cms/AuditPanel";
 import SecurityPanel from "./cms/SecurityPanel";
+import Drawer from "./cms/Drawer";
 
 const EMPTY_AD = {
   name: "",
@@ -6595,50 +6596,23 @@ export function CMS({ onExit, currentUser }) {
             return { item, start, end: new Date(current), hasDuration };
           });
         })();
-        return (
+        const drawerTitle = (
           <>
-            {/* Backdrop */}
-            <div
-              onClick={closeDrawer}
-              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.25)", zIndex: 298, backdropFilter: "blur(2px)" }}
-            />
-            {/* Drawer panel */}
-            <div style={{
-              position: "fixed", right: 0, top: 0, bottom: 0,
-              width: "min(520px, 100vw)",
-              background: "#ffffff",
-              borderLeft: "1px solid #e2e8f0",
-              boxShadow: "-8px 0 32px rgba(0,0,0,0.1)",
-              zIndex: 299,
-              display: "flex",
-              flexDirection: "column",
-              fontFamily: "'Space Grotesk', sans-serif",
-            }}>
-              {/* Drawer header */}
-              <div style={{ padding: "20px 24px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
-                <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "#0f172a" }}>
-                  {tab === "content" && videoSubTab === "shorts" && (editingId ? "Edit Movie" : "Add Movie")}
-                  {tab === "content" && videoSubTab === "series" && (editingShowId ? "Edit Series" : "Add Series")}
-                  {tab === "content" && videoSubTab === "episodes" && (editingEpisodeId ? "Edit Episode" : "Add Episode")}
-                  {tab === "content" && videoSubTab === "podcasts" && (editingPodcastId ? "Edit Podcast" : "Add Podcast")}
-                  {tab === "content" && videoSubTab === "carousels" && (editingCarouselId ? "Edit Carousel" : "Add Carousel")}
-                  {tab === "live" && liveSubTab === "channels" && (editingChannelId ? "Edit Channel" : "Add Channel")}
-                  {tab === "live" && liveSubTab !== "channels" && drawerFormType !== "epg" && drawerFormType !== "bulk" && (editingLiveId ? "Edit Stream" : "Add Stream")}
-                  {tab === "live" && drawerFormType === "epg" && (editingEpgId ? "Edit Program" : "Add Program")}
-                  {tab === "live" && drawerFormType === "bulk" && "Auto-Schedule Block"}
-                  {tab === "analytics" && analyticsTab === "ads" && (editingAdId ? "Edit Ad Tag" : "Add Ad Tag")}
-                  {drawerFormType === "report" && "Report Details"}
-                </h2>
-                <button
-                  onClick={closeDrawer}
-                  style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 18, color: "#6b7280", lineHeight: 1 }}
-                >
-                  ×
-                </button>
-              </div>
-
-              {/* Scrollable form content */}
-              <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
+            {tab === "content" && videoSubTab === "shorts" && (editingId ? "Edit Movie" : "Add Movie")}
+            {tab === "content" && videoSubTab === "series" && (editingShowId ? "Edit Series" : "Add Series")}
+            {tab === "content" && videoSubTab === "episodes" && (editingEpisodeId ? "Edit Episode" : "Add Episode")}
+            {tab === "content" && videoSubTab === "podcasts" && (editingPodcastId ? "Edit Podcast" : "Add Podcast")}
+            {tab === "content" && videoSubTab === "carousels" && (editingCarouselId ? "Edit Carousel" : "Add Carousel")}
+            {tab === "live" && liveSubTab === "channels" && (editingChannelId ? "Edit Channel" : "Add Channel")}
+            {tab === "live" && liveSubTab !== "channels" && drawerFormType !== "epg" && drawerFormType !== "bulk" && (editingLiveId ? "Edit Stream" : "Add Stream")}
+            {tab === "live" && drawerFormType === "epg" && (editingEpgId ? "Edit Program" : "Add Program")}
+            {tab === "live" && drawerFormType === "bulk" && "Auto-Schedule Block"}
+            {tab === "analytics" && analyticsTab === "ads" && (editingAdId ? "Edit Ad Tag" : "Add Ad Tag")}
+            {drawerFormType === "report" && "Report Details"}
+          </>
+        );
+        return (
+          <Drawer onClose={closeDrawer} title={drawerTitle}>
 
                 {/* ── REPORT DETAIL ── */}
                 {drawerFormType === "report" && selectedReport && (() => {
@@ -7859,9 +7833,7 @@ export function CMS({ onExit, currentUser }) {
                   </div>
                 )}
 
-              </div>
-            </div>
-          </>
+          </Drawer>
         );
       })()}
 
