@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  web:
+    name: Test & build (peep/)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: peep
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: peep/package-lock.json
+
+      - run: npm ci
+
+      - name: Tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+
+      # Lint currently reports ~227 pre-existing problems, so it reports rather
+      # than blocks. Flip continue-on-error off once that backlog is cleared —
+      # at that point this becomes a real gate against new lint errors.
+      - name: Lint (reporting only)
+        run: npm run lint
+        continue-on-error: true
