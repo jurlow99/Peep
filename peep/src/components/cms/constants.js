@@ -1,3 +1,6 @@
+// Horizontal page padding shared by the CMS shell and its panels.
+export const PAD = "clamp(24px, 4vw, 64px)";
+
 /** CMS form defaults — shared across content tabs. */
 export const EMPTY_ROW = {
   title: "",
