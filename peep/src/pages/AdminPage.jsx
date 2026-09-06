@@ -21,6 +21,11 @@ export function AdminPage() {
         if (isAdminProfile(profile)) { setIsAdmin(true); setCurrentUser(session.user); }
       }
       setChecking(false);
+    }).catch(err => {
+      // Without this, a failed session check left `checking` true forever and the
+      // page rendered null -- a black screen with no clue what went wrong.
+      setError(`Can't reach the database: ${err.message}`);
+      setChecking(false);
     });
   }, []);
 
