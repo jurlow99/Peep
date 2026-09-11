@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { createRevealScheduler, measureClockOffset, measureClockOffsetMedian, DEFAULT_JITTER_BUFFER_MS } from "./marketScheduler";
+import { createRevealScheduler, measureClockOffset, measureClockOffsetMedian, DEFAULT_JITTER_BUFFER_MS, MAX_REVEAL_DELAY_MS } from "./marketScheduler";
 import type { MarketTick } from "./marketTypes";
 
 const tick: MarketTick = { type: "lock", marketId: "m1", seq: 1, eventTs: 1_000_000 };
@@ -42,6 +42,25 @@ describe("createRevealScheduler", () => {
     scheduler.schedule(tick, onReveal);
 
     vi.advanceTimersByTime(0);
+    expect(onReveal).toHaveBeenCalledWith(tick);
+  });
+
+  it("caps the delay so a bad latency reading can't hold a tick indefinitely", () => {
+    // A real bug this guards against: hls.js reporting a liveSyncPosition
+    // against a VOD test stream produced a computed latency over 10
+    // minutes long -- nothing was broken, it was just scheduled correctly
+    // for a nonsense delay. This proves that can't happen regardless of
+    // how bad the input is.
+    const scheduler = createRevealScheduler({
+      getPlayerLatencyMs: () => 600_000_000, // absurd, e.g. a VOD misreported as live
+      now: () => 1_000_000,
+    });
+    const onReveal = vi.fn();
+    scheduler.schedule(tick, onReveal);
+
+    vi.advanceTimersByTime(MAX_REVEAL_DELAY_MS - 1);
+    expect(onReveal).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
     expect(onReveal).toHaveBeenCalledWith(tick);
   });
 

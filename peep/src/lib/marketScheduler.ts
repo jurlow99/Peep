@@ -4,6 +4,14 @@ import type { MarketTick } from "./marketTypes";
  * deliberately a little slow rather than ever ahead of what's on screen. */
 export const DEFAULT_JITTER_BUFFER_MS = 250;
 
+/** A real Cloudflare Stream live edge sits 6-18s behind (spec §3). A bad
+ * getPlayerLatencyMs reading -- e.g. hls.js reporting a liveSyncPosition
+ * against a VOD with no live edge at all -- can produce a delay of any
+ * size, holding a tick for what looks like forever with no error anywhere.
+ * Capping the total delay means a bad reading costs a late reveal, not a
+ * silently stuck one, regardless of what fed it a bad number. */
+export const MAX_REVEAL_DELAY_MS = 30_000;
+
 export interface RevealSchedulerOptions {
   /** server_ts - client_ts, in ms. Defaults to 0 until a /v1/time endpoint
    * exists to measure it (see measureClockOffset below). */
@@ -37,7 +45,7 @@ export function createRevealScheduler(opts: RevealSchedulerOptions = {}): Reveal
   return {
     schedule(tick, onReveal) {
       const revealAt = tick.eventTs + getClockOffsetMs() + getPlayerLatencyMs() + jitterBufferMs;
-      const delay = Math.max(0, revealAt - now());
+      const delay = Math.min(MAX_REVEAL_DELAY_MS, Math.max(0, revealAt - now()));
       const timer = setTimeout(() => {
         timers.delete(timer);
         onReveal(tick);
