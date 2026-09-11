@@ -16,8 +16,15 @@ import type { MarketTick } from "./marketTypes";
  * genuine live tick published after this -- which always uses
  * market.seq + 1 at publish time -- lands with a strictly greater seq and
  * is never mistaken for a stale replay.
+ *
+ * Also exported so useMarketFeed can call it again on tab-visibility
+ * regain: Broadcast is fire-and-forget with no replay, so a tick that
+ * arrives while a background tab's connection is throttled or briefly
+ * dropped is lost, not delayed -- there is no way to "catch up" except by
+ * re-reading current truth. Safe to call repeatedly: seq gating means an
+ * already-caught-up client just no-ops every synthetic tick here.
  */
-async function seedFromSnapshot(streamId: string, store: MarketStore): Promise<void> {
+export async function seedFromSnapshot(streamId: string, store: MarketStore): Promise<void> {
   const eventId = Number(streamId);
   if (!Number.isFinite(eventId)) return; // not a real event id (e.g. the mock script's dev-stream-1) -- nothing to seed
 

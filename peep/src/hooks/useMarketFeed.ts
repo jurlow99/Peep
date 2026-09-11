@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { getOrCreateStore, disposeStore } from "../lib/marketStore";
-import { connectMarketFeed } from "../lib/marketFeed";
+import { connectMarketFeed, seedFromSnapshot } from "../lib/marketFeed";
 import type { RevealSchedulerOptions } from "../lib/marketScheduler";
 
 /**
@@ -12,7 +12,18 @@ export function useMarketFeed(streamId: string, schedulerOpts?: RevealSchedulerO
   useEffect(() => {
     const store = getOrCreateStore(streamId);
     const { disconnect } = connectMarketFeed(streamId, store, schedulerOpts);
+
+    // A backgrounded tab can have its WebSocket activity throttled by the
+    // browser -- a tick that arrives during that window is lost outright,
+    // since Broadcast has no replay. Re-reading current truth the moment
+    // the tab is looked at again is the only way to catch back up.
+    function onVisible() {
+      if (document.visibilityState === "visible") seedFromSnapshot(streamId, store);
+    }
+    document.addEventListener("visibilitychange", onVisible);
+
     return () => {
+      document.removeEventListener("visibilitychange", onVisible);
       disconnect();
       disposeStore(streamId);
     };
