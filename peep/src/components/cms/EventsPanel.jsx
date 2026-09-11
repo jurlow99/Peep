@@ -5,7 +5,25 @@ import { OddsOption } from "../player/MarketOverlay";
 import { CARD_STYLE } from "../player/marketCardStyle";
 
 const EMPTY_EVENT = { title: "", description: "", thumbnail: "", hero_url: "", stream_url: "", stream_uid: "", starts_at: "", status: "scheduled" };
-const EMPTY_OPTIONS = [{ key: "yes", label: "Yes", odds: "2.00" }, { key: "no", label: "No", odds: "1.80" }];
+const EMPTY_OPTIONS = [{ label: "Yes", odds: "2.00" }, { label: "No", odds: "1.80" }];
+
+// The client matches ticks to options by a short internal "key" (see
+// marketFeed.ts), but there's no reason to make an admin invent one --
+// it's derived from the label they already typed, with a numeric suffix
+// if two labels collide (e.g. two blank rows both becoming "option_1").
+function slugifyKey(label, fallbackIndex) {
+  const base = (label || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  return base || `option_${fallbackIndex + 1}`;
+}
+function keyOptionRows(options) {
+  const used = new Set();
+  return options.map((o, i) => {
+    let key = slugifyKey(o.label, i);
+    while (used.has(key)) key = `${key}_2`;
+    used.add(key);
+    return { ...o, key };
+  });
+}
 
 const STATUS_COLOR = { scheduled: "#818cf8", live: "#22c55e", ended: "#9ca3af" };
 const MARKET_STATUS_COLOR = { open: "#22c55e", locked: "#f59e0b", settled: "#818cf8", void: "#9ca3af" };
@@ -122,8 +140,8 @@ export default function EventsPanel({ showToast, logAudit }) {
   // Creating a market and opening it are the same action -- there's no
   // "draft" state; a market only exists once viewers can see it.
   async function createAndOpenMarket(eventId) {
-    if (!marketQuestion.trim() || marketOptions.some(o => !o.key.trim() || !o.label.trim())) {
-      showToast("Question and every option need a key + label", "error");
+    if (!marketQuestion.trim() || marketOptions.some(o => !o.label.trim() || !(Number(o.odds) > 0))) {
+      showToast("Question needs a label and a payout for every option", "error");
       return;
     }
     setMarketSaving(true);
@@ -132,8 +150,8 @@ export default function EventsPanel({ showToast, logAudit }) {
       .select().single();
     if (error) { showToast("Error: " + error.message, "error"); setMarketSaving(false); return; }
 
-    const optionRows = marketOptions.map((o, i) => ({
-      market_id: market.id, key: o.key.trim(), label: o.label.trim(), odds: Number(o.odds) || 1, sort_order: i,
+    const optionRows = keyOptionRows(marketOptions).map((o, i) => ({
+      market_id: market.id, key: o.key, label: o.label.trim(), odds: Number(o.odds) || 1, sort_order: i,
     }));
     const { data: savedOptions } = await supabase.from("market_options").insert(optionRows).select();
 
@@ -253,26 +271,21 @@ export default function EventsPanel({ showToast, logAudit }) {
                     style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 7, padding: "8px 10px", fontSize: 12.5, color: "#0f172a", marginBottom: 12, boxSizing: "border-box" }} />
 
                   <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
-                    <MiniLabel style={{ width: 56 }}>Key</MiniLabel>
-                    <MiniLabel style={{ width: 90 }}>Label</MiniLabel>
-                    <MiniLabel style={{ width: 56 }}>Odds</MiniLabel>
+                    <MiniLabel style={{ width: 146 }}>Option text</MiniLabel>
+                    <MiniLabel style={{ width: 72 }}>Payout ×</MiniLabel>
                   </div>
-                  <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
                     {marketOptions.map((o, i) => (
                       <div key={i} style={{ display: "flex", gap: 4 }}>
-                        <input value={o.key} onChange={e => updateMarketOption(i, "key", e.target.value)} placeholder="yes"
-                          title="Short code the client uses to match this option across ticks -- lowercase, no spaces (e.g. yes, home, team_a)"
-                          style={{ width: 56, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 8px", fontSize: 11.5, color: "#0f172a" }} />
-                        <input value={o.label} onChange={e => updateMarketOption(i, "label", e.target.value)} placeholder="Yes"
-                          title="What viewers see on the button"
-                          style={{ width: 90, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 8px", fontSize: 11.5, color: "#0f172a" }} />
+                        <input value={o.label} onChange={e => updateMarketOption(i, "label", e.target.value)} placeholder={`Option ${i + 1}, e.g. "Yes"`}
+                          style={{ width: 146, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 8px", fontSize: 11.5, color: "#0f172a", boxSizing: "border-box" }} />
                         <input value={o.odds} onChange={e => updateMarketOption(i, "odds", e.target.value)} placeholder="2.00" type="number" step="0.01"
-                          title="Payout multiplier -- a 50-Point bet at 2.00x pays 100 if it wins"
-                          style={{ width: 56, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 8px", fontSize: 11.5, color: "#0f172a" }} />
+                          title="A 50-Point bet at 2.00x pays 100 back if this option wins"
+                          style={{ width: 72, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 8px", fontSize: 11.5, color: "#0f172a", boxSizing: "border-box" }} />
                       </div>
                     ))}
                     {marketOptions.length < 4 && (
-                      <button onClick={() => setMarketOptions(opts => [...opts, { key: "", label: "", odds: "2.00" }])}
+                      <button onClick={() => setMarketOptions(opts => [...opts, { label: "", odds: "" }])}
                         style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 10px", fontSize: 11, color: "#374151", cursor: "pointer" }}>+ Option</button>
                     )}
                   </div>
@@ -324,18 +337,26 @@ export default function EventsPanel({ showToast, logAudit }) {
 // so this is a true preview, not a mockup that can drift from what ships.
 // Un-set fields fall back to a placeholder so it never renders blank.
 function MarketPreview({ question, options }) {
-  const previewOptions = options.map((o, i) => ({
-    key: o.key || `opt${i}`,
-    label: o.label || `Option ${i + 1}`,
-    odds: Number(o.odds) || 1,
-  }));
   return (
     <div style={{ background: "linear-gradient(160deg,#2a2618,#121108 70%)", borderRadius: 10, padding: 16, minHeight: 150, display: "flex", alignItems: "flex-end" }}>
       <div style={{ ...CARD_STYLE, width: "100%", boxSizing: "border-box" }}>
         <p style={{ fontSize: 13.5, fontWeight: 600, margin: "0 0 3px" }}>{question || "Your question appears here"}</p>
         <p style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 10, color: "#d7cf9e", margin: "0 0 11px" }}>Locks in 0:30</p>
         <div style={{ display: "flex", gap: 8 }}>
-          {previewOptions.map(o => <OddsOption key={o.key} option={o} selected={false} disabled onClick={() => {}} />)}
+          {options.map((o, i) => {
+            const hasOdds = Number(o.odds) > 0;
+            // Dimmed rather than showing a made-up number -- an unfilled
+            // option should visibly look unfilled, not like real data.
+            const filledIn = !!o.label.trim() && hasOdds;
+            return (
+              <div key={i} style={{ flex: 1, display: "flex", opacity: filledIn ? 1 : 0.35 }}>
+                <OddsOption
+                  option={{ key: `opt${i}`, label: o.label.trim() || `Option ${i + 1}`, odds: hasOdds ? Number(o.odds) : 0 }}
+                  selected={false} disabled onClick={() => {}}
+                />
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
