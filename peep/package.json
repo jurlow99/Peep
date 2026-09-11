@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "test": "vitest run",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "mock:market": "node scripts/mock-market.mjs"
   },
   "dependencies": {
     "@stripe/react-stripe-js": "^6.4.0",

@@ -1,0 +1,47 @@
+{
+  "description": "One market: opens, ticks twice, locks, settles home.",
+  "ticks": [
+    {
+      "offsetMs": 0,
+      "payload": {
+        "type": "open",
+        "marketId": "m1",
+        "seq": 1,
+        "question": "Next play: 10+ yard gain?",
+        "options": [
+          { "key": "yes", "label": "Yes", "odds": 2.1 },
+          { "key": "no", "label": "No", "odds": 1.74 }
+        ]
+      }
+    },
+    {
+      "offsetMs": 4200,
+      "payload": {
+        "type": "price",
+        "marketId": "m1",
+        "seq": 2,
+        "options": [{ "key": "yes", "odds": 2.35 }]
+      }
+    },
+    {
+      "offsetMs": 11000,
+      "payload": {
+        "type": "price",
+        "marketId": "m1",
+        "seq": 3,
+        "options": [
+          { "key": "yes", "odds": 2.2 },
+          { "key": "no", "odds": 1.68 }
+        ]
+      }
+    },
+    {
+      "offsetMs": 24000,
+      "payload": { "type": "lock", "marketId": "m1", "seq": 4 }
+    },
+    {
+      "offsetMs": 32000,
+      "payload": { "type": "settle", "marketId": "m1", "seq": 5, "winningKey": "yes" }
+    }
+  ]
+}
