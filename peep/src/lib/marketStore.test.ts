@@ -85,6 +85,33 @@ describe("createMarketStore", () => {
     expect(notified).toBe(0);
   });
 
+  it("tracks latestMarketId on open, and leaves it alone for price/lock/settle", () => {
+    const store = createMarketStore("s1");
+    expect(store.getSnapshot().latestMarketId).toBeNull();
+
+    store.applyTick(open);
+    expect(store.getSnapshot().latestMarketId).toBe("m1");
+
+    store.applyTick({ type: "price", marketId: "m1", seq: 2, eventTs: 1100, options: [{ key: "yes", odds: 2.2 }] });
+    expect(store.getSnapshot().latestMarketId).toBe("m1");
+
+    store.applyTick({ ...open, marketId: "m2", seq: 1 });
+    expect(store.getSnapshot().latestMarketId).toBe("m2"); // a newer market takes over
+
+    store.applyTick({ type: "lock", marketId: "m1", seq: 3, eventTs: 1200 });
+    expect(store.getSnapshot().latestMarketId).toBe("m2"); // locking m1 doesn't reclaim it
+  });
+
+  it("does not update latestMarketId for a dropped (no-op) open", () => {
+    const store = createMarketStore("s1");
+    store.applyTick(open);
+    store.applyTick({ ...open, marketId: "m2", seq: 1 });
+    expect(store.getSnapshot().latestMarketId).toBe("m2");
+
+    store.applyTick({ ...open, seq: 1 }); // replaying m1's open, same seq -- dropped
+    expect(store.getSnapshot().latestMarketId).toBe("m2");
+  });
+
   it("unsubscribe stops further notifications", () => {
     const store = createMarketStore("s1");
     let notified = 0;

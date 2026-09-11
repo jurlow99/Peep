@@ -4,9 +4,13 @@ import type { Market, MarketOption, MarketTick } from "./marketTypes";
 export interface MarketStoreState {
   markets: Record<string, Market>;
   lastEventAt: number;
+  /** Id of the most recently OPENED market -- a string/null primitive, so a
+   * selector reading just this field is trivially stable across renders
+   * without needing object-reference bookkeeping. See useLatestMarketId. */
+  latestMarketId: string | null;
 }
 
-const EMPTY_STATE: MarketStoreState = { markets: {}, lastEventAt: 0 };
+const EMPTY_STATE: MarketStoreState = { markets: {}, lastEventAt: 0, latestMarketId: null };
 
 /**
  * Pure reducer: applies one tick to the current market map and returns the
@@ -82,7 +86,11 @@ export function createMarketStore(streamId: string): MarketStore {
     applyTick(tick) {
       const markets = applyMarketTick(state.markets, tick);
       if (markets === state.markets) return; // no-op tick -- don't notify
-      state = { markets, lastEventAt: Date.now() };
+      state = {
+        markets,
+        lastEventAt: Date.now(),
+        latestMarketId: tick.type === "open" ? tick.marketId : state.latestMarketId,
+      };
       listeners.forEach(l => l());
     },
   };
