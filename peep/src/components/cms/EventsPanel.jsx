@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "../../supabase";
 import Drawer from "./Drawer";
+import { OddsOption } from "../player/MarketOverlay";
+import { CARD_STYLE } from "../player/marketCardStyle";
 
 const EMPTY_EVENT = { title: "", description: "", thumbnail: "", hero_url: "", stream_url: "", stream_uid: "", starts_at: "", status: "scheduled" };
 const EMPTY_OPTIONS = [{ key: "yes", label: "Yes", odds: "2.00" }, { key: "no", label: "No", odds: "1.80" }];
@@ -242,41 +244,48 @@ export default function EventsPanel({ showToast, logAudit }) {
                 </div>
               ))}
 
-              <div style={{ background: "#fff", border: "1px dashed #cbd5e1", borderRadius: 8, padding: "12px 14px" }}>
-                <p style={{ margin: "0 0 8px", fontSize: 11.5, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5 }}>New market</p>
+              <div style={{ background: "#fff", border: "1px dashed #cbd5e1", borderRadius: 8, padding: "12px 14px", display: "flex", gap: 20, flexWrap: "wrap" }}>
+                <div style={{ flex: "1 1 280px", minWidth: 260 }}>
+                  <p style={{ margin: "0 0 8px", fontSize: 11.5, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5 }}>New market</p>
 
-                <MiniLabel>Question — what viewers are predicting</MiniLabel>
-                <input value={marketQuestion} onChange={e => setMarketQuestion(e.target.value)} placeholder="Next play: 10+ yard gain?"
-                  style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 7, padding: "8px 10px", fontSize: 12.5, color: "#0f172a", marginBottom: 12, boxSizing: "border-box" }} />
+                  <MiniLabel>Question — what viewers are predicting</MiniLabel>
+                  <input value={marketQuestion} onChange={e => setMarketQuestion(e.target.value)} placeholder="Next play: 10+ yard gain?"
+                    style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 7, padding: "8px 10px", fontSize: 12.5, color: "#0f172a", marginBottom: 12, boxSizing: "border-box" }} />
 
-                <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
-                  <MiniLabel style={{ width: 56 }}>Key</MiniLabel>
-                  <MiniLabel style={{ width: 90 }}>Label</MiniLabel>
-                  <MiniLabel style={{ width: 56 }}>Odds</MiniLabel>
+                  <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
+                    <MiniLabel style={{ width: 56 }}>Key</MiniLabel>
+                    <MiniLabel style={{ width: 90 }}>Label</MiniLabel>
+                    <MiniLabel style={{ width: 56 }}>Odds</MiniLabel>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+                    {marketOptions.map((o, i) => (
+                      <div key={i} style={{ display: "flex", gap: 4 }}>
+                        <input value={o.key} onChange={e => updateMarketOption(i, "key", e.target.value)} placeholder="yes"
+                          title="Short code the client uses to match this option across ticks -- lowercase, no spaces (e.g. yes, home, team_a)"
+                          style={{ width: 56, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 8px", fontSize: 11.5, color: "#0f172a" }} />
+                        <input value={o.label} onChange={e => updateMarketOption(i, "label", e.target.value)} placeholder="Yes"
+                          title="What viewers see on the button"
+                          style={{ width: 90, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 8px", fontSize: 11.5, color: "#0f172a" }} />
+                        <input value={o.odds} onChange={e => updateMarketOption(i, "odds", e.target.value)} placeholder="2.00" type="number" step="0.01"
+                          title="Payout multiplier -- a 50-Point bet at 2.00x pays 100 if it wins"
+                          style={{ width: 56, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 8px", fontSize: 11.5, color: "#0f172a" }} />
+                      </div>
+                    ))}
+                    {marketOptions.length < 4 && (
+                      <button onClick={() => setMarketOptions(opts => [...opts, { key: "", label: "", odds: "2.00" }])}
+                        style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 10px", fontSize: 11, color: "#374151", cursor: "pointer" }}>+ Option</button>
+                    )}
+                  </div>
+                  <button onClick={() => createAndOpenMarket(ev.id)} disabled={marketSaving}
+                    style={{ background: "#059669", border: "none", borderRadius: 7, padding: "8px 16px", fontSize: 12, fontWeight: 600, color: "#fff", cursor: "pointer", opacity: marketSaving ? 0.6 : 1 }}>
+                    {marketSaving ? "Opening…" : "Create & Open"}
+                  </button>
                 </div>
-                <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-                  {marketOptions.map((o, i) => (
-                    <div key={i} style={{ display: "flex", gap: 4 }}>
-                      <input value={o.key} onChange={e => updateMarketOption(i, "key", e.target.value)} placeholder="yes"
-                        title="Short code the client uses to match this option across ticks -- lowercase, no spaces (e.g. yes, home, team_a)"
-                        style={{ width: 56, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 8px", fontSize: 11.5, color: "#0f172a" }} />
-                      <input value={o.label} onChange={e => updateMarketOption(i, "label", e.target.value)} placeholder="Yes"
-                        title="What viewers see on the button"
-                        style={{ width: 90, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 8px", fontSize: 11.5, color: "#0f172a" }} />
-                      <input value={o.odds} onChange={e => updateMarketOption(i, "odds", e.target.value)} placeholder="2.00" type="number" step="0.01"
-                        title="Payout multiplier -- a 50-Point bet at 2.00x pays 100 if it wins"
-                        style={{ width: 56, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 8px", fontSize: 11.5, color: "#0f172a" }} />
-                    </div>
-                  ))}
-                  {marketOptions.length < 4 && (
-                    <button onClick={() => setMarketOptions(opts => [...opts, { key: "", label: "", odds: "2.00" }])}
-                      style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 10px", fontSize: 11, color: "#374151", cursor: "pointer" }}>+ Option</button>
-                  )}
+
+                <div style={{ flex: "0 0 260px" }}>
+                  <MiniLabel>Preview — what viewers see over the video</MiniLabel>
+                  <MarketPreview question={marketQuestion} options={marketOptions} />
                 </div>
-                <button onClick={() => createAndOpenMarket(ev.id)} disabled={marketSaving}
-                  style={{ background: "#059669", border: "none", borderRadius: 7, padding: "8px 16px", fontSize: 12, fontWeight: 600, color: "#fff", cursor: "pointer", opacity: marketSaving ? 0.6 : 1 }}>
-                  {marketSaving ? "Opening…" : "Create & Open"}
-                </button>
               </div>
             </div>
           )}
@@ -307,6 +316,28 @@ export default function EventsPanel({ showToast, logAudit }) {
           </div>
         </Drawer>
       )}
+    </div>
+  );
+}
+
+// Renders with MarketOverlay's real CARD_STYLE/OddsOption, not a copy --
+// so this is a true preview, not a mockup that can drift from what ships.
+// Un-set fields fall back to a placeholder so it never renders blank.
+function MarketPreview({ question, options }) {
+  const previewOptions = options.map((o, i) => ({
+    key: o.key || `opt${i}`,
+    label: o.label || `Option ${i + 1}`,
+    odds: Number(o.odds) || 1,
+  }));
+  return (
+    <div style={{ background: "linear-gradient(160deg,#2a2618,#121108 70%)", borderRadius: 10, padding: 16, minHeight: 150, display: "flex", alignItems: "flex-end" }}>
+      <div style={{ ...CARD_STYLE, width: "100%", boxSizing: "border-box" }}>
+        <p style={{ fontSize: 13.5, fontWeight: 600, margin: "0 0 3px" }}>{question || "Your question appears here"}</p>
+        <p style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 10, color: "#d7cf9e", margin: "0 0 11px" }}>Locks in 0:30</p>
+        <div style={{ display: "flex", gap: 8 }}>
+          {previewOptions.map(o => <OddsOption key={o.key} option={o} selected={false} disabled onClick={() => {}} />)}
+        </div>
+      </div>
     </div>
   );
 }

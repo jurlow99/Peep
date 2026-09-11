@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { useMarket } from "../../hooks/useMarket";
 import { useMarketFeed } from "../../hooks/useMarketFeed";
 import { useLatestMarketId } from "../../hooks/useLatestMarketId";
+import { YELLOW, CARD_STYLE } from "./marketCardStyle";
 
-const YELLOW = "#facc15";
 const AUTO_DISMISS_MS = 6000;
 
 // Root layer: a GPU-promoted, non-interactive sibling of <video>. contain
@@ -107,17 +107,6 @@ function MarketCard({ streamId, marketId }) {
   );
 }
 
-const CARD_STYLE = {
-  padding: "14px 16px",
-  borderRadius: 10,
-  background: "rgba(15,14,8,0.72)",
-  backdropFilter: "blur(10px) saturate(1.3)", // sized to the card only -- never full-bleed, see spec §2
-  border: "1px solid rgba(255,255,255,0.09)",
-  fontFamily: "'Space Grotesk', sans-serif",
-  color: "#f3f1e6",
-  boxShadow: "0 12px 32px rgba(0,0,0,0.5)",
-};
-
 function CloseButton({ onClose }) {
   return (
     <button onClick={onClose} aria-label="Dismiss"
@@ -166,7 +155,7 @@ function OpenCard({ market, clock, myBet, selectedKey, onSelect, stake, onStake,
   );
 }
 
-function OddsOption({ option, selected, disabled, onClick }) {
+export function OddsOption({ option, selected, disabled, onClick }) {
   return (
     <button onClick={disabled ? undefined : onClick} disabled={disabled}
       style={{
