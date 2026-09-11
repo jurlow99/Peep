@@ -188,9 +188,19 @@ Two **separate Supabase projects**:
 
 The **Streams** tab (`LiveTV.jsx`) opens with a cinematic hero + a data-driven "Living Mosaic" of channels showing now/next from the guide. Channels live in `channels`; guide entries in `epg_entries`. **The EPG auto-refreshes daily**: the `refresh-epg` edge function (streams XMLTV from each channel's `epg_channel_sources.source_url` — i.mjh.nz for Plex/Roku, epgshare01 for others — and rebuilds `epg_entries`) is triggered by a `pg_cron` job and a CMS "↻ Refresh guides" button. See the *epg-automation* memory.
 
+## Prediction Markets (Predictions tab)
+
+A third lane, deliberately separate from both Content and Social: **curated, admin-scheduled events**, each with its own live-odds overlay — not tied to a FAST channel or a creator's live stream. Its own player (`components/player/EventPlayer.jsx`), its own nav tab (`activeNav === "Predictions"` in `Homepage.jsx`), its own tables. Real-money settlement, KYC, and an actual 18+ gate are **not built** — bets are local UI state only (no `place-bet` edge function, no `market_bets` writes yet), and `PredictionsPage.jsx` shows a dismissible age disclaimer, not a real check.
+
+**Client plumbing** (`lib/marketStore.ts`, `marketScheduler.ts`, `marketFeed.ts`, `hooks/useMarket*.ts`): a `useSyncExternalStore`-backed store per event, fed by a Supabase **Broadcast** channel (`market:{eventId}`, not Postgres Changes — no DB write per tick). Ticks are held by a reveal scheduler until `eventTs + clockOffset + playerLatency + jitter` has passed, so the overlay never shows an outcome before the video itself gets there — `EventPlayer` feeds it real measured latency via `hls.liveSyncPosition - video.currentTime`. `npm run mock:market [eventId]` replays a fixture onto a real channel for local testing without a live event.
+
+**Admin side** (`components/cms/EventsPanel.jsx`, CMS nav key `events`): create events, then create-and-open a market (question + 2–4 options), reprice, lock, and settle — each action writes the DB rows *and* publishes the matching Broadcast tick from the same client, reusing the exact payload shape `marketFeed.ts` expects.
+
+**Schema** (`db/prediction_events_migration.sql`, not yet applied — run it by hand per the usual workflow): `prediction_events`, `prediction_markets`, `market_options`, `market_bets`, `market_resolutions`. Same RLS pattern as everything else (public read, admin write; `market_bets` additionally scopes reads/inserts to `auth.uid()`).
+
 ## CMS Structure
 
-`CMS.jsx` renders a nine-group left nav that targets 12 internal tabs (`content`, `live`, `analytics`, `members`, `settings`, `security`, `moderation`, `creators`, `storage`, `flags`, `audit`, `scaffold`), most with sub-tabs. The `live` tab sits behind a passcode gate. Regions & Packages, Resources, and Devices are **scaffold placeholders** — nav entries with a blurb, no implementation.
+`CMS.jsx` renders a nine-group left nav that targets 13 internal tabs (`content`, `live`, `analytics`, `members`, `settings`, `security`, `moderation`, `creators`, `storage`, `flags`, `audit`, `events`, `scaffold`), most with sub-tabs. The `live` tab sits behind a passcode gate. Regions & Packages, Resources, and Devices are **scaffold placeholders** — nav entries with a blurb, no implementation.
 
 Note the naming skew: the Movies UI is keyed `videoSubTab === "shorts"` and handpick labels `movie` as "Short" — legacy from when movies were shorts.
 

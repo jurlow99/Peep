@@ -19,6 +19,7 @@ import { Avatar } from "../Avatar";
 import { filterByTier, canSeeTier } from "../../lib/tiers";
 import { IS_DEV_DB } from "../EnvBadge";
 import { LiveTVPage } from "../../pages/LiveTV";
+import { PredictionsPage } from "../../pages/PredictionsPage";
 
 // Admin-controlled "live" row — renders FAST channels and/or live creator streams
 // in a horizontal rail. Used for any carousel with type live_channels/creator_streams.
@@ -452,6 +453,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
     { id: "Series",  label: "Series",  icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></svg> },
     { id: "Streams", label: "Live TV", icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49"/><path d="M7.76 7.76a6 6 0 0 0 0 8.49"/><path d="M20.66 3.34a12 12 0 0 1 0 17.32"/><path d="M3.34 3.34a12 12 0 0 0 0 17.32"/></svg>, badge: liveNow.length > 0 },
     { id: "Podcasts",label: "Podcasts",icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg> },
+    { id: "Predictions", label: "Predictions", icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/></svg> },
     { id: "My List", label: "My List", icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg> },
   ];
 
@@ -809,6 +811,13 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
             <LiveTVPage streams={liveStreams} channels={channels} epgEntries={epgEntries} onChannelPlay={onChannelPlay} user={user} streamsLoading={loading} />
           </>
         )
+      )}
+
+      {/* Predictions tab — curated events with a live-odds overlay. Its own
+          content type, decoupled from FAST channels and creator streams;
+          the auth gate lives inside PredictionsPage itself. */}
+      {!studioContent && activeNav === "Predictions" && !loading && (
+        <PredictionsPage user={user} onAuthOpen={onAuthOpen} userTier={userTier} />
       )}
 
       {/* Live Now is now an admin-controlled row (carousel type live_channels / creator_streams),

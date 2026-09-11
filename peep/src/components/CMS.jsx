@@ -27,6 +27,7 @@ import UsersPanel from "./cms/UsersPanel";
 import SubscriptionsPanel from "./cms/SubscriptionsPanel";
 import SupportPanel from "./cms/SupportPanel";
 import ReviewPanel from "./cms/ReviewPanel";
+import EventsPanel from "./cms/EventsPanel";
 
 const EMPTY_AD = {
   name: "",
@@ -100,6 +101,7 @@ const ADMIN_NAV = [
   ] },
   { key: "regions", label: "Regions & Packages", color: "#14b8a6", scaffold: { icon: "🌍", blurb: "Define subscription packages and tiers, and control regional (geo) availability of content." } },
   { key: "commercial", label: "Commercial", color: "#a855f7", target: { tab: "analytics", analyticsTab: "ads" } },
+  { key: "events", label: "Predictions", color: "#eab308", target: { tab: "events" } },
   { key: "resources", label: "Resources", color: "#0ea5e9", scaffold: { icon: "📄", blurb: "Manage static pages and help content — FAQ, legal, about, and support articles." } },
   { key: "devices", label: "Devices", color: "#64748b", scaffold: { icon: "📱", blurb: "Manage supported device platforms and app builds — web, mobile, Roku, Fire TV, and more." } },
   { key: "streaming", label: "Streaming", color: "#ec4899", sections: [
@@ -5684,6 +5686,9 @@ export function CMS({ onExit, currentUser }) {
 
         {/* ────── MODERATION TAB ────── */}
         {tab === "moderation" && <ModerationPanel onPendingCount={setPendingReportCount} />}
+
+        {/* ────── PREDICTION EVENTS TAB ────── */}
+        {tab === "events" && <EventsPanel showToast={showToast} logAudit={logAudit} />}
 
       </div>
 
