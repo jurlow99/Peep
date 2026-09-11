@@ -244,16 +244,27 @@ export default function EventsPanel({ showToast, logAudit }) {
 
               <div style={{ background: "#fff", border: "1px dashed #cbd5e1", borderRadius: 8, padding: "12px 14px" }}>
                 <p style={{ margin: "0 0 8px", fontSize: 11.5, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5 }}>New market</p>
+
+                <MiniLabel>Question — what viewers are predicting</MiniLabel>
                 <input value={marketQuestion} onChange={e => setMarketQuestion(e.target.value)} placeholder="Next play: 10+ yard gain?"
-                  style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 7, padding: "8px 10px", fontSize: 12.5, color: "#0f172a", marginBottom: 8, boxSizing: "border-box" }} />
+                  style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 7, padding: "8px 10px", fontSize: 12.5, color: "#0f172a", marginBottom: 12, boxSizing: "border-box" }} />
+
+                <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
+                  <MiniLabel style={{ width: 56 }}>Key</MiniLabel>
+                  <MiniLabel style={{ width: 90 }}>Label</MiniLabel>
+                  <MiniLabel style={{ width: 56 }}>Odds</MiniLabel>
+                </div>
                 <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
                   {marketOptions.map((o, i) => (
                     <div key={i} style={{ display: "flex", gap: 4 }}>
-                      <input value={o.key} onChange={e => updateMarketOption(i, "key", e.target.value)} placeholder="key"
+                      <input value={o.key} onChange={e => updateMarketOption(i, "key", e.target.value)} placeholder="yes"
+                        title="Short code the client uses to match this option across ticks -- lowercase, no spaces (e.g. yes, home, team_a)"
                         style={{ width: 56, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 8px", fontSize: 11.5, color: "#0f172a" }} />
-                      <input value={o.label} onChange={e => updateMarketOption(i, "label", e.target.value)} placeholder="Label"
+                      <input value={o.label} onChange={e => updateMarketOption(i, "label", e.target.value)} placeholder="Yes"
+                        title="What viewers see on the button"
                         style={{ width: 90, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 8px", fontSize: 11.5, color: "#0f172a" }} />
                       <input value={o.odds} onChange={e => updateMarketOption(i, "odds", e.target.value)} placeholder="2.00" type="number" step="0.01"
+                        title="Payout multiplier -- a 50-Point bet at 2.00x pays 100 if it wins"
                         style={{ width: 56, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 8px", fontSize: 11.5, color: "#0f172a" }} />
                     </div>
                   ))}
@@ -309,4 +320,11 @@ function Field({ label, children }) {
       {children}
     </label>
   );
+}
+
+// Bare label text, no wrapping <label>/input pairing -- for a caption above
+// a single field (full-width) or a column header above a row of them
+// (narrow, via the style override), like the market option key/label/odds row.
+function MiniLabel({ children, style }) {
+  return <span style={{ display: "block", fontSize: 10.5, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 5, ...style }}>{children}</span>;
 }
