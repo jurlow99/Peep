@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMarket } from "../../hooks/useMarket";
 import { useMarketFeed } from "../../hooks/useMarketFeed";
 import { useLatestMarketId } from "../../hooks/useLatestMarketId";
-import { recordBetResult } from "../../lib/betHistory";
+import { recordBetPlaced, resolveBetResult } from "../../lib/betHistory";
 import { YELLOW, BAR_BG } from "./marketCardStyle";
 
 const AUTO_DISMISS_MS = 6000;
@@ -89,38 +89,44 @@ function MarketCard({ streamId, marketId, eventTitle }) {
     return () => clearTimeout(id);
   }, [market?.status]);
 
-  // Record the result to the session's bet history exactly once, the
-  // instant this market settles -- a ref guard rather than relying on
-  // dismissal, since the card can still be on screen (pre-auto-dismiss)
-  // when `market` re-renders with the same settled status.
-  const recordedRef = useRef(false);
+  // Resolve the pending history entry (added in placeBet, below) exactly
+  // once, the instant this market settles -- a ref guard rather than
+  // relying on dismissal, since the card can still be on screen
+  // (pre-auto-dismiss) when `market` re-renders with the same settled status.
+  const resolvedRef = useRef(false);
   useEffect(() => {
-    if (market?.status !== "settled" || !myBet || recordedRef.current) return;
-    recordedRef.current = true;
+    if (market?.status !== "settled" || !myBet || resolvedRef.current) return;
+    resolvedRef.current = true;
     const won = myBet.optionKey === market.winningKey;
-    recordBetResult({
-      id: `${marketId}-${myBet.optionKey}`,
-      eventTitle,
-      question: market.question,
-      optionLabel: market.options.find(o => o.key === myBet.optionKey)?.label ?? myBet.optionKey,
-      stake: myBet.stake,
-      odds: myBet.odds,
+    resolveBetResult(`${marketId}-${myBet.optionKey}`, {
       won,
       payout: won ? Math.round(myBet.stake * myBet.odds) : 0,
       settledAt: Date.now(),
     });
-  }, [market, myBet, eventTitle, marketId]);
+  }, [market, myBet, marketId]);
 
   if (!market || dismissed) return null;
 
   function placeBet() {
     if (!selectedKey) return;
     const option = market.options.find(o => o.key === selectedKey);
+    const odds = option?.odds ?? 0;
     // NOTE: local UI state only. There is no place-bet edge function or
     // market_bets row yet -- that's real backend work, not built here (see
     // the Predictions feature notes). This proves out the interaction only.
-    setMyBet({ optionKey: selectedKey, stake, odds: option?.odds ?? 0 });
+    setMyBet({ optionKey: selectedKey, stake, odds });
     setSelectedKey(null);
+    // Shows up in the history panel right away, as "pending" -- resolved
+    // (above) once the market settles, not created a second time.
+    recordBetPlaced({
+      id: `${marketId}-${selectedKey}`,
+      eventTitle,
+      question: market.question,
+      optionLabel: option?.label ?? selectedKey,
+      stake,
+      odds,
+      placedAt: Date.now(),
+    });
   }
 
   const remainingMs = market.locksAt ? Math.max(0, market.locksAt - now) : 0;
