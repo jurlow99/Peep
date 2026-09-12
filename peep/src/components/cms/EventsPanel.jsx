@@ -50,6 +50,7 @@ export default function EventsPanel({ showToast, logAudit }) {
   const [marketsByEvent, setMarketsByEvent] = useState({});
   const [marketQuestion, setMarketQuestion] = useState("");
   const [marketOptions, setMarketOptions] = useState(EMPTY_OPTIONS);
+  const [lockSeconds, setLockSeconds] = useState("30");
   const [marketSaving, setMarketSaving] = useState(false);
 
   const channelsRef = useRef(new Map()); // eventId -> subscribed RealtimeChannel, reused across actions
@@ -59,6 +60,29 @@ export default function EventsPanel({ showToast, logAudit }) {
     const channels = channelsRef.current;
     return () => { channels.forEach(ch => supabase.removeChannel(ch)); channels.clear(); };
   }, []);
+
+  // Auto-lock: a market's countdown used to be purely cosmetic -- the admin
+  // still had to notice it hit zero and click Lock by hand, which is the
+  // actual source of viewer confusion ("locks in 0:00" sitting there with
+  // betting still open). Whichever admin has this event's markets expanded
+  // locks it for real the moment its timer runs out. Scoped to the expanded
+  // event only (not silently running for every event in the background) --
+  // an admin running a live event is expected to keep it open anyway to
+  // reprice/settle. Markets created with no timer keep the manual-only Lock
+  // button and are simply not covered here.
+  useEffect(() => {
+    if (!expandedId) return;
+    const timed = (marketsByEvent[expandedId] || []).filter(m => m.status === "open" && m.locks_at);
+    const timers = timed.map(m => {
+      const delay = new Date(m.locks_at).getTime() - Date.now();
+      return setTimeout(() => lockMarket(expandedId, m), Math.max(0, delay));
+    });
+    return () => timers.forEach(clearTimeout);
+    // lockMarket is recreated every render; including it would re-arm every
+    // timer on every keystroke in the form below instead of just when the
+    // expanded event or its market list actually changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expandedId, marketsByEvent]);
 
   async function loadEvents() {
     setLoading(true);
@@ -145,8 +169,13 @@ export default function EventsPanel({ showToast, logAudit }) {
       return;
     }
     setMarketSaving(true);
+    // A blank/zero field means "no timer" -- the market stays manual-lock
+    // only, same as before this existed.
+    const secs = Number(lockSeconds);
+    const locksAtDate = secs > 0 ? new Date(Date.now() + secs * 1000) : null;
+
     const { data: market, error } = await supabase.from("prediction_markets")
-      .insert({ event_id: eventId, question: marketQuestion.trim(), status: "open", seq: 1 })
+      .insert({ event_id: eventId, question: marketQuestion.trim(), status: "open", seq: 1, locks_at: locksAtDate ? locksAtDate.toISOString() : null })
       .select().single();
     if (error) { showToast("Error: " + error.message, "error"); setMarketSaving(false); return; }
 
@@ -159,12 +188,12 @@ export default function EventsPanel({ showToast, logAudit }) {
       type: "open", marketId: String(market.id), seq: 1,
       question: market.question,
       options: (savedOptions || optionRows).map(o => ({ key: o.key, label: o.label, odds: Number(o.odds) })),
-      locksAt: null,
+      locksAt: locksAtDate ? locksAtDate.getTime() : null,
     });
 
     logAudit?.("create", "prediction_market", market.id, market.question);
     showToast("Market opened");
-    setMarketQuestion(""); setMarketOptions(EMPTY_OPTIONS); setMarketSaving(false);
+    setMarketQuestion(""); setMarketOptions(EMPTY_OPTIONS); setLockSeconds("30"); setMarketSaving(false);
     loadMarkets(eventId);
   }
 
@@ -241,7 +270,11 @@ export default function EventsPanel({ showToast, logAudit }) {
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                     <p style={{ margin: 0, flex: 1, fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{m.question}</p>
                     <span style={{ fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, color: MARKET_STATUS_COLOR[m.status], background: `${MARKET_STATUS_COLOR[m.status]}18`, padding: "3px 7px", borderRadius: 99 }}>{m.status}</span>
-                    {m.status === "open" && <button onClick={() => lockMarket(ev.id, m)} style={{ background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, color: "#92400e", cursor: "pointer" }}>Lock</button>}
+                    {m.status === "open" && (m.locks_at
+                      ? <LockCountdown locksAt={m.locks_at} />
+                      : <span style={{ fontSize: 10.5, color: "#9ca3af" }}>no timer — lock manually</span>
+                    )}
+                    {m.status === "open" && <button onClick={() => lockMarket(ev.id, m)} style={{ background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, color: "#92400e", cursor: "pointer" }}>Lock now</button>}
                   </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     {(m.market_options || []).map(o => (
@@ -270,6 +303,10 @@ export default function EventsPanel({ showToast, logAudit }) {
                   <input value={marketQuestion} onChange={e => setMarketQuestion(e.target.value)} placeholder="Next play: 10+ yard gain?"
                     style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 7, padding: "8px 10px", fontSize: 12.5, color: "#0f172a", marginBottom: 12, boxSizing: "border-box" }} />
 
+                  <MiniLabel>Locks in — seconds until betting closes (blank = lock manually)</MiniLabel>
+                  <input value={lockSeconds} onChange={e => setLockSeconds(e.target.value)} placeholder="30" type="number" min="5"
+                    style={{ width: 90, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 7, padding: "8px 10px", fontSize: 12.5, color: "#0f172a", marginBottom: 12, boxSizing: "border-box" }} />
+
                   <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
                     <MiniLabel style={{ width: 146 }}>Option text</MiniLabel>
                     <MiniLabel style={{ width: 72 }}>Payout ×</MiniLabel>
@@ -297,7 +334,7 @@ export default function EventsPanel({ showToast, logAudit }) {
 
                 <div style={{ flex: "0 0 260px" }}>
                   <MiniLabel>Preview — what viewers see over the video</MiniLabel>
-                  <MarketPreview question={marketQuestion} options={marketOptions} />
+                  <MarketPreview question={marketQuestion} options={marketOptions} lockSeconds={lockSeconds} />
                 </div>
               </div>
             </div>
@@ -333,10 +370,31 @@ export default function EventsPanel({ showToast, logAudit }) {
   );
 }
 
+// A live-ticking readout next to an open market's Lock button, matching
+// the countdown ring viewers see (both read from the same `locks_at`) --
+// this was the missing piece: previously nothing on the admin side showed
+// whether a timer was running or how long was left on it.
+function LockCountdown({ locksAt }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const secsLeft = Math.max(0, Math.round((new Date(locksAt).getTime() - now) / 1000));
+  const clock = `${Math.floor(secsLeft / 60)}:${String(secsLeft % 60).padStart(2, "0")}`;
+  return (
+    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 700, color: secsLeft <= 10 ? "#dc2626" : "#92400e" }}>
+      Locks in {clock}
+    </span>
+  );
+}
+
 // Renders with MarketOverlay's real BAR_BG/OddsColumn, not a copy -- so
 // this is a true preview, not a mockup that can drift from what ships.
 // Un-set fields fall back to a placeholder so it never renders blank.
-function MarketPreview({ question, options }) {
+function MarketPreview({ question, options, lockSeconds }) {
+  const secs = Number(lockSeconds);
+  const lockLabel = secs > 0 ? `LOCKS ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}` : "NO LOCK TIMER";
   return (
     <div style={{ background: "linear-gradient(160deg,#2a2618,#121108 70%)", borderRadius: 10, padding: 16, minHeight: 150, display: "flex", alignItems: "flex-end" }}>
       <div style={{ width: "100%", boxSizing: "border-box" }}>
@@ -345,7 +403,7 @@ function MarketPreview({ question, options }) {
           <div style={{ flex: 1, minWidth: 0, padding: "13px 16px", display: "flex", alignItems: "center", gap: 9 }}>
             <span style={{ width: 7, height: 7, borderRadius: "50%", background: YELLOW, flexShrink: 0 }} />
             <p style={{ margin: 0, fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{question || "Your question appears here"}</p>
-            <span style={{ marginLeft: "auto", flexShrink: 0, fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 10.5, color: "#d7cf9e" }}>LOCKS 0:30</span>
+            <span style={{ marginLeft: "auto", flexShrink: 0, fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 10.5, color: "#d7cf9e" }}>{lockLabel}</span>
           </div>
           {options.map((o, i) => {
             const hasOdds = Number(o.odds) > 0;
