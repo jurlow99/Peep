@@ -4,13 +4,7 @@
 // needs these to render the REAL card look, not a copy that can drift.
 export const YELLOW = "#facc15";
 
-export const CARD_STYLE = {
-  padding: "14px 16px",
-  borderRadius: 10,
-  background: "rgba(15,14,8,0.72)",
-  backdropFilter: "blur(10px) saturate(1.3)", // sized to the card only -- never full-bleed, see spec §2
-  border: "1px solid rgba(255,255,255,0.09)",
-  fontFamily: "'Space Grotesk', sans-serif",
-  color: "#f3f1e6",
-  boxShadow: "0 12px 32px rgba(0,0,0,0.5)",
-};
+// Full-width broadcast-bar background -- replaced the old floating
+// frosted-glass CARD_STYLE when the card became a score-bug docked to the
+// player's bottom edge (no surrounding space left for a blur/shadow to sit in).
+export const BAR_BG = "#0d0c08";

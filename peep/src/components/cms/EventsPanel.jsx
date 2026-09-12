@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "../../supabase";
 import Drawer from "./Drawer";
-import { OddsOption } from "../player/MarketOverlay";
-import { CARD_STYLE } from "../player/marketCardStyle";
+import { OddsColumn } from "../player/MarketOverlay";
+import { YELLOW, BAR_BG } from "../player/marketCardStyle";
 
 const EMPTY_EVENT = { title: "", description: "", thumbnail: "", hero_url: "", stream_url: "", stream_uid: "", starts_at: "", status: "scheduled" };
 const EMPTY_OPTIONS = [{ label: "Yes", odds: "2.00" }, { label: "No", odds: "1.80" }];
@@ -333,24 +333,28 @@ export default function EventsPanel({ showToast, logAudit }) {
   );
 }
 
-// Renders with MarketOverlay's real CARD_STYLE/OddsOption, not a copy --
-// so this is a true preview, not a mockup that can drift from what ships.
+// Renders with MarketOverlay's real BAR_BG/OddsColumn, not a copy -- so
+// this is a true preview, not a mockup that can drift from what ships.
 // Un-set fields fall back to a placeholder so it never renders blank.
 function MarketPreview({ question, options }) {
   return (
     <div style={{ background: "linear-gradient(160deg,#2a2618,#121108 70%)", borderRadius: 10, padding: 16, minHeight: 150, display: "flex", alignItems: "flex-end" }}>
-      <div style={{ ...CARD_STYLE, width: "100%", boxSizing: "border-box" }}>
-        <p style={{ fontSize: 13.5, fontWeight: 600, margin: "0 0 3px" }}>{question || "Your question appears here"}</p>
-        <p style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 10, color: "#d7cf9e", margin: "0 0 11px" }}>Locks in 0:30</p>
-        <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ width: "100%", boxSizing: "border-box" }}>
+        <div style={{ height: 2, background: YELLOW }} />
+        <div style={{ background: BAR_BG, display: "flex", alignItems: "stretch", fontFamily: "'Space Grotesk', sans-serif", color: "#f3f1e6" }}>
+          <div style={{ flex: 1, minWidth: 0, padding: "13px 16px", display: "flex", alignItems: "center", gap: 9 }}>
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: YELLOW, flexShrink: 0 }} />
+            <p style={{ margin: 0, fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{question || "Your question appears here"}</p>
+            <span style={{ marginLeft: "auto", flexShrink: 0, fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 10.5, color: "#d7cf9e" }}>LOCKS 0:30</span>
+          </div>
           {options.map((o, i) => {
             const hasOdds = Number(o.odds) > 0;
             // Dimmed rather than showing a made-up number -- an unfilled
             // option should visibly look unfilled, not like real data.
             const filledIn = !!o.label.trim() && hasOdds;
             return (
-              <div key={i} style={{ flex: 1, display: "flex", opacity: filledIn ? 1 : 0.35 }}>
-                <OddsOption
+              <div key={i} style={{ opacity: filledIn ? 1 : 0.35 }}>
+                <OddsColumn
                   option={{ key: `opt${i}`, label: o.label.trim() || `Option ${i + 1}`, odds: hasOdds ? Number(o.odds) : 0 }}
                   selected={false} disabled onClick={() => {}}
                 />
