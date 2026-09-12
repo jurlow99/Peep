@@ -168,15 +168,24 @@ function OpenBar({ market, clock, ringFraction, myBet, selectedKey, onSelect, st
           )}
         </div>
         {market.options.map(o => (
-          <OddsColumn key={o.key} option={o} selected={selectedKey === o.key} disabled={!!myBet} onClick={() => onSelect(o.key)} />
+          <OddsColumn key={o.key} option={o}
+            selected={selectedKey === o.key || myBet?.optionKey === o.key}
+            pulse={selectedKey === o.key && !myBet}
+            disabled={!!myBet} onClick={() => onSelect(o.key)} />
         ))}
         <CloseButton onClose={onClose} />
       </div>
 
       {myBet && (
-        <div style={{ background: BAR_BG, borderTop: "1px solid rgba(255,255,255,0.06)", padding: "8px 16px" }}>
-          <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 11.5, color: "#d7cf9e" }}>
-            Bet placed — {myBet.stake} Points on {market.options.find(o => o.key === myBet.optionKey)?.label}
+        <div style={{ background: BAR_BG, borderTop: `1px solid rgba(250,204,21,0.22)`, padding: "9px 16px", display: "flex", alignItems: "center", gap: 8 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={YELLOW} strokeWidth="2.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+            <path d="M20 6 9 17l-5-5" />
+          </svg>
+          <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 12, fontWeight: 600, color: "#f3f1e6", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {myBet.stake} Points on {market.options.find(o => o.key === myBet.optionKey)?.label}
+          </span>
+          <span style={{ marginLeft: "auto", flexShrink: 0, fontFamily: MONO, fontSize: 12, fontWeight: 700, color: YELLOW, whiteSpace: "nowrap" }}>
+            → {Math.round(myBet.stake * myBet.odds)} Points
           </span>
         </div>
       )}
@@ -202,10 +211,13 @@ function OpenBar({ market, clock, ringFraction, myBet, selectedKey, onSelect, st
 }
 
 // Exported so EventsPanel's live preview renders the SAME odds segment, not
-// a copy that can drift. selected=true pulses with an inset glow -- a
-// breathing bloom rather than an outer box-shadow, since these sit flush
+// a copy that can drift. `selected` fills the column solid yellow;
+// `pulse` (only true while a choice is picked but not yet placed) adds the
+// breathing inset glow on top -- once a bet is placed the column stays
+// filled to show what you picked, but stops pulsing, since the decision is
+// no longer pending. Inset, not an outer box-shadow, since these sit flush
 // edge-to-edge with no gap for a shadow to read against.
-export function OddsColumn({ option, selected, disabled, onClick }) {
+export function OddsColumn({ option, selected, pulse, disabled, onClick }) {
   return (
     <button onClick={disabled ? undefined : onClick} disabled={disabled}
       style={{
@@ -214,7 +226,7 @@ export function OddsColumn({ option, selected, disabled, onClick }) {
         cursor: disabled ? "default" : "pointer",
         background: selected ? YELLOW : "transparent",
         color: selected ? "#171712" : "#e9e6d6",
-        animation: selected ? "marketGlow 1.8s ease-in-out infinite" : "none",
+        animation: pulse ? "marketGlow 1.8s ease-in-out infinite" : "none",
       }}>
       <span style={{ display: "block", fontSize: 10, fontWeight: 600, letterSpacing: "0.02em" }}>{option.label.toUpperCase()}</span>
       <span style={{ fontFamily: MONO, fontSize: 15, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
