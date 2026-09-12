@@ -3,9 +3,25 @@ import { supabase } from "../../supabase";
 import Drawer from "./Drawer";
 import { OddsColumn } from "../player/MarketOverlay";
 import { YELLOW, BAR_BG } from "../player/marketCardStyle";
+import { LEAGUES, searchLiveEvents, fetchEventStatus } from "../../lib/sportsScoreboard";
 
 const EMPTY_EVENT = { title: "", description: "", thumbnail: "", hero_url: "", stream_url: "", stream_uid: "", starts_at: "", status: "scheduled" };
 const EMPTY_OPTIONS = [{ label: "Yes", odds: "2.00" }, { label: "No", odds: "1.80" }];
+const LIVE_STATUS_POLL_MS = 20000;
+
+// Loosely match a scoreboard team name to an option label -- either
+// containing the other, case-insensitive -- so a detected final can offer a
+// one-click settle only when it's unambiguous which option won. Two or zero
+// matches means "don't guess": the admin still settles manually below.
+function matchOptionForWinner(options, winnerName) {
+  if (!winnerName) return null;
+  const w = winnerName.toLowerCase();
+  const matches = (options || []).filter(o => {
+    const label = o.label.toLowerCase();
+    return label && (w.includes(label) || label.includes(w));
+  });
+  return matches.length === 1 ? matches[0] : null;
+}
 
 // The client matches ticks to options by a short internal "key" (see
 // marketFeed.ts), but there's no reason to make an admin invent one --
@@ -53,6 +69,21 @@ export default function EventsPanel({ showToast, logAudit }) {
   const [lockSeconds, setLockSeconds] = useState("30");
   const [marketSaving, setMarketSaving] = useState(false);
 
+  // Linking a market to a real game (New Market form) -- see sportsScoreboard.ts.
+  const [linkLeague, setLinkLeague] = useState("NFL");
+  const [linkQuery, setLinkQuery] = useState("");
+  const [linkResults, setLinkResults] = useState([]);
+  const [linkSearching, setLinkSearching] = useState(false);
+  const [linkedEvent, setLinkedEvent] = useState(null); // { league, id, name, home, away } | null
+
+  // Live status for already-linked, still-open-or-locked markets -- keyed by
+  // market id. autoSettle defaults on per market (a client-side convenience,
+  // not persisted); dismissedFinal suppresses the confirm banner after
+  // "Not yet" until the panel is reopened.
+  const [liveStatusByMarket, setLiveStatusByMarket] = useState({});
+  const [autoSettleByMarket, setAutoSettleByMarket] = useState({});
+  const [dismissedFinal, setDismissedFinal] = useState(new Set());
+
   const channelsRef = useRef(new Map()); // eventId -> subscribed RealtimeChannel, reused across actions
 
   useEffect(() => { loadEvents(); }, []);
@@ -82,6 +113,54 @@ export default function EventsPanel({ showToast, logAudit }) {
     // timer on every keystroke in the form below instead of just when the
     // expanded event or its market list actually changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expandedId, marketsByEvent]);
+
+  // Debounced search against the scoreboard as the admin types a team name
+  // into "Link to a live event" -- only while nothing is linked yet and the
+  // query is long enough to be worth a call.
+  useEffect(() => {
+    // Every branch's setState lives inside this callback (not the effect
+    // body itself) so none of it runs synchronously during the effect --
+    // clearing results on a short/linked query gets the same 350ms debounce
+    // as a real search, which costs nothing here.
+    const id = setTimeout(async () => {
+      if (linkedEvent || linkQuery.trim().length < 2) { setLinkResults([]); return; }
+      setLinkSearching(true);
+      try {
+        const results = await searchLiveEvents(LEAGUES[linkLeague], linkQuery);
+        setLinkResults(results);
+      } catch {
+        setLinkResults([]); // scoreboard unreachable/not deployed yet -- fail quiet, not a crash
+      } finally {
+        setLinkSearching(false);
+      }
+    }, 350);
+    return () => clearTimeout(id);
+  }, [linkQuery, linkLeague, linkedEvent]);
+
+  // Poll the linked game's live status for every open/locked market in the
+  // expanded event -- same scope as auto-lock above (an admin running a live
+  // event keeps it expanded). Stops polling a market once it's settled/void.
+  useEffect(() => {
+    if (!expandedId) return;
+    const linked = (marketsByEvent[expandedId] || []).filter(m =>
+      m.linked_event_id && (m.status === "open" || m.status === "locked"));
+    if (linked.length === 0) return;
+
+    let cancelled = false;
+    async function poll() {
+      for (const m of linked) {
+        try {
+          const status = await fetchEventStatus(m.linked_league, m.linked_event_id);
+          if (!cancelled && status) setLiveStatusByMarket(prev => ({ ...prev, [m.id]: status }));
+        } catch {
+          // scoreboard unreachable this tick -- keep the last known status, try again next poll
+        }
+      }
+    }
+    poll();
+    const id = setInterval(poll, LIVE_STATUS_POLL_MS);
+    return () => { cancelled = true; clearInterval(id); };
   }, [expandedId, marketsByEvent]);
 
   async function loadEvents() {
@@ -161,6 +240,20 @@ export default function EventsPanel({ showToast, logAudit }) {
     setMarketOptions(opts => opts.map((o, idx) => (idx === i ? { ...o, [field]: value } : o)));
   }
 
+  // Picking a search result auto-fills the question and the first two
+  // options from the real matchup -- odds aren't part of a free scoreboard
+  // feed, so those stay blank for the admin to set, same as any other market.
+  function selectLinkedEvent(event) {
+    setLinkedEvent({ league: linkLeague, id: event.id, name: event.name, home: event.home, away: event.away });
+    setLinkQuery(""); setLinkResults([]);
+    setMarketQuestion(event.name);
+    setMarketOptions([{ label: event.away.name, odds: "" }, { label: event.home.name, odds: "" }]);
+  }
+
+  function unlinkEvent() {
+    setLinkedEvent(null);
+  }
+
   // Creating a market and opening it are the same action -- there's no
   // "draft" state; a market only exists once viewers can see it.
   async function createAndOpenMarket(eventId) {
@@ -175,7 +268,12 @@ export default function EventsPanel({ showToast, logAudit }) {
     const locksAtDate = secs > 0 ? new Date(Date.now() + secs * 1000) : null;
 
     const { data: market, error } = await supabase.from("prediction_markets")
-      .insert({ event_id: eventId, question: marketQuestion.trim(), status: "open", seq: 1, locks_at: locksAtDate ? locksAtDate.toISOString() : null })
+      .insert({
+        event_id: eventId, question: marketQuestion.trim(), status: "open", seq: 1,
+        locks_at: locksAtDate ? locksAtDate.toISOString() : null,
+        linked_league: linkedEvent ? LEAGUES[linkedEvent.league] : null,
+        linked_event_id: linkedEvent ? linkedEvent.id : null,
+      })
       .select().single();
     if (error) { showToast("Error: " + error.message, "error"); setMarketSaving(false); return; }
 
@@ -194,6 +292,7 @@ export default function EventsPanel({ showToast, logAudit }) {
     logAudit?.("create", "prediction_market", market.id, market.question);
     showToast("Market opened");
     setMarketQuestion(""); setMarketOptions(EMPTY_OPTIONS); setLockSeconds("30"); setMarketSaving(false);
+    setLinkedEvent(null); setLinkQuery(""); setLinkResults([]);
     loadMarkets(eventId);
   }
 
@@ -229,6 +328,7 @@ export default function EventsPanel({ showToast, logAudit }) {
 
   return (
     <div>
+      <style>{"@keyframes eventsLivePulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }"}</style>
       <div style={{ marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
           <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Prediction Events</h2>
@@ -276,6 +376,24 @@ export default function EventsPanel({ showToast, logAudit }) {
                     )}
                     {m.status === "open" && <button onClick={() => lockMarket(ev.id, m)} style={{ background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, color: "#92400e", cursor: "pointer" }}>Lock now</button>}
                   </div>
+
+                  {m.linked_event_id && (m.status === "open" || m.status === "locked") && (
+                    <div style={{ marginBottom: 8 }}>
+                      <LiveLinkStatus
+                        market={m}
+                        liveStatus={liveStatusByMarket[m.id]}
+                        autoSettle={autoSettleByMarket[m.id] !== false}
+                        onToggleAutoSettle={() => setAutoSettleByMarket(prev => ({ ...prev, [m.id]: !(prev[m.id] !== false) }))}
+                        dismissed={dismissedFinal.has(m.id)}
+                        onDismiss={() => setDismissedFinal(prev => new Set(prev).add(m.id))}
+                        onConfirmSettle={opt => settleMarket(ev.id, m, opt)}
+                      />
+                    </div>
+                  )}
+                  {m.status === "settled" && m.linked_event_id && (
+                    <p style={{ margin: "0 0 8px", fontSize: 10, color: "#9ca3af" }}>Linked to a live feed for this settlement.</p>
+                  )}
+
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     {(m.market_options || []).map(o => (
                       <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 6, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "5px 8px" }}>
@@ -298,6 +416,47 @@ export default function EventsPanel({ showToast, logAudit }) {
               <div style={{ background: "#fff", border: "1px dashed #cbd5e1", borderRadius: 8, padding: "12px 14px", display: "flex", gap: 20, flexWrap: "wrap" }}>
                 <div style={{ flex: "1 1 280px", minWidth: 260 }}>
                   <p style={{ margin: "0 0 8px", fontSize: 11.5, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5 }}>New market</p>
+
+                  <MiniLabel>Link to a live event — optional, fills in the question and enables live status</MiniLabel>
+                  {linkedEvent ? (
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "#eef2ff", border: "1px solid #c7d2fe", borderRadius: 99, padding: "5px 6px 5px 10px", marginBottom: 12 }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2.4" strokeLinecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                      <span style={{ fontSize: 11.5, fontWeight: 600, color: "#3730a3" }}>{linkedEvent.name}</span>
+                      <span onClick={unlinkEvent} style={{ cursor: "pointer", fontSize: 12, color: "#6366f1", background: "#fff", width: 18, height: 18, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>×</span>
+                    </div>
+                  ) : (
+                    <div style={{ marginBottom: 12 }}>
+                      <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                        <select value={linkLeague} onChange={e => setLinkLeague(e.target.value)}
+                          style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 7, padding: "8px 8px", fontSize: 12, color: "#0f172a" }}>
+                          {Object.keys(LEAGUES).map(name => <option key={name} value={name}>{name}</option>)}
+                        </select>
+                        <div style={{ position: "relative", flex: 1 }}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.2" style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)" }}><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                          <input value={linkQuery} onChange={e => setLinkQuery(e.target.value)} placeholder="Search today's games by team…"
+                            style={{ width: "100%", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 7, padding: "8px 10px 8px 28px", fontSize: 12.5, color: "#0f172a", boxSizing: "border-box" }} />
+                        </div>
+                      </div>
+                      {linkSearching && <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>Searching…</p>}
+                      {!linkSearching && linkQuery.trim().length >= 2 && linkResults.length === 0 && (
+                        <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>No matches in today's {linkLeague} schedule.</p>
+                      )}
+                      {linkResults.length > 0 && (
+                        <div style={{ border: "1px solid #e2e8f0", borderRadius: 7, overflow: "hidden" }}>
+                          {linkResults.map(r => (
+                            <button key={r.id} onClick={() => selectLinkedEvent(r)}
+                              style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "8px 10px", background: "#fff", border: "none", borderTop: "1px solid #e2e8f0", cursor: "pointer", textAlign: "left" }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600, color: "#0f172a" }}>{r.name}</p>
+                                <p style={{ margin: 0, fontSize: 10.5, color: "#6b7280" }}>{r.detail || new Date(r.date).toLocaleString()} · via ESPN scoreboard</p>
+                              </div>
+                              <span style={{ flexShrink: 0, fontSize: 10.5, fontWeight: 600, color: "#4f46e5" }}>Select →</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <MiniLabel>Question — what viewers are predicting</MiniLabel>
                   <input value={marketQuestion} onChange={e => setMarketQuestion(e.target.value)} placeholder="Next play: 10+ yard gain?"
@@ -366,6 +525,71 @@ export default function EventsPanel({ showToast, logAudit }) {
           </div>
         </Drawer>
       )}
+    </div>
+  );
+}
+
+// What a market linked to a real game shows in place of nothing: a live
+// score while the game's in progress, then -- once the feed reports a
+// final -- a confirm-to-settle banner. Never writes a settlement itself;
+// `onConfirmSettle` routes through the same settleMarket() as the manual
+// "Settle: wins" buttons below, native confirm dialog included, so a
+// mis-detected result gets the same one more chance to be caught.
+function LiveLinkStatus({ market, liveStatus, autoSettle, onToggleAutoSettle, dismissed, onDismiss, onConfirmSettle }) {
+  if (!liveStatus) {
+    return <span style={{ fontSize: 10.5, color: "#9ca3af" }}>Linked to a live game — waiting for the feed…</span>;
+  }
+
+  const isFinal = liveStatus.state === "post";
+  const scoreText = `${liveStatus.away.abbrev || liveStatus.away.name} ${liveStatus.away.score ?? "—"}, ${liveStatus.home.abbrev || liveStatus.home.name} ${liveStatus.home.score ?? "—"}`;
+
+  if (!isFinal) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "6px 10px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
+          <span style={{ flexShrink: 0, width: 6, height: 6, borderRadius: "50%", background: "#ef4444", animation: "eventsLivePulse 1.4s ease-in-out infinite" }} />
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, color: "#b91c1c", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            LIVE — {liveStatus.detail} · {scoreText}
+          </span>
+        </div>
+        <label style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0, fontSize: 11, fontWeight: 600, color: "#374151", cursor: "pointer" }}>
+          Auto-settle when final
+          <span onClick={onToggleAutoSettle} style={{ width: 30, height: 17, borderRadius: 99, background: autoSettle ? "#22c55e" : "#e2e8f0", position: "relative", display: "inline-block", cursor: "pointer" }}>
+            <span style={{ position: "absolute", top: 2, left: autoSettle ? 15 : 2, width: 13, height: 13, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 2px rgba(0,0,0,0.25)", transition: "left 0.15s ease" }} />
+          </span>
+        </label>
+      </div>
+    );
+  }
+
+  if (dismissed || !autoSettle) {
+    return <span style={{ fontSize: 10.5, color: "#92400e" }}>Live feed reports final — {scoreText}. Settle manually below.</span>;
+  }
+
+  const winnerName = Number(liveStatus.home.score) > Number(liveStatus.away.score) ? liveStatus.home.name : liveStatus.away.name;
+  const matched = matchOptionForWinner(market.market_options, winnerName);
+
+  return (
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 10, background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: "10px 12px" }}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#92400e" strokeWidth="2" style={{ flexShrink: 0, marginTop: 1 }}>
+        <circle cx="12" cy="12" r="9" /><line x1="12" y1="8" x2="12" y2="13" /><circle cx="12" cy="16.5" r="0.5" fill="#92400e" stroke="none" />
+      </svg>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ margin: "0 0 2px", fontSize: 12.5, fontWeight: 700, color: "#92400e" }}>Live feed reports final: {scoreText}</p>
+        <p style={{ margin: "0 0 10px", fontSize: 11, color: "#92400e", opacity: 0.85 }}>
+          {matched
+            ? `Settling now pays out every bet on "${matched.label}" at its locked odds. This can't be undone.`
+            : "Couldn't match this result to one of your options automatically — settle manually below."}
+        </p>
+        <div style={{ display: "flex", gap: 8 }}>
+          {matched && (
+            <button onClick={() => onConfirmSettle(matched)} style={{ background: "#dcfce7", border: "1px solid #bbf7d0", borderRadius: 6, padding: "6px 14px", fontSize: 11.5, fontWeight: 700, color: "#166534", cursor: "pointer" }}>
+              Confirm &amp; Settle: {matched.label} wins
+            </button>
+          )}
+          <button onClick={onDismiss} style={{ background: "none", border: "1px solid #fde68a", borderRadius: 6, padding: "6px 12px", fontSize: 11.5, fontWeight: 600, color: "#92400e", cursor: "pointer" }}>Not yet</button>
+        </div>
+      </div>
     </div>
   );
 }
