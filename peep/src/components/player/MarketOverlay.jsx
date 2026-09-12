@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMarket } from "../../hooks/useMarket";
 import { useMarketFeed } from "../../hooks/useMarketFeed";
 import { useLatestMarketId } from "../../hooks/useLatestMarketId";
+import { recordBetResult } from "../../lib/betHistory";
 import { YELLOW, BAR_BG } from "./marketCardStyle";
 
 const AUTO_DISMISS_MS = 6000;
@@ -42,7 +43,7 @@ const KEYFRAMES = `
  * no latency correction at all, which is fine for a mock feed with no real
  * playback delay but wrong against a real live stream (see spec §3).
  */
-export function MarketOverlay({ streamId, getPlayerLatencyMs }) {
+export function MarketOverlay({ streamId, getPlayerLatencyMs, eventTitle }) {
   useMarketFeed(streamId, getPlayerLatencyMs ? { getPlayerLatencyMs } : undefined);
   const marketId = useLatestMarketId(streamId);
 
@@ -52,12 +53,12 @@ export function MarketOverlay({ streamId, getPlayerLatencyMs }) {
       <style>{KEYFRAMES}</style>
       {/* key remounts the bar on a new market -- lets fresh useState
           initializers do the reset instead of an effect fighting them. */}
-      <MarketCard key={marketId} streamId={streamId} marketId={marketId} />
+      <MarketCard key={marketId} streamId={streamId} marketId={marketId} eventTitle={eventTitle} />
     </div>
   );
 }
 
-function MarketCard({ streamId, marketId }) {
+function MarketCard({ streamId, marketId, eventTitle }) {
   const market = useMarket(streamId, marketId);
   const [selectedKey, setSelectedKey] = useState(null);
   const [stake, setStake] = useState(50);
@@ -87,6 +88,28 @@ function MarketCard({ streamId, marketId }) {
     const id = setTimeout(() => setDismissed(true), AUTO_DISMISS_MS);
     return () => clearTimeout(id);
   }, [market?.status]);
+
+  // Record the result to the session's bet history exactly once, the
+  // instant this market settles -- a ref guard rather than relying on
+  // dismissal, since the card can still be on screen (pre-auto-dismiss)
+  // when `market` re-renders with the same settled status.
+  const recordedRef = useRef(false);
+  useEffect(() => {
+    if (market?.status !== "settled" || !myBet || recordedRef.current) return;
+    recordedRef.current = true;
+    const won = myBet.optionKey === market.winningKey;
+    recordBetResult({
+      id: `${marketId}-${myBet.optionKey}`,
+      eventTitle,
+      question: market.question,
+      optionLabel: market.options.find(o => o.key === myBet.optionKey)?.label ?? myBet.optionKey,
+      stake: myBet.stake,
+      odds: myBet.odds,
+      won,
+      payout: won ? Math.round(myBet.stake * myBet.odds) : 0,
+      settledAt: Date.now(),
+    });
+  }, [market, myBet, eventTitle, marketId]);
 
   if (!market || dismissed) return null;
 

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../supabase";
 import { filterByTier } from "../lib/tiers";
 import { EventPlayer } from "../components/player/EventPlayer";
+import { BetHistoryPanel } from "../components/player/BetHistoryPanel";
 
 const PAD = "clamp(16px, 5vw, 96px)";
 const YELLOW = "#facc15";
@@ -83,9 +84,10 @@ export function PredictionsPage({ user, onAuthOpen, userTier = "production" }) {
           All events
         </button>
         <div style={{ maxWidth: 900 }}>
-          <EventPlayer url={eventStreamUrl(selected)} streamId={String(selected.id)} />
+          <EventPlayer url={eventStreamUrl(selected)} streamId={String(selected.id)} eventTitle={selected.title} />
           <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 22, fontWeight: 700, color: "#fff", margin: "18px 0 6px", letterSpacing: "-0.01em" }}>{selected.title}</h1>
           {selected.description && <p style={{ margin: 0, fontSize: 14, color: "#9ca3af", lineHeight: 1.6, maxWidth: 640 }}>{selected.description}</p>}
+          <BetHistoryPanel />
         </div>
       </div>
     );
@@ -105,8 +107,13 @@ export function PredictionsPage({ user, onAuthOpen, userTier = "production" }) {
         </div>
       )}
 
-      <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 26, fontWeight: 700, color: "#fff", margin: "0 0 4px", letterSpacing: "-0.01em" }}>Predictions</h1>
-      <p style={{ margin: "0 0 24px", fontSize: 13.5, color: "#888" }}>Live odds, updated in real time.</p>
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 24 }}>
+        <div>
+          <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 26, fontWeight: 700, color: "#fff", margin: "0 0 4px", letterSpacing: "-0.01em" }}>Predictions</h1>
+          <p style={{ margin: 0, fontSize: 13.5, color: "#888" }}>Live odds, updated in real time.</p>
+        </div>
+        <BetHistoryPanel compact />
+      </div>
 
       {loading ? (
         <div style={{ color: "#888", padding: 60, textAlign: "center" }}>Loading…</div>

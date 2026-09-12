@@ -12,7 +12,7 @@ import { MarketOverlay } from "./MarketOverlay";
  * uses (see its VideoPlayer for the reasoning behind each value) -- proven
  * settings for Cloudflare Stream live playback, not reinvented here.
  */
-export function EventPlayer({ url, streamId }) {
+export function EventPlayer({ url, streamId, eventTitle }) {
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
   const [, setReady] = useState(false); // forces a render once playback actually starts
@@ -84,7 +84,7 @@ export function EventPlayer({ url, streamId }) {
   return (
     <div style={{ position: "relative", background: "#000", borderRadius: 14, overflow: "hidden", aspectRatio: "16/9", boxShadow: "0 24px 60px rgba(0,0,0,0.6)" }}>
       <video ref={videoRef} controls autoPlay playsInline style={{ width: "100%", height: "100%", display: "block" }} />
-      {streamId && <MarketOverlay streamId={streamId} getPlayerLatencyMs={getPlayerLatencyMs} />}
+      {streamId && <MarketOverlay streamId={streamId} getPlayerLatencyMs={getPlayerLatencyMs} eventTitle={eventTitle} />}
     </div>
   );
 }
