@@ -23,12 +23,18 @@ for (let pass=1;pass<=2;pass++) {
    INSERT INTO public.app_settings(key,value) VALUES ('maintenance_mode','false'),('admin_pin','never-public');
    INSERT INTO public.watch_progress(user_id,content_id,content_type) VALUES ('${b}','private','movie');`);
   await role('anon');
+  await denied("SELECT setval('public.shows_id_seq',1000)");
   for (const t of ['videos','shows','episodes','channels','epg_entries','app_settings']) assert.equal(await count(`SELECT count(*) n FROM public.${t}`),1,t);
   assert.equal(await count('SELECT count(*) n FROM public.public_live_feeds'),0);
   await denied('SELECT * FROM public.profiles');
   await denied('SELECT * FROM public.live_feed_secrets');
+  for (const view of ['public_live_feeds','movies']) {
+   await denied(`UPDATE public.${view} SET id=id`);
+   await denied(`DELETE FROM public.${view}`);
+  }
   await denied("INSERT INTO public.videos(title) VALUES ('forged')");
   await role('authenticated',a);
+  await denied("SELECT setval('public.shows_id_seq',1000)");
   assert.equal(await count('SELECT count(*) n FROM public.profiles'),1);
   assert.equal(await count('SELECT count(*) n FROM public.watch_progress'),0);
   await denied(`UPDATE public.profiles SET role='admin' WHERE id='${a}'`);
@@ -41,11 +47,16 @@ for (let pass=1;pass<=2;pass++) {
   assert.equal(await count('SELECT count(*) n FROM public.videos'),3);
   await db.exec(`INSERT INTO public.subscriptions(user_id,status,plan,current_period_end) VALUES ('${a}','active','paid',now()+interval '1 day');`);
   await role('authenticated',a);
+  await denied("SELECT setval('public.shows_id_seq',1000)");
   assert.equal(await count('SELECT count(*) n FROM public.videos'),2);
   assert.equal(await count('SELECT count(*) n FROM public.public_live_feeds'),1);
+  await denied("UPDATE public.public_live_feeds SET cloudflare_hls_url='https://example.invalid/attacker'");
+  await denied('DELETE FROM public.public_live_feeds');
+  await denied('DELETE FROM public.movies');
   await role('postgres');
   await db.exec(`UPDATE public.subscriptions SET current_period_end=now()-interval '1 day' WHERE user_id='${a}';`);
   await role('authenticated',a);
+  await denied("SELECT setval('public.shows_id_seq',1000)");
   assert.equal(await count('SELECT count(*) n FROM public.videos'),1);
   await role('postgres');
   assert.equal(await count("SELECT count(*) n FROM pg_tables WHERE schemaname='public' AND NOT rowsecurity"),0);

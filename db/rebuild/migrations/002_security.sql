@@ -337,6 +337,7 @@ CREATE POLICY own_follow ON public.streamer_follows FOR ALL TO authenticated USI
 CREATE POLICY own_stream_read ON public.live_streams FOR SELECT TO authenticated USING (user_id=auth.uid());
 CREATE POLICY own_application_read ON public.streamer_applications FOR SELECT TO authenticated USING (user_id=auth.uid());
 CREATE POLICY own_notifications_read ON public.streamer_notifications FOR SELECT TO authenticated USING (EXISTS(SELECT FROM public.live_streams s WHERE s.id=stream_id AND s.user_id=auth.uid()));
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM PUBLIC, anon, authenticated;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;
 -- A definer view is intentional: source table is admin-only. Filter through the
 -- same channel entitlement helper, never merely enabled=true.
@@ -344,9 +345,11 @@ CREATE VIEW public.public_live_feeds WITH (security_barrier=true) AS
  SELECT f.id, f.cloudflare_hls_url, f.playback_status, f.enabled FROM public.live_feeds f
  WHERE f.enabled IS TRUE AND EXISTS (SELECT FROM public.channels c WHERE c.live_feed_id=f.id
  AND c.is_active IS TRUE AND public.can_read_content(c.visibility_tier,c.is_premium));
+REVOKE ALL ON public.public_live_feeds FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON public.public_live_feeds TO anon, authenticated;
 -- Compatibility for the legacy creator dashboard's movies spelling.
 CREATE VIEW public.movies WITH (security_invoker=true) AS SELECT * FROM public.videos;
+REVOKE ALL ON public.movies FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON public.movies TO authenticated, service_role;
 -- View counters are intentionally service-only until rate-limited tracking exists.
 CREATE FUNCTION public.increment_view(p_id text, p_table text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$

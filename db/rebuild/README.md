@@ -69,3 +69,26 @@ Realtime publications and Broadcast authorization are not enabled. Review safe t
 Original auth identities/passwords/sessions; user profiles, lists, ratings and watch history; catalog metadata/rights and schedules; creator referrals/payout history; subscriptions and their identity mapping; audit/moderation records; Storage objects; project secrets, cron/publication settings, OAuth/email provider configuration. Stripe/Cloudflare may retain separately recoverable records if their owners still have access, but no such access or recovery was attempted.
 
 References used for policy design: [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security), [database functions and execution privileges](https://supabase.com/docs/guides/database/functions). Current repository contracts override stale prose in CLAUDE.md.
+
+## Review hardening and real-Supabase validation
+
+The revised baseline explicitly revokes inherited view grants on `public_live_feeds`
+and `movies` before granting SELECT, and revokes inherited sequence privileges before
+granting USAGE/SELECT to authenticated/service_role. Local validation now starts with
+Supabase-style default ALL grants on tables/views/sequences and verifies client view
+writes and sequence setval are denied.
+
+`tests/real-supabase-rollback.sql` is for a single privileged SQL call bound to the new
+**development** project only. It uses actual auth.users/auth.uid, local role/JWT claims,
+synthetic identities and explicit negative bigint IDs, and ends in ROLLBACK. It tests
+the Auth trigger, untrusted metadata, escalation/upserts, owner isolation, entitlement
+expiry and view/sequence ACLs. It has passed locally with auth stubs; real Supabase
+execution is pending. It does not test GoTrue signup/password/login/email delivery.
+
+`tests/tvos-rest-smoke.mjs` is read-only and hardcodes the new dev origin. It matches
+current tvOS REST query shapes and optionally uses a genuine dev user token for
+viewer_profiles. Supply only the new public key through its documented environment
+variable. No remote checks have been run locally. Empty arrays validate query routes,
+not populated-model decoding, media playback, or REST entitlement isolation. SQL
+rollback fixtures cannot be observed from independent REST connections; real API
+fixture testing needs separate dev-only committed fixtures and cleanup authorization.
