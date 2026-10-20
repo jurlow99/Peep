@@ -26,7 +26,7 @@ python3 db/rebuild/tests/contracts.py
 
 The harness supplies test-only auth roles/schema. Never apply `tests/bootstrap.sql` to Supabase. Test rows use `example.invalid`, exist only in memory and disappear when the test process exits. There is intentionally **no catalog seed**, no copied feed URLs, and no invented restored content.
 
-## New development setup checklist (not executed)
+## Development setup checklist (schema completed; remaining steps below)
 
 1. Confirm the new account and explicitly chosen, empty **development** project. Record its project ID separately from production. Do not link the checkout to an old project or run `supabase db reset` against any existing stack.
 2. Run the local tests. Review the schema and remaining compatibility gaps below. On the explicitly authorized new empty database, use `psql -X -v ON_ERROR_STOP=1 -f db/rebuild/apply.sql` with a securely supplied connection. Do not put a password or service key in source, shell history, logs, or frontend environment files. The same SQL can be reviewed as one transaction in the project's SQL editor; psql include directives are not SQL-editor syntax.
@@ -37,7 +37,7 @@ The harness supplies test-only auth roles/schema. Never apply `tests/bootstrap.s
 7. Repeat the exact tvOS REST queries in `peep-tv/PeepTV/Services/SupabaseService.swift` for videos, shows, approved episodes, active channels, EPG and public feeds with the new anon key. Verify UUID video IDs and integer show/episode/channel IDs decode; test paging at 200 records and empty results. Test web browse/player, then sign in as two different viewers and an admin. Include hidden/premium/expired/private-feed negative cases. Never relax policies to resolve an empty catalog.
 8. Verify profile creation, username/avatar updates and progress/rating/list upserts through actual PostgREST. Inspect returned errors rather than relying on UI toast messages. Set up media, functions and integrations in separate reviewed steps below.
 
-## Separate production setup checklist (not executed)
+## Separate production setup checklist (empty schema initialized only)
 
 Use a different new project, distinct credentials, Auth URLs, storage, Cloudflare inputs, Stripe mode/account resources, webhooks and email settings. Apply the **identical** reviewed baseline to that empty project only after dev integration checks pass. No test identities, demo catalog, test subscriptions or raw dev data should be copied. `VITE_PEEP_ENV=production` is required; do not infer environment by comparison with an obsolete project ID. Review all `.env.local`/mode precedence before building. The templates do not configure the deployed site. Release, DNS, deployment, payment and webhook cutover require separate authorization. Record backup/PITR choices and new migrations before launch.
 
@@ -83,7 +83,7 @@ writes and sequence setval are denied.
 synthetic identities and explicit negative bigint IDs, and ends in ROLLBACK. It tests
 the Auth trigger, untrusted metadata, escalation/upserts, owner isolation, entitlement
 expiry and view/sequence ACLs. It has passed locally with auth stubs; real Supabase
-execution is pending. It does not test GoTrue signup/password/login/email delivery.
+execution also passed on the new development project, as reported by the parent task. It does not test GoTrue signup/password/login/email delivery.
 
 `tests/tvos-rest-smoke.mjs` is read-only and hardcodes the new dev origin. It matches
 current tvOS REST query shapes and optionally uses a genuine dev user token for
@@ -115,5 +115,54 @@ Tests now exercise both fresh and forward migration paths with inherited ALL gra
 metadata denial, admin RPC isolation, invoker-view properties and absence of exposed
 client-callable definers. The real rollback script omits the anon JSON sub claim
 entirely; empty sub strings are invalid UUIDs in real auth.uid(). Parent reported v1
-real-role rollback tests and empty-catalog tvOS REST checks passed; rerun the revised
-rollback test and advisors after applying this hardening to dev.
+real-role rollback tests and empty-catalog tvOS REST checks passed. The parent then
+applied v2 hardening and reran the corrected tests successfully; see final status below.
+
+
+## Verified handoff status — 2026-10-20
+
+The parent task reported the following remote results after reviewing and applying
+these exact artifacts. This local documentation task did not make remote changes.
+The setup checklists above remain useful for future installs; **do not rerun the
+fresh bootstrap or forward hardening on the already initialized projects**.
+
+| Environment | Project ref | Verified state |
+|---|---|---|
+| Development | `cuwdyedmmnpklufduaho` | Baseline plus forward v2 hardening applied; corrected real Auth/RLS/ACL transactional rollback tests passed; guest tvOS REST smoke queries passed. |
+| Production | `ffoiacnvcjlkgsazacrk` | Fresh baseline v2 applied to the separate empty database; 49 of 49 tables have RLS enabled. Production application workflows have not been validated. |
+
+Both projects' Supabase security advisors reported **no ERROR or WARN**. The only
+reported INFO is `live_feed_secrets` having RLS enabled with no policies, intentionally
+denying client access. These advisor results do not establish production readiness.
+The old projects and live website were left unchanged.
+
+The Apple TV task configured its ignored `Local.xcconfig` with the new development
+publishable key, built and launched the app, and confirmed successful home video/show
+fetches. The empty catalog is expected. Xcode omitted custom generated metadata, so
+that task additionally used a workspace-local `PeepTV-Local-Info.plist`. It reported
+no tracked source changes. No key or token is recorded here; retain the ignored/local
+configuration and existing simulator state. This proves development connectivity,
+not media playback or populated catalog behavior.
+
+### Work remaining before a platform launch
+
+- Add owned/licensed catalog metadata and media, explicitly approved episodes, active
+  authorized channels and guide data. Verify populated Swift decoding, pagination,
+  thumbnails, playback and entitlement denial with real client sessions.
+- Configure and test Storage buckets/policies and signed delivery for private/premium
+  media; recover or re-upload assets only from separately authorized sources. No old
+  assets, users, watch history, financial records or catalog rows were restored.
+- Complete genuine Auth signup, email verification, password/reset, login/refresh,
+  initial admin enrollment and cross-user API checks. Database trigger/role tests are
+  not a substitute for these end-to-end flows.
+- Review/deploy required Edge Functions and separately configure Cloudflare, Stripe,
+  Resend, Turnstile and relay resources. Keep development resources and payment/email
+  behavior isolated from production; verify webhook authorization and signatures.
+- Resolve the documented social stream-key separation and safe public profile access,
+  anonymous heartbeat/view counting, UUID coercion in CMS EPG/ad editors, and creator
+  payout/prediction workflow gaps before enabling those features.
+- Deliberately configure safe Realtime/Broadcast access and EPG scheduling. Decide
+  backups/PITR, incremental migration tracking and operational recovery procedures.
+- Validate the full web application and production configuration, then separately
+  authorize deployment/cutover. Neither a deployed web change nor production platform
+  readiness is implied by the completed empty-schema rebuild.
