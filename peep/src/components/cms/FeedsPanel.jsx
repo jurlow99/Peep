@@ -55,7 +55,7 @@ export default function FeedsPanel({ showToast }) {
   async function load() {
     setLoading(true);
     const [f, c] = await Promise.all([
-      supabase.from("live_feeds").select("*").order("created_at", { ascending: false }),
+      supabase.rpc("admin_live_feeds").order("created_at", { ascending: false }),
       supabase.from("channels").select("id, name, live_feed_id"),
     ]);
     setFeeds(f.data || []);
