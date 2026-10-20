@@ -73,7 +73,7 @@ struct HeroView: View {
                         .background(Color.white)
                         .cornerRadius(10)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.card)
                 }
                 .padding(.top, 8)
             }

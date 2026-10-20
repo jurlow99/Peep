@@ -3,58 +3,40 @@ import SwiftUI
 struct ProfileMenuView: View {
     @EnvironmentObject var supabase: SupabaseService
     @State private var showProfileSelect = false
+    @State private var showSignIn = false
+    @State private var profileError: String?
 
     var body: some View {
-        VStack(spacing: 40) {
-            Text("Account")
-                .font(.system(size: 52, weight: .bold, design: .serif))
-                .foregroundColor(.white)
-
-            if let profile = supabase.activeProfile {
-                VStack(spacing: 12) {
-                    Circle()
-                        .fill(Color(hex: "#6366f1"))
-                        .frame(width: 120, height: 120)
-                        .overlay(
-                            Text(String((profile.name ?? "?").prefix(1)).uppercased())
-                                .font(.system(size: 56, weight: .bold))
-                                .foregroundColor(.white)
-                        )
-
-                    Text(profile.name ?? "Profile")
-                        .font(.system(size: 32, weight: .semibold))
-                        .foregroundColor(.white)
-                }
-            }
-
-            VStack(spacing: 16) {
+        VStack(spacing: 36) {
+            Text("peep").font(.system(size: 72, weight: .heavy, design: .rounded)).foregroundStyle(.yellow)
+            Text(supabase.session == nil ? "Make yourself at home." : (supabase.activeProfile?.name ?? "Your account"))
+                .font(.title)
+            if supabase.session == nil {
+                Text("Browse and watch for free. Sign in to choose your profile.")
+                    .foregroundStyle(.secondary)
+                Button("Sign In") { showSignIn = true }
+            } else {
                 Button("Switch Profile") {
-                    showProfileSelect = true
+                    Task {
+                        do {
+                            try await supabase.reloadProfiles()
+                            if supabase.profiles.isEmpty {
+                                profileError = "No viewer profiles yet. Create one at watchpeep.tv."
+                            } else {
+                                showProfileSelect = true
+                            }
+                        } catch { profileError = error.localizedDescription }
+                    }
                 }
-                .font(.system(size: 26))
-                .padding(.horizontal, 48)
-                .padding(.vertical, 16)
-                .background(Color(white: 0.15))
-                .foregroundColor(.white)
-                .cornerRadius(10)
-                .buttonStyle(.card)
-
-                Button("Sign Out") {
-                    supabase.signOut()
-                }
-                .font(.system(size: 26))
-                .padding(.horizontal, 48)
-                .padding(.vertical, 16)
-                .background(Color(white: 0.1))
-                .foregroundColor(Color(white: 0.6))
-                .cornerRadius(10)
-                .buttonStyle(.card)
+                Button("Sign Out") { supabase.signOut() }
             }
+            Text("Manage your account at watchpeep.tv").font(.caption).foregroundStyle(.secondary)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black)
-        .fullScreenCover(isPresented: $showProfileSelect) {
-            ProfileSelectView()
-        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.black)
+        .sheet(isPresented: $showSignIn) { AuthView() }
+        .fullScreenCover(isPresented: $showProfileSelect) { ProfileSelectView() }
+        .alert("Profiles", isPresented: Binding(get: { profileError != nil }, set: { if !$0 { profileError = nil } })) {
+            Button("OK") { profileError = nil }
+        } message: { Text(profileError ?? "") }
     }
 }

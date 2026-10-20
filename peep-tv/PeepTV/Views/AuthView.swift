@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AuthView: View {
     @EnvironmentObject var supabase: SupabaseService
+    @Environment(\.dismiss) private var dismiss
     @State private var email = ""
     @State private var password = ""
     @State private var isLoading = false
@@ -15,11 +16,11 @@ struct AuthView: View {
                 // Left panel — branding
                 VStack(alignment: .leading, spacing: 24) {
                     Spacer()
-                    Text("peep.")
-                        .font(.custom("Georgia", size: 96))
+                    Text("peep")
+                        .font(.system(size: 96, weight: .heavy, design: .rounded))
                         .foregroundColor(Color(hex: "#facc15"))
 
-                    Text("Adult animation,\nunfiltered.")
+                    Text("Find your next\nfavorite.")
                         .font(.system(size: 36, weight: .light))
                         .foregroundColor(Color(white: 0.6))
                         .lineSpacing(8)
@@ -46,7 +47,9 @@ struct AuthView: View {
                             .padding(18)
                             .background(Color(white: 0.1))
                             .cornerRadius(10)
-                            .autocapitalization(.none)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .textContentType(.username)
                             .keyboardType(.emailAddress)
                     }
 
@@ -55,7 +58,8 @@ struct AuthView: View {
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(Color(white: 0.4))
                             .kerning(1.5)
-                        SecureField("••••••••", text: $password)
+                        SecureField("Password", text: $password)
+                            .textContentType(.password)
                             .font(.system(size: 24))
                             .foregroundColor(.white)
                             .padding(18)
@@ -86,9 +90,10 @@ struct AuthView: View {
                         .background(Color(hex: "#facc15"))
                         .cornerRadius(12)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.card)
                     .disabled(isLoading || email.isEmpty || password.isEmpty)
                     .opacity(email.isEmpty || password.isEmpty ? 0.5 : 1)
+                    Button("Back to browsing") { dismiss() }
                 }
                 .frame(maxWidth: 560)
                 .padding(80)
@@ -102,6 +107,7 @@ struct AuthView: View {
         errorMessage = nil
         do {
             try await supabase.signIn(email: email, password: password)
+            dismiss()
         } catch {
             errorMessage = error.localizedDescription
         }

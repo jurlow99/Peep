@@ -2,66 +2,76 @@ import Foundation
 import Combine
 
 @MainActor
-class SupabaseService: ObservableObject {
+final class SupabaseService: ObservableObject {
     static let shared = SupabaseService()
-
-    private let baseURL = "https://iuozujwtuzuwubhsnhix.supabase.co"
-    private let anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml1b3p1and0dXp1d3ViaHNuaGl4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1OTQ2MDEsImV4cCI6MjA5NDE3MDYwMX0.IoCOsLNqUCwICddaYr1nW94gTFUUJsBIFp4pkF2bz8s"
-
-    @Published var session: UserSession?
+    let configuration: AppConfiguration?
+    @Published private(set) var configurationError: String?
+    @Published private(set) var session: UserSession?
     @Published var activeProfile: Profile?
-    @Published var profiles: [Profile] = []
+    @Published private(set) var profiles: [Profile] = []
+    @Published private(set) var isRestoring = true
+    private var refreshTask: Task<UserSession, Error>?
+    private let decoder = JSONDecoder()
 
-    private let decoder: JSONDecoder = {
-        let d = JSONDecoder()
-        d.keyDecodingStrategy = .useDefaultKeys
-        return d
-    }()
-
-    init() { loadSession() }
-
-    // MARK: - Headers
-
-    private var headers: [String: String] {
-        var h = ["apikey": anonKey, "Content-Type": "application/json"]
-        if let token = session?.accessToken {
-            h["Authorization"] = "Bearer \(token)"
-        } else {
-            h["Authorization"] = "Bearer \(anonKey)"
-        }
-        return h
+    init() {
+        do { configuration = try AppConfiguration.load() }
+        catch { configuration = nil; configurationError = error.localizedDescription }
     }
 
-    // MARK: - Auth
+    func restoreSession() async {
+        defer { isRestoring = false }
+        guard configuration != nil else { return }
+        session = SessionStore.read()
+        guard session != nil else { return }
+        do {
+            try await refreshIfNeeded()
+            profiles = try await fetchProfiles()
+            if let id = UserDefaults.standard.string(forKey: "peep_tv_profile_id") {
+                activeProfile = profiles.first { $0.id == id }
+            }
+        } catch {
+            // A transient network failure must not erase saved credentials.
+        }
+    }
+
+    private func auth(grant: String, body: [String: String]) async throws -> UserSession {
+        guard let config = configuration else { throw AppError.networkError(configurationError ?? "Missing configuration.") }
+        var components = URLComponents(url: config.baseURL.appendingPathComponent("auth/v1/token"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "grant_type", value: grant)]
+        var request = URLRequest(url: components.url!)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 25
+        request.allHTTPHeaderFields = ["apikey": config.anonKey, "Content-Type": "application/json"]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw AppError.networkError("No response from the server.") }
+        if [400, 401, 403].contains(http.statusCode) {
+            throw grant == "password" ? AppError.invalidCredentials : AppError.noSession
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            throw AppError.networkError("Sign in is unavailable (\(http.statusCode)). Please try again.")
+        }
+        return try decoder.decode(AuthResponse.self, from: data).session
+    }
 
     func signIn(email: String, password: String) async throws {
-        let url = URL(string: "\(baseURL)/auth/v1/token?grant_type=password")!
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.allHTTPHeaderFields = ["apikey": anonKey, "Content-Type": "application/json"]
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["email": email, "password": password])
-
-        let (data, resp) = try await URLSession.shared.data(for: req)
-        guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else {
-            throw AppError.invalidCredentials
-        }
-
-        let auth = try decoder.decode(AuthResponse.self, from: data)
-        let uid = auth.user.id
-        session = UserSession(accessToken: auth.access_token, userId: uid)
-        saveSession()
-
+        let result = try await auth(grant: "password", body: ["email": email.trimmingCharacters(in: .whitespacesAndNewlines), "password": password])
+        try SessionStore.write(result)
+        session = result
+        activeProfile = nil
         profiles = (try? await fetchProfiles()) ?? []
-        activeProfile = profiles.first ?? Profile(id: uid, name: "Me", avatar_id: "a1", user_id: uid)
     }
 
     func signOut() {
+        refreshTask?.cancel()
+        refreshTask = nil
         session = nil
         activeProfile = nil
         profiles = []
-        UserDefaults.standard.removeObject(forKey: "peep_tv_token")
-        UserDefaults.standard.removeObject(forKey: "peep_tv_uid")
-        UserDefaults.standard.removeObject(forKey: "peep_tv_profile_id")
+        SessionStore.clear()
+        for key in ["peep_tv_token", "peep_tv_uid", "peep_tv_profile_id"] {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
     }
 
     func selectProfile(_ profile: Profile) {
@@ -69,74 +79,98 @@ class SupabaseService: ObservableObject {
         UserDefaults.standard.set(profile.id, forKey: "peep_tv_profile_id")
     }
 
-    private func saveSession() {
-        guard let s = session else { return }
-        UserDefaults.standard.set(s.accessToken, forKey: "peep_tv_token")
-        UserDefaults.standard.set(s.userId, forKey: "peep_tv_uid")
-    }
-
-    private func loadSession() {
-        guard
-            let token = UserDefaults.standard.string(forKey: "peep_tv_token"),
-            let uid = UserDefaults.standard.string(forKey: "peep_tv_uid")
-        else { return }
-        session = UserSession(accessToken: token, userId: uid)
-        Task {
-            profiles = (try? await fetchProfiles()) ?? []
-            if let pid = UserDefaults.standard.string(forKey: "peep_tv_profile_id") {
-                activeProfile = profiles.first { $0.id == pid } ?? profiles.first
-            } else {
-                activeProfile = profiles.first ?? Profile(id: uid, name: "Me", avatar_id: "a1", user_id: uid)
-            }
+    private func refreshIfNeeded() async throws {
+        guard let old = session, old.expiresAt.timeIntervalSinceNow < 60 else { return }
+        if let refreshTask { _ = try await refreshTask.value; return }
+        let task = Task { try await self.auth(grant: "refresh_token", body: ["refresh_token": old.refreshToken]) }
+        refreshTask = task
+        defer { refreshTask = nil }
+        do {
+            let updated = try await task.value
+            try Task.checkCancellation()
+            guard session?.refreshToken == old.refreshToken else { return }
+            try SessionStore.write(updated)
+            session = updated
+        } catch AppError.noSession {
+            signOut()
+            throw AppError.noSession
         }
     }
 
-    // MARK: - Generic fetch
-
     func get<T: Decodable>(_ table: String, query: [String: String] = [:]) async throws -> T {
-        var comps = URLComponents(string: "\(baseURL)/rest/v1/\(table)")!
-        comps.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) }
-        var req = URLRequest(url: comps.url!)
-        req.allHTTPHeaderFields = headers
-        let (data, _) = try await URLSession.shared.data(for: req)
+        guard let config = configuration else { throw AppError.networkError(configurationError ?? "Missing configuration.") }
+        try await refreshIfNeeded()
+        var components = URLComponents(url: config.baseURL.appendingPathComponent("rest/v1/\(table)"), resolvingAgainstBaseURL: false)!
+        components.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) }
+        var request = URLRequest(url: components.url!)
+        request.timeoutInterval = 25
+        request.setValue(config.anonKey, forHTTPHeaderField: "apikey")
+        // Publishable keys are not JWTs. Legacy anon keys can also be used as bearer tokens.
+        if let session {
+            request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+        } else if config.anonKey.hasPrefix("eyJ") {
+            request.setValue("Bearer \(config.anonKey)", forHTTPHeaderField: "Authorization")
+        }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw AppError.networkError("Couldn't load \(table). Please try again.")
+        }
         return try decoder.decode(T.self, from: data)
     }
 
-    // MARK: - Content
-
-    func fetchVideos(category: String? = nil) async throws -> [Video] {
-        var q: [String: String] = ["order": "order_index.asc,id.desc", "limit": "200"]
-        if let c = category { q["category"] = "eq.\(c)" }
-        return try await get("videos", query: q)
+    private func catalogQuery(order: String) -> [String: String] {
+        var query = ["select": "*", "order": order]
+        // TV exposes the public catalog. Preview account tiers remain on the web.
+        if configuration?.isDevelopment != true { query["or"] = "(visibility_tier.eq.production,visibility_tier.is.null)" }
+        return query
     }
 
+    private func all<T: Decodable>(_ table: String, query: [String: String]) async throws -> [T] {
+        var result: [T] = []
+        var offset = 0
+        while true {
+            try Task.checkCancellation()
+            var pageQuery = query
+            pageQuery["limit"] = "200"
+            pageQuery["offset"] = String(offset)
+            let page: [T] = try await get(table, query: pageQuery)
+            result.append(contentsOf: page)
+            if page.count < 200 { return result }
+            offset += page.count
+        }
+    }
+
+    func fetchVideos() async throws -> [Video] {
+        let rows: [Video] = try await all("videos", query: catalogQuery(order: "id.desc"))
+        return rows.filter { $0.is_premium != true }
+    }
     func fetchShows() async throws -> [Show] {
-        return try await get("shows", query: ["order": "id.desc", "limit": "100"])
+        let rows: [Show] = try await all("shows", query: catalogQuery(order: "id.desc"))
+        return rows.filter { $0.is_premium != true }
     }
-
-    func fetchLiveStreams() async throws -> [LiveStream] {
-        return try await get("live_streams", query: ["order": "id.desc"])
+    func fetchEpisodes(showId: Int) async throws -> [Episode] {
+        let rows: [Episode] = try await all("episodes", query: ["show_id": "eq.\(showId)", "order": "season.asc,episode_number.asc,id.asc"])
+        return rows.filter { $0.is_premium != true && ($0.status == nil || $0.status == "published" || $0.status == "approved") }
     }
-
-    func fetchSeasons(showId: Int) async throws -> [Season] {
-        return try await get("show_seasons", query: [
-            "show_id": "eq.\(showId)",
-            "order": "season_number.asc"
-        ])
+    func fetchChannels() async throws -> [Channel] {
+        var query = catalogQuery(order: "sort_order.asc,id.asc")
+        query["is_active"] = "eq.true"
+        let rows: [Channel] = try await all("channels", query: query)
+        return rows.filter { $0.is_premium != true }
     }
-
-    func fetchEpisodes(seasonId: Int) async throws -> [Episode] {
-        return try await get("show_episodes", query: [
-            "season_id": "eq.\(seasonId)",
-            "order": "episode_number.asc"
-        ])
+    func fetchGuide() async throws -> [GuideEntry] {
+        let formatter = ISO8601DateFormatter()
+        let now = Date()
+        return try await all("epg_entries", query: ["end_time": "gt.\(formatter.string(from: now))", "start_time": "lt.\(formatter.string(from: now.addingTimeInterval(6 * 3600)))", "order": "start_time.asc,id.asc"])
     }
-
+    func fetchFeeds() async throws -> [PublicFeed] {
+        try await all("public_live_feeds", query: ["select": "id,cloudflare_hls_url", "order": "id.asc"])
+    }
+    func reloadProfiles() async throws {
+        profiles = try await fetchProfiles()
+    }
     func fetchProfiles() async throws -> [Profile] {
-        guard let uid = session?.userId else { return [] }
-        return try await get("viewer_profiles", query: [
-            "user_id": "eq.\(uid)",
-            "order": "created_at.asc"
-        ])
+        guard let session else { return [] }
+        return try await get("viewer_profiles", query: ["user_id": "eq.\(session.userId)", "order": "created_at.asc"])
     }
 }

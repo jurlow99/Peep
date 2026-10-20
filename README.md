@@ -79,6 +79,7 @@ Note that `main` deploying is independent of which database you're on. The
 | Path | Purpose |
 |------|---------|
 | `peep/` | **Canonical frontend** — run all npm commands here |
+| `peep-tv/` | Native Apple TV app — [Mac setup and testing](peep-tv/README.md) |
 | `supabase/` | Edge functions + SQL migrations |
 | `docs/` | Product and ops documentation |
 

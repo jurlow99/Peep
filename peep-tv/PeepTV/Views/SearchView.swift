@@ -7,12 +7,14 @@ struct SearchView: View {
     @State private var allShows: [Show] = []
     @State private var selectedVideo: Video?
     @State private var selectedShow: Show?
+    @State private var isLoading = true
+    @State private var errorMessage: String?
 
     private var results: (videos: [Video], shows: [Show]) {
         guard !query.trimmingCharacters(in: .whitespaces).isEmpty else {
             return ([], [])
         }
-        let q = query.lowercased()
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return (
             allVideos.filter { $0.title.lowercased().contains(q) || ($0.description?.lowercased().contains(q) == true) },
             allShows.filter { $0.title.lowercased().contains(q) || ($0.description?.lowercased().contains(q) == true) }
@@ -40,7 +42,7 @@ struct SearchView: View {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(Color(white: 0.4))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.card)
                 }
             }
             .padding(.horizontal, 24)
@@ -49,7 +51,11 @@ struct SearchView: View {
             .cornerRadius(12)
             .padding(.horizontal, 80)
 
-            if query.isEmpty {
+            if isLoading {
+                ProgressView("Loading catalog…").frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let errorMessage {
+                StatusView(title: "Couldn't load search", message: errorMessage, retry: { Task { await load() } })
+            } else if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 // Prompt
                 VStack(spacing: 16) {
                     Image(systemName: "magnifyingglass")
@@ -86,6 +92,7 @@ struct SearchView: View {
                                         }
                                     }
                                     .padding(.horizontal, 80)
+                                    .padding(.vertical, 28)
                                 }
                             }
                         }
@@ -102,6 +109,7 @@ struct SearchView: View {
                                         }
                                     }
                                     .padding(.horizontal, 80)
+                                    .padding(.vertical, 28)
                                 }
                             }
                         }
@@ -111,17 +119,23 @@ struct SearchView: View {
             }
         }
         .background(Color.black)
-        .task {
-            async let v = supabase.fetchVideos()
-            async let s = supabase.fetchShows()
-            allVideos = (try? await v) ?? []
-            allShows = (try? await s) ?? []
-        }
+        .task { await load() }
         .fullScreenCover(item: $selectedVideo) { v in
-            if let url = v.videoURL { PlayerView(url: url, title: v.title) }
+            PlaybackView(url: v.videoURL, title: v.title)
         }
         .sheet(item: $selectedShow) { s in
             SeriesDetailView(show: s)
         }
+    }
+
+    private func load() async {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+        do {
+            async let v = supabase.fetchVideos()
+            async let s = supabase.fetchShows()
+            (allVideos, allShows) = try await (v, s)
+        } catch { errorMessage = error.localizedDescription }
     }
 }

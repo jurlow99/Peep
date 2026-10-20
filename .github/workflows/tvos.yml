@@ -1,0 +1,38 @@
+name: Apple TV
+
+on:
+  pull_request:
+    paths: ['peep-tv/**', '.github/workflows/tvos.yml']
+  push:
+    branches: [develop, main]
+    paths: ['peep-tv/**', '.github/workflows/tvos.yml']
+  workflow_dispatch:
+
+jobs:
+  tvos:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: peep-tv
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Select available Apple TV simulator
+        run: |
+          DEVICE_ID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(v["udid"] for k,vs in d["devices"].items() if "tvOS" in k for v in vs if v["isAvailable"]))')
+          echo "TVOS_DEVICE_ID=$DEVICE_ID" >> "$GITHUB_ENV"
+      - name: Build and test
+        run: |
+          xcodebuild test -project PeepTV.xcodeproj -scheme PeepTV \
+            -destination "platform=tvOS Simulator,id=$TVOS_DEVICE_ID" \
+            -derivedDataPath build -resultBundlePath build/PeepTV.xcresult \
+            CODE_SIGNING_ALLOWED=NO
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tvos-test-results
+          path: peep-tv/build/PeepTV.xcresult

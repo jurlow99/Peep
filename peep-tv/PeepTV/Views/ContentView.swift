@@ -15,7 +15,7 @@ struct ContentView: View {
                 .tabItem { Label("Series", systemImage: "tv.fill") }
 
             StreamsView()
-                .tabItem { Label("Streams", systemImage: "antenna.radiowaves.left.and.right") }
+                .tabItem { Label("Live TV", systemImage: "antenna.radiowaves.left.and.right") }
 
             SearchView()
                 .tabItem { Label("Search", systemImage: "magnifyingglass") }

@@ -120,69 +120,6 @@ struct ShowCardView: View {
     }
 }
 
-// MARK: - Stream Card
-
-struct StreamCardView: View {
-    let stream: LiveStream
-    @State private var playing: LiveStream?
-
-    var body: some View {
-        Button { if stream.is_live == true { playing = stream } } label: {
-            VStack(alignment: .leading, spacing: 12) {
-                ZStack {
-                    AsyncImage(url: stream.thumbURL) { img in
-                        img.resizable().aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        ZStack {
-                            Rectangle().fill(Color(white: 0.12))
-                            Image(systemName: "antenna.radiowaves.left.and.right")
-                                .font(.system(size: 36))
-                                .foregroundColor(Color(white: 0.25))
-                        }
-                    }
-                    .frame(width: CARD_W, height: CARD_H)
-                    .clipped()
-
-                    if stream.is_live == true {
-                        VStack {
-                            HStack {
-                                LiveBadge()
-                                Spacer()
-                                if let v = stream.viewer_count, v > 0 {
-                                    Label("\(v)", systemImage: "eye.fill")
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 8).padding(.vertical, 4)
-                                        .background(Color.black.opacity(0.6))
-                                        .cornerRadius(6)
-                                }
-                            }
-                            .padding(10)
-                            Spacer()
-                        }
-                    }
-                }
-                .cornerRadius(12)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(stream.displayName)
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                    if let t = stream.stream_title {
-                        Text(t).font(.system(size: 16)).foregroundColor(Color(white: 0.45)).lineLimit(1)
-                    }
-                }
-                .frame(width: CARD_W, alignment: .leading)
-            }
-        }
-        .buttonStyle(.card)
-        .fullScreenCover(item: $playing) { s in
-            if let url = s.streamURL { PlayerView(url: url, title: s.displayName) }
-        }
-    }
-}
-
 // MARK: - Live Badge
 
 struct LiveBadge: View {

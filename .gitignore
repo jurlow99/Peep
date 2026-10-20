@@ -35,3 +35,11 @@ peep/peep/
 # Supabase temp files
 supabase/.temp/
 peep/supabase/
+
+# Native Apple TV local configuration and build output
+peep-tv/Config/Local.xcconfig
+peep-tv/Config/Production.xcconfig
+peep-tv/*.xcodeproj/
+peep-tv/build/
+peep-tv/DerivedData/
+*.xcuserstate

@@ -4,13 +4,12 @@ struct HomeView: View {
     @EnvironmentObject var supabase: SupabaseService
     @State private var videos: [Video] = []
     @State private var shows: [Show] = []
-    @State private var streams: [LiveStream] = []
     @State private var playingVideo: Video?
     @State private var playingShow: Show?
     @State private var isLoading = true
+    @State private var errorMessage: String?
 
     private var hero: Video? { videos.first(where: { $0.is_featured == true }) ?? videos.first }
-    private var live: [LiveStream] { streams.filter { $0.is_live == true } }
 
     var body: some View {
         ZStack {
@@ -25,6 +24,10 @@ struct HomeView: View {
                         .font(.system(size: 24))
                         .foregroundColor(Color(white: 0.4))
                 }
+            } else if let errorMessage {
+                StatusView(title: "Couldn't load Home", message: errorMessage, retry: { Task { await load() } })
+            } else if videos.isEmpty && shows.isEmpty {
+                StatusView(title: "Your next favorite is on its way", message: "There are no titles in the catalog yet.", symbol: "film")
             } else {
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 56) {
@@ -32,13 +35,6 @@ struct HomeView: View {
                         // Hero
                         if let h = hero {
                             HeroView(video: h) { playingVideo = h }
-                        }
-
-                        // Live Now
-                        if !live.isEmpty {
-                            ShelfView(title: "🔴  Live Now") {
-                                ForEach(live) { s in StreamCardView(stream: s) }
-                            }
                         }
 
                         // Just Added
@@ -75,7 +71,7 @@ struct HomeView: View {
         }
         .task { await load() }
         .fullScreenCover(item: $playingVideo) { v in
-            if let url = v.videoURL { PlayerView(url: url, title: v.title) }
+            PlaybackView(url: v.videoURL, title: v.title)
         }
         .sheet(item: $playingShow) { s in
             SeriesDetailView(show: s)
@@ -91,13 +87,14 @@ struct HomeView: View {
     }
 
     private func load() async {
-        async let v = try? supabase.fetchVideos()
-        async let s = try? supabase.fetchShows()
-        async let l = try? supabase.fetchLiveStreams()
-        videos = await v ?? []
-        shows = await s ?? []
-        streams = await l ?? []
-        isLoading = false
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+        do {
+            async let v = supabase.fetchVideos()
+            async let s = supabase.fetchShows()
+            (videos, shows) = try await (v, s)
+        } catch { errorMessage = error.localizedDescription }
     }
 }
 
@@ -117,7 +114,7 @@ struct ShelfView<Content: View>: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 28) { content }
                     .padding(.horizontal, 88)
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 28)
             }
         }
     }

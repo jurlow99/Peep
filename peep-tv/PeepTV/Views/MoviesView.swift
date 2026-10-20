@@ -6,6 +6,7 @@ struct MoviesView: View {
     @State private var selectedCategory: String? = nil
     @State private var selectedVideo: Video?
     @State private var isLoading = true
+    @State private var errorMessage: String?
 
     private var categories: [String] { Array(Set(videos.compactMap(\.category))).sorted() }
     private var filtered: [Video] {
@@ -44,10 +45,14 @@ struct MoviesView: View {
             if isLoading {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let errorMessage {
+                StatusView(title: "Couldn't load movies", message: errorMessage, retry: { Task { await load() } })
+            } else if filtered.isEmpty {
+                StatusView(title: "No movies yet", message: "Try another category or come back soon.", symbol: "film")
             } else {
                 ScrollView {
                     LazyVGrid(
-                        columns: Array(repeating: GridItem(.fixed(320), spacing: 24), count: 5),
+                        columns: [GridItem(.adaptive(minimum: 340), spacing: 36)],
                         spacing: 40
                     ) {
                         ForEach(filtered) { video in
@@ -55,22 +60,23 @@ struct MoviesView: View {
                         }
                     }
                     .padding(.horizontal, 80)
-                    .padding(.bottom, 80)
+                    .padding(.vertical, 40)
                 }
             }
         }
         .background(Color.black)
         .task { await load() }
         .fullScreenCover(item: $selectedVideo) { v in
-            if let url = v.videoURL {
-                PlayerView(url: url, title: v.title)
-            }
+            PlaybackView(url: v.videoURL, title: v.title)
         }
     }
 
     private func load() async {
-        videos = (try? await supabase.fetchVideos()) ?? []
-        isLoading = false
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+        do { videos = try await supabase.fetchVideos() }
+        catch { errorMessage = error.localizedDescription }
     }
 }
 
@@ -89,6 +95,6 @@ struct FilterChip: View {
                 .foregroundColor(isSelected ? .black : .white)
                 .cornerRadius(20)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.card)
     }
 }

@@ -1,0 +1,47 @@
+name: PeepTV
+options:
+  bundleIdPrefix: tv.watchpeep
+  deploymentTarget:
+    tvOS: '17.0'
+configs:
+  Debug: debug
+  Release: release
+targets:
+  PeepTV:
+    type: application
+    platform: tvOS
+    sources: [PeepTV]
+    configFiles:
+      Debug: Config/Debug.xcconfig
+      Release: Config/Release.xcconfig
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tv.watchpeep.PeepTV
+        SWIFT_VERSION: '5.0'
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: peep
+        INFOPLIST_KEY_SUPABASE_URL: $(PEEP_SUPABASE_URL)
+        INFOPLIST_KEY_SUPABASE_ANON_KEY: $(PEEP_SUPABASE_ANON_KEY)
+        INFOPLIST_KEY_CLOUDFLARE_STREAM_HOST: $(PEEP_STREAM_HOST)
+        INFOPLIST_KEY_PEEP_ENVIRONMENT: $(PEEP_ENVIRONMENT)
+        MARKETING_VERSION: '1.0.0'
+        CURRENT_PROJECT_VERSION: 1
+        TARGETED_DEVICE_FAMILY: '3'
+        CODE_SIGN_STYLE: Automatic
+  PeepTVTests:
+    type: bundle.unit-test
+    platform: tvOS
+    sources: [PeepTVTests]
+    dependencies:
+      - target: PeepTV
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: '5.0'
+schemes:
+  PeepTV:
+    build:
+      targets:
+        PeepTV: all
+    test:
+      targets: [PeepTVTests]

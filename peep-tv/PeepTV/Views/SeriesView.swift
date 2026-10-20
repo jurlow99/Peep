@@ -5,148 +5,110 @@ struct SeriesView: View {
     @State private var shows: [Show] = []
     @State private var selectedShow: Show?
     @State private var isLoading = true
+    @State private var errorMessage: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("Series")
-                .font(.system(size: 52, weight: .bold, design: .serif))
-                .foregroundColor(.white)
-                .padding(.horizontal, 80)
-                .padding(.top, 60)
-                .padding(.bottom, 32)
-
+        VStack(alignment: .leading, spacing: 32) {
+            Text("Series").font(.system(size: 52, weight: .bold))
+                .padding(.horizontal, 80).padding(.top, 60)
             if isLoading {
-                ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let errorMessage {
+                StatusView(title: "Couldn't load series", message: errorMessage, retry: { Task { await load() } })
             } else if shows.isEmpty {
-                Text("No series yet.")
-                    .font(.system(size: 28))
-                    .foregroundColor(Color(white: 0.4))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                StatusView(title: "No series yet", message: "Check back soon.", symbol: "tv")
             } else {
                 ScrollView {
-                    LazyVGrid(
-                        columns: Array(repeating: GridItem(.fixed(320), spacing: 24), count: 5),
-                        spacing: 40
-                    ) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 340), spacing: 36)], spacing: 40) {
                         ForEach(shows) { show in
                             ShowCardView(show: show) { selectedShow = show }
                         }
                     }
-                    .padding(.horizontal, 80)
-                    .padding(.bottom, 80)
+                    .padding(.horizontal, 80).padding(.vertical, 40)
                 }
             }
         }
         .background(Color.black)
         .task { await load() }
-        .sheet(item: $selectedShow) { show in
-            SeriesDetailView(show: show)
-        }
+        .sheet(item: $selectedShow) { SeriesDetailView(show: $0) }
     }
 
     private func load() async {
-        shows = (try? await supabase.fetchShows()) ?? []
-        isLoading = false
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+        do { shows = try await supabase.fetchShows() }
+        catch { errorMessage = error.localizedDescription }
     }
 }
 
 struct SeriesDetailView: View {
     @EnvironmentObject var supabase: SupabaseService
-    let show: Show
-    @State private var seasons: [Season] = []
-    @State private var episodes: [Int: [Episode]] = [:]
-    @State private var selectedSeason: Season?
-    @State private var selectedEpisode: Episode?
     @Environment(\.dismiss) private var dismiss
+    let show: Show
+    @State private var episodes: [Episode] = []
+    @State private var selectedSeason = 1
+    @State private var selectedEpisode: Episode?
+    @State private var isLoading = true
+    @State private var errorMessage: String?
+
+    private var seasons: [Int] { Array(Set(episodes.map { $0.season ?? 1 })).sorted() }
+    private var visibleEpisodes: [Episode] { episodes.filter { ($0.season ?? 1) == selectedSeason } }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 0) {
-            // Sidebar: show info + seasons
-            VStack(alignment: .leading, spacing: 24) {
-                AsyncImage(url: show.thumbURL) { img in
-                    img.resizable().aspectRatio(16/9, contentMode: .fill)
-                } placeholder: { Rectangle().fill(Color(white: 0.1)) }
-                .frame(width: 400, height: 225)
-                .clipped()
-                .cornerRadius(12)
-
-                Text(show.title)
-                    .font(.system(size: 36, weight: .bold, design: .serif))
-                    .foregroundColor(.white)
-
-                if let desc = show.description {
-                    Text(desc)
-                        .font(.system(size: 20))
-                        .foregroundColor(Color(white: 0.6))
-                        .lineLimit(4)
-                }
-
-                if !seasons.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("SEASONS")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(Color(white: 0.4))
-
-                        ForEach(seasons) { season in
-                            Button {
-                                selectedSeason = season
-                                Task { await loadEpisodes(for: season) }
-                            } label: {
-                                Text(season.title ?? "Season \(season.season_number)")
-                                    .font(.system(size: 22, weight: selectedSeason?.id == season.id ? .bold : .regular))
-                                    .foregroundColor(selectedSeason?.id == season.id ? Color(hex: "#facc15") : .white)
-                                    .padding(.vertical, 6)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-
-                Spacer()
-            }
-            .frame(width: 460)
-            .padding(48)
-            .background(Color(white: 0.07))
-
-            // Episodes
+        HStack(alignment: .top, spacing: 40) {
             ScrollView {
-                if let season = selectedSeason, let eps = episodes[season.id] {
-                    LazyVStack(spacing: 16) {
-                        ForEach(eps) { ep in
-                            EpisodeRowView(episode: ep) {
-                                selectedEpisode = ep
-                            }
+                VStack(alignment: .leading, spacing: 28) {
+                    Button("Back") { dismiss() }
+                    AsyncImage(url: show.thumbURL) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: { Rectangle().fill(Color(white: 0.12)) }
+                    .frame(width: 400, height: 225).clipped().cornerRadius(12)
+                    Text(show.title).font(.title2.bold())
+                    Text(show.description ?? "").font(.body).foregroundStyle(.secondary).lineLimit(5)
+                    ForEach(seasons, id: \.self) { season in
+                        Button {
+                            selectedSeason = season
+                        } label: {
+                            Label("Season \(season)", systemImage: selectedSeason == season ? "checkmark.circle.fill" : "circle")
                         }
+                        .buttonStyle(.card)
                     }
-                    .padding(40)
-                } else {
-                    ProgressView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .padding(.top, 100)
+                }
+                .padding(32)
+            }
+            .frame(width: 470)
+            if isLoading {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let errorMessage {
+                StatusView(title: "Couldn't load episodes", message: errorMessage, retry: { Task { await load() } })
+            } else if episodes.isEmpty {
+                StatusView(title: "Coming soon", message: "Episodes haven't been published yet.", symbol: "tv")
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 28) {
+                        ForEach(visibleEpisodes) { episode in
+                            EpisodeRowView(episode: episode) { selectedEpisode = episode }
+                        }
+                    }.padding(40)
                 }
             }
         }
-        .background(Color(white: 0.05))
-        .task { await loadSeasons() }
-        .fullScreenCover(item: $selectedEpisode) { ep in
-            if let url = ep.videoURL {
-                PlayerView(url: url, title: ep.displayTitle)
-            }
+        .padding(32).background(Color.black)
+        .task { await load() }
+        .fullScreenCover(item: $selectedEpisode) {
+            PlaybackView(url: $0.videoURL, title: $0.displayTitle)
         }
     }
 
-    private func loadSeasons() async {
-        seasons = (try? await supabase.fetchSeasons(showId: show.id)) ?? []
-        if let first = seasons.first {
-            selectedSeason = first
-            await loadEpisodes(for: first)
-        }
-    }
-
-    private func loadEpisodes(for season: Season) async {
-        guard episodes[season.id] == nil else { return }
-        episodes[season.id] = (try? await supabase.fetchEpisodes(seasonId: season.id)) ?? []
+    private func load() async {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+        do {
+            episodes = try await supabase.fetchEpisodes(showId: show.id)
+            selectedSeason = seasons.first ?? 1
+        } catch { errorMessage = error.localizedDescription }
     }
 }
 

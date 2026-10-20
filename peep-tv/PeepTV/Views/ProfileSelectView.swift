@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ProfileSelectView: View {
     @EnvironmentObject var supabase: SupabaseService
+    @Environment(\.dismiss) private var dismiss
 
     let avatarColors: [Color] = [
         Color(hex: "#6366f1"), Color(hex: "#ec4899"),
@@ -22,11 +23,12 @@ struct ProfileSelectView: View {
                     ForEach(supabase.profiles) { profile in
                         Button {
                             supabase.selectProfile(profile)
+                            dismiss()
                         } label: {
                             VStack(spacing: 16) {
                                 ZStack {
                                     Circle()
-                                        .fill(avatarColors[abs((profile.avatar_id ?? "a1").hashValue) % avatarColors.count])
+                                        .fill(avatarColors[(profile.avatar_id ?? "a1").utf8.reduce(0) { ($0 + Int($1)) % avatarColors.count }])
                                         .frame(width: 160, height: 160)
                                     Text(String((profile.name ?? "?").prefix(1)).uppercased())
                                         .font(.system(size: 72, weight: .bold))
@@ -44,6 +46,7 @@ struct ProfileSelectView: View {
 
                 Button("Sign Out") {
                     supabase.signOut()
+                    dismiss()
                 }
                 .font(.system(size: 22))
                 .foregroundColor(Color(white: 0.4))
