@@ -20,6 +20,13 @@ DO $$ DECLARE r text; v text; BEGIN
   END IF;
  END LOOP;
 END $$;
+DO $$ BEGIN
+ IF EXISTS (SELECT FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+ WHERE n.nspname='public' AND p.prosecdef AND (has_function_privilege('anon',p.oid,'EXECUTE') OR has_function_privilege('authenticated',p.oid,'EXECUTE'))) THEN
+ RAISE EXCEPTION 'FAIL: exposed callable definer'; END IF;
+ IF NOT EXISTS (SELECT FROM pg_class WHERE oid='public.public_live_feeds'::regclass AND 'security_invoker=true'=ANY(reloptions)) THEN
+ RAISE EXCEPTION 'FAIL: feed view must be invoker'; END IF;
+END $$;
 INSERT INTO auth.users(id,email,raw_user_meta_data) VALUES ('71000000-0000-0000-0000-000000000001','rebuild-a@example.invalid','{"full_name":"Synthetic A","role":"admin","is_admin":true,"access_tier":"test"}'),('71000000-0000-0000-0000-000000000002','rebuild-b@example.invalid','{}'),('71000000-0000-0000-0000-000000000003','rebuild-admin@example.invalid','{}');
 DO $$ BEGIN IF NOT COALESCE(((SELECT count(*)=3 FROM public.profiles WHERE id IN ('71000000-0000-0000-0000-000000000001','71000000-0000-0000-0000-000000000002','71000000-0000-0000-0000-000000000003'))),false) THEN RAISE EXCEPTION 'FAIL: auth trigger creates profiles'; END IF; END $$;
 DO $$ BEGIN IF NOT COALESCE(((SELECT role='viewer' AND NOT is_admin AND access_tier='production' AND full_name='Synthetic A' FROM public.profiles WHERE id='71000000-0000-0000-0000-000000000001')),false) THEN RAISE EXCEPTION 'FAIL: signup ignores metadata entitlements'; END IF; END $$;
@@ -36,7 +43,7 @@ INSERT INTO public.epg_entries(id,channel_id,title,start_time,end_time) VALUES (
 INSERT INTO public.app_settings(key,value) VALUES ('rebuild_test_private_pin','synthetic');
 
 INSERT INTO public.viewer_profiles(id,user_id,name) VALUES ('74000000-0000-0000-0000-000000000001','71000000-0000-0000-0000-000000000002','Synthetic B'); INSERT INTO public.watch_progress(id,user_id,content_id,content_type) VALUES (-7101,'71000000-0000-0000-0000-000000000002','synthetic-b','movie');
-RESET ROLE; SELECT set_config('request.jwt.claim.sub','',true); SELECT set_config('request.jwt.claims','{"sub":"","role":"anon"}',true); SET LOCAL ROLE anon;
+RESET ROLE; SELECT set_config('request.jwt.claim.sub','',true); SELECT set_config('request.jwt.claims','{"role":"anon"}',true); SET LOCAL ROLE anon;
 DO $$ BEGIN IF NOT COALESCE(((SELECT count(*)=1 FROM public.videos WHERE title LIKE 'REBUILD TEST%')),false) THEN RAISE EXCEPTION 'FAIL: anon videos'; END IF; END $$;
 DO $$ BEGIN IF NOT COALESCE(((SELECT count(*)=1 FROM public.shows WHERE id BETWEEN -7103 AND -7101)),false) THEN RAISE EXCEPTION 'FAIL: anon shows'; END IF; END $$;
 DO $$ BEGIN IF NOT COALESCE(((SELECT count(*)=1 FROM public.episodes WHERE id BETWEEN -7103 AND -7101)),false) THEN RAISE EXCEPTION 'FAIL: anon episodes'; END IF; END $$;
@@ -45,6 +52,7 @@ DO $$ BEGIN IF NOT COALESCE(((SELECT count(*)=1 FROM public.epg_entries WHERE id
 DO $$ BEGIN IF NOT COALESCE(((SELECT count(*)=0 FROM public.public_live_feeds WHERE id='73000000-0000-0000-0000-000000000001')),false) THEN RAISE EXCEPTION 'FAIL: anon public_live_feeds'; END IF; END $$;
 DO $$ BEGIN IF NOT COALESCE(((SELECT count(*)=0 FROM public.app_settings WHERE key='rebuild_test_private_pin')),false) THEN RAISE EXCEPTION 'FAIL: anon app_settings'; END IF; END $$;
 DO $$ BEGIN BEGIN SELECT * FROM public.profiles; RAISE EXCEPTION 'FAIL: anon profiles unexpectedly allowed'; EXCEPTION WHEN insufficient_privilege THEN NULL; END; END $$;
+DO $$ BEGIN BEGIN SELECT source_host FROM public.live_feeds; RAISE EXCEPTION 'FAIL: anon feed metadata'; EXCEPTION WHEN insufficient_privilege THEN NULL; END; END $$;
 DO $$ BEGIN BEGIN SELECT * FROM public.live_feed_secrets; RAISE EXCEPTION 'FAIL: anon secrets unexpectedly allowed'; EXCEPTION WHEN insufficient_privilege THEN NULL; END; END $$;
 RESET ROLE; SELECT set_config('request.jwt.claim.sub','71000000-0000-0000-0000-000000000001',true); SELECT set_config('request.jwt.claims','{"sub":"71000000-0000-0000-0000-000000000001","role":"authenticated"}',true); SET LOCAL ROLE authenticated;
 DO $$ BEGIN IF NOT COALESCE((auth.uid()='71000000-0000-0000-0000-000000000001'::uuid AND current_user='authenticated'),false) THEN RAISE EXCEPTION 'FAIL: actual uid/role claims'; END IF; END $$;
@@ -61,20 +69,23 @@ UPDATE public.profiles SET full_name='Allowed' WHERE id='71000000-0000-0000-0000
 DO $$ BEGIN IF NOT COALESCE(((SELECT full_name='Allowed' FROM public.profiles WHERE id='71000000-0000-0000-0000-000000000001')),false) THEN RAISE EXCEPTION 'FAIL: allowed own profile'; END IF; END $$;
 RESET ROLE; SELECT set_config('request.jwt.claim.sub','71000000-0000-0000-0000-000000000003',true); SELECT set_config('request.jwt.claims','{"sub":"71000000-0000-0000-0000-000000000003","role":"authenticated"}',true); SET LOCAL ROLE authenticated;
 DO $$ BEGIN IF NOT COALESCE(((SELECT count(*)=3 FROM public.videos WHERE title LIKE 'REBUILD TEST%')),false) THEN RAISE EXCEPTION 'FAIL: admin catalog'; END IF; END $$;
+DO $$ BEGIN IF NOT EXISTS(SELECT FROM public.admin_live_feeds() WHERE id='73000000-0000-0000-0000-000000000001') THEN RAISE EXCEPTION 'FAIL: admin feed RPC'; END IF; END $$;
 DO $$ BEGIN IF NOT COALESCE(((SELECT full_name IS NULL FROM public.profiles WHERE id='71000000-0000-0000-0000-000000000002')),false) THEN RAISE EXCEPTION 'FAIL: cross user update had zero effect'; END IF; END $$;
 INSERT INTO public.subscriptions(id,user_id,status,plan,current_period_end) VALUES (-7101,'71000000-0000-0000-0000-000000000001','active','paid',now()+interval '1 day');
 RESET ROLE; SELECT set_config('request.jwt.claim.sub','71000000-0000-0000-0000-000000000001',true); SELECT set_config('request.jwt.claims','{"sub":"71000000-0000-0000-0000-000000000001","role":"authenticated"}',true); SET LOCAL ROLE authenticated;
 DO $$ BEGIN IF NOT COALESCE(((SELECT count(*)=2 FROM public.videos WHERE title LIKE 'REBUILD TEST%')),false) THEN RAISE EXCEPTION 'FAIL: active paid access'; END IF; END $$;
 DO $$ BEGIN IF NOT COALESCE(((SELECT count(*)=2 FROM public.episodes WHERE id BETWEEN -7103 AND -7101)),false) THEN RAISE EXCEPTION 'FAIL: paid inherited episode access'; END IF; END $$;
 DO $$ BEGIN IF NOT COALESCE(((SELECT count(*)=1 FROM public.public_live_feeds WHERE id='73000000-0000-0000-0000-000000000001')),false) THEN RAISE EXCEPTION 'FAIL: paid linked feed access'; END IF; END $$;
+DO $$ BEGIN BEGIN SELECT source_host FROM public.live_feeds; RAISE EXCEPTION 'FAIL: subscriber feed metadata'; EXCEPTION WHEN insufficient_privilege THEN NULL; END; END $$;
+DO $$ BEGIN BEGIN SELECT * FROM public.admin_live_feeds(); RAISE EXCEPTION 'FAIL: viewer admin RPC'; EXCEPTION WHEN insufficient_privilege THEN NULL; END; END $$;
 RESET ROLE; SELECT set_config('request.jwt.claim.sub','71000000-0000-0000-0000-000000000003',true); SELECT set_config('request.jwt.claims','{"sub":"71000000-0000-0000-0000-000000000003","role":"authenticated"}',true); SET LOCAL ROLE authenticated;
 UPDATE public.subscriptions SET current_period_end=now()-interval '1 day' WHERE user_id='71000000-0000-0000-0000-000000000001';
 RESET ROLE; SELECT set_config('request.jwt.claim.sub','71000000-0000-0000-0000-000000000001',true); SELECT set_config('request.jwt.claims','{"sub":"71000000-0000-0000-0000-000000000001","role":"authenticated"}',true); SET LOCAL ROLE authenticated;
-DO $$ BEGIN IF NOT COALESCE((NOT public.has_active_subscription()),false) THEN RAISE EXCEPTION 'FAIL: expired paid denied'; END IF; END $$;
+DO $$ BEGIN IF NOT COALESCE((NOT peep_private.has_active_subscription()),false) THEN RAISE EXCEPTION 'FAIL: expired paid denied'; END IF; END $$;
 RESET ROLE; SELECT set_config('request.jwt.claim.sub','71000000-0000-0000-0000-000000000003',true); SELECT set_config('request.jwt.claims','{"sub":"71000000-0000-0000-0000-000000000003","role":"authenticated"}',true); SET LOCAL ROLE authenticated;
 UPDATE public.subscriptions SET plan='comp',current_period_end=null WHERE user_id='71000000-0000-0000-0000-000000000001';
 RESET ROLE; SELECT set_config('request.jwt.claim.sub','71000000-0000-0000-0000-000000000001',true); SELECT set_config('request.jwt.claims','{"sub":"71000000-0000-0000-0000-000000000001","role":"authenticated"}',true); SET LOCAL ROLE authenticated;
-DO $$ BEGIN IF NOT COALESCE((public.has_active_subscription()),false) THEN RAISE EXCEPTION 'FAIL: explicit comp access'; END IF; END $$;
+DO $$ BEGIN IF NOT COALESCE((peep_private.has_active_subscription()),false) THEN RAISE EXCEPTION 'FAIL: explicit comp access'; END IF; END $$;
 RESET ROLE; SELECT set_config('request.jwt.claim.sub','71000000-0000-0000-0000-000000000003',true); SELECT set_config('request.jwt.claims','{"sub":"71000000-0000-0000-0000-000000000003","role":"authenticated"}',true); SET LOCAL ROLE authenticated;
 UPDATE public.subscriptions SET status='canceled' WHERE user_id='71000000-0000-0000-0000-000000000001'; UPDATE public.profiles SET access_tier='test' WHERE id='71000000-0000-0000-0000-000000000001';
 RESET ROLE; SELECT set_config('request.jwt.claim.sub','71000000-0000-0000-0000-000000000001',true); SELECT set_config('request.jwt.claims','{"sub":"71000000-0000-0000-0000-000000000001","role":"authenticated"}',true); SET LOCAL ROLE authenticated;

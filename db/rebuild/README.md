@@ -92,3 +92,28 @@ variable. No remote checks have been run locally. Empty arrays validate query ro
 not populated-model decoding, media playback, or REST entitlement isolation. SQL
 rollback fixtures cannot be observed from independent REST connections; real API
 fixture testing needs separate dev-only committed fixtures and cleanup authorization.
+
+## Hardening v2: private helpers and caller-checked feeds
+
+Apply `003_private_helpers.sql` transactionally **once** to an existing v1 baseline;
+new databases apply 001, 002, 003 together via apply.sql. Keep `peep_private` outside
+the Data API exposed-schema list. Its restricted executable helpers are available to
+RLS through schema USAGE, not through public RPC endpoints. No anon/auth-executable
+SECURITY DEFINER function remains in public. Existing policy dependencies follow
+ALTER FUNCTION SET SCHEMA; string function bodies are explicitly updated.
+
+`public_live_feeds` is now SECURITY INVOKER. Clients receive SELECT on only id,
+cloudflare_hls_url, playback_status and enabled in live_feeds. Entitlement RLS limits
+viewer rows to enabled feeds linked to active entitled channels. Source/ingest/admin
+metadata has no client column grant. The CMS's two full-metadata reads now use
+`admin_live_feeds()`, a public invoker wrapper over a private, explicitly admin-checked
+function returning the same fields. Non-admin calls are denied. Install the matching
+local CMS code with this migration before using its feeds UI. Service-owned edge
+function reads are unchanged. No passphrase read access was added.
+
+Tests now exercise both fresh and forward migration paths with inherited ALL grants,
+metadata denial, admin RPC isolation, invoker-view properties and absence of exposed
+client-callable definers. The real rollback script omits the anon JSON sub claim
+entirely; empty sub strings are invalid UUIDs in real auth.uid(). Parent reported v1
+real-role rollback tests and empty-catalog tvOS REST checks passed; rerun the revised
+rollback test and advisors after applying this hardening to dev.

@@ -2274,7 +2274,7 @@ export function CMS({ onExit, currentUser }) {
     setChannelLoading(true);
     const [{ data }, feedsRes] = await Promise.all([
       supabase.from("channels").select("*").order("sort_order"),
-      supabase.from("live_feeds").select("id, name, cloudflare_hls_url, playback_status, relay_status").order("name"),
+      supabase.rpc("admin_live_feeds").select("id, name, cloudflare_hls_url, playback_status, relay_status").order("name"),
     ]);
     setChannelList(data || []);
     setChannelFeeds(feedsRes.data || []);

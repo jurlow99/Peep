@@ -8,7 +8,10 @@ for (let pass=1;pass<=2;pass++) {
  const db=new PGlite();
  try {
   await db.exec(await file('bootstrap.sql'));
-  await db.exec('BEGIN;'+await file('../migrations/001_schema.sql')+await file('../migrations/002_security.sql')+'COMMIT;');
+  const baseline=await file('../migrations/001_schema.sql')+await file('../migrations/002_security.sql');
+  const hardening=await file('../migrations/003_private_helpers.sql');
+  if(pass===1) await db.exec('BEGIN;'+baseline+hardening+'COMMIT;');
+  else { await db.exec('BEGIN;'+baseline+'COMMIT;'); await db.exec('BEGIN;'+hardening+'COMMIT;'); }
   const count=async sql=>Number((await db.query(sql)).rows[0].n);
   const role=async (r,uid='')=>db.exec(`RESET ROLE; SELECT set_config('request.jwt.claim.sub','${uid}',false); SET ROLE ${r};`);
   const denied=async sql=> { await assert.rejects(()=>db.exec(sql)); };
@@ -28,6 +31,8 @@ for (let pass=1;pass<=2;pass++) {
   assert.equal(await count('SELECT count(*) n FROM public.public_live_feeds'),0);
   await denied('SELECT * FROM public.profiles');
   await denied('SELECT * FROM public.live_feed_secrets');
+  await denied('SELECT source_host FROM public.live_feeds');
+  await denied('SELECT * FROM public.admin_live_feeds()');
   for (const view of ['public_live_feeds','movies']) {
    await denied(`UPDATE public.${view} SET id=id`);
    await denied(`DELETE FROM public.${view}`);
@@ -45,11 +50,16 @@ for (let pass=1;pass<=2;pass++) {
   await db.exec(`UPDATE public.profiles SET full_name='Allowed' WHERE id='${a}'; INSERT INTO public.watch_progress(user_id,content_id,content_type) VALUES ('${a}','own','movie') ON CONFLICT(user_id,content_id,content_type) DO UPDATE SET progress_seconds=1;`);
   await role('authenticated',admin);
   assert.equal(await count('SELECT count(*) n FROM public.videos'),3);
+  assert.equal(await count('SELECT count(*) n FROM public.admin_live_feeds()'),1);
+  await denied('SELECT source_host FROM public.live_feeds');
   await db.exec(`INSERT INTO public.subscriptions(user_id,status,plan,current_period_end) VALUES ('${a}','active','paid',now()+interval '1 day');`);
   await role('authenticated',a);
   await denied("SELECT setval('public.shows_id_seq',1000)");
   assert.equal(await count('SELECT count(*) n FROM public.videos'),2);
   assert.equal(await count('SELECT count(*) n FROM public.public_live_feeds'),1);
+  await denied('SELECT source_host FROM public.live_feeds');
+  await denied('SELECT * FROM public.live_feeds');
+  await denied('SELECT * FROM public.admin_live_feeds()');
   await denied("UPDATE public.public_live_feeds SET cloudflare_hls_url='https://example.invalid/attacker'");
   await denied('DELETE FROM public.public_live_feeds');
   await denied('DELETE FROM public.movies');
@@ -60,6 +70,8 @@ for (let pass=1;pass<=2;pass++) {
   assert.equal(await count('SELECT count(*) n FROM public.videos'),1);
   await role('postgres');
   assert.equal(await count("SELECT count(*) n FROM pg_tables WHERE schemaname='public' AND NOT rowsecurity"),0);
+  assert.equal(await count("SELECT count(*) n FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.prosecdef AND (has_function_privilege('anon',p.oid,'EXECUTE') OR has_function_privilege('authenticated',p.oid,'EXECUTE'))"),0);
+  assert.equal(await count("SELECT count(*) n FROM pg_class WHERE oid='public.public_live_feeds'::regclass AND 'security_invoker=true'=ANY(reloptions)"),1);
   // Repeat application must refuse an existing database, not silently mutate it.
   const again=await file('../migrations/001_schema.sql');
   await assert.rejects(()=>db.exec('BEGIN;'+again), /Refusing bootstrap/);
