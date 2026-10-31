@@ -11,10 +11,21 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    // Public viewers poll this, so it stays unauthenticated — but it only ever
+    // writes the real Cloudflare state for the stream's own stored input UID.
+    // The caller's stream_uid is never trusted (it used to let anyone flip
+    // is_live on any stream by pairing it with another input's UID).
     const url = new URL(req.url);
-    const streamUid = url.searchParams.get("stream_uid");
-    const streamId  = url.searchParams.get("stream_id");
-    if (!streamUid || !streamId) throw new Error("stream_uid and stream_id are required");
+    const streamId = url.searchParams.get("stream_id");
+    if (!streamId || !/^\d+$/.test(streamId)) throw new Error("stream_id is required");
+
+    const { data: stream } = await supabase
+      .from("live_streams")
+      .select("stream_uid")
+      .eq("id", streamId)
+      .maybeSingle();
+    const streamUid = stream?.stream_uid;
+    if (!streamUid) throw new Error("Stream not found");
 
     const cfAccountId = Deno.env.get("CLOUDFLARE_ACCOUNT_ID")!;
     const cfToken     = Deno.env.get("CLOUDFLARE_API_TOKEN")!;

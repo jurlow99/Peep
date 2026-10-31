@@ -1,6 +1,31 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const CORS_ORIGIN = Deno.env.get("SITE_URL") || "https://watchpeep.tv";
 
+// Cloudflare signs each webhook: `Webhook-Signature: time=<unix>,sig1=<hex>`,
+// where sig1 = HMAC-SHA256(secret, "<time>.<raw body>"). The secret comes from
+// register-webhook. Fails closed when the secret isn't configured.
+const MAX_SIGNATURE_AGE_SECONDS = 300;
+
+async function verifySignature(header: string | null, body: string): Promise<boolean> {
+  const secret = Deno.env.get("CLOUDFLARE_STREAM_WEBHOOK_SECRET");
+  if (!secret || !header) return false;
+  const parts = Object.fromEntries(header.split(",").map(p => p.trim().split("=", 2)));
+  const time = Number(parts.time);
+  const sig = parts.sig1;
+  if (!Number.isFinite(time) || !sig) return false;
+  if (Math.abs(Date.now() / 1000 - time) > MAX_SIGNATURE_AGE_SECONDS) return false;
+
+  const key = await crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+  );
+  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${parts.time}.${body}`)));
+  const expected = Array.from(mac, b => b.toString(16).padStart(2, "0")).join("");
+  if (expected.length !== sig.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
+  return diff === 0;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -14,7 +39,14 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const body = await req.json();
+    const raw = await req.text();
+    if (!(await verifySignature(req.headers.get("Webhook-Signature"), raw))) {
+      return new Response(JSON.stringify({ error: "Invalid signature" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    const body = JSON.parse(raw);
     const event = body?.event ?? body?.action;
 
     if (event === "live_input.connected" || event === "stream.live_input.connected") {

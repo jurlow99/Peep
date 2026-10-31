@@ -1,8 +1,19 @@
+import { requireAdmin } from "../_shared/supabase.ts";
+
 const CORS_ORIGIN = Deno.env.get("SITE_URL") || "https://watchpeep.tv";
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
       headers: { "Access-Control-Allow-Origin": CORS_ORIGIN, "Access-Control-Allow-Headers": "authorization, content-type" },
+    });
+  }
+
+  try {
+    await requireAdmin(req);
+  } catch {
+    return new Response(JSON.stringify({ error: "Admin access required" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": CORS_ORIGIN },
     });
   }
 

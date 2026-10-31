@@ -354,16 +354,20 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
     return trackLiveVideo(videoRef.current, Number(String(video.id).slice(3)));
   }, [video.id, isLive, adPlaying]);
 
+  // live_viewers.channel_id is bigint: FAST channels arrive as "ch-12", creator
+  // streams as their numeric id. A non-numeric value would fail the write.
+  const viewerChannelId = isLive ? Number(String(video.id ?? "").replace(/^ch[-_]/, "")) || null : null;
+
   // Live viewer heartbeat — register this session while watching live
   useEffect(() => {
-    if (!isLive || !video.id) return;
+    if (!isLive || !viewerChannelId) return;
     let sid = sessionStorage.getItem("peep_live_session");
     if (!sid) {
       sid = (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now();
       sessionStorage.setItem("peep_live_session", sid);
     }
     const ping = () => supabase.from("live_viewers").upsert(
-      { session_id: sid, channel_id: video.id, user_id: user?.id ?? null, last_ping: new Date().toISOString() },
+      { session_id: sid, channel_id: viewerChannelId, user_id: user?.id ?? null, last_ping: new Date().toISOString() },
       { onConflict: "session_id" }
     ).then(() => {});
     ping();
@@ -372,23 +376,23 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
       clearInterval(t);
       supabase.from("live_viewers").delete().eq("session_id", sid).then(() => {});
     };
-  }, [video.id, isLive]);
+  }, [viewerChannelId, isLive]);
 
   // Live viewer count for current channel
   useEffect(() => {
-    if (!isLive) return;
+    if (!isLive || !viewerChannelId) return;
     async function fetchCount() {
       const cutoff = new Date(Date.now() - 90 * 1000).toISOString();
       const { count } = await supabase.from("live_viewers")
         .select("*", { count: "exact", head: true })
-        .eq("channel_id", video.id)
+        .eq("channel_id", viewerChannelId)
         .gte("last_ping", cutoff);
       if (count !== null) setCurrentViewers(count);
     }
     fetchCount();
     const t = setInterval(fetchCount, 30000);
     return () => { clearInterval(t); setCurrentViewers(0); };
-  }, [video.id, isLive]);
+  }, [viewerChannelId, isLive]);
 
   // Live chat — subscribe when 2+ viewers present
   // Fullscreen guide — show on mouse move, expand on scroll down, hide on inactivity

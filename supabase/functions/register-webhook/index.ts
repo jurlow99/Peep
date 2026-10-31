@@ -1,4 +1,17 @@
-Deno.serve(async () => {
+import { requireAdmin } from "../_shared/supabase.ts";
+
+// Admin-only: Cloudflare's response includes the webhook signing secret.
+// Save that secret as CLOUDFLARE_STREAM_WEBHOOK_SECRET so stream-webhook
+// can verify incoming events.
+Deno.serve(async (req) => {
+  try {
+    await requireAdmin(req);
+  } catch {
+    return new Response(JSON.stringify({ error: "Admin access required" }), {
+      status: 403, headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const cfAccountId = Deno.env.get("CLOUDFLARE_ACCOUNT_ID")!;
   const cfToken = Deno.env.get("CLOUDFLARE_API_TOKEN")!;
   // Append the anon key so Cloudflare's unauthenticated POST passes Supabase JWT verification
