@@ -53,17 +53,14 @@ struct SeriesDetailView: View {
     @State private var episodes: [Episode] = []
     @State private var progress: [String: WatchProgress] = [:]
     @State private var selectedSeason = 1
+    @State private var seasonTouched = false
     @State private var selectedEpisode: Episode?
     @State private var isLoading = true
     @State private var errorMessage: String?
 
     private var seasons: [Int] { Array(Set(episodes.map { $0.season ?? 1 })).sorted() }
     private var visibleEpisodes: [Episode] { episodes.filter { ($0.season ?? 1) == selectedSeason } }
-    private var firstPlayable: Episode? {
-        visibleEpisodes.first { $0.videoURL != nil && progress[String($0.id)]?.canResume == true }
-        ?? visibleEpisodes.first { $0.videoURL != nil && progress[String($0.id)]?.completed != true }
-        ?? visibleEpisodes.first { $0.videoURL != nil }
-    }
+    private var nextUp: Episode? { SeriesPlayback.nextUp(in: episodes, progress: progress) }
 
     var body: some View {
         ScrollView {
@@ -84,9 +81,9 @@ struct SeriesDetailView: View {
                                 .lineLimit(3).frame(maxWidth: 1040, alignment: .leading)
                         }
                         HStack(spacing: 20) {
-                            if let episode = firstPlayable {
+                            if let episode = nextUp {
                                 Button { selectedEpisode = episode } label: {
-                                    Label("\(progress[String(episode.id)]?.canResume == true ? "Resume" : "Play") episode \(episode.episode_number ?? 1)", systemImage: "play.fill")
+                                    Label("\(progress[String(episode.id)]?.canResume == true ? "Resume" : "Play") S\(episode.season ?? 1) E\(episode.episode_number ?? 1)", systemImage: "play.fill")
                                         .font(.system(size: 22, weight: .semibold)).padding(18)
                                 }.buttonStyle(BrowseCardStyle())
                             }
@@ -103,7 +100,7 @@ struct SeriesDetailView: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 12) {
                                 ForEach(seasons, id: \.self) { season in
-                                    FilterChip(label: "Season \(season)", isSelected: selectedSeason == season) { selectedSeason = season }
+                                    FilterChip(label: "Season \(season)", isSelected: selectedSeason == season) { seasonTouched = true; selectedSeason = season }
                                 }
                             }.padding(6)
                         }
@@ -143,13 +140,20 @@ struct SeriesDetailView: View {
         do {
             episodes = try await supabase.fetchEpisodes(showId: show.id)
             await loadProgress()
-            if !seasons.contains(selectedSeason) { selectedSeason = seasons.first ?? 1 }
+            followNextUp()
         } catch { errorMessage = error.localizedDescription }
+    }
+    /// Open on the season the viewer is up to, until they pick a season themselves.
+    private func followNextUp() {
+        guard !seasonTouched else { return }
+        if let season = nextUp?.season { selectedSeason = season }
+        else if !seasons.contains(selectedSeason) { selectedSeason = seasons.first ?? 1 }
     }
     private func loadProgress() async {
         if supabase.session == nil { progress = [:]; return }
         guard let rows = try? await supabase.fetchEpisodeProgress(ids: episodes.map(\.id)) else { return }
         progress = Dictionary(rows.map { ($0.content_id, $0) }, uniquingKeysWith: { _, latest in latest })
+        followNextUp()
     }
 
 }

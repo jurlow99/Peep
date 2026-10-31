@@ -1011,6 +1011,22 @@ final class CatalogTests: XCTestCase {
         try JSONDecoder().decode(type, from: Data(json.utf8))
     }
 
+    func testSeriesNextUpResumesFurthestThenFollowsLastFinishedAcrossSeasons() throws {
+        let e1 = try decode(Episode.self, #"{"id":1,"show_id":1,"season":1,"episode_number":1,"url":"https://m.example.com/1.m3u8"}"#)
+        let e2 = try decode(Episode.self, #"{"id":2,"show_id":1,"season":1,"episode_number":2,"url":"https://m.example.com/2.m3u8"}"#)
+        let e3 = try decode(Episode.self, #"{"id":3,"show_id":1,"season":2,"episode_number":1,"url":"https://m.example.com/3.m3u8"}"#)
+        let unreleased = try decode(Episode.self, #"{"id":4,"show_id":1,"season":2,"episode_number":2}"#)
+        let done = try decode(WatchProgress.self, #"{"content_id":"x","content_type":"episode","progress_seconds":95,"duration_seconds":100,"completed":true}"#)
+        let partial = try decode(WatchProgress.self, #"{"content_id":"x","content_type":"episode","progress_seconds":45,"duration_seconds":100,"completed":false}"#)
+        let all = [unreleased, e3, e2, e1]
+        XCTAssertEqual(SeriesPlayback.nextUp(in: all, progress: [:])?.id, 1)
+        XCTAssertEqual(SeriesPlayback.nextUp(in: all, progress: ["1": done])?.id, 2)
+        XCTAssertEqual(SeriesPlayback.nextUp(in: all, progress: ["1": done, "2": done])?.id, 3)             // crosses into season 2
+        XCTAssertEqual(SeriesPlayback.nextUp(in: all, progress: ["1": done, "3": partial])?.id, 3)          // an unfinished episode wins
+        XCTAssertEqual(SeriesPlayback.nextUp(in: all, progress: ["1": done, "2": done, "3": done])?.id, 1)  // a finished series starts again
+        XCTAssertNil(SeriesPlayback.nextUp(in: [unreleased], progress: [:]))
+    }
+
     func testUpNextProposalLeadsByThirtySecondsAndSkipsShortOrUnknownItems() {
         XCTAssertNil(UpNextTiming.transitionTime(duration: .nan))
         XCTAssertNil(UpNextTiming.transitionTime(duration: 45))

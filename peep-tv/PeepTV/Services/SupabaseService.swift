@@ -363,7 +363,7 @@ final class SupabaseService: ObservableObject {
 
     func fetchWatchProgress() async throws -> [WatchProgress] {
         guard let userID = session?.userId else { return [] }
-        let rows: [WatchProgress] = try await get("watch_progress", query: ["user_id": "eq.\(userID)", "order": "last_watched_at.desc", "limit": "100"])
+        let rows: [WatchProgress] = try await get("watch_progress", query: ["user_id": "eq.\(userID)", "completed": "eq.false", "order": "last_watched_at.desc", "limit": "100"])
         guard session?.userId == userID else { return [] }
         return rows
     }

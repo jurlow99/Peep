@@ -75,6 +75,7 @@ struct HomeView: View {
                         }
 
                         if carousels.isEmpty {
+                            continueShelf(title: "Continue Watching")
                             catalogShelf(title: "Trending Now", items: Array(fallbackItems.reversed()), layout: "top10")
                             ForEach(fallbackCategories, id: \.self) { category in
                                 catalogShelf(title: "\(category) Films", items: fallbackItems.filter { $0.category == category })

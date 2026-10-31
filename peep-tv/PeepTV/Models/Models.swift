@@ -448,16 +448,28 @@ struct SavedListItem: Decodable, Identifiable {
 
 /// Never advance backwards or repeat an episode with duplicate numbering.
 enum SeriesPlayback {
+    static func before(_ a: Episode, _ b: Episode) -> Bool {
+        if (a.season ?? 1) != (b.season ?? 1) { return (a.season ?? 1) < (b.season ?? 1) }
+        if (a.episode_number ?? 0) != (b.episode_number ?? 0) { return (a.episode_number ?? 0) < (b.episode_number ?? 0) }
+        return a.id < b.id
+    }
     static func next(after current: Episode, in episodes: [Episode]) -> Episode? {
         episodes.filter { candidate in
             candidate.videoURL != nil && candidate.id != current.id &&
             ((candidate.season ?? 1) > (current.season ?? 1) ||
              ((candidate.season ?? 1) == (current.season ?? 1) && (candidate.episode_number ?? 0) > (current.episode_number ?? 0)))
-        }.sorted {
-            if ($0.season ?? 1) != ($1.season ?? 1) { return ($0.season ?? 1) < ($1.season ?? 1) }
-            if ($0.episode_number ?? 0) != ($1.episode_number ?? 0) { return ($0.episode_number ?? 0) < ($1.episode_number ?? 0) }
-            return $0.id < $1.id
-        }.first
+        }.sorted(by: before).first
+    }
+    /// What the series Play button opens, across every season: the furthest unfinished
+    /// episode, else the one after the last finished episode, else the first playable
+    /// one (so a finished series starts again).
+    static func nextUp(in episodes: [Episode], progress: [String: WatchProgress]) -> Episode? {
+        let ordered = episodes.filter { $0.videoURL != nil }.sorted(by: before)
+        if let resumable = ordered.last(where: { progress[String($0.id)]?.canResume == true }) { return resumable }
+        if let finished = ordered.last(where: { progress[String($0.id)]?.completed == true }) {
+            return next(after: finished, in: ordered) ?? ordered.first
+        }
+        return ordered.first
     }
 }
 
