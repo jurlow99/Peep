@@ -46,6 +46,58 @@ final class CatalogTests: XCTestCase {
         XCTAssertNil(LiveTransportProbe.splice(Array(bytes.prefix(10))))
     }
 
+    func testPlaylistCueOutMarkersBecomeMidrollCues() throws {
+        let signal = "/DBHAAAAAAAAAADAFAUAAAI0f+/+C16cyf4ApOMOAAAAAAAiAiBDVUVJAAAAAX//AACk4w4ODDM4OTQ3XzIwMDMzMCIBAUfWsPg="
+        let joined = """
+        #EXTM3U
+        #EXT-X-TARGETDURATION:6
+        #EXT-X-PROGRAM-DATE-TIME:2026-10-31T22:16:54.030+00:00
+        #EXTINF:6.006000,
+        seg_0138250.ts
+        #EXTINF:6.006000,
+        seg_0138251.ts
+        #EXT-OATCLS-SCTE35:\(signal)
+        #EXT-X-CUE-OUT:120.067001
+        #EXTINF:6.006000,
+        seg_0138252.ts
+        #EXT-X-CUE-OUT-CONT:ElapsedTime=6.006000,Duration=120.067001,SCTE35=\(signal)
+        #EXTINF:6.006000,
+        seg_0138253.ts
+        """
+        let cue = try XCTUnwrap(LivePlaylistCues.parse(joined).first)
+        XCTAssertEqual(cue.id, "cue:" + signal)
+        XCTAssertEqual(cue.start.timeIntervalSince1970, 1793485026.042, accuracy: 0.01)
+        XCTAssertEqual(cue.end.timeIntervalSince(cue.start), 120.067, accuracy: 0.001)
+        XCTAssertEqual(LivePlaylistCues.parse(joined).count, 1, "CUE-OUT and its CONT lines describe one break")
+        XCTAssertNotNil(cue.remaining(at: cue.start.addingTimeInterval(2)))
+
+        // Joining mid-break: only CONT lines are in the window, start is recovered from ElapsedTime.
+        let late = """
+        #EXTM3U
+        #EXT-X-PROGRAM-DATE-TIME:2026-10-31T22:17:36.072+00:00
+        #EXT-X-CUE-OUT-CONT:ElapsedTime=30.030000,Duration=120.067001,SCTE35=\(signal)
+        #EXTINF:6.006000,
+        seg_0138257.ts
+        #EXT-X-CUE-OUT-CONT:ElapsedTime=36.036000,Duration=120.067001,SCTE35=\(signal)
+        #EXTINF:6.006000,
+        seg_0138258.ts
+        #EXT-X-CUE-IN
+        #EXTINF:6.006000,
+        seg_0138259.ts
+        """
+        let recovered = try XCTUnwrap(LivePlaylistCues.parse(late).first)
+        XCTAssertEqual(recovered.id, cue.id)
+        XCTAssertEqual(recovered.start.timeIntervalSince1970, cue.start.timeIntervalSince1970, accuracy: 0.01)
+        XCTAssertEqual(recovered.end.timeIntervalSince1970, 1793485068.084, accuracy: 0.01, "CUE-IN closes the break at the next segment's date")
+
+        // No programme date, or a duration-less CUE-OUT, gives nothing to time against.
+        XCTAssertTrue(LivePlaylistCues.parse("#EXTM3U\n#EXT-X-CUE-OUT:30\n#EXTINF:6,\na.ts\n").isEmpty)
+        XCTAssertTrue(LivePlaylistCues.parse("#EXTM3U\n#EXT-X-PROGRAM-DATE-TIME:2026-10-31T22:00:00Z\n#EXT-X-CUE-OUT\n#EXTINF:6,\na.ts\n").isEmpty)
+        let unsigned = LivePlaylistCues.parse("#EXTM3U\n#EXT-X-PROGRAM-DATE-TIME:2026-10-31T22:00:00Z\n#EXT-X-CUE-OUT:DURATION=45\n#EXTINF:6,\na.ts\n")
+        XCTAssertEqual(unsigned.first?.id, "cue:1793484000")
+        XCTAssertEqual(unsigned.first.map { $0.end.timeIntervalSince($0.start) }, 45)
+    }
+
     func testLiveMidrollRequiresKnownBoundedDurationAndOnTimePlayback() {
         let start = Date(timeIntervalSince1970: 1000)
         let cue = LiveMidrollCue(id: "break", start: start, end: start.addingTimeInterval(30))

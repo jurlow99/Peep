@@ -1289,6 +1289,65 @@ enum LiveTransportProbe {
     }
 }
 
+// Playlist-level break markers: #EXT-X-CUE-OUT, #EXT-X-CUE-OUT-CONT, #EXT-X-CUE-IN
+// (with the optional #EXT-OATCLS-SCTE35 line), the style Tubi-type FAST feeds
+// send. AVFoundation only surfaces EXT-X-DATERANGE, so these are read from the
+// rendition playlist. Timing comes from PROGRAM-DATE-TIME; no date, no cue.
+enum LivePlaylistCues {
+    static func attribute(_ name: String, in list: String) -> String? {
+        for pair in list.split(separator: ",") {
+            guard let equals = pair.firstIndex(of: "=") else { continue }
+            if pair[..<equals].trimmingCharacters(in: .whitespaces).caseInsensitiveCompare(name) == .orderedSame {
+                return pair[pair.index(after: equals)...].trimmingCharacters(in: CharacterSet(charactersIn: "\" "))
+            }
+        }
+        return nil
+    }
+    static func parse(_ text: String) -> [LiveMidrollCue] {
+        let iso = ISO8601DateFormatter(); iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let plain = ISO8601DateFormatter()
+        var date: Date?, duration = 0.0, signal: String?
+        var pendingOut: (signal: String?, duration: Double?)?
+        var pendingCont: (signal: String?, elapsed: Double, duration: Double?)?
+        var open: String?
+        var found: [String: LiveMidrollCue] = [:]
+        let stamp = { (start: Date) in "cue:" + String(Int(start.timeIntervalSince1970.rounded())) }
+        for raw in text.components(separatedBy: .newlines) {
+            let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if line.hasPrefix("#EXT-X-PROGRAM-DATE-TIME:") { let value = String(line.dropFirst(25)); date = iso.date(from: value) ?? plain.date(from: value) }
+            else if line == "#EXT-X-DISCONTINUITY" { date = nil }
+            else if line.hasPrefix("#EXTINF:") { duration = Double(line.dropFirst(8).split(separator: ",")[0]) ?? 0 }
+            else if line.hasPrefix("#EXT-OATCLS-SCTE35:") { signal = String(line.dropFirst(19)) }
+            else if line.hasPrefix("#EXT-X-CUE-OUT") && !line.hasPrefix("#EXT-X-CUE-OUT-CONT") {
+                let value = line.count > 15 ? String(line.dropFirst(15)) : ""
+                pendingOut = (signal, Double(attribute("DURATION", in: value) ?? value))
+            }
+            else if line.hasPrefix("#EXT-X-CUE-OUT-CONT") {
+                let attrs = line.count > 20 ? String(line.dropFirst(20)) : ""
+                pendingCont = (attribute("SCTE35", in: attrs) ?? signal, Double(attribute("ElapsedTime", in: attrs) ?? "") ?? 0, Double(attribute("Duration", in: attrs) ?? ""))
+            }
+            else if line.hasPrefix("#EXT-X-CUE-IN") {
+                if let open, let cue = found[open], let end = date, end > cue.start { found[open] = LiveMidrollCue(id: open, start: cue.start, end: end) }
+                open = nil; signal = nil
+            }
+            else if !line.isEmpty, !line.hasPrefix("#") {
+                defer { pendingOut = nil; pendingCont = nil; if let current = date { date = current.addingTimeInterval(duration) } }
+                guard let segmentDate = date else { continue }
+                if let out = pendingOut, let length = out.duration, length > 0 {
+                    let id = out.signal.map { "cue:" + $0 } ?? stamp(segmentDate)
+                    found[id] = LiveMidrollCue(id: id, start: segmentDate, end: segmentDate.addingTimeInterval(length)); open = id
+                } else if let cont = pendingCont, let length = cont.duration, length > 0 {
+                    let start = segmentDate.addingTimeInterval(-cont.elapsed)
+                    let id = cont.signal.map { "cue:" + $0 } ?? stamp(start)
+                    if found[id] == nil { found[id] = LiveMidrollCue(id: id, start: start, end: start.addingTimeInterval(length)) }
+                    open = id
+                }
+            }
+        }
+        return found.values.sorted { $0.start < $1.start }
+    }
+}
+
 actor LiveInbandReader {
     private var playlist: URL?
     private var segments: [URL] = []
@@ -1314,7 +1373,14 @@ actor LiveInbandReader {
         }
         guard let playlist else { return [:] }
         let text = String(decoding: try await fetch(playlist,limit: 1024*1024),as: UTF8.self)
-        guard text.hasPrefix("#EXTM3U"), !text.contains("#EXT-X-KEY:"), !text.contains("#EXT-X-MAP:"), !text.contains("#EXT-X-BYTERANGE:") else { return [:] }
+        guard text.hasPrefix("#EXTM3U") else { return [:] }
+        // Playlist markers first: they need no segment download. A cue without a
+        // signal id is matched to an earlier sighting by start time so it keeps one id.
+        for cue in LivePlaylistCues.parse(text) {
+            let id = cues.first { $0.key.hasPrefix("cue:") && abs($0.value.start.timeIntervalSince(cue.start)) < 3 }?.key ?? cue.id
+            cues[id] = LiveMidrollCue(id: id, start: cue.start, end: min(cue.end, ends[id] ?? .distantFuture))
+        }
+        guard !text.contains("#EXT-X-KEY:"), !text.contains("#EXT-X-MAP:"), !text.contains("#EXT-X-BYTERANGE:") else { return prune() }
         var date: Date?, duration: Double = 0, discontinuity = false
         let iso = ISO8601DateFormatter(); iso.formatOptions = [.withInternetDateTime,.withFractionalSeconds]
         let plain = ISO8601DateFormatter()
@@ -1344,6 +1410,9 @@ actor LiveInbandReader {
                 }
             }
         }
+        return prune()
+    }
+    private func prune() -> [String:LiveMidrollCue] {
         cues = cues.filter { $0.value.end > Date().addingTimeInterval(-300) }
         ends = ends.filter { $0.value > Date().addingTimeInterval(-300) }
         return cues
