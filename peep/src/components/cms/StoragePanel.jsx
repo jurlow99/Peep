@@ -1,3 +1,5 @@
+import VODUploadFlow from "./VODUploadFlow";
+import VODSourceLibrary from "./VODSourceLibrary";
 import { useState, useEffect } from "react";
 import { supabase } from "../../supabase";
 import { Spinner } from "../ui/Spinner";
@@ -6,7 +8,7 @@ import { PAD } from "./constants";
 // Storage tab: lists video/audio files in the public "content" bucket and turns
 // them into content rows. Owns everything it touches except the content pools,
 // which the shell already loads for other tabs, and toast/audit.
-export default function StoragePanel({ showToast, logAudit, videosList, showsList, podcastsList }) {
+export default function StoragePanel({ showToast, logAudit, videosList, showsList, podcastsList, onVODSaved }) {
   const [storageFiles, setStorageFiles] = useState([]);
   const [storageLoading, setStorageLoading] = useState(true);
   const [bulkPublishing, setBulkPublishing] = useState(false);
@@ -75,7 +77,7 @@ export default function StoragePanel({ showToast, logAudit, videosList, showsLis
       const urlCol = "trailer_url";
       ({ error } = await supabase.from(table).update({ [urlCol]: url }).eq("id", f.linked_id));
     } else if (f.type === "episode") {
-      ({ error } = await supabase.from("episodes").insert({ title: f.title, url, show_id: f.show_id, episode_number: f.episode_number, season_number: f.season_number, description: f.description }));
+      ({ error } = await supabase.from("episodes").insert({ title: f.title, url, show_id: f.show_id, episode_number: f.episode_number, season: f.season_number, description: f.description }));
     } else if (f.type === "podcast_episode") {
       ({ error } = await supabase.from("podcast_episodes").insert({ title: f.title, audio_url: url, podcast_id: f.podcast_id, description: f.description }));
     }
@@ -107,11 +109,15 @@ export default function StoragePanel({ showToast, logAudit, videosList, showsLis
   }
 
   return (
+    <div className="vod-workspace">
+      <VODUploadFlow shows={showsList} showToast={showToast} onSaved={onVODSaved} />
+      <details className="vod-tools"><summary><span>Media library</span><small>Original files & manual linking</small></summary><VODSourceLibrary movies={videosList} shows={showsList} showToast={showToast} logAudit={logAudit} /></details>
+      <details className="vod-tools"><summary><span>Legacy importer</span><small>Older uploads & URL imports</small></summary>
       <div style={{ maxWidth: 1600, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28, flexWrap: "wrap", gap: 12 }}>
           <div>
-            <p style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 700, color: "#0f172a" }}>Uploaded Files</p>
-            <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Files in your Supabase bucket. Click "Publish" to make them watchable on Peep.</p>
+            <p style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 700, color: "#0f172a" }}>Legacy media importer</p>
+            <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Existing files in the legacy content bucket. The private VOD library above is used for new uploads.</p>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={publishAllPending} disabled={bulkPublishing} style={{ padding: "10px 18px", background: "#059669", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: bulkPublishing ? "wait" : "pointer", opacity: bulkPublishing ? 0.7 : 1 }}>{bulkPublishing ? "Publishing…" : "↑ Publish all new"}</button>
@@ -303,5 +309,7 @@ export default function StoragePanel({ showToast, logAudit, videosList, showsLis
           </>
         )}
       </div>
+      </details>
+    </div>
   );
 }

@@ -1,3 +1,4 @@
+import { matchesCatalogGenre } from "../../lib/catalogGenres";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { PAD, CARD_W } from "../../lib/theme";
 import { useIsMobile } from "../../hooks/useIsMobile";
@@ -23,12 +24,12 @@ export function CatalogPage({ type, content, carousels = [], podcasts = [], onPl
   }, [content, genreFilter, sortBy]);
 
   // Build carousel sections for this tab — same logic as homepage
-  const catalogSections = useMemo(() => carousels.map(c => {
-    const filterVal = c.filter_value?.toLowerCase();
+  const catalogSections = useMemo(() => carousels.filter(c => c.type !== "multiview").map(c => {
+    const filterVal = c.filter_value?.trim().toLowerCase();
     const baseItems = c.type === "trending"
       ? [...content].reverse()
       : c.type === "category"
-      ? content.filter(v => v.category?.toLowerCase() === filterVal)
+      ? content.filter(v => matchesCatalogGenre(v, filterVal))
       : content;
     const items = c.content_type === "shorts" ? baseItems.filter(v => v._type === "movie")
       : c.content_type === "shows" ? baseItems.filter(v => v._type === "show")

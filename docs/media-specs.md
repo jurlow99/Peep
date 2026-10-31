@@ -8,11 +8,33 @@ Specs for every image and video asset on Peep.
 
 ## Poster
 
-Used as the card artwork in all browse rows and grids. The platform displays the poster as a pure image — **no text is overlaid by the app**. Your title treatment, logo, and any text must be baked directly into the poster.
+Request **one portrait key-art poster per movie or series**. Posters are required
+when adding movies or creating a series. Episodes use a separate landscape still.
 
-- **Dimensions:** 600 × 900px minimum · 1200 × 1800px preferred (2:3 ratio)
-- **Format:** JPG or WebP
-- **Tips:** Design it like a film or VHS poster — self-contained, with the title/logo built in. The card shows the full image with no cropping on desktop. Treat it as a standalone piece of art.
+- **Preferred:** 1200 × 1800 pixels, portrait **2:3**.
+- **Minimum:** 600 × 900 pixels. Supply the highest-quality original available;
+  do not stretch or upscale a small thumbnail to meet the dimensions.
+- **File:** JPG or WebP, sRGB. Aim for **under 500 KB** after export while keeping
+  text and faces sharp; this is a delivery target, not an enforced upload limit.
+- **Composition:** artwork edge to edge, with **no added black bars, white margins,
+  borders, or transparent padding**. Empty space baked into the file will remain
+  visible in the app.
+- **Title treatment:** a title/logo can be part of the artwork, but is **optional**.
+  Peep displays the catalog title separately underneath; it does not overlay text
+  on the poster. Keep essential text clear of the rounded corners.
+- **Apple TV display:** the full image sets the frame’s aspect ratio. No cropping,
+  stretching, or gray backing around loaded artwork. The yellow focus outline hugs
+  the image. Standard cards are 320 points wide, spotlight cards 360; these are UI
+  sizes, not export dimensions. Nonstandard source ratios retain their shape, but
+  request 2:3 for consistent rows. Series-detail posters use the same framing.
+
+**Copy to send a provider:**
+
+> Please supply a portrait key-art poster for each movie or series: 1200 × 1800 px
+> preferred (2:3), 600 × 900 px minimum, JPG or WebP in sRGB. Artwork should fill the
+> file edge to edge, without borders, letterboxing or transparent padding. A title
+> treatment is welcome but optional. Please provide artwork approved for display
+> and promotion on Peep.
 
 ---
 
@@ -69,7 +91,7 @@ Send this alongside your assets:
 
 | Asset | Dimensions | Format | Notes |
 |---|---|---|---|
-| Poster | 1200 × 1800px preferred | JPG/WebP | Title baked in — no app text overlay |
+| Poster | 1200 × 1800px preferred; 600 × 900px minimum (2:3) | JPG/WebP, sRGB | Edge-to-edge artwork; no padding; title shown separately |
 | Hero / Thumbnail | 2560 × 1440px preferred | JPG/WebP | Title baked in, subject right-of-frame, bottom-left clear for buttons |
 | Video | 1080p+ | MP4 (H.264/AAC) | |
 | Trailer | any | MP4 or YouTube | 60–180s ideal |

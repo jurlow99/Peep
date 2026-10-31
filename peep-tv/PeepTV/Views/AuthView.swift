@@ -16,9 +16,7 @@ struct AuthView: View {
                 // Left panel — branding
                 VStack(alignment: .leading, spacing: 24) {
                     Spacer()
-                    Text("peep")
-                        .font(.system(size: 96, weight: .heavy, design: .rounded))
-                        .foregroundColor(Color(hex: "#facc15"))
+                    PeepBrandMark(width: 260)
 
                     Text("Find your next\nfavorite.")
                         .font(.system(size: 36, weight: .light))
@@ -78,19 +76,19 @@ struct AuthView: View {
                     } label: {
                         Group {
                             if isLoading {
-                                ProgressView().progressViewStyle(.circular).tint(.black)
+                                ProgressView().progressViewStyle(.circular).tint(.white)
                             } else {
                                 Text("Sign In")
                                     .font(.system(size: 26, weight: .bold))
-                                    .foregroundColor(.black)
+                                    .foregroundColor(.white)
                             }
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 20)
-                        .background(Color(hex: "#facc15"))
+                        .background(Color(white: 0.22))
                         .cornerRadius(12)
                     }
-                    .buttonStyle(.card)
+                    .buttonStyle(BrowseCardStyle())
                     .disabled(isLoading || email.isEmpty || password.isEmpty)
                     .opacity(email.isEmpty || password.isEmpty ? 0.5 : 1)
                     Button("Back to browsing") { dismiss() }

@@ -1,3 +1,5 @@
+import DeleteAccountPage from "./pages/DeleteAccountPage";
+import ProviderPortal from './pages/ProviderPortal.jsx'
 /* eslint-disable react-refresh/only-export-components -- entry module:
    it exports nothing, so it is never a fast-refresh boundary. */
 import { Component, lazy, Suspense } from 'react'
@@ -64,8 +66,9 @@ createRoot(document.getElementById('root')).render(
     <ErrorBoundary>
       <DevSplash />
       <EnvBadge />
-      {isAdminHost              ? <Suspense fallback={adminFallback}><AdminPage /></Suspense> :
+      {path.replace(/\/+$/, '') === '/deliveries' ? <ProviderPortal /> : isAdminHost              ? <Suspense fallback={adminFallback}><AdminPage /></Suspense> :
        path === '/signup'         ? <SignupPage />        :
+       path === '/account/delete' ? <DeleteAccountPage /> :
        path === '/signin'         ? <SigninPage />        :
        path === '/set-password'   ? <SetPasswordPage />   :
        path === '/support'        ? <SupportPage />       :

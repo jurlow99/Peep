@@ -1,0 +1,26 @@
+{
+  "title": "Privacy information",
+  "status": "Information screen; full policy review outstanding",
+  "sections": [
+    {
+      "title": "Your account",
+      "text": "Peep uses account details such as your email, display name and avatar to provide account features. Watch history and My List are shared by viewers on the same account."
+    },
+    {
+      "title": "Viewing activity",
+      "text": "Peep stores viewing progress to resume videos. Live TV activity includes viewing sessions, channel identifiers, viewing time and an app-generated device identifier for reporting."
+    },
+    {
+      "title": "Advertising and playback",
+      "text": "Peep uses third-party hosting and advertising services to deliver video and ads. Requests to those services include network information. Peep records ad requests, starts, completions and errors; advertising providers also perform their own tracking."
+    },
+    {
+      "title": "On this Apple TV",
+      "text": "Playback preferences, your last viewer selection and the ad-frequency timestamp are saved on this device. Signing out does not delete your Peep account."
+    },
+    {
+      "title": "Privacy questions",
+      "text": "For privacy questions or an account-data deletion request, contact privacy@watchpeep.tv. This is a contact option, not an in-app account-deletion flow."
+    }
+  ]
+}

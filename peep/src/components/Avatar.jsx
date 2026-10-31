@@ -16,6 +16,22 @@ export const PRESET_AVATARS = [
   { id: "a10", gradient: "linear-gradient(135deg, #f43f5e, #f97316)", emoji: "🏆" },
   { id: "a11", gradient: "linear-gradient(135deg, #64748b, #334155)", emoji: "👾" },
   { id: "a12", gradient: "linear-gradient(135deg, #facc15, #f97316)", emoji: "⭐" },
+  {"id": "a13", "name": "Fox", "gradient": "linear-gradient(135deg, #f97316, #b45309)", "emoji": "🦊"},
+  {"id": "a14", "name": "Panda", "gradient": "linear-gradient(135deg, #64748b, #1e293b)", "emoji": "🐼"},
+  {"id": "a15", "name": "Cat", "gradient": "linear-gradient(135deg, #fb7185, #be185d)", "emoji": "🐱"},
+  {"id": "a16", "name": "Dog", "gradient": "linear-gradient(135deg, #d97706, #78350f)", "emoji": "🐶"},
+  {"id": "a17", "name": "Frog", "gradient": "linear-gradient(135deg, #84cc16, #15803d)", "emoji": "🐸"},
+  {"id": "a18", "name": "Octopus", "gradient": "linear-gradient(135deg, #c084fc, #7e22ce)", "emoji": "🐙"},
+  {"id": "a19", "name": "Shark", "gradient": "linear-gradient(135deg, #38bdf8, #0369a1)", "emoji": "🦈"},
+  {"id": "a20", "name": "Owl", "gradient": "linear-gradient(135deg, #a78bfa, #4338ca)", "emoji": "🦉"},
+  {"id": "a21", "name": "Astronaut", "gradient": "linear-gradient(135deg, #6366f1, #172554)", "emoji": "🧑‍🚀"},
+  {"id": "a22", "name": "Rocket", "gradient": "linear-gradient(135deg, #f43f5e, #7c3aed)", "emoji": "🚀"},
+  {"id": "a23", "name": "Planet", "gradient": "linear-gradient(135deg, #a855f7, #312e81)", "emoji": "🪐"},
+  {"id": "a24", "name": "Robot", "gradient": "linear-gradient(135deg, #22d3ee, #475569)", "emoji": "🤖"},
+  {"id": "a25", "name": "Popcorn", "gradient": "linear-gradient(135deg, #ef4444, #9f1239)", "emoji": "🍿"},
+  {"id": "a26", "name": "Film", "gradient": "linear-gradient(135deg, #475569, #0f172a)", "emoji": "🎬"},
+  {"id": "a27", "name": "Basketball", "gradient": "linear-gradient(135deg, #fb923c, #c2410c)", "emoji": "🏀"},
+  {"id": "a28", "name": "Headphones", "gradient": "linear-gradient(135deg, #2dd4bf, #0f766e)", "emoji": "🎧"},
 ];
 
 export function avatarForId(id) {

@@ -1,3 +1,9 @@
+import {searchCatalog} from "../../lib/catalogSearch";
+import { matchesCatalogGenre } from "../../lib/catalogGenres";
+import HeroBackgroundVideo from "./HeroBackgroundVideo";
+import { continueWatchingItems } from "../../lib/continueWatching";
+import { liveRowChannels, automaticLiveRows } from "../../lib/liveRows";
+import MultiviewShelf from "./MultiviewShelf";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "../../supabase";
 import { PAD, CARD_W, SAFE_TOP } from "../../lib/theme";
@@ -104,13 +110,12 @@ function LiveRow({ title, channels = [], streams = [], nowByChannel = {}, onChan
 }
 
 // Admin-composed promo hero for the home screen (image/video + text + CTA to anything).
-function CustomHero({ hero, isMobile, onCta }) {
+function CustomHero({ hero, isMobile, onCta, userID }) {
   return (
     <div style={{ position: "relative", width: "100%", height: isMobile ? "72vh" : "82vh", minHeight: 420, overflow: "hidden", background: "#0a0a0a" }}>
       {hero.image_url && <img src={hero.image_url} alt="" onError={e => { e.target.style.display = "none"; }}
         style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 20%" }} />}
-      {hero.video_url && <video src={hero.video_url} autoPlay muted loop playsInline
-        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />}
+      {hero.video_url && <HeroBackgroundVideo url={hero.video_url} userID={userID} />}
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, #0a0a0a 0%, rgba(10,10,10,0.25) 45%, transparent 78%)" }} />
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, rgba(10,10,10,0.85) 0%, rgba(10,10,10,0.3) 42%, transparent 72%)" }} />
       <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: isMobile ? "0 20px 40px" : "0 64px 76px", maxWidth: 760 }}>
@@ -134,6 +139,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
   const [shows, setShows] = useState([]);
   const [carousels, setCarousels] = useState([]);
   const [podcasts, setPodcasts] = useState([]);
+  const [continueEpisodes, setContinueEpisodes] = useState([]);
   const [watchRows, setWatchRows] = useState([]); // recent watch_progress, for Continue Watching / Recommended rows
   const [liveStreams, setLiveStreams] = useState([]);
   const [epgEntries, setEpgEntries] = useState([]);
@@ -186,12 +192,24 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
 
   // Recent watch history — powers Continue Watching / Recommended carousel types
   useEffect(() => {
-    if (!user?.id) { setWatchRows([]); return; }
-    supabase.from("watch_progress")
-      .select("content_id, content_type, progress_seconds, completed, last_watched_at")
-      .eq("user_id", user.id).order("last_watched_at", { ascending: false }).limit(50)
-      .then(({ data }) => setWatchRows(data || []));
-  }, [user?.id]);
+    let cancelled = false;
+    setWatchRows([]);
+    setContinueEpisodes([]);
+    if (!user?.id) return;
+    (async () => {
+      const { data, error } = await supabase.from("watch_progress")
+        .select("content_id, content_type, progress_seconds, duration_seconds, completed, last_watched_at")
+        .eq("user_id", user.id).order("last_watched_at", { ascending: false }).limit(50);
+      if (cancelled || error) return;
+      const rows = data || [];
+      const ids = [...new Set(rows.filter(r => r.content_type === "episode" && !r.completed).map(r => r.content_id))];
+      const result = ids.length ? await supabase.from("episodes").select("*").in("id", ids) : { data: [] };
+      if (cancelled) return;
+      setContinueEpisodes(filterByTier(result.data || [], userTier));
+      setWatchRows(rows);
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id, userTier]);
 
   async function fetchAll() {
     const epgWindowStart = new Date(Date.now() - 60 * 60 * 1000);
@@ -276,7 +294,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
     return rank > 0 ? rank : null;
   }, [featured, featuredIsShow, videos, shows]);
 
-  const visibleCarousels = useMemo(() => carousels.filter(c => {
+  const visibleCarousels = useMemo(() => (activeNav === "Streams" ? [...carousels, ...automaticLiveRows(channels || [], carousels)] : carousels).filter(c => {
     if (!c.enabled) return false;
     const pages = (c.pages || "home").split(",").map(p => p.trim());
     if (activeNav === "Home") return pages.includes("home");
@@ -285,22 +303,11 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
     if (activeNav === "Podcasts") return pages.includes("podcasts");
     if (activeNav === "Streams") return pages.includes("live");
     return false;
-  }), [carousels, activeNav]);
+  }), [carousels, activeNav, channels]);
 
-  // Continue Watching — in-progress movies from watch history (newest first)
-  const continueItems = useMemo(() => {
-    if (!watchRows.length) return [];
-    const movieById = {};
-    allContent.forEach(v => { if (v._type === "movie") movieById[String(v.id)] = v; });
-    const seen = new Set();
-    const out = [];
-    for (const r of watchRows) {
-      if (r.completed || r.content_type !== "movie") continue; // movies map by uuid; episodes need show lookup
-      const v = movieById[String(r.content_id)];
-      if (v && !seen.has(v.id)) { seen.add(v.id); out.push(v); }
-    }
-    return out;
-  }, [watchRows, allContent]);
+  // Personalized content appears only in an enabled, admin-configured row.
+  const continueItems = useMemo(() => continueWatchingItems(watchRows, allContent, continueEpisodes),
+    [watchRows, allContent, continueEpisodes]);
 
   // Recommended — titles sharing a category with the last watched (or a saved) title
   const recommendedItems = useMemo(() => {
@@ -330,16 +337,11 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
     ? []
     : visibleCarousels.length > 0
     ? visibleCarousels.map(c => {
-        const filterVal = c.filter_value?.toLowerCase();
+        if (c.type === "multiview") return { id: String(c.id), title: c.title, isMultiview: true, row: c };
+        const filterVal = c.filter_value?.trim().toLowerCase();
         // Live TV channels row (admin-controlled): all live channels, by category, or handpicked.
         if (c.type === "live_channels") {
-          let chans = liveChannels;
-          if (filterVal && filterVal !== "all") {
-            try {
-              const picks = JSON.parse(c.filter_value);
-              if (Array.isArray(picks)) chans = picks.flatMap(p => { const f = liveChannels.find(ch => String(ch.id) === String(p.id)); return f ? [f] : []; });
-            } catch { chans = liveChannels.filter(ch => (ch.category || "general").toLowerCase() === filterVal); }
-          }
+          const chans = liveRowChannels(c.filter_value, liveChannels);
           return { id: String(c.id), title: c.title, isLiveRow: true, liveChannels: chans, liveStreams: [] };
         }
         // Creator streams row (admin-controlled): all live creators, or handpicked.
@@ -363,15 +365,15 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
           : c.type === "continue"
           ? continueItems
           : c.type === "category"
-          ? filteredContent.filter(v => v.category?.toLowerCase() === filterVal)
+          ? filteredContent.filter(v => matchesCatalogGenre(v, filterVal))
           : c.type === "handpicked"
           ? (() => { try { const picks = JSON.parse(c.filter_value || "[]"); return picks.flatMap(p => { const found = filteredContent.find(v => v.id === p.id && v._type === p.type); return found ? [found] : []; }); } catch { return filteredContent; } })()
           : filteredContent;
         const items = c.content_type === "shorts" ? baseItems.filter(v => v._type === "movie")
-          : c.content_type === "shows" ? baseItems.filter(v => v._type === "show")
+          : c.content_type === "shows" ? baseItems.filter(v => v._type === "show" || v._type === "episode")
           : baseItems;
         return { id: String(c.id), title: c.title, videos: items, layout: c.layout || (c.type === "trending" ? "top10" : "standard"), numbered: c.type === "trending" };
-      }).filter(s => s.isPodcast ? s.podcastItems.length > 0 : s.isLiveRow ? (s.liveChannels.length + s.liveStreams.length) > 0 : s.videos.length > 0)
+      }).filter(s => s.isMultiview ? true : s.isPodcast ? s.podcastItems.length > 0 : s.isLiveRow ? (s.liveChannels.length + s.liveStreams.length) > 0 : s.videos.length > 0)
     : activeNav === "Podcasts"
     ? [{ id: "all-podcasts", title: "All Podcasts", isPodcast: true, videos: [], podcastItems: podcasts }]
     : activeNav === "Streams"
@@ -395,25 +397,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
     ];
   }, [videos, shows, podcasts, liveStreams]);
 
-  const searchResults = useMemo(() => {
-    if (!debouncedQuery || !debouncedQuery.trim()) return [];
-    const q = debouncedQuery.toLowerCase().trim();
-    return searchPool.filter(v => {
-      if (searchTypeFilter !== "all") {
-        if (searchTypeFilter !== "all" && v._type !== searchTypeFilter) return false;
-      }
-      const titleWords = v.title?.toLowerCase().split(/\s+/) || [];
-      const titleMatch = titleWords.some(w => w.startsWith(q));
-      if (q.length < 2) return titleMatch;
-      return (
-        titleMatch ||
-        v.title?.toLowerCase().includes(q) ||
-        v.category?.toLowerCase().includes(q) ||
-        v.description?.toLowerCase().includes(q) ||
-        v._tagsStr.toLowerCase().includes(q)
-      );
-    });
-  }, [debouncedQuery, searchPool, searchTypeFilter]);
+  const searchResults = useMemo(() => searchCatalog(searchPool,debouncedQuery,searchTypeFilter), [debouncedQuery,searchPool,searchTypeFilter]);
 
   function closeSearch() {
     setSearchQuery("");
@@ -706,7 +690,7 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
         loading ? (
           <div style={{ height: "85vh", display: "flex", alignItems: "center", justifyContent: "center" }}><Spinner /></div>
         ) : homeHero?.enabled ? (
-          <CustomHero hero={homeHero} isMobile={isMobile} onCta={() => {
+          <CustomHero hero={homeHero} isMobile={isMobile} userID={user?.id} onCta={() => {
             const { cta_type, cta_value } = homeHero;
             if (cta_type === "url" && cta_value) { window.open(cta_value, "_blank", "noopener"); return; }
             if (cta_type === "tab" && cta_value) { if (cta_value === "Streams" && !user) { onAuthOpen?.(); return; } onExitStudio?.(); setActiveNav(cta_value); window.scrollTo({ top: 0 }); return; }
@@ -808,6 +792,9 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
                 ))}
               </div>
             )}
+            {sections.filter(s => s.isMultiview || s.isLiveRow).map(section => section.isMultiview
+              ? <MultiviewShelf key={section.id} row={section.row} userTier={userTier} />
+              : <LiveRow key={section.id} title={section.title} channels={section.liveChannels} streams={section.liveStreams} nowByChannel={nowByChannel} onChannelPlay={onChannelPlay} isMobile={isMobile} />)}
             <LiveTVPage streams={liveStreams} channels={channels} epgEntries={epgEntries} onChannelPlay={onChannelPlay} user={user} streamsLoading={loading} />
           </>
         )
@@ -824,13 +811,15 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
           rendered inline with the other content rows below — no longer hardcoded here. */}
 
       {/* Content rows (Home / Movies / Series / My List) */}
-      {!studioContent && activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "My List" && activeNav !== "Podcasts" && activeNav !== "Streams" && !loading && allContent.length > 0 && (
+      {!studioContent && activeNav !== "Movies" && activeNav !== "Series" && activeNav !== "My List" && activeNav !== "Podcasts" && activeNav !== "Streams" && !loading && (allContent.length > 0 || sections.some(s => s.isMultiview)) && (
         <div style={{ position: "relative", zIndex: 1, marginTop: 0, paddingBottom: 80 }}>
-          {filteredContent.length === 0 ? (
+          {filteredContent.length === 0 && !sections.some(s => s.isMultiview) ? (
             <div style={{ padding: "100px 0", textAlign: "center", color: "#444", fontSize: 15 }}>
               No {activeNav.toLowerCase()} yet.
             </div>
-          ) : sections.map(section => section.isLiveRow ? (
+          ) : sections.map(section => section.isMultiview ? (
+            <MultiviewShelf key={section.id} row={section.row} userTier={userTier} />
+          ) : section.isLiveRow ? (
             <LiveRow key={section.id} title={section.title} channels={section.liveChannels} streams={section.liveStreams} nowByChannel={nowByChannel} onChannelPlay={onChannelPlay} isMobile={isMobile} />
           ) : section.videos?.length > 0 ? (
             <ContentRow key={section.id} section={section} onPlay={onPlay} onShowSelect={onShowSelect} myList={myList} onToggleList={onToggleList} isPremiumUser={isPremiumUser} />

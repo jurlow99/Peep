@@ -1,3 +1,23 @@
+import ChannelEditorLayout from "./cms/ChannelEditorLayout";
+import StreamInspector from "./cms/StreamInspector";
+import tvPrivacyInformation from "../../../peep-tv/PeepTV/PrivacyInformation.json";
+import { channelCheckURL } from "../lib/channelCheck";
+import ChannelGuideSetup from "./cms/ChannelGuideSetup";
+import PublicationStatus, {useSeriesInventory} from "./cms/PublicationStatus";
+import './cms/AdminForms.css';
+import ProviderDeliveries from './cms/ProviderDeliveries';
+import SeriesWorkspace from "./cms/SeriesWorkspace";
+import TitleMetadataImporter from "./cms/TitleMetadataImporter";
+import EpisodeAutoThumbnail from "./cms/EpisodeAutoThumbnail";
+import HomeHeroEditor from "./cms/HomeHeroEditor";
+import AdminNavigation from "./cms/AdminNavigation";
+import ChannelBlackoutEditor from "./cms/ChannelBlackoutEditor";
+import { blackoutFields, channelBlackout } from "../lib/channelBlackout";
+import LiveChannelRowPicker from "./cms/LiveChannelRowPicker";
+import { TEST_VAST_URL, appleTVPlacementError } from "../lib/ads";
+import LiveTVViewingDashboard from "./cms/LiveTVViewingDashboard";
+import { useMultiviewPackages } from "../hooks/useMultiviewPackages";
+import MultiviewPackagesPanel, { MultiviewRowPicker } from "./cms/MultiviewPackagesPanel";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "../supabase";
 import { Wordmark } from "./Wordmark";
@@ -36,6 +56,8 @@ const EMPTY_AD = {
   scope: "global",
   content_id: "",
   active: true,
+  is_test: true,
+  platforms: ["web"],
 };
 
 // SUPABASE_URL comes from lib/config — see the import at the top of this file.
@@ -84,47 +106,6 @@ function TierSelect({ value, onChange }) {
   );
 }
 
-// Top-level admin categories. Each maps to existing internal render state (tab + sub-tab),
-// so the underlying feature blocks stay untouched — only the navigation is reorganized.
-const ADMIN_NAV = [
-  { key: "feeds", label: "Feeds", color: "#ef4444", target: { tab: "live", liveSubTab: "feeds" } },
-  { key: "channels", label: "Channels", color: "#ef4444", target: { tab: "live", liveSubTab: "channels" } },
-  { key: "epg", label: "EPG", color: "#f59e0b", target: { tab: "live", liveSubTab: "channels" } },
-  { key: "shows", label: "Shows", color: "#3b82f6", sections: [
-    { key: "series", label: "Series", target: { tab: "content", videoSubTab: "series" } },
-    { key: "episodes", label: "Episodes", target: { tab: "content", videoSubTab: "episodes" } },
-  ] },
-  { key: "vod", label: "VOD", color: "#4f46e5", sections: [
-    { key: "movies", label: "Movies", target: { tab: "content", videoSubTab: "shorts" } },
-    { key: "podcasts", label: "Podcasts", target: { tab: "content", videoSubTab: "podcasts" } },
-    { key: "carousels", label: "Carousels", target: { tab: "content", videoSubTab: "carousels" } },
-  ] },
-  { key: "regions", label: "Regions & Packages", color: "#14b8a6", scaffold: { icon: "🌍", blurb: "Define subscription packages and tiers, and control regional (geo) availability of content." } },
-  { key: "commercial", label: "Commercial", color: "#a855f7", target: { tab: "analytics", analyticsTab: "ads" } },
-  { key: "events", label: "Predictions", color: "#eab308", target: { tab: "events" } },
-  { key: "resources", label: "Resources", color: "#0ea5e9", scaffold: { icon: "📄", blurb: "Manage static pages and help content — FAQ, legal, about, and support articles." } },
-  { key: "devices", label: "Devices", color: "#64748b", scaffold: { icon: "📱", blurb: "Manage supported device platforms and app builds — web, mobile, Roku, Fire TV, and more." } },
-  { key: "streaming", label: "Streaming", color: "#ec4899", sections: [
-    { key: "streams", label: "Live Streams", target: { tab: "live", liveSubTab: "streams" } },
-    { key: "applications", label: "Applications", target: { tab: "live", liveSubTab: "applications" } },
-    { key: "partners", label: "Partners", target: { tab: "creators", creatorsTab: "list" } },
-  ] },
-  { key: "reports", label: "Reports", color: "#34d399", sections: [
-    { key: "content", label: "Content Reports", target: { tab: "moderation" } },
-    { key: "analytics", label: "Analytics", target: { tab: "analytics", analyticsTab: "reports" } },
-  ] },
-  { key: "system", label: "System", color: "#eab308", sections: [
-    { key: "members", label: "Members", target: { tab: "members", membersTab: "users" } },
-    { key: "subs", label: "Subscriptions", target: { tab: "members", membersTab: "subscriptions" } },
-    { key: "support", label: "Support", target: { tab: "members", membersTab: "support" } },
-    { key: "storage", label: "Storage", target: { tab: "storage" } },
-    { key: "flags", label: "Feature Flags", target: { tab: "flags" } },
-    { key: "audit", label: "Audit Log", target: { tab: "audit" } },
-    { key: "settings", label: "Settings", target: { tab: "settings" } },
-    { key: "security", label: "Security", target: { tab: "security" } },
-  ] },
-];
-
 // Uploads a file to the public "content" storage bucket and returns its URL.
 function UploadButton({ onUploaded, accept = "image/*", label = "Upload" }) {
   const ref = useRef(null);
@@ -156,8 +137,6 @@ function UploadButton({ onUploaded, accept = "image/*", label = "Upload" }) {
 export function CMS({ onExit, currentUser }) {
   const [tab, setTab] = useState("content");
   const [videoSubTab, setVideoSubTab] = useState("shorts"); // "shorts" | "series" | "episodes" | "carousels" | "podcasts" | "music"
-  const [section, setSection] = useState("vod"); // top-level admin category (see ADMIN_NAV)
-  const [openMenu, setOpenMenu] = useState(null); // which category dropdown is open
   const [analyticsTab, setAnalyticsTab] = useState("reports"); // "reports" | "ads"
   const [membersTab, setMembersTab] = useState("users"); // "users" | "subscriptions" | "support"
   const [creatorsTab, setCreatorsTab] = useState("list"); // "list" | "review" | "payouts"
@@ -180,9 +159,12 @@ export function CMS({ onExit, currentUser }) {
   
   // Carousels state
   const [carousels, setCarousels] = useState([]);
+  const multiviewAdmin = useMultiviewPackages();
   const [carouselLoading, setCarouselLoading] = useState(true);
   const [carouselPageTab, setCarouselPageTab] = useState("home"); // which screen's rows the carousel admin is showing
-  const [homeHeroForm, setHomeHeroForm] = useState({ enabled: false, image_url: "", video_url: "", title: "", subtitle: "", badge: "", cta_type: "none", cta_label: "", cta_value: "" });
+  const [heroDraft] = useState(() => { try { return JSON.parse(sessionStorage.getItem("peep-admin-hero-draft") || "null"); } catch { return null; } });
+  const [homeHeroForm, setHomeHeroForm] = useState(heroDraft || { enabled: false, image_url: "", video_url: "", title: "", subtitle: "", badge: "", cta_type: "none", cta_label: "", cta_value: "" });
+  useEffect(() => { try { sessionStorage.setItem("peep-admin-hero-draft", JSON.stringify(homeHeroForm)); } catch {} }, [homeHeroForm]);
   const [homeHeroSaving, setHomeHeroSaving] = useState(false);
   const [homeHeroOpen, setHomeHeroOpen] = useState(false);
   const carouselsOnPage = (page) => carousels.filter(c => (c.pages || "home").split(",").map(p => p.trim()).includes(page));
@@ -199,6 +181,9 @@ export function CMS({ onExit, currentUser }) {
   
   // Shows state
   const [showsList, setShowsList] = useState([]);
+  const seriesInventory = useSeriesInventory(showsList);
+  const [workspaceShowID, setWorkspaceShowID] = useState(null);
+  const workspaceShow = showsList.find(show => show.id === workspaceShowID);
   const [showsLoading, setShowsLoading] = useState(true);
   const [videosList, setVideosList] = useState([]);
   const [editingShowId, setEditingShowId] = useState(null);
@@ -255,6 +240,7 @@ export function CMS({ onExit, currentUser }) {
   const [editingLiveId, setEditingLiveId] = useState(null);
   const [liveForm, setLiveForm] = useState(EMPTY_LIVE_STREAM);
   const [channelList, setChannelList] = useState([]);
+  const [fastChannelDetails, setFastChannelDetails] = useState({});
   const [channelFeeds, setChannelFeeds] = useState([]); // live_feeds for the "Linked Feed" dropdown
   const [channelLoading, setChannelLoading] = useState(false);
   const [editingChannelId, setEditingChannelId] = useState(null);
@@ -326,7 +312,6 @@ export function CMS({ onExit, currentUser }) {
   const [epgDetailEntry, setEpgDetailEntry] = useState(null);
   const [epgSources, setEpgSources] = useState({});
 
-  const [heroConfirm, setHeroConfirm] = useState(null); // { current, next, type: "video"|"show" }
 
   // Creators state
   const [creatorsList, setCreatorsList] = useState([]);
@@ -367,6 +352,9 @@ export function CMS({ onExit, currentUser }) {
   const [adSaving, setAdSaving] = useState(false);
   const [deleteAdConfirm, setDeleteAdConfirm] = useState(null);
   const [adTableMissing, setAdTableMissing] = useState(false);
+  const adIncludeTestsRef = useRef(false);
+  const adReportGenerationRef = useRef(0);
+  const [adIncludeTests, setAdIncludeTests] = useState(false);
   const [adAnalytics, setAdAnalytics] = useState(null);
 
   // Reports state
@@ -422,6 +410,7 @@ export function CMS({ onExit, currentUser }) {
     loadRows();
     subscribeToChanges();
     loadCarousels();
+    loadChannels();
     subscribeToCarouselChanges();
     loadShows();
     loadPodcasts();
@@ -491,7 +480,7 @@ export function CMS({ onExit, currentUser }) {
     if (tab === "creators") { loadCreators(); loadContentCreators(); }
     if (tab === "storage") {
       supabase.from("videos").select("id, title").order("title").then(({ data }) => setVideosList(data || []));
-      supabase.from("shows").select("id, title").order("title").then(({ data }) => setShowsList(prev => prev.length ? prev : (data || [])));
+      supabase.from("shows").select("id, title, poster, is_premium, visibility_tier").order("title").then(({ data }) => setShowsList(prev => prev.length ? prev : (data || [])));
       supabase.from("podcasts").select("id, title").order("title").then(({ data }) => setPodcastsList(prev => prev.length ? prev : (data || [])));
     }
   }, [tab]);
@@ -690,24 +679,32 @@ export function CMS({ onExit, currentUser }) {
   }
 
   async function saveSetting(key, value) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) {
+      showToast("Your admin session ended. Sign in again; your hero draft is kept in this tab.", "error");
+      return false;
+    }
     const { error } = await supabase.from("app_settings").upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: "key" });
     if (error) {
       console.error("saveSetting error:", error);
       showToast(`Failed to save setting: ${error.message}`, "error");
-      return;
+      return false;
     }
     setBossSettings(prev => ({ ...prev, [key]: value }));
+    return true;
   }
 
   // ── Home Hero (custom promo banner) ──
   useEffect(() => {
     supabase.from("app_settings").select("value").eq("key", "home_hero").maybeSingle()
-      .then(({ data }) => { if (data?.value) { try { setHomeHeroForm(f => ({ ...f, ...JSON.parse(data.value) })); } catch {} } });
+      .then(({ data }) => { if (!heroDraft && data?.value) { try { setHomeHeroForm(f => ({ ...f, ...JSON.parse(data.value) })); } catch {} } });
   }, []);
 
   async function saveHomeHero() {
     setHomeHeroSaving(true);
-    await saveSetting("home_hero", JSON.stringify(homeHeroForm));
+    const saved = await saveSetting("home_hero", JSON.stringify(homeHeroForm));
+    if (!saved) { setHomeHeroSaving(false); return; }
+    try { sessionStorage.removeItem("peep-admin-hero-draft"); } catch {}
     logAudit("update", "home_hero", "home");
     showToast(homeHeroForm.enabled ? "Home hero saved — live on the home screen" : "Home hero saved (currently off)");
     setHomeHeroSaving(false);
@@ -1446,6 +1443,7 @@ export function CMS({ onExit, currentUser }) {
   function parseForm() {
     return {
       ...form,
+      category: form.category?.trim() || "",
       score: form.score !== "" ? Number(form.score) : null,
       year: form.year !== "" ? Number(form.year) : null,
       trailer_url: form.trailer_url.trim() || null,
@@ -1469,6 +1467,7 @@ export function CMS({ onExit, currentUser }) {
       showToast("Title and URL are required.", "error");
       return;
     }
+    if (!form.poster?.trim()) { showToast("Poster is required.", "error"); return; }
     setSaving(true);
     const payload = parseForm();
 
@@ -1495,15 +1494,6 @@ export function CMS({ onExit, currentUser }) {
       showToast("Save failed: " + error.message, "error");
     }
     setSaving(false);
-  }
-
-  async function setHeroVideo(row) {
-    const current = rows.find(r => r.featured) || showsList.find(s => s.featured);
-    if (current && current.id !== row.id) {
-      setHeroConfirm({ current, next: row, type: "video" });
-      return;
-    }
-    await applyHero(row, "video");
   }
 
   async function deleteRow(id) {
@@ -1616,6 +1606,18 @@ export function CMS({ onExit, currentUser }) {
     if (carouselForm.type === "handpicked" && handpickedSelected.length === 0) {
       showToast("Pick at least one title.", "error");
       return;
+    }
+    if (carouselForm.type === "continue" && (carouselForm.pages || "home").split(",").some(p => p.trim() !== "home")) {
+      showToast("Continue Watching is currently supported on Home in browser and Apple TV. Choose Home for this row.", "error"); return;
+    }
+    if (carouselForm.type === "multiview" && (carouselForm.pages || "home").split(",").some(p => !["home", "live"].includes(p.trim()))) {
+      showToast("Multiview rows are supported on Home and Live TV. Choose those screens.", "error"); return;
+    }
+    if (carouselForm.type === "live_channels" && (carouselForm.filter_value || "").trim().startsWith("[")) {
+      try {
+        const picks = JSON.parse(carouselForm.filter_value);
+        if (!Array.isArray(picks) || picks.length === 0) { showToast("Choose at least one channel for this row.", "error"); return; }
+      } catch { showToast("Choose channels again before saving this row.", "error"); return; }
     }
     // Block duplicate rows: same name already on one of the chosen screens
     if (!editingCarouselId) {
@@ -1747,15 +1749,16 @@ export function CMS({ onExit, currentUser }) {
   function startShowEdit(show) {
     setEditingShowId(show.id);
     setDrawerOpen(true);
-    setShowForm({ title: show.title ?? "", category: show.category ?? "Horror", rating: show.rating ?? "NR", year: show.year ?? "", score: show.score ?? "", thumbnail: show.thumbnail ?? "", poster: show.poster ?? "", description: show.description ?? "", tags: Array.isArray(show.tags) ? show.tags.join(", ") : (show.tags ?? ""), trailer_url: show.trailer_url ?? "", is_premium: show.is_premium ?? false, visibility_tier: show.visibility_tier ?? "production" });
+    setShowForm({ autoplay_next: show.autoplay_next !== false, title: show.title ?? "", category: show.category ?? "Horror", rating: show.rating ?? "NR", year: show.year ?? "", score: show.score ?? "", thumbnail: show.thumbnail ?? "", poster: show.poster ?? "", description: show.description ?? "", tags: Array.isArray(show.tags) ? show.tags.join(", ") : (show.tags ?? ""), trailer_url: show.trailer_url ?? "", is_premium: show.is_premium ?? false, visibility_tier: show.visibility_tier ?? "production" });
   }
 
   function cancelShowEdit() { setEditingShowId(null); setShowForm(EMPTY_SHOW); setDrawerOpen(false); }
 
   async function saveShow() {
     if (!showForm.title.trim()) { showToast("Title is required.", "error"); return; }
+    if (!showForm.poster?.trim()) { showToast("Poster is required.", "error"); return; }
     setShowSaving(true);
-    const payload = { ...showForm, year: showForm.year !== "" ? Number(showForm.year) : null, score: showForm.score !== "" ? Number(showForm.score) : null, trailer_url: showForm.trailer_url?.trim() || null, tags: showForm.tags ? showForm.tags.split(",").map(t => t.trim()).filter(Boolean) : [] };
+    const payload = { ...showForm, category: showForm.category?.trim() || "", year: showForm.year !== "" ? Number(showForm.year) : null, score: showForm.score !== "" ? Number(showForm.score) : null, trailer_url: showForm.trailer_url?.trim() || null, tags: showForm.tags ? showForm.tags.split(",").map(t => t.trim()).filter(Boolean) : [] };
     try {
       if (editingShowId) {
         const { error } = await supabase.from("shows").update(payload).eq("id", editingShowId);
@@ -1772,25 +1775,6 @@ export function CMS({ onExit, currentUser }) {
       await loadShows();
     } catch (error) { showToast("Save failed: " + error.message, "error"); }
     setShowSaving(false);
-  }
-
-  async function setHeroShow(show) {
-    const current = rows.find(r => r.featured) || showsList.find(s => s.featured);
-    if (current && current.id !== show.id) {
-      setHeroConfirm({ current, next: show, type: "show" });
-      return;
-    }
-    await applyHero(show, "show");
-  }
-
-  async function applyHero(item, type) {
-    await supabase.from("videos").update({ featured: false }).eq("featured", true);
-    await supabase.from("shows").update({ featured: false }).eq("featured", true);
-    await supabase.from(type === "show" ? "shows" : "videos").update({ featured: true }).eq("id", item.id);
-    showToast("Hero updated — now showing: " + item.title);
-    setHeroConfirm(null);
-    await loadRows();
-    await loadShows();
   }
 
   async function deleteShow(id) {
@@ -1927,7 +1911,7 @@ export function CMS({ onExit, currentUser }) {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      if (!res.ok || data.error) throw new Error(data.error || data.message || `RSS import returned ${res.status}`);
       if (!data.episodes?.length) throw new Error("No episodes found in that feed. Double-check the URL points to an RSS/XML feed.");
       setRssPreview(data);
     } catch (e) {
@@ -1953,7 +1937,7 @@ export function CMS({ onExit, currentUser }) {
           artwork_url: meta.artwork_url || "",
           link_url: meta.link_url || "",
           episode_count: rssPreview.total ?? null,
-          tags: [],
+          tags: "",
           enabled: true,
         }]).select().single();
         if (error) throw error;
@@ -2079,7 +2063,7 @@ export function CMS({ onExit, currentUser }) {
 
   function startAdEdit(ad) {
     setEditingAdId(ad.id);
-    setAdForm({ name: ad.name ?? "", tag_url: ad.tag_url ?? "", ad_type: ad.ad_type ?? "pre_roll", scope: ad.scope ?? "global", content_id: ad.content_id ?? "", active: ad.active ?? true });
+    setAdForm({ name: ad.name ?? "", tag_url: ad.tag_url ?? "", ad_type: ad.ad_type ?? "pre_roll", scope: ad.scope ?? "global", content_id: ad.content_id ?? "", active: ad.active ?? true, is_test: ad.is_test ?? true, platforms: ad.platforms ?? ["web"] });
     setDrawerOpen(true);
   }
 
@@ -2088,8 +2072,13 @@ export function CMS({ onExit, currentUser }) {
   async function saveAd() {
     if (!adForm.name.trim()) { showToast("Name is required.", "error"); return; }
     if (!adForm.tag_url.trim()) { showToast("VAST tag URL is required.", "error"); return; }
+    try { if (new URL(adForm.tag_url).protocol !== "https:") throw new Error(); } catch { showToast("Use a valid HTTPS VAST tag URL.", "error"); return; }
+    if (!["global", "movie", "episode", "live", "multiview"].includes(adForm.scope)) { showToast("This rollout supports movies, episodes, Live TV and multiview entry placements.", "error"); return; }
+    const placementError = appleTVPlacementError(adForm, IS_DEV_DB);
+    if (placementError) { showToast(placementError, "error"); return; }
+    if (!(adForm.platforms || ["web"]).length) { showToast("Choose at least one player platform.", "error"); return; }
     setAdSaving(true);
-    const payload = { name: adForm.name.trim(), tag_url: adForm.tag_url.trim(), ad_type: adForm.ad_type, scope: adForm.scope, content_id: adForm.scope !== "global" && adForm.content_id !== "" ? Number(adForm.content_id) : null, active: adForm.active };
+    const payload = { name: adForm.name.trim(), tag_url: adForm.tag_url.trim(), ad_type: adForm.ad_type, scope: adForm.scope, content_id: !["global", "multiview"].includes(adForm.scope) && adForm.content_id !== "" ? String(adForm.content_id).trim() : null, active: adForm.active, is_test: adForm.is_test ?? true, platforms: adForm.platforms ?? ["web"] };
     try {
       if (editingAdId) {
         const { error } = await supabase.from("vast_tags").update(payload).eq("id", editingAdId);
@@ -2117,11 +2106,20 @@ export function CMS({ onExit, currentUser }) {
     else { showToast("Ad tag deleted"); setDeleteAdConfirm(null); await loadAds(); }
   }
 
-  async function loadAdAnalytics() {
+  async function loadAdAnalytics(includeTests = adIncludeTestsRef.current) {
+    const generation = ++adReportGenerationRef.current;
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const { data } = await supabase.from("ad_impressions")
-      .select("vast_tag_id, event, created_at, user_id")
-      .gte("created_at", since);
+    let request = supabase.from("ad_impressions")
+      .select("vast_tag_id,event,created_at,user_id,session_id,is_test")
+      .gte("created_at", since).order("created_at", { ascending: false });
+    if (!includeTests) request = request.eq("is_test", false);
+    const data = [];
+    for (let page = 0; ; page++) {
+      const result = await request.range(page * 1000, page * 1000 + 999);
+      if (result.error) { showToast("Ad reporting could not load: " + result.error.message, "error"); return; }
+      data.push(...(result.data || []));
+      if ((result.data || []).length < 1000) break;
+    }
     if (!data) return;
 
     const impressions = data.filter(r => r.event === "impression").length;
@@ -2130,7 +2128,9 @@ export function CMS({ onExit, currentUser }) {
     const errors      = data.filter(r => r.event === "error").length;
 
     const completionRate = impressions > 0 ? Math.round(completes / impressions * 100) : null;
-    const fillRate = (impressions + errors) > 0 ? Math.round(impressions / (impressions + errors) * 100) : null;
+    const requested = new Set(data.filter(r => r.event === "request").map(r => r.session_id));
+    const started = new Set(data.filter(r => r.event === "impression" && requested.has(r.session_id)).map(r => r.session_id));
+    const fillRate = requested.size ? Math.round(started.size / requested.size * 100) : null;
     const uniqueViewers = new Set(data.filter(r => r.event === "impression" && r.user_id).map(r => r.user_id)).size;
 
     // Last 14 days bucketed
@@ -2157,6 +2157,7 @@ export function CMS({ onExit, currentUser }) {
       if (r.event === "error")      tagStats[tid].errors++;
     });
 
+    if (generation !== adReportGenerationRef.current) return;
     setAdAnalytics({ impressions, completionRate, fillRate, skips, uniqueViewers, dailyData, tagStats });
     setAdLastFetched(new Date());
   }
@@ -2283,9 +2284,11 @@ export function CMS({ onExit, currentUser }) {
 
   async function saveChannel() {
     if (!channelForm.name.trim()) { showToast("Name is required.", "error"); return; }
+    let blackout;
+    try { blackout = blackoutFields(channelForm); } catch (e) { showToast(e.message, "error"); return; }
     setChannelSaving(true);
     const slug = channelForm.slug.trim() || channelForm.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
-    const payload = { ...channelForm, name: channelForm.name.trim(), slug };
+    const payload = { ...channelForm, ...blackout, name: channelForm.name.trim(), slug };
     try {
       if (editingChannelId) {
         const { error } = await supabase.from("channels").update(payload).eq("id", editingChannelId);
@@ -2311,9 +2314,7 @@ export function CMS({ onExit, currentUser }) {
 
   // Ping each channel's playback URL to find dead streams (M3U imports go stale often).
   function fastChannelUrl(ch) {
-    if (ch.hls_url) return ch.hls_url;
-    if (ch.stream_uid) return `https://customer-x9w8t8qxjaf49jqb.cloudflarestream.com/${ch.stream_uid}/manifest/video.m3u8`;
-    return "";
+    return channelCheckURL(ch, channelFeeds);
   }
   // Health-check channels server-side via the check-channels edge function.
   // Server-side is the only reliable way — no CORS, real User-Agent, true HTTP status.
@@ -2321,12 +2322,22 @@ export function CMS({ onExit, currentUser }) {
     const list = channelList.filter(c => fastChannelUrl(c));
     if (!list.length) { showToast("No channels with a playback URL to test", "error"); return; }
     setTestingFastChannels(true);
+    setFastChannelDetails({});
     setFastChannelStatuses(Object.fromEntries(list.map(c => [c.id, "testing"])));
     setFastTestProgress({ done: 0, total: list.length });
     // Direct fetch to the edge function (matches our other function calls; avoids
     // supabase-js invoke quirks). Chunked so big lists stay under the time limit and
     // results/progress stream in. Counting is done outside setState to stay correct.
-    const token = await getAdminToken();
+    let token;
+    try {
+      token = await getAdminToken();
+      if (!token) throw new Error("Sign in as an admin to check channels.");
+    } catch (error) {
+      setTestingFastChannels(false);
+      setFastChannelStatuses(Object.fromEntries(list.map(c => [c.id, "unknown"])));
+      showToast(error?.message || "Could not validate your admin session.", "error");
+      return;
+    }
     const CHUNK = 40;
     let ok = 0, dead = 0, failedChunks = 0, done = 0, lastErr = "";
     for (let i = 0; i < list.length; i += CHUNK) {
@@ -2338,11 +2349,13 @@ export function CMS({ onExit, currentUser }) {
           body: JSON.stringify({ channels: chunk.map(c => ({ id: String(c.id), url: fastChannelUrl(c) })) }),
           signal: AbortSignal.timeout(90000),
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
-        const results = json.results || {};
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+        if (!json.results || typeof json.results !== "object") throw new Error("Checker returned no results.");
+        const results = json.results;
+        setFastChannelDetails(prev => ({ ...prev, ...(json.details || {}) }));
         const upd = {};
-        chunk.forEach(c => { const st = results[String(c.id)] === "ok" ? "ok" : "error"; upd[c.id] = st; if (st === "ok") ok++; else dead++; });
+        chunk.forEach(c => { const result = results[String(c.id)]; const st = result === "ok" ? "ok" : result === "dead" ? "error" : "unknown"; upd[c.id] = st; if (st === "ok") ok++; else if (st === "error") dead++; });
         setFastChannelStatuses(prev => ({ ...prev, ...upd }));
       } catch (e) {
         failedChunks++;
@@ -2358,7 +2371,7 @@ export function CMS({ onExit, currentUser }) {
     if (ok === 0 && dead === 0) {
       showToast(`Channel checker failed: ${lastErr || "unreachable"}`, "error");
     } else {
-      showToast(`Test complete · ${ok} online, ${dead} dead${failedChunks ? " · some untested" : ""}`);
+      showToast(`Test complete · ${ok} reachable, ${dead} unavailable${failedChunks ? " · some untested" : ""}`);
     }
   }
 
@@ -2388,21 +2401,6 @@ export function CMS({ onExit, currentUser }) {
     if (t.membersTab) setMembersTab(t.membersTab);
     if (t.creatorsTab) setCreatorsTab(t.creatorsTab);
   }
-  function selectCategory(cat) {
-    setSection(cat.key);
-    if (cat.scaffold) { setTab("scaffold"); return; }
-    applyTarget(cat.target || cat.sections?.[0]?.target);
-  }
-  function isTargetActive(t) {
-    if (!t || t.tab !== tab) return false;
-    if (t.videoSubTab && t.videoSubTab !== videoSubTab) return false;
-    if (t.liveSubTab && t.liveSubTab !== liveSubTab) return false;
-    if (t.analyticsTab && t.analyticsTab !== analyticsTab) return false;
-    if (t.membersTab && t.membersTab !== membersTab) return false;
-    if (t.creatorsTab && t.creatorsTab !== creatorsTab) return false;
-    return true;
-  }
-
   // ──── EPG ────
 
   function parseDurationSecs(dur) {
@@ -2585,7 +2583,7 @@ export function CMS({ onExit, currentUser }) {
     const [vRes, eRes, sRes] = await Promise.all([
       supabase.from("videos").select("id, title, duration, thumbnail").order("title"),
       supabase.from("episodes").select("id, title, duration, thumbnail, url, show_id, season, episode_number").order("season").order("episode_number"),
-      supabase.from("shows").select("id, title").order("title"),
+      supabase.from("shows").select("id, title, poster, is_premium, visibility_tier").order("title"),
     ]);
     const showNameMap = {};
     (sRes.data || []).forEach(s => { showNameMap[s.id] = s.title; });
@@ -2628,7 +2626,7 @@ export function CMS({ onExit, currentUser }) {
         : Promise.resolve({ data: null }),
       supabase.from("videos").select("id, title, duration, thumbnail").order("title"),
       supabase.from("episodes").select("id, title, duration, thumbnail, url, show_id, season, episode_number").order("season").order("episode_number"),
-      supabase.from("shows").select("id, title").order("title"),
+      supabase.from("shows").select("id, title, poster, is_premium, visibility_tier").order("title"),
     ]);
 
     let defaultStart = lastEntry.data?.end_time?.slice(0, 16) || "";
@@ -3044,7 +3042,7 @@ export function CMS({ onExit, currentUser }) {
 
 
   return (
-    <div style={{ background: "#f8fafc", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#0f172a" }}>
+    <div className="admin-workspace" style={{ background: "#f8fafc", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#0f172a" }}>
 
       {/* Toast */}
       {toast && (
@@ -3065,26 +3063,6 @@ export function CMS({ onExit, currentUser }) {
           }}
         >
           {toast.msg}
-        </div>
-      )}
-
-      {/* Hero Confirm Modal */}
-      {heroConfirm && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "36px 40px", width: 440, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
-            <div style={{ fontSize: 28, marginBottom: 12 }}>★</div>
-            <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "#0f172a" }}>Change Hero Banner?</p>
-            <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>
-              Currently showing: <span style={{ color: "#4f46e5", fontWeight: 600 }}>"{heroConfirm.current.title}"</span>
-            </p>
-            <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 28 }}>
-              Replace with: <span style={{ color: "#0f172a", fontWeight: 600 }}>"{heroConfirm.next.title}"</span>
-            </p>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setHeroConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
-              <button onClick={() => applyHero(heroConfirm.next, heroConfirm.type)} style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 7, padding: "11px", color: "#ffffff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Yes, Switch</button>
-            </div>
-          </div>
         </div>
       )}
 
@@ -3148,72 +3126,37 @@ export function CMS({ onExit, currentUser }) {
             </svg>
             Log Out
           </button>
-          <button
-            onClick={onExit}
-            style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "7px 16px", color: "#374151", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-            Exit CMS
-          </button>
         </div>
       </div>
 
-      {/* Top category nav (dropdowns) */}
-      <div style={{ position: "relative", zIndex: 20, borderBottom: "1px solid #e2e8f0", padding: `0 ${PAD}`, display: "flex", gap: 2, background: "#ffffff", flexWrap: "wrap" }}>
-        {ADMIN_NAV.map(cat => {
-          const on = section === cat.key;
-          const badge = cat.key === "reports" ? pendingReportCount : 0;
-          const hasMenu = !!cat.sections;
-          const menuOpen = openMenu === cat.key;
-          return (
-            <div key={cat.key} style={{ position: "relative" }}>
-              <button
-                onClick={() => { if (hasMenu) setOpenMenu(menuOpen ? null : cat.key); else { selectCategory(cat); setOpenMenu(null); } }}
-                style={{ background: menuOpen ? "#f8fafc" : "transparent", border: "none", borderBottom: on ? `2px solid ${cat.color}` : "2px solid transparent", color: on ? cat.color : "#6b7280", padding: "16px 12px", fontSize: 14, fontWeight: on ? 600 : 400, cursor: "pointer", transition: "color 0.2s", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}>
-                {cat.label}{badge > 0 ? ` (${badge})` : ""}
-                {hasMenu && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" style={{ opacity: 0.55, transform: menuOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}><polyline points="6 9 12 15 18 9" /></svg>}
-              </button>
-              {hasMenu && menuOpen && (
-                <div style={{ position: "absolute", top: "100%", left: 0, marginTop: -1, minWidth: 200, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, boxShadow: "0 12px 32px rgba(0,0,0,0.12)", padding: 6, zIndex: 40 }}>
-                  {cat.sections.map(sec => {
-                    const secOn = isTargetActive(sec.target);
-                    return (
-                      <button key={sec.key}
-                        onClick={() => { setSection(cat.key); applyTarget(sec.target); setOpenMenu(null); }}
-                        style={{ display: "block", width: "100%", textAlign: "left", background: secOn ? `${cat.color}14` : "transparent", border: "none", borderRadius: 7, padding: "9px 12px", color: secOn ? cat.color : "#374151", fontSize: 13, fontWeight: secOn ? 600 : 400, cursor: "pointer", whiteSpace: "nowrap" }}
-                        onMouseEnter={e => { if (!secOn) e.currentTarget.style.background = "#f1f5f9"; }}
-                        onMouseLeave={e => { if (!secOn) e.currentTarget.style.background = "transparent"; }}>
-                        {sec.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-      {openMenu && <div onClick={() => setOpenMenu(null)} style={{ position: "fixed", inset: 0, zIndex: 15 }} />}
+      <AdminNavigation
+        state={{ tab, videoSubTab, liveSubTab, analyticsTab, membersTab, creatorsTab }}
+        onNavigate={applyTarget} pendingReports={pendingReportCount} padding={PAD}
+      />
 
-      <div style={{ maxWidth: 1600, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
+      <div style={{ maxWidth: 1600, margin: "0 auto", padding: tab === "storage" ? 0 : `40px ${PAD} 80px` }}>
 
-        {/* ────── SCAFFOLD (new categories without features yet) ────── */}
-        {tab === "scaffold" && (() => {
-          const cat = ADMIN_NAV.find(c => c.key === section);
-          if (!cat?.scaffold) return null;
-          return (
-            <div style={{ padding: "80px 24px", textAlign: "center", border: "1px dashed #e2e8f0", borderRadius: 16, background: "#fafafa" }}>
-              <div style={{ fontSize: 48, marginBottom: 20 }}>{cat.scaffold.icon}</div>
-              <h2 style={{ margin: "0 0 10px", fontSize: 22, fontWeight: 700, color: "#0f172a" }}>{cat.label}</h2>
-              <p style={{ margin: "0 auto", maxWidth: 440, fontSize: 14, color: "#6b7280", lineHeight: 1.7 }}>{cat.scaffold.blurb}</p>
-              <div style={{ display: "inline-block", marginTop: 22, background: `${cat.color}14`, border: `1px solid ${cat.color}`, borderRadius: 20, padding: "5px 16px", fontSize: 12, fontWeight: 700, color: cat.color, letterSpacing: 0.5 }}>COMING SOON</div>
-            </div>
-          );
-        })()}
+        {tab === "scaffold" && (
+          <div style={{ maxWidth: 800 }}>
+            <h2 style={{ margin: "0 0 8px", fontSize: 22 }}>Planned tools</h2>
+            <p style={{ color: "#64748b", fontSize: 13 }}>These areas are not implemented yet.</p>
+            <section style={{background:"white",border:"1px solid #e2e8f0",borderRadius:12,padding:24,marginTop:20}} aria-label="Apple TV privacy information">
+              <h3>Apple TV privacy information</h3><p><a href="/account/delete">Open the viewer account-deletion page</a> · Requires sign-in and confirmation; opening this link does not delete an account.</p><p style={{color:"#64748b",fontSize:13}}>Available in Apple TV App settings. This text is bundled with the app; changes require a rebuild. Full privacy-policy approval and advertising disclosures remain outstanding.</p>
+              <details><summary>Review text shown on Apple TV</summary>{tvPrivacyInformation.sections.map(section=><div key={section.title}><h4>{section.title}</h4><p>{section.text}</p></div>)}</details>
+            </section>
+            {[
+              ["Regions & packages", "Regional availability and content packages."],
+              ["Resources", "Static pages, legal documents and help content."],
+              ["Devices", "Supported platforms and app-build management."],
+            ].map(([title, description]) => (
+              <div key={title} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: 20, marginTop: 12 }}>
+                <strong>{title}</strong><span style={{ marginLeft: 12, fontSize: 11, color: "#64748b" }}>Planned</span>
+                <p style={{ margin: "6px 0 0", fontSize: 13, color: "#64748b" }}>{description}</p>
+              </div>
+            ))}
+          </div>
+        )}
 
-        {/* ────── FEATURE FLAGS ────── */}
         {tab === "flags" && <FlagsPanel showToast={showToast} logAudit={logAudit} />}
 
         {/* ────── AUDIT LOG ────── */}
@@ -3226,8 +3169,8 @@ export function CMS({ onExit, currentUser }) {
             <div>
               {/* Header row with Add button */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Shorts ({rows.length})</h2>
-                <span style={{ fontSize: 12, color: "#9ca3af" }}>Add content via Storage →</span>
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Movies ({rows.length})</h2>
+                <span style={{ fontSize: 12, color: "#9ca3af" }}>Upload and manage files in Content → VOD library</span>
               </div>
 
           {/* Controls */}
@@ -3299,7 +3242,7 @@ export function CMS({ onExit, currentUser }) {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "80px 1fr 100px 100px 100px 100px",
+                gridTemplateColumns: "80px minmax(280px, 1fr) 100px 70px 70px 120px",
                 gap: 16,
                 padding: "14px 16px",
                 borderBottom: "1px solid #e2e8f0",
@@ -3330,7 +3273,7 @@ export function CMS({ onExit, currentUser }) {
                     key={row.id}
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "80px 1fr 100px 100px 100px 100px",
+                      gridTemplateColumns: "80px minmax(280px, 1fr) 100px 70px 70px 120px",
                       gap: 16,
                       padding: "12px 16px",
                       borderBottom: idx < filteredRows.length - 1 ? "1px solid #f1f5f9" : "none",
@@ -3344,12 +3287,12 @@ export function CMS({ onExit, currentUser }) {
                     {/* Thumbnail */}
                     <div>
                       <img
-                        src={row.thumbnail}
+                        src={row.poster || row.thumbnail}
                         alt={row.title}
                         style={{
                           width: 64,
-                          height: 40,
-                          objectFit: "cover",
+                          height: 96,
+                          objectFit: "contain",
                           borderRadius: 4,
                           background: "#f1f5f9",
                         }}
@@ -3368,6 +3311,7 @@ export function CMS({ onExit, currentUser }) {
                         {row.duration && <span>{row.duration}</span>}
                         {row.rating && <span>{row.rating}</span>}
                       </div>
+                      <PublicationStatus item={row} type="movie" rows={carousels} />
                     </div>
 
                     {/* Category */}
@@ -3393,9 +3337,6 @@ export function CMS({ onExit, currentUser }) {
 
                     {/* Actions */}
                     <div style={{ display: "flex", gap: 6 }}>
-                      <button onClick={() => setHeroVideo(row)} style={{ background: row.featured ? "rgba(79,70,229,0.1)" : "#f8fafc", border: `1px solid ${row.featured ? "rgba(79,70,229,0.3)" : "#e2e8f0"}`, borderRadius: 5, padding: "5px 10px", color: row.featured ? "#4f46e5" : "#6b7280", fontSize: 11, cursor: "pointer", fontWeight: 500 }} title="Set as hero banner">
-                        {row.featured ? "★ Hero" : "☆ Hero"}
-                      </button>
                       <button onClick={() => startEdit(row)} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 5, padding: "5px 10px", color: "#374151", fontSize: 11, cursor: "pointer", fontWeight: 500 }}>Edit</button>
                       <button onClick={() => setDeleteConfirm(row)} style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 5, padding: "5px 10px", color: "#f87171", fontSize: 11, cursor: "pointer", fontWeight: 500 }}>Delete</button>
                     </div>
@@ -3415,11 +3356,11 @@ export function CMS({ onExit, currentUser }) {
 
         {/* ────── VIDEOS TAB — SERIES ────── */}
         {tab === "content" && videoSubTab === "series" && (
-          <>
+          workspaceShow ? <SeriesWorkspace key={workspaceShow.id} curationRows={carousels} show={workspaceShow} onBack={() => { setWorkspaceShowID(null); loadShows(); }} onUpdated={loadShows} showToast={showToast} /> : <>
             <div>
               {/* Header row with Add button */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#0f172a" }}>All Shows ({showsList.length})</h2>
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Series ({showsList.length})</h2>
                 <button
                   onClick={() => { setShowForm(EMPTY_SHOW); setEditingShowId(null); setDrawerOpen(true); }}
                   style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
@@ -3435,12 +3376,10 @@ export function CMS({ onExit, currentUser }) {
                   <div style={{ flex: 1 }}>
                     <p style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 600 }}>{show.title}</p>
                     <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>{show.category} · {show.year} · {show.rating}</p>
+                    <PublicationStatus item={show} type="show" rows={carousels} episodes={seriesInventory?.filter(e=>e.show_id===show.id)} />
                   </div>
                   <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={() => setHeroShow(show)} style={{ background: show.featured ? "rgba(79,70,229,0.1)" : "#f8fafc", border: `1px solid ${show.featured ? "rgba(79,70,229,0.3)" : "#e2e8f0"}`, borderRadius: 5, padding: "5px 10px", color: show.featured ? "#4f46e5" : "#6b7280", fontSize: 11, cursor: "pointer", fontWeight: 500 }}>
-                      {show.featured ? "★ Hero" : "☆ Hero"}
-                    </button>
-                    <button onClick={() => { setVideoSubTab("episodes"); setSelectedShowForEpisodes(String(show.id)); loadEpisodes(String(show.id)); setEpisodeForm({ ...EMPTY_EPISODE, show_id: String(show.id) }); }} style={{ background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.2)", borderRadius: 5, padding: "5px 10px", color: "#60a5fa", fontSize: 11, cursor: "pointer", fontWeight: 500 }}>Episodes</button>
+                    <button onClick={() => setWorkspaceShowID(show.id)} style={{ background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.2)", borderRadius: 5, padding: "5px 10px", color: "#60a5fa", fontSize: 11, cursor: "pointer", fontWeight: 500 }}>Manage series</button>
                     <button onClick={() => startShowEdit(show)} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 5, padding: "5px 10px", color: "#374151", fontSize: 11, cursor: "pointer" }}>Edit</button>
                     <button onClick={() => setDeleteShowConfirm(show)} style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 5, padding: "5px 10px", color: "#f87171", fontSize: 11, cursor: "pointer" }}>Delete</button>
                   </div>
@@ -3528,6 +3467,8 @@ export function CMS({ onExit, currentUser }) {
           </>
         )}
 
+        {tab === "content" && videoSubTab === "multiview" && <MultiviewPackagesPanel {...multiviewAdmin} />}
+
         {/* ────── CAROUSELS TAB ────── */}
         {tab === "content" && videoSubTab === "carousels" && (
           <div>
@@ -3549,17 +3490,14 @@ export function CMS({ onExit, currentUser }) {
 
             {/* Home Hero (custom promo banner) — only relevant on the Home screen */}
             {carouselPageTab === "home" && (() => {
-              const lbl = { display: "block", fontSize: 12, color: "#6b7280", marginBottom: 5, fontWeight: 600 };
-              const inp = { width: "100%", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "9px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" };
-              const list = homeHeroForm.cta_type === "movie" ? rows : homeHeroForm.cta_type === "show" ? showsList : homeHeroForm.cta_type === "channel" ? channelList : podcastsList;
               return (
-                <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, marginBottom: 20, overflow: "hidden" }}>
-                  <button onClick={() => setHomeHeroOpen(o => !o)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "14px 18px", background: "transparent", border: "none", cursor: "pointer" }}>
+                <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, marginBottom: 36, overflow: "hidden", boxShadow: "0 3px 12px rgba(15,23,42,0.05)" }}>
+                  <button type="button" aria-expanded={homeHeroOpen} onClick={() => setHomeHeroOpen(o => !o)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "14px 18px", background: "transparent", border: "none", cursor: "pointer" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       <span style={{ fontSize: 18 }}>🎬</span>
                       <div style={{ textAlign: "left" }}>
                         <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>Home Hero — custom banner</div>
-                        <div style={{ fontSize: 12, color: "#6b7280" }}>{homeHeroForm.enabled ? "On — overrides the ☆ featured movie/series" : "Off — home shows the ☆ featured movie/series"}</div>
+                        <div style={{ fontSize: 12, color: "#6b7280" }}>{homeHeroForm.enabled ? "On — using the custom Home hero" : "Off — using the catalog fallback"}</div>
                       </div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -3567,77 +3505,18 @@ export function CMS({ onExit, currentUser }) {
                       <span style={{ color: "#9ca3af", fontSize: 13 }}>{homeHeroOpen ? "▲" : "▼"}</span>
                     </div>
                   </button>
-                  {homeHeroOpen && (
-                    <div style={{ padding: "4px 18px 18px", display: "flex", flexDirection: "column", gap: 14, borderTop: "1px solid #f1f5f9" }}>
-                      <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", marginTop: 12 }}>
-                        <input type="checkbox" checked={homeHeroForm.enabled} onChange={e => setHomeHeroForm(f => ({ ...f, enabled: e.target.checked }))} />
-                        <span style={{ fontSize: 13, color: "#374151", fontWeight: 600 }}>Show this custom hero on the home screen</span>
-                      </label>
-                      <div>
-                        <label style={lbl}>Background image (1920×1080)</label>
-                        <ImageUploader label="Upload Hero Image" folder="hero" onUploadSuccess={url => setHomeHeroForm(f => ({ ...f, image_url: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
-                        <input value={homeHeroForm.image_url} onChange={e => setHomeHeroForm(f => ({ ...f, image_url: e.target.value }))} placeholder="or paste image URL…" style={{ ...inp, marginTop: 8 }} />
-                        {homeHeroForm.image_url && <img src={homeHeroForm.image_url} alt="" onError={e => { e.target.style.display = "none"; }} style={{ marginTop: 8, width: "100%", maxHeight: 130, objectFit: "cover", borderRadius: 8, border: "1px solid #e2e8f0" }} />}
-                      </div>
-                      <div>
-                        <label style={lbl}>Background video URL (optional — direct .mp4, autoplays muted)</label>
-                        <input value={homeHeroForm.video_url} onChange={e => setHomeHeroForm(f => ({ ...f, video_url: e.target.value }))} placeholder="https://…/loop.mp4" style={inp} />
-                      </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                        <div><label style={lbl}>Badge (small pill)</label><input value={homeHeroForm.badge} onChange={e => setHomeHeroForm(f => ({ ...f, badge: e.target.value }))} placeholder="NEW · LIVE EVENT" style={inp} /></div>
-                        <div><label style={lbl}>Title</label><input value={homeHeroForm.title} onChange={e => setHomeHeroForm(f => ({ ...f, title: e.target.value }))} placeholder="Big headline" style={inp} /></div>
-                      </div>
-                      <div><label style={lbl}>Subtitle</label><input value={homeHeroForm.subtitle} onChange={e => setHomeHeroForm(f => ({ ...f, subtitle: e.target.value }))} placeholder="One line of supporting text" style={inp} /></div>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                        <div>
-                          <label style={lbl}>Button links to</label>
-                          <select value={homeHeroForm.cta_type} onChange={e => setHomeHeroForm(f => ({ ...f, cta_type: e.target.value, cta_value: "" }))} style={{ ...inp, cursor: "pointer" }}>
-                            <option value="none">No button</option>
-                            <option value="movie">A movie</option>
-                            <option value="show">A series</option>
-                            <option value="channel">A live channel</option>
-                            <option value="podcast">A podcast</option>
-                            <option value="tab">A section (tab)</option>
-                            <option value="url">External URL</option>
-                          </select>
-                        </div>
-                        {homeHeroForm.cta_type !== "none" && (
-                          <div><label style={lbl}>Button label</label><input value={homeHeroForm.cta_label} onChange={e => setHomeHeroForm(f => ({ ...f, cta_label: e.target.value }))} placeholder="Watch now" style={inp} /></div>
-                        )}
-                      </div>
-                      {homeHeroForm.cta_type !== "none" && (
-                        <div>
-                          <label style={lbl}>Button target</label>
-                          {homeHeroForm.cta_type === "url" ? (
-                            <input value={homeHeroForm.cta_value} onChange={e => setHomeHeroForm(f => ({ ...f, cta_value: e.target.value }))} placeholder="https://…" style={inp} />
-                          ) : homeHeroForm.cta_type === "tab" ? (
-                            <select value={homeHeroForm.cta_value} onChange={e => setHomeHeroForm(f => ({ ...f, cta_value: e.target.value }))} style={{ ...inp, cursor: "pointer" }}>
-                              <option value="">Choose…</option>
-                              <option value="Home">Home</option>
-                              <option value="Movies">Movies</option>
-                              <option value="Series">Series</option>
-                              <option value="Streams">Live TV</option>
-                              <option value="Podcasts">Podcasts</option>
-                            </select>
-                          ) : (
-                            <select value={homeHeroForm.cta_value} onChange={e => setHomeHeroForm(f => ({ ...f, cta_value: e.target.value }))} style={{ ...inp, cursor: "pointer" }}>
-                              <option value="">Choose…</option>
-                              {(list || []).map(item => <option key={item.id} value={item.id}>{item.title || item.name}</option>)}
-                            </select>
-                          )}
-                        </div>
-                      )}
-                      <button onClick={saveHomeHero} disabled={homeHeroSaving} style={{ alignSelf: "flex-start", background: "#4f46e5", border: "none", borderRadius: 8, padding: "11px 22px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: homeHeroSaving ? "not-allowed" : "pointer", opacity: homeHeroSaving ? 0.6 : 1 }}>
-                        {homeHeroSaving ? "Saving…" : "Save Home Hero"}
-                      </button>
-                    </div>
-                  )}
+                  {homeHeroOpen && <HomeHeroEditor value={homeHeroForm} onChange={setHomeHeroForm}
+                    onSave={saveHomeHero} saving={homeHeroSaving} bucket={IS_DEV_DB ? "promo-images" : undefined}
+                    onError={err => showToast("Upload failed: " + err, "error")}
+                    movies={rows} shows={showsList} channels={channelList} podcasts={podcastsList} />}
+
                 </div>
               );
             })()}
 
+            <section aria-label="Screen rows" style={{ background: "#eef1f6", border: "1px solid #dbe2ec", borderRadius: 14, padding: "24px", marginTop: 12 }}>
             {/* Header row with Add button */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 24 }}>
               <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#0f172a" }}>{({ home: "Home", shorts: "Movies", series: "Series", podcasts: "Podcasts", live: "Live TV" }[carouselPageTab])} rows ({carouselsOnPage(carouselPageTab).length}) <span style={{ color: "#6b7280", fontWeight: 400, fontSize: 13 }}>— drag ⠿ or use ▲▼ to reorder</span></h2>
               <button
                 onClick={() => { setCarouselForm({ ...EMPTY_CAROUSEL, pages: carouselPageTab }); setEditingCarouselId(null); setDrawerOpen(true); }}
@@ -3647,6 +3526,7 @@ export function CMS({ onExit, currentUser }) {
               </button>
             </div>
 
+            {carouselPageTab === "live" && <p style={{padding:12,background:"#f1f5f9",borderRadius:8,color:"#475569",fontSize:13}}>Live TV automatically adds rows for channel categories. Assign categories to channels and they join those rows automatically. The rows below are your curated overrides: add a category row to set its title, position, or hide it, or choose channels for a custom collection. Automatic rows appear after your curated rows.</p>}
             {carouselLoading ? (
               <div style={{ padding: 40, textAlign: "center", color: "#6b7280" }}>Loading…</div>
             ) : carouselsOnPage(carouselPageTab).length === 0 ? (
@@ -3661,9 +3541,9 @@ export function CMS({ onExit, currentUser }) {
                   const t = carousel.type;
                   const ct = carousel.content_type;
                   const rowPages = (carousel.pages || "home").split(",").map(p => p.trim()).filter(Boolean);
-                  const contentLabel = t === "live_channels" ? "Live TV" : t === "creator_streams" ? "Creator Streams" : t === "podcast" ? "Podcasts" : ct === "shorts" ? "Movies only" : ct === "shows" ? "Series only" : "All content";
+                  const contentLabel = t === "continue" ? "Continue Watching" : t === "multiview" ? "Multiview packages" : t === "live_channels" ? "Live TV" : t === "creator_streams" ? "Creator Streams" : t === "podcast" ? "Podcasts" : ct === "shorts" ? "Movies only" : ct === "shows" ? "Series only" : "All content";
                   const handpickedCount = t === "handpicked" ? (() => { try { return JSON.parse(carousel.filter_value || "[]").length; } catch { return 0; } })() : 0;
-                  const orderLabel = t === "trending" ? "Recently Added" : t === "recommended" ? "Recommended" : t === "continue" ? "Continue Watching" : t === "handpicked" ? `${handpickedCount} hand-picked` : t === "category" ? `Genre: ${carousel.filter_value || "?"}` : t === "podcast" ? (carousel.filter_value ? `Tag: ${carousel.filter_value}` : "All podcasts") : t === "live_channels" ? (carousel.filter_value ? `Category: ${carousel.filter_value}` : "All live channels") : t === "creator_streams" ? "Live creators" : "Default order";
+                  const orderLabel = t === "multiview" ? "Curated channel pairs" : t === "trending" ? "Recently Added" : t === "recommended" ? "Recommended" : t === "continue" ? "Continue Watching" : t === "handpicked" ? `${handpickedCount} hand-picked` : t === "category" ? `Genre: ${carousel.filter_value || "?"}` : t === "podcast" ? (carousel.filter_value ? `Tag: ${carousel.filter_value}` : "All podcasts") : t === "live_channels" ? (carousel.filter_value ? ((carousel.filter_value || "").trim().startsWith("[") ? `${(() => { try { return JSON.parse(carousel.filter_value).length; } catch { return 0; } })()} chosen channels` : `Category: ${carousel.filter_value}`) : "All live channels") : t === "creator_streams" ? "Live creators" : "Default order";
                   const contentColor = t === "live_channels" ? "#ef4444" : t === "creator_streams" ? "#ef4444" : t === "podcast" ? "#a78bfa" : ct === "shorts" ? "#facc15" : ct === "shows" ? "#34d399" : "#f59e0b";
                   const pageLabels = { home: "Home", shorts: "Movies", series: "Series", podcasts: "Podcasts", live: "Live TV" };
 
@@ -3713,6 +3593,7 @@ export function CMS({ onExit, currentUser }) {
             <div style={{ marginTop: 12, fontSize: 12, color: "#9ca3af", textAlign: "right" }}>
               {carousels.length} row{carousels.length !== 1 ? "s" : ""} total
             </div>
+            </section>
           </div>
         )}
         {/* ────── LIVE TAB ────── */}
@@ -3818,8 +3699,9 @@ export function CMS({ onExit, currentUser }) {
                         <span style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>{ch.name}</span>
                         <span style={{ fontSize: 11, fontWeight: 700, padding: "1px 8px", borderRadius: 20, background: ch.is_active ? "rgba(34,197,94,0.1)" : "rgba(100,100,100,0.1)", color: ch.is_active ? "#15803d" : "#888", border: `1px solid ${ch.is_active ? "rgba(34,197,94,0.3)" : "rgba(100,100,100,0.2)"}` }}>{ch.is_active ? "ACTIVE" : "INACTIVE"}</span>
                         <span style={{ fontSize: 11, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.5 }}>{ch.ingest_type}</span>
-                        {fastChannelStatuses[ch.id] === "error" && <span style={{ fontSize: 11, fontWeight: 600, color: "#ef4444" }}>· dead stream</span>}
-                        {fastChannelStatuses[ch.id] === "unknown" && <span style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af" }}>· couldn't test</span>}
+                        {(ch.blackout_enabled || ch.blackout_starts_at) && <span style={{ fontSize: 11, fontWeight: 700, color: "#334155" }}>{channelBlackout(ch) ? "BLACKOUT" : new Date(ch.blackout_ends_at) > new Date() ? "BLACKOUT SCHEDULED" : "BLACKOUT ENDED"}</span>}
+                        {fastChannelStatuses[ch.id] === "error" && <span style={{ fontSize: 11, fontWeight: 600, color: "#ef4444" }}>· {fastChannelDetails[ch.id] || "Playlist check failed"}</span>}
+                        {fastChannelStatuses[ch.id] === "unknown" && <span style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af" }}>· {fastChannelDetails[ch.id] || "Could not test — retry"}</span>}
                       </div>
                       <p style={{ margin: 0, fontSize: 12, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch.hls_url || "No playback URL set"}</p>
                     </div>
@@ -3831,7 +3713,7 @@ export function CMS({ onExit, currentUser }) {
                         style={{ background: selectedChannelForEpg?.id === ch.id ? "rgba(79,70,229,0.15)" : "#eef2ff", border: `1px solid ${selectedChannelForEpg?.id === ch.id ? "#4f46e5" : "#c7d2fe"}`, borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: selectedChannelForEpg?.id === ch.id ? 700 : 600, color: "#4f46e5", cursor: "pointer" }}>
                         {selectedChannelForEpg?.id === ch.id ? "Close" : "Schedule"}
                       </button>
-                      <button onClick={() => { setChannelForm({ name: ch.name, slug: ch.slug || "", description: ch.description || "", logo_url: ch.logo_url || "", hero_url: ch.hero_url || "", category: ch.category || "general", ingest_type: ch.ingest_type || "hls", hls_url: ch.hls_url || "", stream_uid: ch.stream_uid || "", is_active: ch.is_active ?? true, sort_order: ch.sort_order ?? 0, is_premium: ch.is_premium ?? false, tile_size: ch.tile_size || "normal", is_live_hero: ch.is_live_hero ?? false, live_feed_id: ch.live_feed_id ?? null, visibility_tier: ch.visibility_tier ?? "production" }); setEditingChannelId(ch.id); setDrawerOpen(true); }}
+                      <button onClick={() => { setChannelForm({ blackout_enabled: ch.blackout_enabled ?? false, blackout_message: ch.blackout_message || "", blackout_starts_at: ch.blackout_starts_at ?? null, blackout_ends_at: ch.blackout_ends_at ?? null, name: ch.name, slug: ch.slug || "", description: ch.description || "", logo_url: ch.logo_url || "", hero_url: ch.hero_url || "", category: ch.category || "general", ingest_type: ch.ingest_type || "hls", hls_url: ch.hls_url || "", stream_uid: ch.stream_uid || "", is_active: ch.is_active ?? true, sort_order: ch.sort_order ?? 0, is_premium: ch.is_premium ?? false, tile_size: ch.tile_size || "normal", is_live_hero: ch.is_live_hero ?? false, live_feed_id: ch.live_feed_id ?? null, visibility_tier: ch.visibility_tier ?? "production" }); setEditingChannelId(ch.id); setDrawerOpen(true); }}
                         style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "7px 14px", fontSize: 12, fontWeight: 600, color: "#374151", cursor: "pointer" }}>
                         Edit
                       </button>
@@ -4495,6 +4377,7 @@ export function CMS({ onExit, currentUser }) {
           <div>
 
             {/* ── Ad Performance ── */}
+            <label style={{ display: "block", padding: 12, fontSize: 13 }}><input type="checkbox" checked={adIncludeTests} onChange={e => { adIncludeTestsRef.current = e.target.checked; setAdIncludeTests(e.target.checked); loadAdAnalytics(e.target.checked); }} /> Include test ad delivery (no earnings)</label><p style={{ padding: "0 12px", fontSize: 12, color: "#64748b" }}>Peep delivery reports cover signed-in viewers. IMA sends provider tracking for guests too. These counts are not billable revenue or payout confirmations.</p>
             {adAnalytics && (
               <div style={{ marginBottom: 36 }}>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 18 }}>
@@ -4530,10 +4413,10 @@ export function CMS({ onExit, currentUser }) {
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 16, marginBottom: 28 }}>
                   {[
                     { label: "Impressions", value: adAnalytics.impressions.toLocaleString(), color: "#6366f1", hint: "How many times an ad started playing" },
-                    { label: "Unique Viewers", value: adAnalytics.uniqueViewers.toLocaleString(), color: "#8b5cf6", hint: "Distinct logged-in users who saw at least one ad" },
+                    { label: "Signed-in viewers", value: adAnalytics.uniqueViewers.toLocaleString(), color: "#8b5cf6", hint: "Distinct logged-in users who saw at least one ad" },
                     { label: "Skips", value: adAnalytics.skips.toLocaleString(), color: "#64748b", hint: "How many viewers skipped the ad before it finished" },
-                    { label: "Completion Rate", value: adAnalytics.completionRate !== null ? adAnalytics.completionRate + "%" : "—", color: "#22c55e", hint: "% of viewers who watched the full ad without skipping. 70%+ is good." },
-                    { label: "Fill Rate", value: adAnalytics.fillRate !== null ? adAnalytics.fillRate + "%" : "—", color: "#f59e0b", hint: "How often the ad server had an ad ready. Dropping fill rate means your tag may be broken or inventory is low." },
+                    { label: "Completion Rate", value: adAnalytics.completionRate !== null ? adAnalytics.completionRate + "%" : "—", color: "#22c55e", hint: "Recorded ad completions divided by recorded playback impressions. Signed-in delivery only; not a billing measurement." },
+                    { label: "Ad break start rate", value: adAnalytics.fillRate !== null ? adAnalytics.fillRate + "%" : "—", color: "#f59e0b", hint: "Requested breaks with at least one playback impression. This is delivery telemetry, not provider fill, billable revenue or payout confirmation." },
                   ].map(({ label, value, color, hint }) => (
                     <div key={label} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
                       <div style={{ fontSize: 12, color: "#6b7280", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 6 }}>{label}</div>
@@ -4581,7 +4464,7 @@ export function CMS({ onExit, currentUser }) {
                           const pct = s.impressions > 0 ? Math.round(s.completes / s.impressions * 100) : null;
                           return (
                             <tr key={ad.id} style={{ borderBottom: i < adList.length - 1 ? "1px solid #f1f5f9" : "none" }}>
-                              <td style={{ padding: "11px 16px", fontWeight: 600, color: "#0f172a" }}>{ad.name}</td>
+                              <td style={{ padding: "11px 16px", fontWeight: 600, color: "#0f172a" }}>{ad.name}<div style={{ fontWeight: 400, fontSize: 11, color: "#64748b", marginTop: 4 }}>{ad.is_test ? "TEST · no earnings" : "Non-test delivery"} · {(ad.platforms || ["web"]).map(p => p === "tvos" ? "Apple TV" : "Browser").join(" + ")}</div></td>
                               <td style={{ padding: "11px 16px", color: "#6366f1", fontWeight: 600 }}>{s.impressions.toLocaleString()}</td>
                               <td style={{ padding: "11px 16px", color: "#374151" }}>{s.completes.toLocaleString()}</td>
                               <td style={{ padding: "11px 16px", color: "#374151" }}>{s.skips.toLocaleString()}</td>
@@ -4706,6 +4589,7 @@ export function CMS({ onExit, currentUser }) {
         )}
 
         {/* ────── REPORTS TAB ────── */}
+        {tab === "analytics" && analyticsTab === "live_tv" && <LiveTVViewingDashboard />}
         {tab === "analytics" && analyticsTab === "reports" && (
           <div>
             {/* Header row */}
@@ -4725,6 +4609,8 @@ export function CMS({ onExit, currentUser }) {
                 Refresh
               </button>
             </div>
+
+            {reportSection === "overview" && <LiveTVViewingDashboard compact />}
 
             {/* ── User Search ── */}
             <div style={{ marginBottom: 28, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, overflow: "hidden" }}>
@@ -5533,7 +5419,7 @@ export function CMS({ onExit, currentUser }) {
             </div>
 
             {/* ── Creators Card ── */}
-            <div onClick={() => { setSection("streaming"); setTab("creators"); setCreatorsTab("list"); }}
+            <div onClick={() => { setTab("creators"); setCreatorsTab("list"); }}
               style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "22px 28px", marginBottom: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "box-shadow 0.15s" }}
               onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"}
               onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
@@ -5550,7 +5436,7 @@ export function CMS({ onExit, currentUser }) {
             </div>
 
             {/* ── Review Queue Card ── */}
-            <div onClick={() => { setSection("streaming"); setTab("creators"); setCreatorsTab("review"); }}
+            <div onClick={() => { setTab("creators"); setCreatorsTab("review"); }}
               style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "22px 28px", marginBottom: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "box-shadow 0.15s" }}
               onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"}
               onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
@@ -5570,7 +5456,7 @@ export function CMS({ onExit, currentUser }) {
             </div>
 
             {/* ── Payouts Card ── */}
-            <div onClick={() => { setSection("streaming"); setTab("creators"); setCreatorsTab("payouts"); setPayoutView("current"); }}
+            <div onClick={() => { setTab("creators"); setCreatorsTab("payouts"); setPayoutView("current"); }}
               style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "22px 28px", marginBottom: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "box-shadow 0.15s" }}
               onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"}
               onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
@@ -5587,7 +5473,7 @@ export function CMS({ onExit, currentUser }) {
             </div>
 
             {/* ── Security Card ── */}
-            <div onClick={() => { setSection("system"); setTab("security"); }}
+            <div onClick={() => { setTab("security"); }}
               style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "22px 28px", marginBottom: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "box-shadow 0.15s" }}
               onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"}
               onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
@@ -5741,7 +5627,8 @@ export function CMS({ onExit, currentUser }) {
                 {/* ── MOVIES FORM ── */}
                 {tab === "content" && videoSubTab === "shorts" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                    <FieldInput label="Title *" value={form.title} onChange={v => setForm(f => ({ ...f, title: v }))} placeholder="e.g. Metropolis" />
+                    <TitleMetadataImporter key={editingId || "new"} type="movie" onApply={(fields, replace) => setForm(f => ({ ...f, ...Object.fromEntries(Object.entries(fields).filter(([key]) => replace || !String(f[key] ?? "").trim())) }))} />
+                    <FieldInput label="Title — required" value={form.title} onChange={v => setForm(f => ({ ...f, title: v }))} placeholder="e.g. Metropolis" />
                     <PremiumToggleButton on={form.is_premium} onToggle={() => setForm(f => ({ ...f, is_premium: !f.is_premium }))} />
                     <TierSelect value={form.visibility_tier} onChange={v => setForm(f => ({ ...f, visibility_tier: v }))} />
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -5754,7 +5641,7 @@ export function CMS({ onExit, currentUser }) {
                       <FieldInput label="Score %" value={form.score} onChange={v => setForm(f => ({ ...f, score: v }))} placeholder="99" type="number" />
                     </div>
                     <div>
-                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Hero Image</label>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Hero image — recommended</label>
                       <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>Landscape · 1920×1080px · full-screen banner · Safe zone: center 1400×800 (stay 260px from sides, 140px from top/bottom)</p>
                       <ImageUploader label="Upload Hero Image (JPG/PNG)" folder="hero" onUploadSuccess={url => setForm(f => ({ ...f, thumbnail: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
                       <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "8px 0" }}>
@@ -5773,9 +5660,9 @@ export function CMS({ onExit, currentUser }) {
                       )}
                     </div>
                     <div>
-                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Poster</label>
-                      <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>Portrait · 400×600px · browse cards (optional) · Safe zone: center 320×460 (stay 40px from sides, 70px from top, 100px from bottom — title overlay)</p>
-                      <ImageUploader label="Upload Poster (JPG/PNG)" folder="posters" onUploadSuccess={url => setForm(f => ({ ...f, poster: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Poster — required</label>
+                      <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>Portrait 2:3 · 1200×1800 preferred · 600×900 minimum · JPG/WebP · No borders or padding. Title appears below.</p>
+                      <ImageUploader label="Upload Poster (JPG/PNG)" appearance="light" folder={IS_DEV_DB ? "hero/posters" : "posters"} bucket={IS_DEV_DB ? "promo-images" : undefined} onUploadSuccess={url => setForm(f => ({ ...f, poster: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
                       <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "8px 0" }}>
                         <div style={{ flex: 1, height: 1, background: "#e2e8f0" }} />
                         <span style={{ fontSize: 11, color: "#9ca3af" }}>or paste URL</span>
@@ -5791,11 +5678,11 @@ export function CMS({ onExit, currentUser }) {
                         </div>
                       )}
                     </div>
-                    <FieldInput label="Video URL *" value={form.url} onChange={v => setForm(f => ({ ...f, url: v }))} placeholder="https://..." />
-                    <FieldInput label="Trailer URL" value={form.trailer_url} onChange={v => setForm(f => ({ ...f, trailer_url: v }))} placeholder="https://youtube.com/watch?v=... (optional)" />
-                    <FieldInput label="Tags (comma-separated)" value={form.tags} onChange={v => setForm(f => ({ ...f, tags: v }))} placeholder="Silent, Epic, Classic" />
+                    <FieldInput label="Video URL — required to save movie" value={form.url} onChange={v => setForm(f => ({ ...f, url: v }))} placeholder="https://..." />
+                    <FieldInput label="Trailer URL — optional" value={form.trailer_url} onChange={v => setForm(f => ({ ...f, trailer_url: v }))} placeholder="https://youtube.com/watch?v=... (optional)" />
+                    <FieldInput label="Tags · search & genre rows (comma-separated)" value={form.tags} onChange={v => setForm(f => ({ ...f, tags: v }))} placeholder="Silent, Epic, Classic" />
                     <div>
-                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Description</label>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Description — recommended</label>
                       <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Short synopsis..." style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
                     </div>
                     <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
@@ -5810,9 +5697,15 @@ export function CMS({ onExit, currentUser }) {
                 {/* ── SERIES FORM ── */}
                 {tab === "content" && videoSubTab === "series" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                    <FieldInput label="Title *" value={showForm.title} onChange={v => setShowForm(f => ({ ...f, title: v }))} placeholder="e.g. The Twilight Zone" />
+                    <TitleMetadataImporter key={editingShowId || "new"} type="series" onApply={(fields, replace) => setShowForm(f => ({ ...f, ...Object.fromEntries(Object.entries(fields).filter(([key]) => replace || !String(f[key] ?? "").trim())) }))} />
+                    <FieldInput label="Title — required" value={showForm.title} onChange={v => setShowForm(f => ({ ...f, title: v }))} placeholder="e.g. The Twilight Zone" />
                     <PremiumToggleButton on={showForm.is_premium} onToggle={() => setShowForm(f => ({ ...f, is_premium: !f.is_premium }))} />
                     <TierSelect value={showForm.visibility_tier} onChange={v => setShowForm(f => ({ ...f, visibility_tier: v }))} />
+                    <label style={{ display: "flex", gap: 10, alignItems: "center", color: "#334155", fontSize: 14 }}>
+                      <input type="checkbox" checked={showForm.autoplay_next !== false} onChange={e => setShowForm(f => ({ ...f, autoplay_next: e.target.checked }))} />
+                      Allow next-episode autoplay
+                    </label>
+                    <p style={{ margin: 0, fontSize: 12, color: "#64748b" }}>Viewers can turn autoplay off in their playback settings. Episodes advance after they finish.</p>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                       <FieldCombo label="Category" value={showForm.category} onChange={v => setShowForm(f => ({ ...f, category: v }))} options={categories} />
                       <FieldSelect label="Rating" value={showForm.rating} onChange={v => setShowForm(f => ({ ...f, rating: v }))} options={["NR", "G", "PG", "PG-13", "R"]} />
@@ -5821,26 +5714,26 @@ export function CMS({ onExit, currentUser }) {
                       <FieldInput label="Year" value={showForm.year} onChange={v => setShowForm(f => ({ ...f, year: v }))} placeholder="1959" type="number" />
                       <FieldInput label="Score %" value={showForm.score} onChange={v => setShowForm(f => ({ ...f, score: v }))} placeholder="98" type="number" />
                     </div>
-                    <FieldInput label="Tags (comma-separated)" value={showForm.tags} onChange={v => setShowForm(f => ({ ...f, tags: v }))} placeholder="Anthology, Black & White, Classic" />
+                    <FieldInput label="Tags · search & genre rows (comma-separated)" value={showForm.tags} onChange={v => setShowForm(f => ({ ...f, tags: v }))} placeholder="Anthology, Black & White, Classic" />
                     <div>
-                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Hero Image</label>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Hero image — recommended</label>
                       <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>Landscape · 1920×1080px · banner background · Safe zone: center 1400×800 (stay 260px from sides, 140px from top/bottom)</p>
-                      <ImageUploader label="Upload Hero Image" folder="hero" onUploadSuccess={url => setShowForm(f => ({ ...f, thumbnail: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
+                      <ImageUploader label="Upload Hero Image" folder="hero" allowUrlImport bucket={IS_DEV_DB ? "promo-images" : undefined} onUploadSuccess={url => setShowForm(f => ({ ...f, thumbnail: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
                       <input type="text" value={showForm.thumbnail} onChange={e => setShowForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
                       {showForm.thumbnail && <img src={showForm.thumbnail} alt="" style={{ width: "100%", height: 100, objectFit: "cover", borderRadius: 6, marginTop: 8 }} onError={e => { e.target.style.display = "none"; }} />}
                     </div>
                     <div>
-                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Poster</label>
-                      <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>Portrait · 400×600px · card image · Safe zone: center 320×460 (stay 40px from sides, 70px from top, 100px from bottom — title overlay)</p>
-                      <ImageUploader label="Upload Poster" folder="posters" onUploadSuccess={url => setShowForm(f => ({ ...f, poster: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Poster — required</label>
+                      <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>Portrait 2:3 · 1200×1800 preferred · 600×900 minimum · JPG/WebP · No borders or padding. Title appears below.</p>
+                      <ImageUploader label="Upload Poster" appearance="light" folder={IS_DEV_DB ? "hero/posters" : "posters"} bucket={IS_DEV_DB ? "promo-images" : undefined} allowUrlImport onUploadSuccess={url => setShowForm(f => ({ ...f, poster: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
                       <input type="text" value={showForm.poster} onChange={e => setShowForm(f => ({ ...f, poster: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
-                      {showForm.poster && <img src={showForm.poster} alt="" style={{ width: 70, aspectRatio: "2/3", objectFit: "cover", borderRadius: 6, marginTop: 8 }} onError={e => { e.target.style.display = "none"; }} />}
+                      {showForm.poster && <img key={showForm.poster} src={showForm.poster} alt="Series poster preview — image unavailable if it cannot load" style={{ width: 150, aspectRatio: "2/3", objectFit: "contain", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: 8, marginTop: 8 }} />}
                     </div>
                     <div>
-                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Description</label>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Description — recommended</label>
                       <textarea value={showForm.description} onChange={e => setShowForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Short synopsis..." style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
                     </div>
-                    <FieldInput label="Trailer URL" value={showForm.trailer_url} onChange={v => setShowForm(f => ({ ...f, trailer_url: v }))} placeholder="https://youtube.com/watch?v=... (optional)" />
+                    <FieldInput label="Trailer URL — optional" value={showForm.trailer_url} onChange={v => setShowForm(f => ({ ...f, trailer_url: v }))} placeholder="https://youtube.com/watch?v=... (optional)" />
                     <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
                       <button onClick={saveShow} disabled={showSaving} style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: showSaving ? "not-allowed" : "pointer", opacity: showSaving ? 0.7 : 1 }}>
                         {showSaving ? "Saving…" : editingShowId ? "Save Changes" : "Add Show"}
@@ -5854,7 +5747,7 @@ export function CMS({ onExit, currentUser }) {
                 {tab === "content" && videoSubTab === "episodes" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <div>
-                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Show *</label>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Series — required</label>
                       <select value={selectedShowForEpisodes} onChange={e => { setSelectedShowForEpisodes(e.target.value); loadEpisodes(e.target.value); setEpisodeForm({ ...EMPTY_EPISODE, show_id: e.target.value }); }}
                         style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }}>
                         <option value="">Select a show...</option>
@@ -5862,20 +5755,23 @@ export function CMS({ onExit, currentUser }) {
                       </select>
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                      <FieldInput label="Season" value={episodeForm.season} onChange={v => setEpisodeForm(f => ({ ...f, season: v }))} placeholder="1" type="number" />
-                      <FieldInput label="Episode #" value={episodeForm.episode_number} onChange={v => setEpisodeForm(f => ({ ...f, episode_number: v }))} placeholder="1" type="number" />
+                      <FieldInput label="Season — defaults to 1" value={episodeForm.season} onChange={v => setEpisodeForm(f => ({ ...f, season: v }))} placeholder="1" type="number" />
+                      <FieldInput label="Episode number" value={episodeForm.episode_number} onChange={v => setEpisodeForm(f => ({ ...f, episode_number: v }))} placeholder="1" type="number" />
                     </div>
-                    <FieldInput label="Title *" value={episodeForm.title} onChange={v => setEpisodeForm(f => ({ ...f, title: v }))} placeholder="e.g. Pilot" />
+                    <TitleMetadataImporter key={editingEpisodeId || "new"} type="episode" onApply={(fields, replace) => setEpisodeForm(f => ({ ...f, ...Object.fromEntries(Object.entries(fields).filter(([key]) => replace || !String(f[key] ?? "").trim())) }))} />
+                    <FieldInput label="Title — required" value={episodeForm.title} onChange={v => setEpisodeForm(f => ({ ...f, title: v }))} placeholder="e.g. Pilot" />
                     <FieldInput label="Duration" value={episodeForm.duration} onChange={v => setEpisodeForm(f => ({ ...f, duration: v }))} placeholder="42 min" />
-                    <FieldInput label="Video URL" value={episodeForm.url} onChange={v => setEpisodeForm(f => ({ ...f, url: v }))} placeholder="https://archive.org/..." />
+                    <FieldInput label="Video URL — required for playback" value={episodeForm.url} onChange={v => setEpisodeForm(f => ({ ...f, url: v }))} placeholder="https://archive.org/..." />
                     <div>
-                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Episode Thumbnail</label>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Episode thumbnail — recommended</label>
                       <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>16:9 still from the episode (optional)</p>
-                      <ImageUploader label="Upload Thumbnail" folder="episodes" onUploadSuccess={url => setEpisodeForm(f => ({ ...f, thumbnail: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
+                      <EpisodeAutoThumbnail url={episodeForm.url} thumbnail={episodeForm.thumbnail} onGenerated={(thumbnail, source, replace) => setEpisodeForm(f => f.url === source && (replace || !f.thumbnail?.trim()) ? { ...f, thumbnail } : f)} />
+                      <ImageUploader label="Upload Thumbnail" appearance="light" folder={IS_DEV_DB ? "hero/episodes" : "episodes"} bucket={IS_DEV_DB ? "promo-images" : undefined} onUploadSuccess={url => setEpisodeForm(f => ({ ...f, thumbnail: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
                       <input type="text" value={episodeForm.thumbnail} onChange={e => setEpisodeForm(f => ({ ...f, thumbnail: e.target.value }))} placeholder="or paste URL..." style={{ width: "100%", marginTop: 8, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
                     </div>
+                    {episodeForm.thumbnail && <img key={episodeForm.thumbnail} src={episodeForm.thumbnail} alt="Episode thumbnail preview" style={{ width: "100%", maxWidth: 320, aspectRatio: "16/9", objectFit: "contain", borderRadius: 8 }} />}
                     <div>
-                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Description</label>
+                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Description — recommended</label>
                       <textarea value={episodeForm.description} onChange={e => setEpisodeForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Episode synopsis..." style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit" }} onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
                     </div>
                     <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
@@ -5973,19 +5869,23 @@ export function CMS({ onExit, currentUser }) {
                       <p style={{ margin: "0 0 10px", fontSize: 11, color: "#6b7280" }}>What kind of row is this?</p>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                         {[
+                          { k: "multiview", icon: "▥", label: "Multiview", desc: "Channel packages · Home / Live TV" },
+                          { k: "continue", icon: "⏱️", label: "Continue Watching", desc: "Personalized unfinished titles · Home" },
                           { k: "vod",     icon: "🎬", label: "VOD",             desc: "Movies & series" },
                           { k: "live",    icon: "📡", label: "Live TV",         desc: "Your FAST channels" },
                           { k: "creator", icon: "🎥", label: "Creator Streams", desc: "Live creators" },
                           { k: "podcast", icon: "🎙️", label: "Podcasts",        desc: "Podcast shows" },
                         ].map(({ k, icon, label, desc }) => {
-                          const curKind = carouselForm.type === "live_channels" ? "live" : carouselForm.type === "creator_streams" ? "creator" : carouselForm.type === "podcast" ? "podcast" : "vod";
+                          const curKind = carouselForm.type === "continue" ? "continue" : carouselForm.type === "multiview" ? "multiview" : carouselForm.type === "live_channels" ? "live" : carouselForm.type === "creator_streams" ? "creator" : carouselForm.type === "podcast" ? "podcast" : "vod";
                           const isActive = curKind === k;
                           return (
-                            <button key={k} onClick={() => {
-                              if (k === "live") setCarouselForm(f => ({ ...f, type: "live_channels", content_type: "all", filter_value: "" }));
+                            <button key={k} disabled={k === "multiview" && (carouselForm.pages || "home").split(",").some(p => !["home", "live"].includes(p.trim()))} onClick={() => {
+                              if (k === "continue") setCarouselForm(f => ({ ...f, type: "continue", pages: "home", layout: "standard", content_type: "all", filter_value: "" }));
+                              else if (k === "multiview") setCarouselForm(f => ({ ...f, type: "multiview", layout: "standard", content_type: "all", filter_value: "" }));
+                              else if (k === "live") setCarouselForm(f => ({ ...f, type: "live_channels", content_type: "all", filter_value: "" }));
                               else if (k === "creator") setCarouselForm(f => ({ ...f, type: "creator_streams", content_type: "all", filter_value: "" }));
                               else if (k === "podcast") setCarouselForm(f => ({ ...f, type: "podcast", content_type: "all", filter_value: "" }));
-                              else setCarouselForm(f => ({ ...f, type: ["live_channels", "creator_streams", "podcast"].includes(f.type) ? "custom" : f.type, content_type: f.content_type || "all", filter_value: ["live_channels", "creator_streams", "podcast"].includes(f.type) ? "" : f.filter_value }));
+                              else setCarouselForm(f => ({ ...f, type: ["live_channels", "creator_streams", "podcast", "multiview", "continue"].includes(f.type) ? "custom" : f.type, content_type: f.content_type || "all", filter_value: ["live_channels", "creator_streams", "podcast", "multiview", "continue"].includes(f.type) ? "" : f.filter_value }));
                             }}
                               style={{ background: isActive ? "rgba(79,70,229,0.08)" : "#f8fafc", border: `1.5px solid ${isActive ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 10, padding: "14px 12px", cursor: "pointer", textAlign: "left", transition: "border-color 0.15s, background 0.15s" }}>
                               <div style={{ fontSize: 22, marginBottom: 5 }}>{icon}</div>
@@ -5998,7 +5898,7 @@ export function CMS({ onExit, currentUser }) {
                     </div>
 
                     {/* VOD: which content */}
-                    {!["podcast", "live_channels", "creator_streams"].includes(carouselForm.type) && (
+                    {!["podcast", "live_channels", "creator_streams", "multiview"].includes(carouselForm.type) && (
                       <div>
                         <label style={{ display: "block", fontSize: 12, color: "#374151", fontWeight: 600, marginBottom: 8 }}>Which content?</label>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
@@ -6020,25 +5920,14 @@ export function CMS({ onExit, currentUser }) {
                       </div>
                     )}
 
-                    {carouselForm.type === "live_channels" && (
-                      <div style={{ marginTop: 6, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 14 }}>
-                        <label style={{ display: "block", fontSize: 12, color: "#374151", fontWeight: 600, marginBottom: 8 }}>Which channels?</label>
-                        <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                          {[{ v: "", l: "All live channels" }, { v: "__cat__", l: "By category" }].map(o => {
-                            const on = o.v === "__cat__" ? (carouselForm.filter_value && carouselForm.filter_value !== "") : (!carouselForm.filter_value);
-                            return (
-                              <button key={o.l} onClick={() => setCarouselForm(f => ({ ...f, filter_value: o.v === "__cat__" ? (f.filter_value || "news") : "" }))}
-                                style={{ flex: 1, background: on ? "rgba(79,70,229,0.08)" : "#fff", border: `1.5px solid ${on ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 8, padding: "9px 10px", fontSize: 12, fontWeight: 600, color: on ? "#4f46e5" : "#374151", cursor: "pointer" }}>{o.l}</button>
-                            );
-                          })}
-                        </div>
-                        {carouselForm.filter_value && carouselForm.filter_value !== "" && (
-                          <input value={carouselForm.filter_value} onChange={e => setCarouselForm(f => ({ ...f, filter_value: e.target.value }))}
-                            placeholder="Category (e.g. news, sports, music) — matches the channel's Category field"
-                            style={{ width: "100%", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 6, padding: "9px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
-                        )}
+                    {carouselForm.type === "continue" && (
+                      <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 14, fontSize: 12, color: "#475569" }}>
+                        Uses each signed-in viewer’s unfinished watch history. This row stays hidden when there is nothing to resume. Its title, position and visibility are controlled here; Apple TV no longer inserts an extra row automatically. Apple TV currently supports this row on Home.
                       </div>
                     )}
+
+                    {carouselForm.type === "multiview" && <MultiviewRowPicker value={carouselForm.filter_value} onChange={value => setCarouselForm(f => ({ ...f, filter_value: value }))} packages={multiviewAdmin.packages} />}
+                    {carouselForm.type === "live_channels" && <LiveChannelRowPicker value={carouselForm.filter_value || ""} onChange={value => setCarouselForm(f => ({ ...f, filter_value: value }))} channels={channelList} />}
 
                     {carouselForm.type === "creator_streams" && (
                       <div style={{ marginTop: 6, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 14, fontSize: 12, color: "#6b7280" }}>
@@ -6046,7 +5935,7 @@ export function CMS({ onExit, currentUser }) {
                       </div>
                     )}
 
-                    {!["podcast", "live_channels", "creator_streams"].includes(carouselForm.type) ? (
+                    {!["podcast", "live_channels", "creator_streams", "multiview", "continue"].includes(carouselForm.type) ? (
                       <div style={{ marginTop: 6 }}>
                         <label style={{ display: "block", fontSize: 12, color: "#374151", fontWeight: 600, marginBottom: 8 }}>…and how it's chosen</label>
                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -6054,8 +5943,7 @@ export function CMS({ onExit, currentUser }) {
                             { val: "custom",      icon: "📋", label: "Everything",        desc: "Every title of the chosen type" },
                             { val: "trending",    icon: "🔥", label: "Recently Added",    desc: "Newest titles first" },
                             { val: "recommended", icon: "🪄", label: "Recommended",       desc: "Personalized picks from each viewer's history" },
-                            { val: "continue",    icon: "⏱️", label: "Continue Watching", desc: "In-progress titles for the signed-in viewer" },
-                            { val: "category",    icon: "🏷️", label: "By category",     desc: "Filter to a specific genre" },
+                            { val: "category",    icon: "🏷️", label: "By category or tag", desc: "Match a genre in either field" },
                             { val: "handpicked",  icon: "🎯", label: "Hand-pick",        desc: "Choose specific titles" },
                           ].map(({ val, icon, label, desc }) => {
                             const isActive = carouselForm.type === val;
@@ -6075,14 +5963,14 @@ export function CMS({ onExit, currentUser }) {
                         {carouselForm.type === "category" && (
                           <div style={{ marginTop: 10, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "14px" }}>
                             <label style={{ display: "block", fontSize: 11, color: "#6b7280", marginBottom: 6, fontWeight: 600 }}>
-                              Category name
+                              Category or tag
                             </label>
                             <input value={carouselForm.filter_value} onChange={e => setCarouselForm(f => ({ ...f, filter_value: e.target.value }))}
                               placeholder="e.g. Horror, Comedy, Sci-Fi…"
                               style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 6, padding: "9px 12px", color: "#0f172a", fontSize: 13, outline: "none" }}
                               onFocus={e => (e.target.style.borderColor = "#4f46e5")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
                             <p style={{ margin: "6px 0 0", fontSize: 11, color: "#9ca3af" }}>
-                              Must match exactly as set on your videos (case-insensitive).
+                              Matches a category or tag on movies and series. Ignores case and extra spaces; the content type above still applies.
                             </p>
                           </div>
                         )}
@@ -6206,7 +6094,7 @@ export function CMS({ onExit, currentUser }) {
 
                     <div style={{ height: 1, background: "#e2e8f0" }} />
 
-                    {carouselForm.type !== "podcast" && (
+                    {!["podcast", "multiview", "continue"].includes(carouselForm.type) && (
                       <div>
                         <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>3 · Presentation</label>
                         <p style={{ margin: "0 0 10px", fontSize: 11, color: "#6b7280" }}>How this shelf looks on the home screen.</p>
@@ -6233,7 +6121,7 @@ export function CMS({ onExit, currentUser }) {
                       </div>
                     )}
 
-                    {carouselForm.type !== "podcast" && <div style={{ height: 1, background: "#e2e8f0" }} />}
+                    {!["podcast", "multiview", "continue"].includes(carouselForm.type) && <div style={{ height: 1, background: "#e2e8f0" }} />}
 
                     <div>
                       <label style={{ display: "block", fontSize: 11, color: "#4f46e5", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>4 · Visibility</label>
@@ -6277,12 +6165,10 @@ export function CMS({ onExit, currentUser }) {
 
                 {/* ── CHANNEL FORM ── */}
                 {tab === "live" && liveSubTab === "channels" && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-                    <p style={{ margin: "0 0 10px", fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 1 }}>Basics</p>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
+                  <ChannelEditorLayout key={editingChannelId ?? "new"}
+                    basics={<>
+<div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
                       <FieldInput label="Name *" value={channelForm.name} onChange={v => setChannelForm(f => ({ ...f, name: v }))} placeholder="e.g. Peep Classics" />
-                      <PremiumToggleButton on={channelForm.is_premium} onToggle={() => setChannelForm(f => ({ ...f, is_premium: !f.is_premium }))} />
-                      <TierSelect value={channelForm.visibility_tier} onChange={v => setChannelForm(f => ({ ...f, visibility_tier: v }))} />
                       <FieldInput label="Slug" value={channelForm.slug} onChange={v => setChannelForm(f => ({ ...f, slug: v }))} placeholder="auto-generated from name" />
                       <FieldInput label="Description" value={channelForm.description} onChange={v => setChannelForm(f => ({ ...f, description: v }))} placeholder="What's on this channel?" />
                       <div>
@@ -6292,33 +6178,10 @@ export function CMS({ onExit, currentUser }) {
                           {["general","movies","sports","news","gaming","music","kids","education","entertainment"].map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
                         </select>
                       </div>
-                      <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-                        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                          <input type="checkbox" checked={channelForm.is_active} onChange={e => setChannelForm(f => ({ ...f, is_active: e.target.checked }))} />
-                          <span style={{ fontSize: 13, color: "#374151" }}>Active (visible to users)</span>
-                        </label>
-                      </div>
-                      {/* Living Mosaic presentation controls */}
-                      <div>
-                        <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Mosaic tile size</label>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          {[{ k: "normal", l: "Normal" }, { k: "large", l: "Large" }, { k: "spotlight", l: "Spotlight" }].map(({ k, l }) => (
-                            <button key={k} onClick={() => setChannelForm(f => ({ ...f, tile_size: k }))}
-                              style={{ flex: 1, background: (channelForm.tile_size || "normal") === k ? "#facc15" : "#f1f5f9", border: `1px solid ${(channelForm.tile_size || "normal") === k ? "#facc15" : "#e2e8f0"}`, borderRadius: 7, padding: "8px 4px", color: (channelForm.tile_size || "normal") === k ? "#0a0a0a" : "#374151", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-                              {l}
-                            </button>
-                          ))}
-                        </div>
-                        <p style={{ margin: "6px 0 0", fontSize: 11, color: "#9ca3af" }}>How big this channel appears on the Live TV wall.</p>
-                      </div>
-                      <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                        <input type="checkbox" checked={!!channelForm.is_live_hero} onChange={e => setChannelForm(f => ({ ...f, is_live_hero: e.target.checked }))} />
-                        <span style={{ fontSize: 13, color: "#374151" }}>Feature as Live TV hero (pins to the top of the wall)</span>
-                      </label>
                     </div>
-
-                    <p style={{ margin: "0 0 10px", fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 1 }}>Source</p>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
+                    </>}
+                    source={<>
+<div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
                       <div>
                         <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Linked Live Feed</label>
                         <select value={channelForm.live_feed_id || ""} onChange={e => setChannelForm(f => ({ ...f, live_feed_id: e.target.value || null }))}
@@ -6326,8 +6189,9 @@ export function CMS({ onExit, currentUser }) {
                           <option value="">None — use the playback URL below</option>
                           {channelFeeds.map(fd => <option key={fd.id} value={fd.id}>{fd.name}{fd.playback_status === "available" ? " · live" : ""}</option>)}
                         </select>
-                        <p style={{ margin: "6px 0 0", fontSize: 11, color: "#9ca3af" }}>When a feed is linked, this channel plays the feed's Cloudflare stream — the fields below are ignored.</p>
+                        <p style={{ margin: "6px 0 0", fontSize: 11, color: "#9ca3af" }}>A linked feed supplies playback. Choose None to enter a direct playback URL.</p>
                       </div>
+                      {!channelForm.live_feed_id && <>
                       <div>
                         <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Protocol</label>
                         <div style={{ display: "flex", gap: 6 }}>
@@ -6357,11 +6221,12 @@ export function CMS({ onExit, currentUser }) {
                           <p style={{ margin: "8px 0 0", fontSize: 11, color: "#9ca3af" }}>Pass the stream key as the SRT stream ID. Cloudflare Stream supports SRT ingest natively.</p>
                         </div>
                       )}
-                      <FieldInput label="Sort Order" value={String(channelForm.sort_order)} onChange={v => setChannelForm(f => ({ ...f, sort_order: parseInt(v) || 0 }))} placeholder="0" />
-                    </div>
 
-                    <p style={{ margin: "0 0 10px", fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 1 }}>Media</p>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 20 }}>
+                      </>}
+                    </div>
+                    </>}
+                    artwork={<>
+<div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 20 }}>
                       <div>
                         <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Logo (square)</label>
                         <ImageUploader label="Upload Logo" folder="channels" onUploadSuccess={url => setChannelForm(f => ({ ...f, logo_url: url }))} onError={err => showToast("Upload failed: " + err, "error")} />
@@ -6403,14 +6268,54 @@ export function CMS({ onExit, currentUser }) {
                         <p style={{ margin: "6px 0 0", fontSize: 11, color: "#9ca3af" }}>Reflects your logo, hero, name & tile size. Live preview + real program art appear on the actual wall.</p>
                       </div>
                     </div>
+                    </>}
+                    access={<>
+                      <PremiumToggleButton on={channelForm.is_premium} onToggle={() => setChannelForm(f => ({ ...f, is_premium: !f.is_premium }))} />
+                      <TierSelect value={channelForm.visibility_tier} onChange={v => setChannelForm(f => ({ ...f, visibility_tier: v }))} />
+                      <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                          <input type="checkbox" checked={channelForm.is_active} onChange={e => setChannelForm(f => ({ ...f, is_active: e.target.checked }))} />
+                          <span style={{ fontSize: 13, color: "#374151" }}>Active (visible to users)</span>
+                        </label>
+                      </div>
+                      <ChannelBlackoutEditor value={channelForm} onChange={setChannelForm} />
 
-                    <div style={{ display: "flex", gap: 10 }}>
+                    </>}
+                    presentation={<>
+                      {/* Living Mosaic presentation controls */}
+                      <div>
+                        <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Mosaic tile size</label>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          {[{ k: "normal", l: "Normal" }, { k: "large", l: "Large" }, { k: "spotlight", l: "Spotlight" }].map(({ k, l }) => (
+                            <button key={k} onClick={() => setChannelForm(f => ({ ...f, tile_size: k }))}
+                              style={{ flex: 1, background: (channelForm.tile_size || "normal") === k ? "#facc15" : "#f1f5f9", border: `1px solid ${(channelForm.tile_size || "normal") === k ? "#facc15" : "#e2e8f0"}`, borderRadius: 7, padding: "8px 4px", color: (channelForm.tile_size || "normal") === k ? "#0a0a0a" : "#374151", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                              {l}
+                            </button>
+                          ))}
+                        </div>
+                        <p style={{ margin: "6px 0 0", fontSize: 11, color: "#9ca3af" }}>How big this channel appears on the Live TV wall.</p>
+                      </div>
+                      <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                        <input type="checkbox" checked={!!channelForm.is_live_hero} onChange={e => setChannelForm(f => ({ ...f, is_live_hero: e.target.checked }))} />
+                        <span style={{ fontSize: 13, color: "#374151" }}>Feature as Live TV hero (pins to the top of the wall)</span>
+                      </label>
+                      <FieldInput label="Sort Order" value={String(channelForm.sort_order)} onChange={v => setChannelForm(f => ({ ...f, sort_order: parseInt(v) || 0 }))} placeholder="0" />
+                    </>}
+                    tools={<>
+                    {editingChannelId != null && <StreamInspector key={editingChannelId} channelID={editingChannelId} />}
+                    <details><summary>Optional program data</summary><ChannelGuideSetup channelID={editingChannelId} channelName={channelForm.name} onSaved={loadLiveStreams} /></details>
+
+
+                    </>}
+                    actions={<>
+<div style={{ display: "flex", gap: 10 }}>
                       <button onClick={saveChannel} disabled={channelSaving} style={{ flex: 1, background: "#ef4444", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: channelSaving ? "not-allowed" : "pointer", opacity: channelSaving ? 0.7 : 1 }}>
                         {channelSaving ? "Saving…" : editingChannelId ? "Save Changes" : "Add Channel"}
                       </button>
                       <button onClick={() => { setEditingChannelId(null); setChannelForm(EMPTY_CHANNEL); setDrawerOpen(false); }} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
                     </div>
-                  </div>
+                    </>}
+                  />
                 )}
 
                 {/* ── LIVE FORM ── */}
@@ -6748,6 +6653,13 @@ export function CMS({ onExit, currentUser }) {
                         style={{ width: "100%", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box", fontFamily: "monospace" }}
                         onFocus={e => (e.target.style.borderColor = "#f59e0b")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
                     </div>
+                    <div style={{ padding: 12, background: "#f8fafc", borderRadius: 8 }}>
+                      <label><input type="checkbox" checked={adForm.is_test ?? true} onChange={e => setAdForm(f => ({ ...f, is_test: e.target.checked }))} /> Test tag — exclude delivery from normal ad reports</label>
+                      <p style={{ fontSize: 12 }}>Tags request ads; they do not transfer money or establish a revenue split. Paid tags require the provider's approved account, parameters and platform support.</p>
+                      <button type="button" onClick={() => setAdForm(f => ({ ...f, tag_url: TEST_VAST_URL, is_test: true }))}>Use Google sample ad (no earnings)</button>
+                      <div style={{ marginTop: 12 }}>{[["web", "Browser"], ["tvos", "Apple TV"]].map(([key,label]) => <label key={key} style={{ marginRight: 16 }}><input type="checkbox" checked={(adForm.platforms || ["web"]).includes(key)} onChange={e => setAdForm(f => ({ ...f, platforms: e.target.checked ? [...(f.platforms || ["web"]),key] : (f.platforms || ["web"]).filter(p => p !== key) }))} />{label}</label>)}</div>
+                      <p style={{ fontSize: 12 }}>Use a VAST pre-roll tag for entry breaks, not a VMAP schedule. Apple TV: pre-roll, plus dev-only Live TV mid-roll testing with a test tag and one channel ID. Mid-roll requires player-delivered SCTE35-OUT date ranges with known duration. Multiview remains entry ads only.</p>
+                    </div>
                     <div>
                       <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Ad Position</label>
                       <div style={{ display: "flex", gap: 6 }}>
@@ -6766,16 +6678,17 @@ export function CMS({ onExit, currentUser }) {
                         onFocus={e => (e.target.style.borderColor = "#f59e0b")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")}>
                         <option value="global">All Content</option>
                         <option value="movie">Shorts</option>
-                        <option value="show">TV Shows</option>
+                        <option value="show" disabled>TV Shows (use episode scope)</option>
                         <option value="episode">Episodes</option>
-                        <option value="podcast_episode">Podcasts</option>
+                        <option value="podcast_episode" disabled>Podcasts (not enabled)</option>
                         <option value="live">Live Channels</option>
+                        <option value="multiview">Multiview entry</option>
                       </select>
                     </div>
-                    {adForm.scope !== "global" && (
+                    {!["global", "multiview"].includes(adForm.scope) && (
                       <div>
                         <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Content ID <span style={{ textTransform: "none", color: "#94a3b8" }}>(leave blank for all in type)</span></label>
-                        <input value={adForm.content_id} onChange={e => setAdForm(f => ({ ...f, content_id: e.target.value }))} placeholder="e.g. 42" type="number"
+                        <input value={adForm.content_id} onChange={e => setAdForm(f => ({ ...f, content_id: e.target.value }))} placeholder="Exact content ID" type="text"
                           style={{ width: "100%", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" }}
                           onFocus={e => (e.target.style.borderColor = "#f59e0b")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
                       </div>
@@ -7281,17 +7194,6 @@ export function CMS({ onExit, currentUser }) {
         </div>
       </div>
     )}
-        {/* ────── PARTNERS SUB-TAB BAR ────── */}
-        {tab === "creators" && (
-          <div style={{ display: "flex", gap: 6, padding: `20px ${PAD} 20px`, borderBottom: "1px solid #e2e8f0", background: "#fafafa" }}>
-            {[{ key: "list", label: "Content Partners" }, { key: "review", label: `Review Queue${pendingCount > 0 ? ` (${pendingCount})` : ""}` }, { key: "payouts", label: "Payouts" }].map(({ key, label }) => (
-              <button key={key} onClick={() => setCreatorsTab(key)} style={{ background: creatorsTab === key ? "rgba(249,115,22,0.08)" : "transparent", border: `1px solid ${creatorsTab === key ? "rgba(249,115,22,0.3)" : "#e2e8f0"}`, borderRadius: 8, padding: "7px 16px", color: creatorsTab === key ? "#ea580c" : "#6b7280", fontSize: 13, fontWeight: creatorsTab === key ? 600 : 400, cursor: "pointer" }}>
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
-
         {/* ────── CREATORS LIST ────── */}
         {tab === "creators" && creatorsTab === "list" && (
           <div style={{ maxWidth: 1600, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
@@ -7428,7 +7330,7 @@ export function CMS({ onExit, currentUser }) {
                         <input type="date" value={creatorForm.agreement_signed_at} onChange={e => setCreatorForm(f => ({ ...f, agreement_signed_at: e.target.value }))}
                           style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 12px", fontSize: 13, color: "#0f172a", outline: "none" }} />
                         {!creatorForm.agreement_signed_at && (
-                          <button type="button" onClick={() => setCreatorForm(f => ({ ...f, agreement_signed_at: new Date().toISOString().slice(0, 10) }))}
+                          <button type="button" onClick={() => setCreatorForm(f => ({ ...f, agreement_signed_at: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10) }))}
                             style={{ background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.2)", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, color: "#16a34a", cursor: "pointer", whiteSpace: "nowrap" }}>
                             Mark Signed Today
                           </button>
@@ -7522,9 +7424,16 @@ export function CMS({ onExit, currentUser }) {
         )}
 
         {/* ────── REVIEW QUEUE VIEW (inside Boss) ────── */}
+        {tab === "creators" && creatorsTab === "deliveries" && <ProviderDeliveries admin />}
+
         {tab === "creators" && creatorsTab === "review" && (
-          <ReviewPanel showToast={showToast} onPendingCount={setPendingCount}
-            onBack={() => setCreatorsTab("list")} />
+          <>
+            <ProviderDeliveries admin reviewOnly />
+            <details style={{maxWidth:1076,margin:"0 auto 40px",padding:"0 28px"}}>
+              <summary style={{cursor:"pointer",fontSize:14,color:"#64748b"}}>Legacy episode submissions</summary>
+              <ReviewPanel showToast={showToast} onPendingCount={setPendingCount} onBack={() => setCreatorsTab("list")} />
+            </details>
+          </>
         )}
 
         {/* Reject modal */}
@@ -7742,7 +7651,7 @@ export function CMS({ onExit, currentUser }) {
         {/* ────── STORAGE TAB ────── */}
         {tab === "storage" && (
           <StoragePanel showToast={showToast} logAudit={logAudit}
-            videosList={videosList} showsList={showsList} podcastsList={podcastsList} />
+            videosList={videosList} showsList={showsList} podcastsList={podcastsList} onVODSaved={() => { loadRows(); loadShows(); }} />
         )}
 
     </div>

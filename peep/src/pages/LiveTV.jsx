@@ -1,3 +1,4 @@
+import { useChannelBlackout } from "../hooks/useChannelBlackout";
 import { useState, useEffect, useRef } from "react";
 import Hls from "hls.js";
 import { supabase } from "../supabase";
@@ -393,6 +394,8 @@ const TILE_SPAN = {
 };
 
 function MosaicTile({ channel, epgEntries, onPlay, previewActive, onHoverStart, onHoverEnd, isMobile }) {
+  const blackout = useChannelBlackout(previewActive ? channel.id : null, channel);
+  const canPreview = previewActive && !blackout.loading && !blackout.message && !blackout.error;
   const [imgFailed, setImgFailed] = useState(false);
   const [previewReady, setPreviewReady] = useState(false);
   const videoRef = useRef(null);
@@ -412,7 +415,7 @@ function MosaicTile({ channel, epgEntries, onPlay, previewActive, onHoverStart, 
   // Mount a muted live preview only while this tile is the single active one.
   useEffect(() => {
     setPreviewReady(false);
-    if (!previewActive) { if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; } return; }
+    if (!canPreview) { if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; } return; }
     const url = channelHlsUrl(channel);
     const el = videoRef.current;
     if (!url || !el) return;
@@ -428,8 +431,8 @@ function MosaicTile({ channel, epgEntries, onPlay, previewActive, onHoverStart, 
       el.src = url;
       el.play().then(() => setPreviewReady(true)).catch(() => {});
     }
-    return () => { cancelled = true; if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; } };
-  }, [previewActive, channel.id]);
+    return () => { cancelled = true; if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; } el.pause(); el.removeAttribute("src"); el.load(); };
+  }, [canPreview, channel.id]);
 
   return (
     <div
@@ -458,7 +461,7 @@ function MosaicTile({ channel, epgEntries, onPlay, previewActive, onHoverStart, 
       )}
 
       {/* Live muted preview fades in over the frame */}
-      {previewActive && (
+      {canPreview && (
         <video ref={videoRef} muted playsInline autoPlay
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: previewReady ? 1 : 0, transition: "opacity 0.4s" }} />
       )}

@@ -1,0 +1,47 @@
+/* Keep the light admin independent of the viewer app's dark form defaults. */
+.admin-workspace { color-scheme: light; }
+.admin-workspace :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]), textarea, select) {
+  background-color: #fff !important;
+  color: #0f172a !important;
+  -webkit-text-fill-color: #0f172a;
+  caret-color: #0f172a;
+  border-color: #cbd5e1;
+  color-scheme: light;
+}
+.admin-workspace :is(input, textarea)::placeholder {
+  color: #64748b;
+  -webkit-text-fill-color: #64748b;
+  opacity: 1;
+}
+.admin-workspace :is(input, textarea, select):focus {
+  border-color: #4f46e5 !important;
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgb(79 70 229 / 10%);
+}
+.admin-workspace input:-webkit-autofill,
+.admin-workspace input:-webkit-autofill:hover,
+.admin-workspace input:-webkit-autofill:focus,
+.admin-workspace textarea:-webkit-autofill,
+.admin-workspace select:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px #fff inset !important;
+  -webkit-text-fill-color: #0f172a !important;
+  caret-color: #0f172a;
+}
+.admin-workspace :is(input, textarea, select):disabled {
+  background-color: #f1f5f9 !important;
+  color: #64748b !important;
+  -webkit-text-fill-color: #64748b;
+  opacity: 1;
+}
+.admin-workspace input[type="file"]::file-selector-button {
+  background: #eef2ff;
+  color: #4338ca;
+  border: 1px solid #c7d2fe;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-right: 12px;
+}
+.admin-workspace select option { background: #fff; color: #0f172a; }
+.admin-workspace input[type="checkbox"],
+.admin-workspace input[type="radio"] { accent-color: #4f46e5; }

@@ -6,6 +6,17 @@ struct AppConfiguration {
     let streamHost: String
     let isDevelopment: Bool
 
+    static func accountManagementURL(bundle: Bundle = .main) -> URL? {
+        guard let value = bundle.object(forInfoDictionaryKey: "PEEP_ACCOUNT_MANAGEMENT_URL") as? String,
+              !value.contains("$("), let url = URL(string: value),
+              url.host != nil, url.user == nil, url.password == nil,
+              url.path == "/account/delete", url.query == nil, url.fragment == nil else { return nil }
+        let development = bundle.object(forInfoDictionaryKey: "PEEP_ENVIRONMENT") as? String == "development"
+        let parts = (url.host ?? "").split(separator: ".").compactMap { Int($0) }
+        let privateLAN = parts.count == 4 && parts.allSatisfy { (0...255).contains($0) } && (parts[0] == 10 || (parts[0] == 192 && parts[1] == 168) || (parts[0] == 172 && (16...31).contains(parts[1])))
+        guard url.scheme == "https" || (development && url.scheme == "http" && privateLAN) else { return nil }
+        return url
+    }
     static func load(bundle: Bundle = .main) throws -> AppConfiguration {
         func value(_ key: String) -> String {
             (bundle.object(forInfoDictionaryKey: key) as? String ?? "")

@@ -15,18 +15,39 @@ export function AdminPage() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        const { data: profile } = await supabase.from("profiles").select("role, is_admin").eq("id", session.user.id).maybeSingle();
-        if (isAdminProfile(profile)) { setIsAdmin(true); setCurrentUser(session.user); }
+    let active = true, revision = 0, verifiedID = null;
+    async function validate(session) {
+      const request = ++revision;
+      if (!session?.user) {
+        setChecking(false);
+        setError("Sign in with your admin account. Signing out in another tab also signs out this tab.");
+        return;
       }
-      setChecking(false);
-    }).catch(err => {
-      // Without this, a failed session check left `checking` true forever and the
-      // page rendered null -- a black screen with no clue what went wrong.
-      setError(`Can't reach the database: ${err.message}`);
-      setChecking(false);
+      try {
+        const { data: profile, error } = await supabase.from("profiles").select("role, is_admin").eq("id", session.user.id).maybeSingle();
+        if (!active || request !== revision) return;
+        if (error) throw error;
+        const allowed = isAdminProfile(profile);
+        verifiedID = allowed ? session.user.id : null;
+        setIsAdmin(allowed);
+        setCurrentUser(allowed ? session.user : null);
+        setError(allowed ? null : "This account doesn't have admin access. Sign in with your admin account.");
+      } catch (err) {
+        if (active && request === revision) setError(`Can't verify admin access: ${err.message}`);
+      } finally {
+        if (active && request === revision) setChecking(false);
+      }
+    }
+    // Defer API work outside Supabase's synchronous auth event callback.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user?.id && session.user.id === verifiedID) return;
+      verifiedID = null;
+      setIsAdmin(false);
+      setCurrentUser(null);
+      setTimeout(() => { if (active) void validate(session); }, 0);
     });
+    supabase.auth.getSession().then(({ data: { session } }) => { if (active) void validate(session); });
+    return () => { active = false; revision++; subscription.unsubscribe(); };
   }, []);
 
   async function handleLogin(e) {
@@ -37,7 +58,7 @@ export function AdminPage() {
     if (signInErr) { setError(signInErr.message); setLoading(false); return; }
     const { data: profile } = await supabase.from("profiles").select("role, is_admin").eq("id", data.user.id).maybeSingle();
     if (!isAdminProfile(profile)) {
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: 'local' });
       setError("This account doesn't have admin access.");
       setLoading(false);
       return;
@@ -48,7 +69,7 @@ export function AdminPage() {
   }
 
   async function handleSignOut() {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: 'local' });
     window.location.href = "/";
   }
 

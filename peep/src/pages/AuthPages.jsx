@@ -171,7 +171,7 @@ export function SignupPage() {
   // Auto-redirect after success
   useEffect(() => {
     if (step !== 3) return;
-    const t = setTimeout(() => { window.location.href = "/"; }, 2000);
+    const t = setTimeout(() => { const redirect = new URLSearchParams(window.location.search).get("redirect"); window.location.href = redirect === "/deliveries" ? redirect : "/"; }, 2000);
     return () => clearTimeout(t);
   }, [step]);
 
@@ -336,7 +336,7 @@ export function SignupPage() {
 
 // ─── SIGN IN PAGE ─────────────────────────────────────────────────────────────
 
-export function SigninPage() {
+export function SigninPage({redirectTo = null} = {}) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -365,8 +365,8 @@ export function SigninPage() {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) { setError(error.message); setLoading(false); return; }
 
-    const redirect = new URLSearchParams(window.location.search).get("redirect");
-    window.location.href = redirect && redirect.startsWith("/") ? redirect : "/";
+    const redirect = redirectTo || new URLSearchParams(window.location.search).get("redirect");
+    window.location.href = redirect && /^\/(?![\/\\])/.test(redirect) ? redirect : "/";
   }
 
   async function handleReset(e) {
@@ -424,7 +424,7 @@ export function SigninPage() {
 
           <p style={{ margin: "20px 0 0", textAlign: "center", fontSize: 13, color: "#555" }}>
             Don't have an account?{" "}
-            <a href="/signup" style={{ color: YELLOW, textDecoration: "none", fontWeight: 600 }}>Create one</a>
+            <a href={redirectTo === "/deliveries" ? "/signup?redirect=%2Fdeliveries" : "/signup"} style={{ color: YELLOW, textDecoration: "none", fontWeight: 600 }}>Create one</a>
           </p>
 
         </div>

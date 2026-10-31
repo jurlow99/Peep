@@ -20,6 +20,7 @@ export const EMPTY_ROW = {
 };
 
 export const EMPTY_SHOW = {
+  autoplay_next: true,
   title: "",
   category: "Horror",
   rating: "NR",
@@ -58,6 +59,10 @@ export const EMPTY_CAROUSEL = {
 };
 
 export const EMPTY_CHANNEL = {
+  blackout_enabled: false,
+  blackout_message: "",
+  blackout_starts_at: null,
+  blackout_ends_at: null,
   name: "",
   slug: "",
   description: "",

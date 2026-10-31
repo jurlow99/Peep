@@ -1,0 +1,57 @@
+{
+  "name": "Night Signal \u2014 Layout Demo",
+  "purpose": "FARRIS development layout preview; fictional artwork, real sample-film playback.",
+  "image": {
+    "file": "night-signal-hero-1920x1080.jpg",
+    "width": 1920,
+    "height": 1080,
+    "format": "JPEG",
+    "bytes": 363851,
+    "safe_area": {
+      "width": 1400,
+      "height": 800,
+      "margin_x": 260,
+      "margin_y": 140
+    },
+    "composition": "Dark left half for app text; subject on the right; no baked-in lettering."
+  },
+  "vod": {
+    "url": "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/1080/Big_Buck_Bunny_1080_10s_1MB.mp4",
+    "title": "Big Buck Bunny",
+    "host": "test-videos.co.uk",
+    "verified": "HTTP 200; actual playback verified in tvOS 27 simulator. Safari stalls on remote and local direct video files, outside Peep too; browser playback remains unverified.",
+    "source": "https://test-videos.co.uk/bigbuckbunny/mp4-h264",
+    "use": "Movie Video URL, not the promo background-video field.",
+    "duration_seconds": 10,
+    "local_reproduction": "big-buck-bunny-1080p-10s.mp4",
+    "attribution": "Big Buck Bunny (2008), Blender Foundation / peach.blender.org. CC BY 3.0 https://creativecommons.org/licenses/by/3.0/"
+  },
+  "suggested_promo": {
+    "enabled": true,
+    "image_url": "https://cuwdyedmmnpklufduaho.supabase.co/storage/v1/object/public/promo-images/hero/1792628798562-imported-hero.jpg",
+    "video_url": "",
+    "badge": "DEVELOPMENT DEMO",
+    "title": "Night Signal",
+    "subtitle": "Fictional artwork for layout testing. Play opens the Big Buck Bunny sample film.",
+    "cta_type": "movie",
+    "cta_label": "Play sample",
+    "cta_value": "4e11d0a0-3e97-4c7b-a800-000000000108"
+  },
+  "setup": [
+    "APPLIED in peep-dev only: uploaded artwork, enabled Home Hero, saved Night Signal and Play sample target.",
+    "Background video intentionally blank.",
+    "Browser and Apple TV promo artwork/text verified. Apple TV Reload catalog, Play sample and Back verified.",
+    "Permanent public artwork URL saved in FARRIS dev. Admin-only uploads and replacements; JPEG/PNG/WebP up to 5 MiB."
+  ],
+  "generation": {
+    "method": "Built-in image_gen tool; resized/exported with sips for exact delivery dimensions.",
+    "prompt": "Create a production-ready background image for a fictional streaming movie promo named NIGHT SIGNAL, used only as a Peep development demo. Exact output size 1920 x 1080 pixels, landscape 16:9. Cinematic photorealistic still: a lone astronaut beside a weathered radio observatory on a moonlike ridge, large distant planet and fine stars, silver and charcoal monochrome lighting. Main subject and visual detail on the RIGHT half, within the center 1400x800 safe area (260px horizontal margins, 140px vertical margins). Keep the LEFT half very dark, restrained, low-detail negative space for application-rendered headline, subtitle and button; especially keep bottom-left dark and clear. Avoid bright objects in outer margins, keep focal point upper-right of center. Premium film-key-art quality, realistic materials and atmospheric depth, controlled contrast. No text whatsoever, no lettering, no logos, no borders, no watermarks. Black and grey palette, no yellow or blue UI elements. This is artwork only, not a screenshot or mockup."
+  },
+  "verification": {
+    "web_tests": "36 passed",
+    "web_build": "passed",
+    "browser_media_blocker": "Safari shows indefinite/zero duration for both HLS and MP4, including a downloaded MP4 served directly on localhost outside Peep. No speculative player changes retained.",
+    "storage": "Public delivery verified without auth; downloaded SHA-256 matches original. Anonymous listing and upload denied. Admin-only hero upload/select/update policies.",
+    "signing": "untouched"
+  }
+}

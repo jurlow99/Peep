@@ -58,10 +58,25 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
 
   try {
+    const authorization = req.headers.get("Authorization") || "";
+    const baseURL = Deno.env.get("SUPABASE_URL")!;
+    const apiKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const headers = { Authorization: authorization, apikey: apiKey };
+    const auth = await fetch(`${baseURL}/auth/v1/user`, { headers });
+    const user = auth.ok ? await auth.json() : null;
+    if (!user?.id) return new Response(JSON.stringify({ error: "Sign in to import a feed." }), { status: 401, headers: { "Content-Type": "application/json", ...CORS } });
+    const profile = await fetch(`${baseURL}/rest/v1/profiles?select=role&id=eq.${encodeURIComponent(user.id)}`, { headers });
+    const rows = profile.ok ? await profile.json() : [];
+    if (rows[0]?.role !== "admin") return new Response(JSON.stringify({ error: "Admin access required." }), { status: 403, headers: { "Content-Type": "application/json", ...CORS } });
     const feedUrl = new URL(req.url).searchParams.get("url");
     if (!feedUrl) throw new Error("url is required");
 
-    const res = await fetch(feedUrl, {
+    const parsedURL = new URL(feedUrl);
+    if (parsedURL.protocol !== "https:" || parsedURL.username || parsedURL.password || parsedURL.port || !/^[a-z0-9.-]+$/i.test(parsedURL.hostname) || !parsedURL.hostname.includes(".") || /^(localhost|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2[0-9]|3[01])\.)/i.test(parsedURL.hostname)) {
+      throw new Error("Use a public HTTPS podcast feed URL.");
+    }
+    const res = await fetch(parsedURL, {
+      redirect: "error",
       headers: { "User-Agent": "Peep-RSS-Importer/1.0" },
       signal: AbortSignal.timeout(10000),
     });

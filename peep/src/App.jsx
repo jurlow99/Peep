@@ -1,3 +1,4 @@
+import ProviderDeliveries from './components/cms/ProviderDeliveries';
 import { useState, useEffect, useRef, useMemo, Component } from "react";
 import { useLocation } from "react-router-dom";
 import { supabase } from "./supabase";
@@ -210,8 +211,9 @@ export default function App() {
   if (passwordRecovery) return <PasswordResetPage isInvite={passwordRecovery === "invite"} onDone={() => { setPasswordRecovery(false); window.location.href = "/"; }} />;
   if (!user && !guestMode) return <LandingPage onBrowse={() => { sessionStorage.setItem("peep_guest", "1"); setGuestMode(true); }} />;
   if (user && !user.email_confirmed_at) return <EmailVerificationGate user={user} />;
-  if (user && userRole === "creator") return <CreatorDashboard user={user} onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }} />;
-  if (paywallOpen) return <PaywallPage user={user} onBack={() => setPaywallOpen(false)} onSubscribed={() => setPaywallOpen(false)} onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }} />;
+  if (user && window.location.pathname === "/deliveries") return <ProviderDeliveries />;
+  if (user && userRole === "creator") return <CreatorDashboard user={user} onSignOut={async () => { await supabase.auth.signOut({ scope: 'local' }); window.location.href = "/"; }} />;
+  if (paywallOpen) return <PaywallPage user={user} onBack={() => setPaywallOpen(false)} onSubscribed={() => setPaywallOpen(false)} onSignOut={async () => { await supabase.auth.signOut({ scope: 'local' }); window.location.href = "/"; }} />;
 
   const goToStudio = () => { setProfileOpen(false); setPage("studio"); };
   const profileScreenEl = profileOpen && <ProfileScreen user={user} userAvatarId={userAvatarId} userAvatarUrl={userAvatarUrl} userName={userName} onClose={() => setProfileOpen(false)} onAvatarChange={id => { setUserAvatarId(id); setUserAvatarUrl(null); }} onNameChange={n => setUserName(n)} onViewProfile={() => { setProfileOpen(false); setPage("profile"); }} onOpenSettings={() => { setProfileOpen(false); setPage("settings"); }} onCreatorDash={creatorRecord ? () => { setProfileOpen(false); setPage("creator"); } : null} onStreamerDash={streamRecord ? goToStudio : null} />;
@@ -306,7 +308,7 @@ export default function App() {
             if ("avatarUrl" in p) setUserAvatarUrl(p.avatarUrl);
             if (p.fullName != null) setUserName(p.fullName);
           }}
-          onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }}
+          onSignOut={async () => { await supabase.auth.signOut({ scope: 'local' }); window.location.href = "/"; }}
         />
       </>
     );
@@ -324,7 +326,7 @@ export default function App() {
           onGoHome={goHome}
           onNameChange={n => setUserName(n)}
           onOpenSettings={() => setPage("settings")}
-          onSignOut={async () => { await supabase.auth.signOut(); window.location.href = "/"; }}
+          onSignOut={async () => { await supabase.auth.signOut({ scope: 'local' }); window.location.href = "/"; }}
         />
       </>
     );

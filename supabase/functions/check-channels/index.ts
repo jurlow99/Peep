@@ -1,77 +1,56 @@
-// Server-side channel health check.
-// Client-side testing via public CORS proxies is unreliable (proxies go down,
-// rate-limit, run from the wrong region, and strip headers streams need). This runs
-// on Supabase's servers: no CORS, a real browser User-Agent, and the true HTTP status.
-//
-// POST { channels: [{ id, url }] }  ->  { results: { [id]: "ok" | "dead" } }
+import {handleCors,jsonResponse,errorResponse} from '../_shared/cors.ts';
+import {requireAdmin} from '../_shared/supabase.ts';
+import {publicFeedURL,privateAddress} from '../_shared/xmltvFetch.ts';
+import {httpCheckResult,isHLSManifest} from './manifest.ts';
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-const UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
-
-const PROBE_TIMEOUT_MS = 8000;
-
-async function doProbe(url: string, ctrl: AbortController): Promise<"ok" | "dead"> {
-  const res = await fetch(url, {
-    method: "GET",
-    headers: { "User-Agent": UA, "Accept": "*/*", "Range": "bytes=0-4095" },
-    redirect: "follow",
-    signal: ctrl.signal,
-  });
-  // 206 = partial content (honored our Range); 200 = full.
-  if (!res.ok && res.status !== 206) { try { await res.body?.cancel(); } catch { /* noop */ } return "dead"; }
-  const ctype = (res.headers.get("content-type") || "").toLowerCase();
-  const text = await res.text();
-  if (text.includes("#EXTM3U") || text.includes("#EXT")) return "ok";
-  if (ctype.includes("mpegurl") || ctype.includes("octet-stream")) return "ok";
-  return "dead";
-}
-
-// Hard-cap every probe: a stalled TCP connect can outlive AbortController, so we
-// race the fetch against a timer and treat a timeout as "dead". Guarantees the
-// whole batch finishes predictably instead of hanging on a few unreachable hosts.
-async function probe(url: string): Promise<"ok" | "dead"> {
-  if (!url || !/^https?:\/\//i.test(url)) return "dead";
-  const ctrl = new AbortController();
-  const timeout = new Promise<"dead">((resolve) =>
-    setTimeout(() => { try { ctrl.abort(); } catch { /* noop */ } resolve("dead"); }, PROBE_TIMEOUT_MS)
-  );
-  try {
-    return await Promise.race([doProbe(url, ctrl), timeout]);
-  } catch {
-    return "dead";
+// Reachability of a manifest is not proof that every media segment plays.
+type Check = {status:'ok'|'dead'|'unknown';reason:string};
+async function inspect(value: string, signal: AbortSignal): Promise<Check> {
+ let url=publicFeedURL(value);
+ for(let hop=0;hop<5;hop++) {
+  const host=url.hostname.replace(/^\[|\]$/g,'');
+  const addresses=/^[\d.]+$/.test(host)||host.includes(':')?[host]:(await Promise.allSettled([Deno.resolveDns(host,'A'),Deno.resolveDns(host,'AAAA')])).flatMap(r=>r.status==='fulfilled'?r.value:[]);
+  if(!addresses.length)return {status:'unknown',reason:'DNS lookup failed'};
+  if(addresses.some(privateAddress))return {status:'unknown',reason:'Private network URLs cannot be checked'};
+  let response=await fetch(url,{signal,redirect:'manual',headers:{'User-Agent':'Peep-ChannelCheck/1.0','Accept':'application/vnd.apple.mpegurl,application/x-mpegURL,*/*','Range':'bytes=0-4095'}});
+  if(response.status===416) {
+   await response.body?.cancel();
+   response=await fetch(url,{signal,redirect:'manual',headers:{'User-Agent':'Peep-ChannelCheck/1.0','Accept':'application/vnd.apple.mpegurl,*/*'}});
   }
-}
-
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
-  try {
-    const { channels } = await req.json();
-    if (!Array.isArray(channels)) throw new Error("Expected { channels: [{id, url}] }");
-
-    const results: Record<string, "ok" | "dead"> = {};
-    const CONCURRENCY = 10;
-    for (let i = 0; i < channels.length; i += CONCURRENCY) {
-      const batch = channels.slice(i, i + CONCURRENCY);
-      await Promise.all(
-        batch.map(async (c: { id: string | number; url: string }) => {
-          results[c.id] = await probe(c.url);
-        }),
-      );
-    }
-
-    return new Response(JSON.stringify({ results }), {
-      headers: { ...CORS, "Content-Type": "application/json" },
-    });
-  } catch (e) {
-    return new Response(JSON.stringify({ error: String((e as Error).message || e) }), {
-      status: 400,
-      headers: { ...CORS, "Content-Type": "application/json" },
-    });
+  if([301,302,303,307,308].includes(response.status)) {
+   const next=response.headers.get('location');await response.body?.cancel();
+   if(!next)throw new Error('Missing redirect');url=publicFeedURL(new URL(next,url).toString());continue;
   }
+  if(!response.ok){await response.body?.cancel();return httpCheckResult(response.status);}
+  if(!response.body)return {status:'dead',reason:'Empty playlist response'};
+  const reader=response.body.getReader();const decoder=new TextDecoder();let text='',size=0;
+  try {
+   while(size<4096) {
+    const {value,done}=await reader.read();if(done)break;
+    const part=value.subarray(0,4096-size);size+=part.length;text+=decoder.decode(part,{stream:true});
+    if(isHLSManifest(text))return {status:'ok',reason:'HLS playlist reachable'};
+   }
+   return {status:'dead',reason:'Response is not a valid HLS playlist'};
+  } finally {await reader.cancel().catch(()=>{});reader.releaseLock();}
+ }
+ return {status:'unknown',reason:'Too many redirects'};
+}
+async function probe(url: string): Promise<Check> {
+ const controller=new AbortController();let timer: ReturnType<typeof setTimeout>|undefined;
+ try {
+  return await Promise.race([inspect(url,controller.signal),new Promise<Check>(resolve=>{timer=setTimeout(()=>{resolve({status:'unknown',reason:'Timed out after 12 seconds'});controller.abort();},12000);})]);
+ }catch{return {status:'unknown',reason:controller.signal.aborted?'Timed out after 12 seconds':'Connection failed or source rejected the request'};}finally{if(timer)clearTimeout(timer);controller.abort();}
+}
+Deno.serve(async req=>{
+ const cors=handleCors(req);if(cors)return cors;
+ if(req.method!=='POST')return errorResponse('Use POST.',405);
+ try{await requireAdmin(req);}catch{return errorResponse('Admin access required.',403);}
+ try {
+  const {channels}=await req.json();
+  if(!Array.isArray(channels)||channels.length<1||channels.length>40||channels.some(c=>!c||!['string','number'].includes(typeof c.id)||typeof c.url!=='string'||c.url.length>8192))return errorResponse('Provide 1–40 channels with IDs and playback URLs.');
+  const results: Record<string,'ok'|'dead'|'unknown'>=Object.create(null);
+  const details: Record<string,string>=Object.create(null);
+  for(let i=0;i<channels.length;i+=10)await Promise.all(channels.slice(i,i+10).map(async c=>{const check=await probe(c.url);results[String(c.id)]=check.status;details[String(c.id)]=check.reason;}));
+  return jsonResponse({results,details});
+ }catch{return errorResponse('Could not check channels.',400);}
 });

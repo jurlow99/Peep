@@ -9,7 +9,7 @@ const BUCKET_NAME = "peep-media";
  * @param {string} folder - Folder path in storage (e.g., "thumbnails", "images")
  * @returns {Promise<{url: string, path: string, error: string|null}>}
  */
-export async function uploadImage(file, folder = "thumbnails") {
+export async function uploadImage(file, folder = "thumbnails", bucket = BUCKET_NAME, signedUrlSeconds = 0) {
   try {
     if (!file) throw new Error("No file provided");
     
@@ -20,7 +20,7 @@ export async function uploadImage(file, folder = "thumbnails") {
 
     // Upload to Supabase Storage
     const { data, error } = await supabase.storage
-      .from(BUCKET_NAME)
+      .from(bucket)
       .upload(path, file, {
         cacheControl: "3600",
         upsert: false,
@@ -28,9 +28,15 @@ export async function uploadImage(file, folder = "thumbnails") {
 
     if (error) throw error;
 
+    if (signedUrlSeconds > 0) {
+      const { data: signed, error: signError } = await supabase.storage.from(bucket).createSignedUrl(path, signedUrlSeconds);
+      if (signError) throw signError;
+      return { url: signed.signedUrl, path, error: null };
+    }
+
     // Get public URL
     const { data: urlData } = supabase.storage
-      .from(BUCKET_NAME)
+      .from(bucket)
       .getPublicUrl(path);
 
     return {

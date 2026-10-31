@@ -1,3 +1,10 @@
+import {nextSeriesEpisode, allowsEpisodeAutoplay} from "../../lib/seriesPlayback";
+import { resolveVODPlayback } from "../../lib/vodStorage";
+import { SUPABASE_URL } from "../../lib/config";
+import { useChannelBlackout } from "../../hooks/useChannelBlackout";
+import { startPreroll } from "../../lib/preroll";
+import { selectAdTag, recordAdEvent } from "../../lib/ads";
+import { trackLiveVideo } from "../../lib/liveViewing";
 import { useState, useEffect, useRef, useMemo } from "react";
 import Hls from "hls.js";
 import { Wordmark } from "../Wordmark";
@@ -12,14 +19,61 @@ import { rankRelated } from "../../lib/recommendations";
 import { PREF_AUTOPLAY_NEXT } from "../../pages/settingsHelpers";
 import { VideoCard } from "../browse/BrowseWidgets";
 
-export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, userName }) {
+// Browse rows deliberately omit playback URLs. Resolve the entitled row before
+// mounting either the ad request or the content player.
+export function PlayerView(props) {
+  const rawID = String(props.video.id);
+  const channelID = ["live", "live_epg"].includes(props.video._type) && /^ch[-_]\d+$/.test(rawID) ? Number(rawID.slice(3)) : null;
+  const blackout = useChannelBlackout(channelID);
+  if (blackout.loading || blackout.message || blackout.error) return <div style={{ background: "#080808", color: "white", minHeight: "100vh", padding: "clamp(24px, 6vw, 80px)" }}>
+    <button type="button" onClick={props.onBack}>Back to browsing</button>
+    <h1>{props.video.title}</h1><p role="status">{blackout.loading ? "Checking channel availability…" : blackout.message || blackout.error}</p>
+    {blackout.error && <button type="button" onClick={blackout.retry}>Retry</button>}
+  </div>;
+  return <AvailablePlayerView {...props} />;
+}
+
+function AvailablePlayerView(props) {
+  const { video, onBack } = props;
+  const [resolved, setResolved] = useState(null);
+  const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    let active = true;
+    const abort = new AbortController();
+    setError("");setResolved(null);
+    (async () => {
+      let item=video;
+      if(!item.url) {
+        if (["live","live_epg"].includes(video._type)) throw new Error("A playable stream is not available for this channel.");
+        const {data,error}=await supabase.from(video.show_id ? "episodes" : "videos")
+          .select(video.show_id ? contentSelect.episodesPlay : contentSelect.videosPlay)
+          .eq("id",video.id).abortSignal(abort.signal).maybeSingle();
+        if(error || !data?.url)throw new Error("This video is unavailable or your account does not have access.");
+        item={...video,...data};
+      }
+      const url=await resolveVODPlayback(supabase,item.url,SUPABASE_URL);
+      if(active)setResolved({...item,url});
+    })().catch(error=>{if(active)setError(error.message || "Couldn’t load playback. Please try again.");});
+    return () => { active = false; abort.abort(); };
+  }, [video, attempt, props.user?.id]);
+  if (resolved && resolved.id === video.id) return <ResolvedPlayerView {...props} video={resolved} />;
+  return <div style={{ background: "#0a0a0a", color: "white", minHeight: "100vh", padding: 60 }}>
+    <button type="button" onClick={onBack}>Back</button>
+    {error ? <p role="alert">{error} <button type="button" onClick={() => setAttempt(attempt + 1)}>Retry</button></p> : <p role="status">Preparing playback…</p>}
+  </div>;
+}
+
+function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, userName }) {
   const isMobile = useIsMobile();
   const [allVideos, setAllVideos] = useState([]);
   const [allShows, setAllShows] = useState([]);
   const [nextEpisode, setNextEpisode] = useState(null);
+  const [seriesAllowsAutoplay, setSeriesAllowsAutoplay] = useState(false);
   const [countdownActive, setCountdownActive] = useState(false);
   const [countdown, setCountdown] = useState(10);
   const videoRef = useRef(null);
+  const adsClearedRef = useRef(false);
   const hlsRef = useRef(null);
   const countdownTimerRef = useRef(null);
   const adContainerRef = useRef(null);
@@ -28,6 +82,8 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
   const midRollFiredRef = useRef(false);
   const postRollFiredRef = useRef(false);
   const [adPlaying, setAdPlaying] = useState(false);
+  const adBusyRef = useRef(false);
+  adBusyRef.current = adPlaying;
   const [adVastUrl, setAdVastUrl] = useState(null);
   const [liveChannels, setLiveChannels] = useState([]);
   const [liveEpg, setLiveEpg] = useState([]);
@@ -132,21 +188,19 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
   }
 
   useEffect(() => {
+    let cancelled = false;
     setNextEpisode(null);
+    setSeriesAllowsAutoplay(false);
     if (!isEpisode) return;
-    supabase.from("episodes").select("*").eq("show_id", video.show_id)
-      .order("season", { ascending: true })
-      .order("episode_number", { ascending: true })
-      .then(({ data }) => {
-        if (!data) return;
-        const idx = data.findIndex(e => e.id === video.id);
-        const candidate = idx >= 0 && idx < data.length - 1 ? data[idx + 1] : null;
-        const isForward = candidate && (
-          candidate.season > video.season ||
-          (candidate.season === video.season && candidate.episode_number > video.episode_number)
-        );
-        setNextEpisode(isForward ? candidate : null);
-      });
+    Promise.all([
+      supabase.from("episodes").select("*").eq("show_id", video.show_id),
+      supabase.from("shows").select("autoplay_next").eq("id", video.show_id).maybeSingle(),
+    ]).then(([episodes, show]) => {
+      if (cancelled || episodes.error) return;
+      setNextEpisode(nextSeriesEpisode(video, episodes.data || []));
+      setSeriesAllowsAutoplay(!show.error && !!show.data && show.data.autoplay_next !== false);
+    });
+    return () => { cancelled = true; };
   }, [video.id, video.show_id, isEpisode]);
 
   useEffect(() => {
@@ -205,7 +259,7 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
       const hls = new Hls(hlsConfig);
       hls.loadSource(video.url);
       hls.attachMedia(videoEl);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => { videoEl.play().catch(() => {}); });
+      hls.on(Hls.Events.MANIFEST_PARSED, () => { if (adsClearedRef.current) videoEl.play().catch(() => {}); });
       hls.on(Hls.Events.FRAG_BUFFERED, () => { netRetryRef.current = 0; }); // healthy again → reset
       hls.on(Hls.Events.ERROR, (_, d) => {
         if (!d.fatal) {
@@ -232,7 +286,7 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
       hlsRef.current = hls;
     } else if (videoEl.canPlayType("application/vnd.apple.mpegurl")) {
       videoEl.src = video.url;
-      videoEl.play().catch(() => {});
+      if (adsClearedRef.current) videoEl.play().catch(() => {});
     } else {
       setPlaybackError(true);
     }
@@ -243,7 +297,7 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
     if (!user || getEmbedUrl(video.url) || video._type === "live" || video._type === "live_epg") return;
     const ct = isEpisode ? "episode" : "movie";
     saveProgressRef.current = async () => {
-      if (!videoRef.current) return;
+      if (!videoRef.current || !adsClearedRef.current || adBusyRef.current) return;
       const { currentTime, duration } = videoRef.current;
       if (currentTime < 5 || !duration) return;
       await supabase.from("watch_progress").upsert({
@@ -261,107 +315,25 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
 
   useEffect(() => () => { document.body.style.overflow = ""; }, []);
 
-  // Fetch VAST tag + initialize IMA pre-roll in one effect
   useEffect(() => {
     if (getEmbedUrl(video.url)) return;
-    let cancelled = false;
-
-    async function runAd() {
-      // One pre-roll per session, 30-min cooldown
-      const lastAd = sessionStorage.getItem("lastAdAt");
-      if (lastAd && Date.now() - Number(lastAd) < 30 * 60 * 1000) return;
-
-      // Wait up to 3s for IMA SDK script to load
-      let waited = 0;
-      while (!window.google?.ima && waited < 3000) {
-        await new Promise(r => setTimeout(r, 100));
-        waited += 100;
-      }
-      if (cancelled || !window.google?.ima) return;
-
-      // Fetch best matching pre-roll tag (live channels get their own scope, no SCTE-35 needed)
-      const contentScope = isLive ? "live" : isEpisode ? "episode" : "movie";
-      const { data } = await supabase.from("vast_tags")
-        .select("id, tag_url, scope, content_id")
-        .eq("active", true)
-        .eq("ad_type", "pre_roll")
-        .or(`scope.eq.global,scope.eq.${contentScope}`);
-      if (cancelled || !data || data.length === 0) return;
-
-      const exact = data.find(t => t.content_id === video.id);
-      const typed = data.find(t => t.scope === contentScope && !t.content_id);
-      const glob  = data.find(t => t.scope === "global");
-      const tag = exact || typed || glob;
-      if (!tag) return;
-
-      const logAdEvent = (event) => {
-        supabase.from("ad_impressions").insert({ vast_tag_id: tag.id, video_id: video.id, event, user_id: user?.id ?? null }).then(() => {});
-      };
-
-      const ima = window.google.ima;
-      const videoEl = videoRef.current;
-      const adContainer = adContainerRef.current;
-      if (cancelled || !videoEl || !adContainer) return;
-
-      // Pause content while ad loads
-      videoEl.pause();
-      setAdPlaying(true);
-      setAdVastUrl(tag.tag_url);
-
-      if (!displayContainerRef.current) {
-        displayContainerRef.current = new ima.AdDisplayContainer(adContainer, videoEl);
-        displayContainerRef.current.initialize();
-      }
-      const adsLoader = new ima.AdsLoader(displayContainerRef.current);
-
-      const resume = () => {
-        setAdPlaying(false);
-        if (!cancelled) videoEl.play().catch(() => {});
-      };
-
-      adsLoader.addEventListener(ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED, (e) => {
-        if (cancelled) return;
-        const mgr = e.getAdsManager(videoEl);
-        adsManagerRef.current = mgr;
-
-        mgr.addEventListener(ima.AdEvent.Type.CONTENT_PAUSE_REQUESTED, () => { videoEl.pause(); setAdPlaying(true); });
-        mgr.addEventListener(ima.AdEvent.Type.CONTENT_RESUME_REQUESTED, resume);
-        mgr.addEventListener(ima.AdEvent.Type.STARTED, () => { sessionStorage.setItem("lastAdAt", Date.now()); logAdEvent("impression"); });
-        mgr.addEventListener(ima.AdEvent.Type.COMPLETE, () => logAdEvent("complete"));
-        mgr.addEventListener(ima.AdEvent.Type.SKIPPED, () => logAdEvent("skip"));
-        mgr.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, () => { logAdEvent("error"); mgr.destroy(); adsManagerRef.current = null; resume(); });
-
-        try {
-          const w = videoEl.clientWidth || 640;
-          const h = videoEl.clientHeight || 360;
-          mgr.init(w, h, ima.ViewMode.NORMAL);
-          mgr.start();
-        } catch {
-          mgr.destroy();
-          adsManagerRef.current = null;
-          resume();
+    adsClearedRef.current = false;
+    const stop = startPreroll({ client: supabase, video: videoRef.current, container: adContainerRef.current,
+      scope: isLive ? "live" : isEpisode ? "episode" : "movie",
+      contentId: isLive ? String(video.id).replace(/^ch[-_]/, "") : video.id,
+      onBusy: setAdPlaying, onManager: manager => { adsManagerRef.current = manager; },
+      onReady: () => {
+        adsClearedRef.current = true; setPlaybackError(false);
+        const element = videoRef.current;
+        if (element) { element.style.visibility = "visible"; element.style.display = "block"; element.style.opacity = "1"; }
+        if (element && !isHlsUrl(video.url)) {
+          element.src = video.url;
+          element.load();
         }
-      });
-
-      adsLoader.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, () => { logAdEvent("error"); resume(); });
-
-      const req = new ima.AdsRequest();
-      req.adTagUrl = tag.tag_url;
-      req.linearAdSlotWidth = videoEl.clientWidth || 640;
-      req.linearAdSlotHeight = videoEl.clientHeight || 360;
-      adsLoader.requestAds(req);
-    }
-
-    runAd();
-
-    return () => {
-      cancelled = true;
-      midRollFiredRef.current = false;
-      postRollFiredRef.current = false;
-      adsManagerRef.current?.destroy();
-      adsManagerRef.current = null;
-      displayContainerRef.current = null;
-    };
+        element?.play().catch(() => {});
+      },
+    });
+    return () => { stop(); adsClearedRef.current = false; midRollFiredRef.current = false; postRollFiredRef.current = false; };
   }, [video.id]);
 
   useEffect(() => {
@@ -376,6 +348,11 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, [isFullscreen]);
+
+  useEffect(() => {
+    if (adPlaying || !isLive || !String(video.id).startsWith("ch-")) return;
+    return trackLiveVideo(videoRef.current, Number(String(video.id).slice(3)));
+  }, [video.id, isLive, adPlaying]);
 
   // Live viewer heartbeat — register this session while watching live
   useEffect(() => {
@@ -460,6 +437,7 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
 
   function togglePlayPause() {
     if (!videoRef.current) return;
+    if (adPlaying) return;
     if (videoRef.current.paused) videoRef.current.play().catch(() => {});
     else videoRef.current.pause();
   }
@@ -484,42 +462,34 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
   }
 
   function handleTimeUpdate(e) {
+    if (!adsClearedRef.current || adBusyRef.current) return;
     const { currentTime, duration } = e.currentTarget;
     if (!duration || isNaN(duration)) return;
 
     // Mid-roll: fire once at 50% for videos over 20 minutes
-    if (!midRollFiredRef.current && !getEmbedUrl(video.url) && duration >= 1200 && currentTime / duration >= 0.5) {
+    if (!adPlaying && !isLive && !midRollFiredRef.current && !getEmbedUrl(video.url) && duration >= 1200 && currentTime / duration >= 0.5) {
       midRollFiredRef.current = true;
       playMidRoll();
     }
 
-    if (!nextEpisode || countdownGuardRef.current) return;
-    if (localStorage.getItem(PREF_AUTOPLAY_NEXT) === "false") return;
-    if (duration - currentTime <= 10) {
-      countdownGuardRef.current = true;
-      startCountdown(duration - currentTime);
-    }
+
   }
 
   async function playMidRoll() {
     if (!window.google?.ima) return;
     const contentScope = isEpisode ? "episode" : "movie";
     const { data } = await supabase.from("vast_tags")
-      .select("id, tag_url, scope, content_id")
+      .select("id, tag_url, scope, content_id, active, is_test, platforms")
       .eq("active", true)
       .eq("ad_type", "mid_roll")
       .or(`scope.eq.global,scope.eq.${contentScope}`);
     if (!data || data.length === 0) return;
 
-    const exact = data.find(t => t.content_id === video.id);
-    const typed = data.find(t => t.scope === contentScope && !t.content_id);
-    const glob  = data.find(t => t.scope === "global");
-    const tag = exact || typed || glob;
+    const tag = selectAdTag(data, contentScope, video.id);
     if (!tag) return;
 
-    const logAdEvent = (event) => {
-      supabase.from("ad_impressions").insert({ vast_tag_id: tag.id, video_id: video.id, event, user_id: user?.id ?? null }).then(() => {});
-    };
+    const adSession = crypto.randomUUID();
+    const logAdEvent = event => recordAdEvent(tag, adSession, event, contentScope, video.id);
 
     const ima = window.google.ima;
     const videoEl = videoRef.current;
@@ -564,21 +534,17 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
     postRollFiredRef.current = true;
     const contentScope = isEpisode ? "episode" : "movie";
     supabase.from("vast_tags")
-      .select("id, tag_url, scope, content_id")
+      .select("id, tag_url, scope, content_id, active, is_test, platforms")
       .eq("active", true)
       .eq("ad_type", "post_roll")
       .or(`scope.eq.global,scope.eq.${contentScope}`)
       .then(({ data }) => {
         if (!data || data.length === 0) { onComplete(); return; }
-        const exact = data.find(t => t.content_id === video.id);
-        const typed = data.find(t => t.scope === contentScope && !t.content_id);
-        const glob  = data.find(t => t.scope === "global");
-        const tag = exact || typed || glob;
+        const tag = selectAdTag(data, contentScope, video.id);
         if (!tag) { onComplete(); return; }
 
-        const logAdEvent = (event) => {
-          supabase.from("ad_impressions").insert({ vast_tag_id: tag.id, video_id: video.id, event, user_id: user?.id ?? null }).then(() => {});
-        };
+        const adSession = crypto.randomUUID();
+        const logAdEvent = event => recordAdEvent(tag, adSession, event, contentScope, video.id);
 
         const ima = window.google.ima;
         const videoEl = videoRef.current;
@@ -617,6 +583,7 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
   }
 
   async function handleEnded() {
+    if (!adsClearedRef.current || adBusyRef.current) return;
     if (user && videoRef.current && !getEmbedUrl(video.url)) {
       const { currentTime, duration } = videoRef.current;
       if (duration > 0) {
@@ -625,14 +592,18 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
       }
     }
     const afterAd = () => {
-      if (nextEpisode && localStorage.getItem(PREF_AUTOPLAY_NEXT) !== "false") { clearInterval(countdownTimerRef.current); onSelect(nextEpisode); }
+      if (nextEpisode) {
+        countdownGuardRef.current = true;
+        if (allowsEpisodeAutoplay(seriesAllowsAutoplay, localStorage.getItem(PREF_AUTOPLAY_NEXT))) startCountdown(10);
+        else { setCountdown(0); setCountdownActive(true); }
+      }
     };
     if (!getEmbedUrl(video.url)) playPostRoll(afterAd);
     else afterAd();
   }
 
   function cancelCountdown() {
-    countdownGuardRef.current = false;
+    countdownGuardRef.current = true;
     setCountdownActive(false);
     clearInterval(countdownTimerRef.current);
   }
@@ -653,7 +624,7 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
   }
 
   function handleLoadedMetadata() {
-    if (!videoRef.current) return;
+    if (!videoRef.current || adBusyRef.current) return;
     if ((video._type === "live_epg") && video._elapsed > 0 && !getEmbedUrl(video.url)) {
       const { duration } = videoRef.current;
       if (duration && video._elapsed < duration) videoRef.current.currentTime = video._elapsed;
@@ -712,15 +683,15 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
             {getEmbedUrl(video.url) ? (
               <iframe src={getEmbedUrl(video.url)} style={{ width: "100%", height: "100%", display: "block", border: "none" }} allowFullScreen allow="autoplay" />
             ) : (
-              <video ref={videoRef} controls controlsList="nofullscreen" autoPlay style={{ width: "100%", height: "100%", display: "block", cursor: isFullscreen ? "pointer" : "default" }} poster={video.thumbnail}
+              <video ref={videoRef} controls={!adPlaying} controlsList="nofullscreen" style={{ width: "100%", height: "100%", display: "block", cursor: isFullscreen ? "pointer" : "default" }} poster={video.thumbnail}
                 onClick={isFullscreen ? togglePlayPause : undefined}
-                onError={() => { if (!Hls.isSupported() || !isHlsUrl(video.url)) setPlaybackError(true); }}
+                onError={() => { if (adsClearedRef.current && !adBusyRef.current && (!Hls.isSupported() || !isHlsUrl(video.url))) setPlaybackError(true); }}
                 onTimeUpdate={handleTimeUpdate} onEnded={handleEnded} onLoadedMetadata={handleLoadedMetadata}>
                 {!isHlsUrl(video.url) && <source src={video.url} type="video/mp4" />}
               </video>
             )}
-            <div ref={adContainerRef} style={{ position: "absolute", inset: 0, zIndex: 10, pointerEvents: adPlaying ? "auto" : "none" }} />
-            {playbackError && !streamEnded && (
+            <div ref={adContainerRef} style={{ position: "absolute", inset: 0, zIndex: 10, display: adPlaying ? "block" : "none", pointerEvents: adPlaying ? "auto" : "none" }} />
+            {playbackError && !adPlaying && !streamEnded && (
               <div style={{ position: "absolute", inset: 0, zIndex: 20, background: "rgba(0,0,0,0.94)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, padding: 24, textAlign: "center" }}>
                 <div style={{ fontSize: 46, lineHeight: 1 }}>📡</div>
                 <p style={{ margin: 0, fontSize: 19, fontWeight: 700, color: "#fff" }}>{isLive ? "Channel unavailable" : "Can't play this video"}</p>
@@ -751,7 +722,7 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
           )}
           {countdownActive && nextEpisode && (
             <div style={{ position: "absolute", bottom: isFullscreen ? 80 : 20, right: 20, background: "rgba(15,15,15,0.96)", backdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 14, padding: "18px 20px", display: "flex", alignItems: "center", gap: 18, minWidth: 290, zIndex: 1000, boxShadow: "0 8px 32px rgba(0,0,0,0.7)" }}>
-              <div style={{ position: "relative", flexShrink: 0, width: 54, height: 54 }}>
+              {countdown > 0 && <div style={{ position: "relative", flexShrink: 0, width: 54, height: 54 }}>
                 <svg width="54" height="54" viewBox="0 0 54 54" style={{ transform: "rotate(-90deg)" }}>
                   <circle cx="27" cy="27" r="21" fill="none" stroke="#222" strokeWidth="4" />
                   <circle cx="27" cy="27" r="21" fill="none" stroke="#facc15" strokeWidth="4"
@@ -762,7 +733,7 @@ export function PlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, us
                   />
                 </svg>
                 <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 700, color: "#fff" }}>{countdown}</span>
-              </div>
+              </div>}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ margin: "0 0 2px", fontSize: 10, color: "#666", textTransform: "uppercase", letterSpacing: 1 }}>Next Episode</p>
                 <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "#e5e5e5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

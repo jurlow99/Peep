@@ -734,7 +734,7 @@ export function StreamerDashboard({ embedded = false, preloadedUser = null, onBa
     showToast("Image removed.");
   }
 
-  async function signOut() { await supabase.auth.signOut(); window.location.href = "/"; }
+  async function signOut() { await supabase.auth.signOut({ scope: 'local' }); window.location.href = "/"; }
 
   if (user === undefined || loading) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: embedded ? 300 : "100vh", background: embedded ? "transparent" : BG, fontFamily: "'Space Grotesk', sans-serif" }}>

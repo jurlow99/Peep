@@ -1,0 +1,14 @@
+.channel-guide-setup { padding:24px; border:1px solid #e2e8f0; border-radius:14px; background:#f8fafc; margin:12px 0; color:#334155; }
+.channel-guide-setup h3 { margin:0 0 8px; font-size:20px; color:#0f172a; }
+.channel-guide-setup > p { font-size:13px; color:#64748b; margin:0 0 20px; }
+.channel-guide-setup label { display:block; font-size:13px; font-weight:600; margin:14px 0; }
+.channel-guide-setup input,.channel-guide-setup select { box-sizing:border-box; width:100%; padding:11px 12px; border:1px solid #cbd5e1; border-radius:8px; margin-top:8px; font:inherit; }
+.channel-guide-url { display:flex; gap:10px; align-items:baseline; }.channel-guide-url input { flex:1; min-width:0; }
+.channel-guide-setup button { border:0; border-radius:8px; padding:12px 16px; color:#fff; background:#4f46e5; font:inherit; font-weight:600; cursor:pointer; white-space:nowrap; }
+.channel-guide-setup button:disabled { opacity:.5; cursor:default; }
+.channel-guide-upload input { background:#fff; font-weight:400; }
+.channel-guide-status { display:flex; flex-direction:column; gap:6px; padding:14px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; font-size:13px; }.channel-guide-status span { color:#64748b; font-size:12px; }
+.channel-guide-program { display:flex; gap:16px; padding:9px 0; font-size:12px; border-top:1px solid #e2e8f0; }.channel-guide-program time { color:#64748b; }
+.channel-guide-selection small { display:block; margin-top:10px; color:#64748b; line-height:1.6; }.channel-guide-selection button { margin-top:14px; }
+.channel-guide-setup .channel-guide-error { color:#b91c1c; margin-top:16px; }.channel-guide-setup .channel-guide-success { color:#047857; margin-top:16px; }
+@media(max-width:600px){.channel-guide-url {flex-wrap:wrap;}.channel-guide-url input{flex-basis:100%;}.channel-guide-setup {padding:18px;}}

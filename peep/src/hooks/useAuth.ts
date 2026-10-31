@@ -29,7 +29,7 @@ export function useAuth() {
           .eq("email", activeUser.email)
           .maybeSingle();
         if (blocked) {
-          await supabase.auth.signOut();
+          await supabase.auth.signOut({ scope: 'local' });
           setAuthChecked(true);
           return;
         }

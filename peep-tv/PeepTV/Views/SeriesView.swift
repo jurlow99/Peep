@@ -2,39 +2,43 @@ import SwiftUI
 
 struct SeriesView: View {
     @EnvironmentObject var supabase: SupabaseService
+    @Environment(\.catalogRevision) private var catalogRevision
     @State private var shows: [Show] = []
     @State private var selectedShow: Show?
     @State private var isLoading = true
     @State private var errorMessage: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 32) {
-            Text("Series").font(.system(size: 52, weight: .bold))
-                .padding(.horizontal, 80).padding(.top, 60)
+        VStack(alignment: .leading, spacing: 0) {
+            BrowseHeader(title: "Series", subtitle: "")
             if isLoading {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                ProgressView("Loading series…").frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let errorMessage {
                 StatusView(title: "Couldn't load series", message: errorMessage, retry: { Task { await load() } })
             } else if shows.isEmpty {
                 StatusView(title: "No series yet", message: "Check back soon.", symbol: "tv")
             } else {
-                ScrollView {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 340), spacing: 36)], spacing: 40) {
-                        ForEach(shows) { show in
-                            ShowCardView(show: show) { selectedShow = show }
-                        }
+                GeometryReader { geometry in
+                    let count = PosterGrid.columnCount(availableWidth: geometry.size.width - 140)
+                    ScrollView {
+                        LazyVGrid(columns: Array(repeating: GridItem(.fixed(PosterGrid.cardWidth), spacing: PosterGrid.spacing, alignment: .top), count: count), alignment: .leading, spacing: 34) {
+                            ForEach(Array(shows.enumerated()), id: \.element.id) { index, show in
+                                ShowCardView(show: show) { selectedShow = show }
+                                    .contentEntryTarget(index == 0).sidebarBoundary(index % count == 0)
+                            }
+                        }.frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 70).padding(.top, 24).padding(.bottom, 60).focusSection()
                     }
-                    .padding(.horizontal, 80).padding(.vertical, 40)
                 }
             }
         }
         .background(Color.black)
-        .task { await load() }
-        .sheet(item: $selectedShow) { SeriesDetailView(show: $0) }
+        .task(id: catalogRevision) { await load() }
+        .fullScreenCover(item: $selectedShow) { SeriesDetailView(show: $0) }
     }
 
     private func load() async {
-        isLoading = true
+        isLoading = shows.isEmpty
         errorMessage = nil
         defer { isLoading = false }
         do { shows = try await supabase.fetchShows() }
@@ -47,6 +51,7 @@ struct SeriesDetailView: View {
     @Environment(\.dismiss) private var dismiss
     let show: Show
     @State private var episodes: [Episode] = []
+    @State private var progress: [String: WatchProgress] = [:]
     @State private var selectedSeason = 1
     @State private var selectedEpisode: Episode?
     @State private var isLoading = true
@@ -54,109 +59,213 @@ struct SeriesDetailView: View {
 
     private var seasons: [Int] { Array(Set(episodes.map { $0.season ?? 1 })).sorted() }
     private var visibleEpisodes: [Episode] { episodes.filter { ($0.season ?? 1) == selectedSeason } }
+    private var firstPlayable: Episode? {
+        visibleEpisodes.first { $0.videoURL != nil && progress[String($0.id)]?.canResume == true }
+        ?? visibleEpisodes.first { $0.videoURL != nil && progress[String($0.id)]?.completed != true }
+        ?? visibleEpisodes.first { $0.videoURL != nil }
+    }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 40) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 28) {
-                    Button("Back") { dismiss() }
-                    AsyncImage(url: show.thumbURL) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: { Rectangle().fill(Color(white: 0.12)) }
-                    .frame(width: 400, height: 225).clipped().cornerRadius(12)
-                    Text(show.title).font(.title2.bold())
-                    Text(show.description ?? "").font(.body).foregroundStyle(.secondary).lineLimit(5)
-                    ForEach(seasons, id: \.self) { season in
-                        Button {
-                            selectedSeason = season
-                        } label: {
-                            Label("Season \(season)", systemImage: selectedSeason == season ? "checkmark.circle.fill" : "circle")
+        ScrollView {
+            VStack(alignment: .leading, spacing: 32) {
+                Button { dismiss() } label: {
+                    Label("Back", systemImage: "chevron.left")
+                        .font(.system(size: 21, weight: .semibold)).padding(.horizontal, 20).padding(.vertical, 14)
+                }.buttonStyle(BrowseCardStyle())
+
+                HStack(alignment: .center, spacing: 44) {
+                    PosterArtwork(url: show.thumbURL, width: 188, symbol: "tv")
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("SERIES").font(.system(size: 16, weight: .bold)).tracking(3).foregroundStyle(.secondary)
+                        Text(show.title.trimmingCharacters(in: .whitespacesAndNewlines))
+                            .font(.system(size: 52, weight: .bold, design: .rounded)).lineLimit(2)
+                        if let description = show.description, !description.isEmpty {
+                            Text(description).font(.system(size: 23)).foregroundStyle(Color(white: 0.72))
+                                .lineLimit(3).frame(maxWidth: 1040, alignment: .leading)
                         }
-                        .buttonStyle(.card)
+                        HStack(spacing: 20) {
+                            if let episode = firstPlayable {
+                                Button { selectedEpisode = episode } label: {
+                                    Label("\(progress[String(episode.id)]?.canResume == true ? "Resume" : "Play") episode \(episode.episode_number ?? 1)", systemImage: "play.fill")
+                                        .font(.system(size: 22, weight: .semibold)).padding(18)
+                                }.buttonStyle(BrowseCardStyle())
+                            }
+                            MyListAction(id: String(show.id), type: "show")
+                        }.padding(.top, 8)
                     }
-                }
-                .padding(32)
-            }
-            .frame(width: 470)
-            if isLoading {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let errorMessage {
-                StatusView(title: "Couldn't load episodes", message: errorMessage, retry: { Task { await load() } })
-            } else if episodes.isEmpty {
-                StatusView(title: "Coming soon", message: "Episodes haven't been published yet.", symbol: "tv")
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 28) {
-                        ForEach(visibleEpisodes) { episode in
-                            EpisodeRowView(episode: episode) { selectedEpisode = episode }
+                    Spacer(minLength: 0)
+                }.focusSection()
+
+                Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1).padding(.top, 4)
+                HStack(alignment: .center, spacing: 24) {
+                    Text("Episodes").font(.system(size: 32, weight: .bold, design: .rounded))
+                    if !episodes.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 12) {
+                                ForEach(seasons, id: \.self) { season in
+                                    FilterChip(label: "Season \(season)", isSelected: selectedSeason == season) { selectedSeason = season }
+                                }
+                            }.padding(6)
                         }
-                    }.padding(40)
+                        Text("\(visibleEpisodes.count) episode\(visibleEpisodes.count == 1 ? "" : "s")")
+                            .font(.system(size: 18)).foregroundStyle(.secondary).fixedSize()
+                    }
+                }.focusSection()
+
+                if isLoading {
+                    ProgressView("Loading episodes…").frame(maxWidth: .infinity, minHeight: 220)
+                } else if let errorMessage {
+                    StatusView(title: "Couldn't load episodes", message: errorMessage, retry: { Task { await load() } })
+                } else if episodes.isEmpty {
+                    StatusView(title: "Coming soon", message: "Episodes haven't been published yet.", symbol: "tv")
+                } else {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 32), count: 3), alignment: .leading, spacing: 36) {
+                        ForEach(visibleEpisodes) { episode in
+                            EpisodeRowView(episode: episode, progress: progress[String(episode.id)], fallbackArtwork: MediaURL.parse(show.thumbnail) ?? show.thumbURL) { selectedEpisode = episode }
+                        }
+                    }.focusSection()
                 }
-            }
+            }.padding(.horizontal, 80).padding(.top, 36).padding(.bottom, 70)
         }
-        .padding(32).background(Color.black)
+        .background(Color.black).foregroundStyle(.white)
+        .onExitCommand { dismiss() }
         .task { await load() }
-        .fullScreenCover(item: $selectedEpisode) {
-            PlaybackView(url: $0.videoURL, title: $0.displayTitle)
+        .task(id: "\(supabase.watchProgressRevision):\(supabase.session?.userId ?? "guest")") { await loadProgress() }
+        .fullScreenCover(item: $selectedEpisode, onDismiss: { Task { await loadProgress() } }) {
+            PlaybackView(url: $0.videoURL, title: $0.displayTitle, identity: PlaybackIdentity(id: String($0.id), type: "episode"))
         }
     }
 
     private func load() async {
-        isLoading = true
+        isLoading = episodes.isEmpty
         errorMessage = nil
         defer { isLoading = false }
         do {
             episodes = try await supabase.fetchEpisodes(showId: show.id)
-            selectedSeason = seasons.first ?? 1
+            await loadProgress()
+            if !seasons.contains(selectedSeason) { selectedSeason = seasons.first ?? 1 }
         } catch { errorMessage = error.localizedDescription }
     }
+    private func loadProgress() async {
+        if supabase.session == nil { progress = [:]; return }
+        guard let rows = try? await supabase.fetchEpisodeProgress(ids: episodes.map(\.id)) else { return }
+        progress = Dictionary(rows.map { ($0.content_id, $0) }, uniquingKeysWith: { _, latest in latest })
+    }
+
 }
 
 struct EpisodeRowView: View {
     let episode: Episode
+    var progress: WatchProgress? = nil
+    var fallbackArtwork: URL?
     let onPlay: () -> Void
+    @FocusState private var focused: Bool
 
     var body: some View {
         Button(action: onPlay) {
-            HStack(spacing: 20) {
-                AsyncImage(url: episode.thumbURL) { img in
-                    img.resizable().aspectRatio(16/9, contentMode: .fill)
-                } placeholder: {
-                    Rectangle().fill(Color(white: 0.15))
-                }
-                .frame(width: 220, height: 124)
-                .clipped()
-                .cornerRadius(8)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(episode.displayTitle)
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundColor(.white)
-
-                    if let desc = episode.description {
-                        Text(desc)
-                            .font(.system(size: 18))
-                            .foregroundColor(Color(white: 0.55))
-                            .lineLimit(2)
+            VStack(alignment: .leading, spacing: 12) {
+                EpisodeArtwork(url: episode.thumbURL, fallback: fallbackArtwork)
+                    .aspectRatio(16 / 9, contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(focused ? ContentAppearance.accent : .clear, lineWidth: ContentAppearance.focusWidth))
+                    .overlay(alignment: .bottomLeading) {
+                        if let progress, (progress.progress_seconds ?? 0) > 0 {
+                            GeometryReader { geometry in
+                                Rectangle().fill(Color.white.opacity(0.22))
+                                    .overlay(alignment: .leading) {
+                                        Rectangle().fill(Color.white.opacity(0.85)).frame(width: geometry.size.width * progress.fraction)
+                                    }
+                            }.frame(height: 4).padding(.horizontal, 14).padding(.bottom, 9)
+                        }
                     }
-
-                    if let dur = episode.duration {
-                        Text(dur)
-                            .font(.system(size: 16))
-                            .foregroundColor(Color(white: 0.35))
+                    .overlay(alignment: .topLeading) {
+                        if progress?.completed == true {
+                            Label("Watched", systemImage: "checkmark.circle.fill")
+                                .font(.system(size: 16, weight: .semibold)).padding(.horizontal, 12).padding(.vertical, 8)
+                                .background(.black.opacity(0.8), in: Capsule()).padding(12)
+                        } else if progress?.canResume == true {
+                            Text("Resume").font(.system(size: 16, weight: .semibold)).padding(.horizontal, 12).padding(.vertical, 8)
+                                .background(.black.opacity(0.8), in: Capsule()).padding(12)
+                        }
                     }
+                    .overlay(alignment: .bottomTrailing) {
+                        Image(systemName: "play.fill").font(.system(size: 19, weight: .bold))
+                            .padding(13).background(.black.opacity(0.75), in: Circle()).padding(14)
+                    }
+                HStack {
+                    Text("EPISODE \(episode.episode_number ?? 1)").tracking(1.5)
+                    Spacer()
+                    if let duration = episode.duration, !duration.isEmpty { Text(duration) }
+                }.font(.system(size: 16, weight: .semibold)).foregroundStyle(Color(white: 0.6))
+                Text(episode.displayTitle).font(.system(size: 25, weight: .semibold))
+                    .lineLimit(2).frame(height: 64, alignment: .topLeading)
+                if let description = episode.description, !description.isEmpty {
+                    Text(description).font(.system(size: 19)).foregroundStyle(Color(white: 0.65))
+                        .lineLimit(2).frame(height: 50, alignment: .topLeading)
                 }
+            }.frame(maxWidth: .infinity, alignment: .leading)
+        }.buttonStyle(EpisodePosterStyle()).focused($focused)
+            .disabled(episode.videoURL == nil)
+    }
+}
 
-                Spacer()
+private struct EpisodePosterStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.foregroundStyle(.white).scaleEffect(configuration.isPressed ? 0.98 : 1)
+    }
+}
 
-                Image(systemName: "play.circle.fill")
-                    .font(.system(size: 44))
-                    .foregroundColor(Color(hex: "#facc15"))
+struct EpisodeArtwork: View {
+    let url: URL?
+    let fallback: URL?
+    @State private var artwork: UIImage?
+    private var sources: [URL] { [url, fallback].compactMap { $0 } }
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                Color(white: 0.08)
+                if let artwork {
+                    if artwork.size.width > artwork.size.height {
+                        Image(uiImage: artwork).resizable().scaledToFill()
+                            .frame(width: geometry.size.width, height: geometry.size.height).clipped()
+                    } else {
+                        Image(uiImage: artwork).resizable().scaledToFit()
+                            .frame(width: geometry.size.width, height: geometry.size.height)
+                    }
+                } else {
+                    Image(systemName: "tv").font(.system(size: 38, weight: .light)).foregroundStyle(Color(white: 0.4))
+                }
             }
-            .padding(20)
-            .background(Color(white: 0.1))
-            .cornerRadius(12)
+        }.accessibilityHidden(true)
+        .task(id: sources) {
+            artwork = nil
+            for source in sources {
+                do {
+                    let (data, response) = try await URLSession.shared.data(from: source)
+                    guard !Task.isCancelled else { return }
+                    guard (response as? HTTPURLResponse)?.statusCode == 200,
+                          let image = UIImage(data: data), image.hasVisibleEpisodeArtwork else { continue }
+                    artwork = image
+                    return
+                } catch { if Task.isCancelled { return } }
+            }
         }
-        .buttonStyle(.card)
+    }
+}
+
+private extension UIImage {
+    // Reject effectively blank captures, rather than treating a black intro frame as artwork.
+    var hasVisibleEpisodeArtwork: Bool {
+        guard let cgImage else { return false }
+        var pixels = [UInt8](repeating: 0, count: 16 * 16 * 4)
+        return pixels.withUnsafeMutableBytes { buffer in
+            guard let context = CGContext(data: buffer.baseAddress, width: 16, height: 16, bitsPerComponent: 8,
+                bytesPerRow: 64, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return true }
+            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: 16, height: 16))
+            for index in stride(from: 0, to: buffer.count, by: 4) {
+                if max(buffer[index], buffer[index + 1], buffer[index + 2]) > 16 { return true }
+            }
+            return false
+        }
     }
 }

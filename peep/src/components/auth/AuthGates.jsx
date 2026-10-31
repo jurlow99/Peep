@@ -90,7 +90,7 @@ export function EmailVerificationGate({ user }) {
   }
 
   async function handleSignOut() {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: 'local' });
     window.location.href = "/";
   }
 

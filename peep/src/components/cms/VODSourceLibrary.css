@@ -1,0 +1,47 @@
+.vod-library { max-width: 1500px; margin: 0 auto 36px; padding: 24px; background: white; border: 1px solid #dbe2ec; border-radius: 14px; color: #0f172a; }
+.vod-library header,.vod-list-header,.vod-progress { display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap; }
+.vod-library h2 { margin:0;font-size:22px; }.vod-library p { font-size:13px;line-height:1.6; }.vod-library header p{color:#64748b;margin:6px 0 0;}
+.vod-private{font-size:11px;color:#4338ca;background:#eef2ff;padding:7px 10px;border-radius:20px;}
+.vod-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:24px;}.vod-library button{font:inherit;font-size:12px;padding:9px 12px;border:1px solid #cbd5e1;border-radius:8px;background:white;color:#334155;cursor:pointer;}.vod-library button:disabled{opacity:.5;cursor:default;}.vod-tabs button[aria-pressed="true"]{background:#4f46e5;border-color:#4f46e5;color:white;}
+.vod-notice{color:#475569;background:#f1f5f9;padding:14px;border-radius:8px;}.vod-upload{border:1px solid #dbe2ec;border-radius:10px;padding:18px;margin:20px 0;min-width:0;}.vod-upload legend{font-size:13px;font-weight:700;padding:0 8px;}.vod-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;}.vod-library label{font-size:12px;font-weight:600;display:grid;gap:6px;}.vod-library :is(select,input:not([type="file"])){box-sizing:border-box;width:100%;background:white;color:#0f172a;border:1px solid #cbd5e1;border-radius:7px;padding:10px;font:inherit;font-size:13px;}.vod-library input[type="file"]{max-width:100%;font-size:13px;margin:8px 12px 8px 0;}.vod-upload small,.vod-file-list small{display:block;color:#64748b;font-size:11px;margin-top:12px;}.vod-path{overflow-wrap:anywhere;font-family:monospace;color:#64748b;}.vod-list-header{margin-top:24px;}.vod-list-header label{flex:1;min-width:180px;}.vod-error{background:#fef2f2;color:#b91c1c;padding:14px;border-radius:8px;}.vod-empty{padding:32px;background:#f8fafc;border-radius:10px;text-align:center;color:#64748b;}.vod-file-list article{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:18px 0;border-bottom:1px solid #e2e8f0;}.vod-file-list article>div:first-child{min-width:0;flex:1;}.vod-file-list strong{font-size:13px;overflow-wrap:anywhere;}.vod-file-list code{display:block;font-size:11px;color:#64748b;margin-top:6px;overflow-wrap:anywhere;}.vod-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}.vod-actions a{font-size:12px;color:#4338ca;}.vod-progress progress{flex:1;accent-color:#4f46e5;}.vod-library :is(button,input,select):focus-visible{outline:2px solid #6366f1;outline-offset:3px;}
+
+.vod-upload-first textarea{box-sizing:border-box;width:100%;font:inherit;color:#0f172a;background:#fff;border:1px solid #cbd5e1;border-radius:7px;padding:10px;resize:vertical}.vod-upload-first .vod-save,.vod-complete button{background:#4f46e5;color:white;border-color:#4f46e5;padding:12px 20px;font-weight:600}.vod-file-ready{padding:12px;background:#f0fdf4;color:#166534;border-radius:8px}.vod-complete{padding:20px 0}.vod-upload-first summary{cursor:pointer;font-size:13px;font-weight:600}.vod-upload-first .vod-tabs{margin-top:0}
+
+.vod-save-bar{position:sticky;bottom:0;z-index:5;background:#fff;border-top:1px solid #dbe2ec;padding:14px 0;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 -10px 20px #fff}.vod-save-bar>span{font-size:12px;color:#64748b}.vod-pending{margin-top:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px;background:#f8fafc;border-radius:8px}.vod-pending strong{font-size:12px}.vod-pending button{max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Upload workspace: deliberately separate from the advanced file browser. */
+.vod-workspace{max-width:1240px;margin:0 auto;padding:32px clamp(20px,4vw,64px) 72px;box-sizing:border-box}
+.vod-workspace>.vod-upload-first{padding:30px;margin:0 0 22px;box-shadow:0 8px 30px #0f172a05;border-color:#e2e8f0}
+.vod-upload-first header{padding-bottom:24px;align-items:center}
+.vod-eyebrow{font-size:10px;font-weight:700;letter-spacing:1.6px;color:#7c83a0;display:block;margin-bottom:8px}
+.vod-upload-first h2{font-size:26px;letter-spacing:-.7px}
+.vod-steps{list-style:none;display:flex;margin:0 -30px;padding:16px 30px;gap:32px;background:#fafbfe;border-block:1px solid #edf0f6}
+.vod-steps li{display:flex;align-items:center;gap:9px;color:#94a3b8;font-size:12px;font-weight:600}
+.vod-steps li>span{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#edf0f6;color:#7c83a0;font-size:11px}
+.vod-steps .current{color:#4f46e5}.vod-steps .current>span{background:#4f46e5;color:white}.vod-steps .done{color:#475569}.vod-steps .done>span{background:#e8f5ed;color:#15803d}
+.vod-upload-first .vod-complete{display:grid;grid-template-columns:220px minmax(0,1fr);align-items:center;gap:30px;padding:34px 0 8px}
+.vod-success-art{aspect-ratio:4/3;position:relative;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:12px;display:grid;place-items:center;color:#94a3b8;font-size:32px}
+.vod-success-art>img{width:100%;height:100%;position:absolute;inset:0;object-fit:cover;border-radius:11px}
+.vod-success-art .vod-success-check{position:absolute;bottom:-10px;right:-10px;border:4px solid #fff;border-radius:50%;background:#16a34a;color:white;font-size:18px;width:34px;height:34px;display:grid;place-items:center}
+.vod-success-label{color:#15803d;background:#effaf3;border-radius:6px;padding:5px 8px;font-size:11px;font-weight:700;display:inline-block}
+.vod-complete h3{margin:12px 0 8px;font-size:21px;line-height:1.35;letter-spacing:-.3px;overflow-wrap:anywhere;font-weight:650}
+.vod-complete .vod-success-meta{color:#64748b;margin:0;font-size:12px}.vod-complete p{color:#64748b;margin:8px 0 18px}.vod-complete button{display:inline-flex;gap:20px;align-items:center}
+.vod-upload-first>.vod-upload{margin:28px 0 0;padding:36px 24px;border:1.5px dashed #c7d2fe;background:#fafaff;text-align:center}
+.vod-upload-first>.vod-upload label{font-size:16px;color:#334155;justify-items:center;gap:16px}.vod-upload-first>.vod-upload input[type=file]{font-size:12px}.vod-upload-first input[type=file]::file-selector-button{background:#4f46e5;color:white;border:0;border-radius:7px;padding:10px 16px;margin-right:12px;cursor:pointer;font:inherit}
+.vod-tools{background:#fff;border:1px solid #e2e8f0;border-radius:10px;margin-top:12px;color:#334155;overflow:hidden}
+.vod-tools>summary{cursor:pointer;padding:17px 20px;font-size:13px;font-weight:600}.vod-tools>summary small{font-weight:400;color:#94a3b8;margin-left:14px;font-size:11px}.vod-tools[open]>summary{border-bottom:1px solid #e2e8f0}.vod-tools>.vod-library{margin:0;border:0;border-radius:0}
+@media(max-width:700px){.vod-workspace{padding:20px 16px 48px}.vod-workspace>.vod-upload-first{padding:20px}.vod-steps{margin:0 -20px;padding:14px 20px;gap:16px}.vod-steps li{font-size:10px;gap:5px}.vod-upload-first .vod-complete{grid-template-columns:1fr;gap:24px}.vod-success-art{width:180px}.vod-tools>summary small{display:block;margin:6px 0 0 16px}.vod-upload-first header{gap:16px}}
+
+/* Provider choice is a normal field; only the file picker is an upload surface. */
+.vod-upload-start { margin-top: 28px; }
+.vod-upload-start .vod-provider-field { max-width: 440px; margin-bottom: 24px; text-align: left; justify-items: stretch; gap: 8px; font-size: 14px; color: #334155; }
+.vod-upload-start .vod-provider-field select { min-height: 46px; padding: 10px 36px 10px 12px; font-size: 14px; }
+.vod-upload-start .vod-provider-field small { margin: 0; font-size: 12px; font-weight: 400; line-height: 1.5; color: #64748b; }
+.vod-file-picker { padding: 36px 24px; border: 1.5px dashed #c7d2fe; border-radius: 12px; background: #fafaff; text-align: center; }
+.vod-file-picker label { justify-items: center; gap: 18px; font-size: 17px; color: #334155; }
+.vod-upload-symbol { display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; background: #eef2ff; color: #4f46e5; font-size: 28px; margin-bottom: 14px; }
+.vod-file-picker input[type=file] { width: min(100%, 420px); font-size: 13px; margin: 0; border: 1px solid #dbe2ec; border-radius: 9px; padding: 6px; box-sizing: border-box; }
+.vod-file-picker small { display: block; margin-top: 16px; font-size: 12px; color: #64748b; }
+.vod-upload-start details { border-top: 1px solid #e2e8f0; padding-top: 18px; margin-top: 24px !important; }
+.vod-upload-start details label { max-width: 440px; margin-top: 16px; text-align: left; }
+.vod-upload-start details small { display: block; margin-top: 10px; color: #64748b; }
