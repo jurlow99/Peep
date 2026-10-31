@@ -377,7 +377,9 @@ struct PodcastEpisode: Identifiable, Decodable {
     let audio_url: String?
     let duration: String?
     let thumbnail: String?
+    let published_at: String?
     var audioURL: URL? { MediaURL.playback(audio_url) }
+    var thumbURL: URL? { MediaURL.parse(thumbnail) }
     var displayTitle: String { title ?? "Episode \(episode_number ?? 0)" }
 }
 
@@ -557,5 +559,34 @@ enum LiveSurf {
             if candidate.id != id, playable(candidate) { return candidate }
         }
         return nil
+    }
+}
+
+/// Now Playing details for the Siri Remote info panel, plus the artwork screen for audio.
+struct PlaybackMetadata {
+    var title: String
+    var subtitle: String? = nil
+    var description: String? = nil
+    var artwork: URL? = nil
+    var isLive = false
+    var audioOnly = false
+}
+
+/// Podcast episodes: newest first, and nothing that is scheduled for the future.
+enum PodcastSchedule {
+    static func visible(_ episodes: [PodcastEpisode], now: Date = Date()) -> [PodcastEpisode] {
+        episodes.filter { episode in
+            guard let published = GuideEntry.date(episode.published_at) else { return true }
+            return published <= now
+        }.sorted { a, b in
+            switch (GuideEntry.date(a.published_at), GuideEntry.date(b.published_at)) {
+            case let (x?, y?) where x != y: return x > y
+            case (nil, .some): return false
+            case (.some, nil): return true
+            default:
+                if (a.episode_number ?? 0) != (b.episode_number ?? 0) { return (a.episode_number ?? 0) > (b.episode_number ?? 0) }
+                return a.id > b.id
+            }
+        }
     }
 }

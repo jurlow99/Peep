@@ -853,7 +853,7 @@ final class CatalogTests: XCTestCase {
                 payload = #"[{"id":1,"title":"Published","enabled":true},{"id":2,"title":"Hidden","enabled":false}]"#
             } else {
                 XCTAssertEqual(query.first { $0.name == "podcast_id" }?.value, "eq.1")
-                XCTAssertEqual(query.first { $0.name == "order" }?.value, "episode_number.asc,id.asc")
+                XCTAssertEqual(query.first { $0.name == "order" }?.value, "published_at.desc.nullslast,episode_number.desc,id.desc")
                 payload = #"[{"id":3,"podcast_id":1,"episode_number":2,"audio_url":"https://media.invalid/episode.mp3"},{"id":4,"podcast_id":1,"audio_url":"javascript:bad"}]"#
             }
             return (Data(payload.utf8), HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
@@ -1025,6 +1025,17 @@ final class CatalogTests: XCTestCase {
         XCTAssertEqual(SeriesPlayback.nextUp(in: all, progress: ["1": done, "3": partial])?.id, 3)          // an unfinished episode wins
         XCTAssertEqual(SeriesPlayback.nextUp(in: all, progress: ["1": done, "2": done, "3": done])?.id, 1)  // a finished series starts again
         XCTAssertNil(SeriesPlayback.nextUp(in: [unreleased], progress: [:]))
+    }
+
+    func testPodcastEpisodesHideScheduledOnesAndListNewestFirst() throws {
+        let old = try decode(PodcastEpisode.self, #"{"id":1,"podcast_id":1,"episode_number":1,"published_at":"2026-01-01T00:00:00Z"}"#)
+        let newer = try decode(PodcastEpisode.self, #"{"id":2,"podcast_id":1,"episode_number":2,"published_at":"2026-02-01T00:00:00Z"}"#)
+        let scheduled = try decode(PodcastEpisode.self, #"{"id":3,"podcast_id":1,"episode_number":3,"published_at":"2030-01-01T00:00:00Z"}"#)
+        let undated = try decode(PodcastEpisode.self, #"{"id":4,"podcast_id":1,"episode_number":9}"#)
+        let now = GuideEntry.date("2026-03-01T00:00:00Z")!
+        XCTAssertEqual(PodcastSchedule.visible([old, scheduled, undated, newer], now: now).map(\.id), [2, 1, 4])
+        XCTAssertEqual(PlayerModel.metadataItems(title: "Fallback", metadata: nil).count, 1)
+        XCTAssertEqual(PlayerModel.metadataItems(title: "x", metadata: PlaybackMetadata(title: "Ep", subtitle: "Show", description: "")).map { $0.identifier }, [.commonIdentifierTitle, .iTunesMetadataTrackSubTitle])
     }
 
     func testChannelSurfingWrapsAndSkipsUnplayableChannels() throws {

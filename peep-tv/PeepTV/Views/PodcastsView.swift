@@ -64,7 +64,7 @@ struct PodcastDetailView: View {
         HStack(alignment: .top, spacing: 36) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    Button("Back") { dismiss() }.buttonStyle(.bordered)
+                    Button { dismiss() } label: { Label("Back", systemImage: "chevron.left").font(.system(size: 21, weight: .semibold)).padding(.horizontal, 20).padding(.vertical, 14) }.buttonStyle(BrowseCardStyle())
                     BoundedArtwork(url: podcast.artworkURL, symbol: "mic").frame(width: 340, height: 340)
                     Text(podcast.title).font(.system(size: 36, weight: .bold))
                     if let host = podcast.host { Text(host).foregroundStyle(.secondary) }
@@ -104,7 +104,7 @@ struct PodcastDetailView: View {
         }.padding(32).background(.black)
         .task(id: catalogRevision) { await load() }
         .fullScreenCover(item: $playing) { episode in
-            PodcastPlaybackView(episode: episode, podcastTitle: podcast.title)
+            PodcastPlaybackView(episode: episode, podcast: podcast)
         }
     }
 
@@ -127,13 +127,16 @@ private struct PodcastUnavailableView: View {
     }
 }
 
+/// Goes through PlaybackView so the position is remembered and artwork shows while listening.
 private struct PodcastPlaybackView: View {
     let episode: PodcastEpisode
-    let podcastTitle: String
-    @State private var attempt = UUID()
+    let podcast: Podcast
     var body: some View {
-        if let url = episode.audioURL {
-            PlayerView(url: url, title: "\(podcastTitle) — \(episode.displayTitle)", retry: { attempt = UUID() }).id(attempt)
+        if episode.audioURL != nil {
+            PlaybackView(url: episode.audioURL, title: episode.displayTitle,
+                         identity: PlaybackIdentity(id: String(episode.id), type: "podcast_episode"),
+                         metadata: PlaybackMetadata(title: episode.displayTitle, subtitle: podcast.title, description: episode.description,
+                                                    artwork: episode.thumbURL ?? podcast.artworkURL, audioOnly: true))
         } else {
             PodcastUnavailableView()
         }

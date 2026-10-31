@@ -467,7 +467,7 @@ final class SupabaseService: ObservableObject {
         return rows.filter { $0.enabled != false }
     }
     func fetchPodcastEpisodes(podcastID: Int) async throws -> [PodcastEpisode] {
-        try await all("podcast_episodes", query: ["podcast_id": "eq.\(podcastID)", "order": "episode_number.asc,id.asc"])
+        PodcastSchedule.visible(try await all("podcast_episodes", query: ["podcast_id": "eq.\(podcastID)", "order": "published_at.desc.nullslast,episode_number.desc,id.desc"]))
     }
 
     func fetchShows() async throws -> [Show] {

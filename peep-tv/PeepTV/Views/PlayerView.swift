@@ -116,11 +116,25 @@ final class PlayerModel: ObservableObject {
     private var audioOwner = UUID()
     private let preferences: PlaybackPreferences
     @Published var subtitleNotice: String?
+    var metadata: PlaybackMetadata?
 
-    init(url: URL, title: String, preferences: PlaybackPreferences? = nil) {
+    init(url: URL, title: String, metadata: PlaybackMetadata? = nil, preferences: PlaybackPreferences? = nil) {
         self.preferences = preferences ?? .shared
+        self.metadata = metadata
         player = AVPlayer()
         tune(url: url, title: title)
+    }
+
+    nonisolated static func metadataItems(title: String, metadata: PlaybackMetadata?) -> [AVMetadataItem] {
+        func item(_ identifier: AVMetadataIdentifier, _ value: String?) -> AVMetadataItem? {
+            guard let value, !value.isEmpty else { return nil }
+            let entry = AVMutableMetadataItem()
+            entry.identifier = identifier; entry.value = value as NSString; entry.extendedLanguageTag = "und"
+            return entry
+        }
+        return [item(.commonIdentifierTitle, metadata?.title ?? title),
+                item(.iTunesMetadataTrackSubTitle, metadata?.subtitle),
+                item(.commonIdentifierDescription, metadata?.description)].compactMap { $0 }
     }
 
     func tune(url: URL, title: String) {
@@ -133,11 +147,17 @@ final class PlayerModel: ObservableObject {
         errorMessage = nil
         let item = AVPlayerItem(url: url)
         preferences.applyQuality(to: item)
-        let metadata = AVMutableMetadataItem()
-        metadata.identifier = .commonIdentifierTitle
-        metadata.value = title as NSString
-        metadata.extendedLanguageTag = "und"
-        item.externalMetadata = [metadata]
+        item.externalMetadata = Self.metadataItems(title: title, metadata: metadata)
+        if let artwork = metadata?.artwork {
+            Task { [weak self] in
+                guard let image = await UpNextArtwork.load(artwork), let data = image.jpegData(compressionQuality: 0.85),
+                      let self, self.player.currentItem === item else { return }
+                let entry = AVMutableMetadataItem()
+                entry.identifier = .commonIdentifierArtwork; entry.value = data as NSData
+                entry.dataType = kCMMetadataBaseDataType_JPEG as String; entry.extendedLanguageTag = "und"
+                item.externalMetadata = item.externalMetadata + [entry]
+            }
+        }
         player.replaceCurrentItem(with: item)
         let subtitlePreference = preferences.subtitles
         subtitleTask = Task { [weak self] in
@@ -275,6 +295,7 @@ struct PlaybackView: View {
     var startFromBeginning = false
     var related: [Video] = []
     var openRelated: (Video) -> Void = { _ in }
+    var metadata: PlaybackMetadata? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var currentEpisode: Episode?
     @State private var nextEpisode: Episode?
@@ -288,7 +309,7 @@ struct PlaybackView: View {
     var body: some View {
         Group {
             if let resolvedURL {
-                PlayerView(url: resolvedURL, title: currentEpisode?.displayTitle ?? title, identity: playbackIdentity, liveChannelID: liveChannelID, startFromBeginning: startFromBeginning,
+                PlayerView(url: resolvedURL, title: currentEpisode?.displayTitle ?? title, identity: playbackIdentity, liveChannelID: liveChannelID, startFromBeginning: startFromBeginning, metadata: metadata,
                            nextEpisode: nextEpisode, seriesAllowsAutoplay: seriesAllowsAutoplay, related: related, openRelated: openRelated, playNext: {
                     guard let nextEpisode else { return }
                     currentEpisode = nextEpisode
@@ -345,6 +366,7 @@ struct PlayerView: View {
     let liveChannelID: Int?
     let startFromBeginning: Bool
     let title: String
+    let metadata: PlaybackMetadata?
     var nextEpisode: Episode?
     let seriesAllowsAutoplay: Bool
     let related: [Video]
@@ -366,8 +388,9 @@ struct PlayerView: View {
     @Environment(\.dismiss) private var dismiss
     let retry: () -> Void
 
-    init(url: URL, title: String, identity: PlaybackIdentity? = nil, liveChannelID: Int? = nil, startFromBeginning: Bool = false, nextEpisode: Episode? = nil, seriesAllowsAutoplay: Bool = false, related: [Video] = [], openRelated: @escaping (Video) -> Void = { _ in }, playNext: @escaping () -> Void = {}, retry: @escaping () -> Void) {
+    init(url: URL, title: String, identity: PlaybackIdentity? = nil, liveChannelID: Int? = nil, startFromBeginning: Bool = false, metadata: PlaybackMetadata? = nil, nextEpisode: Episode? = nil, seriesAllowsAutoplay: Bool = false, related: [Video] = [], openRelated: @escaping (Video) -> Void = { _ in }, playNext: @escaping () -> Void = {}, retry: @escaping () -> Void) {
         self.title = title
+        self.metadata = metadata
         self.related = related
         self.openRelated = openRelated
         self.nextEpisode = nextEpisode
@@ -376,7 +399,7 @@ struct PlayerView: View {
         self.identity = identity
         self.liveChannelID = liveChannelID
         self.startFromBeginning = startFromBeginning
-        _model = StateObject(wrappedValue: PlayerModel(url: url, title: title))
+        _model = StateObject(wrappedValue: PlayerModel(url: url, title: title, metadata: metadata))
         self.retry = retry
     }
 
@@ -396,6 +419,7 @@ struct PlayerView: View {
             } else {
                 if (!adGate.blocking || adGate.isMidroll) && !showNext && !showEnd {
                     NativePlayer(player: model.player, proposal: proposal, onAcceptProposal: nextEpisode == nil ? nil : playNext).ignoresSafeArea()
+                    if let metadata, metadata.audioOnly { AudioArtworkOverlay(metadata: metadata) }
                 }
             }
         }
@@ -1255,5 +1279,24 @@ actor LiveInbandReader {
               (response as? HTTPURLResponse)?.statusCode == 200, let image = UIImage(data: data) else { return nil }
         ArtworkMemory.images.setObject(image, forKey: url as NSURL, cost: Int(image.size.width * image.size.height * 4))
         return image
+    }
+}
+
+/// Audio-only items would otherwise play over a black screen.
+struct AudioArtworkOverlay: View {
+    let metadata: PlaybackMetadata
+    var body: some View {
+        VStack(spacing: 28) {
+            BoundedArtwork(url: metadata.artwork, symbol: "mic")
+                .frame(width: 420, height: 420).background(Color(white: 0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 20)).shadow(color: .black.opacity(0.6), radius: 30, y: 12)
+            Text(metadata.title).font(.system(size: 38, weight: .bold, design: .rounded)).lineLimit(2).multilineTextAlignment(.center)
+            if let subtitle = metadata.subtitle, !subtitle.isEmpty {
+                Text(subtitle).font(.system(size: 24)).foregroundStyle(.secondary).lineLimit(1)
+            }
+        }
+        .frame(maxWidth: 1100).padding(.bottom, 180)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .foregroundStyle(.white).allowsHitTesting(false)
     }
 }

@@ -31,7 +31,7 @@ by reading the code and should be reproduced before fixing.
 6. ~~**Guide goes stale.**~~ **Done 2026-10-31** (refresh every 5 min on Live TV and in the player; a failed refresh keeps the last guide; date formatters are static). A time-grid guide remains open. Original note: The EPG is a 6-hour window fetched once per catalog load
    (`SupabaseService.swift:499-503`, `StreamsView.swift:240`); the 15 s refresh loop never
    reloads it, errors silently clear it. Refresh every 5–10 min; consider a time grid. **M**
-7. **Podcasts are second-class.** Audio plays in the video player on black with no
+7. ~~**Podcasts are second-class.**~~ **Mostly done 2026-10-31**: artwork screen while listening, position remembered (`podcast_episode` progress like the web), newest-first with scheduled episodes hidden (`PodcastSchedule`), `UIBackgroundModes: audio` in project.yml/pbxproj. Still open: podcasts in search and My List. Original note: Audio plays in the video player on black with no
    artwork, no progress (`PodcastsView.swift:136`), no background audio (`project.yml`
    lacks `UIBackgroundModes: audio`), sorted by number not `published_at`
    (`SupabaseService.swift:469-471`), not searchable, not saveable. **M**
@@ -77,7 +77,7 @@ by reading the code and should be reproduced before fixing.
 
 ## 4. Platform features not yet built
 
-21. Now Playing metadata is title-only (`PlayerView.swift:136-140`); add artwork,
+21. ~~Now Playing metadata is title-only~~ **Done 2026-10-31** (`PlaybackMetadata`: title, subtitle, description and artwork for movies, episodes and podcasts). Original note: (`PlayerView.swift:136-140`); add artwork,
     description, episode, live flag. **S**
 22. No dynamic Top Shelf and no deep links (`onOpenURL`). **L**
 23. Skip intro / credits markers — needs schema + web admin fields first, then

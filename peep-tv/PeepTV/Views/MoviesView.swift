@@ -346,7 +346,8 @@ struct MovieDetailView: View {
             switch mode {
             case .movie(let startOver):
                 PlaybackView(url: video.videoURL, title: video.title, identity: PlaybackIdentity(id: video.id, type: "movie"), startFromBeginning: startOver,
-                             related: related, openRelated: { pendingRelated = $0; playback = nil })
+                             related: related, openRelated: { pendingRelated = $0; playback = nil },
+                             metadata: PlaybackMetadata(title: video.title, subtitle: facts.isEmpty ? nil : facts, description: video.description, artwork: video.heroURL))
             case .trailer:
                 PlaybackView(url: trailerURL, title: "\(video.title) · Trailer")
             }

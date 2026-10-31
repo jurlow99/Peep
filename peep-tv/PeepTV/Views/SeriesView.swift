@@ -129,7 +129,9 @@ struct SeriesDetailView: View {
         .task { await load() }
         .task(id: "\(supabase.watchProgressRevision):\(supabase.session?.userId ?? "guest")") { await loadProgress() }
         .fullScreenCover(item: $selectedEpisode, onDismiss: { Task { await loadProgress() } }) {
-            PlaybackView(url: $0.videoURL, title: $0.displayTitle, identity: PlaybackIdentity(id: String($0.id), type: "episode"))
+            PlaybackView(url: $0.videoURL, title: $0.displayTitle, identity: PlaybackIdentity(id: String($0.id), type: "episode"),
+                         metadata: PlaybackMetadata(title: $0.displayTitle, subtitle: "\(show.title) · Season \($0.season ?? 1), Episode \($0.episode_number ?? 1)",
+                                                    description: $0.description, artwork: $0.thumbURL ?? show.thumbURL))
         }
     }
 
