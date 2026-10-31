@@ -17,6 +17,9 @@ struct AppConfiguration {
         guard url.scheme == "https" || (development && url.scheme == "http" && privateLAN) else { return nil }
         return url
     }
+    /// The two projects lost with the old account; the web app refuses them too.
+    static let legacyHosts: Set<String> = ["iuozujwtuzuwubhsnhix.supabase.co", "fzrfevzrfurmszdjauov.supabase.co"]
+    static func isLegacyHost(_ host: String?) -> Bool { legacyHosts.contains((host ?? "").lowercased()) }
     static func load(bundle: Bundle = .main) throws -> AppConfiguration {
         func value(_ key: String) -> String {
             (bundle.object(forInfoDictionaryKey: key) as? String ?? "")
@@ -28,6 +31,9 @@ struct AppConfiguration {
               !value("SUPABASE_ANON_KEY").isEmpty,
               !value("SUPABASE_ANON_KEY").contains("$(") else {
             throw AppError.networkError("Set the Supabase URL and public key in Config/Local.xcconfig (Debug) or Config/Production.xcconfig (Release), then rebuild.")
+        }
+        guard !isLegacyHost(host) else {
+            throw AppError.networkError("This build points at a retired Supabase project. Update Config/Local.xcconfig to the current project, then rebuild.")
         }
         return AppConfiguration(baseURL: url, anonKey: value("SUPABASE_ANON_KEY"),
                                 streamHost: value("CLOUDFLARE_STREAM_HOST"),

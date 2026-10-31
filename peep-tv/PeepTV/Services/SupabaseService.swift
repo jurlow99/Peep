@@ -15,6 +15,9 @@ final class SupabaseService: ObservableObject {
     private var savedListOwner: String?
     private var savedListRevision = 0
     @Published var activeProfile: Profile?
+    /// Menu on the launch picker continues as the account itself for this run.
+    @Published private(set) var profileSelectionSkipped = false
+    func skipProfileSelection() { profileSelectionSkipped = true }
     @Published private(set) var profiles: [Profile] = []
     @Published private(set) var isRestoring = true
     private var refreshTask: Task<Void, Error>?
@@ -93,6 +96,7 @@ final class SupabaseService: ObservableObject {
     }
 
     func signOut() {
+        profileSelectionSkipped = false
         invalidateCatalogCache()
         refreshTask?.cancel()
         refreshTask = nil
@@ -113,6 +117,7 @@ final class SupabaseService: ObservableObject {
     func selectProfile(_ profile: Profile) {
         guard let userID = session?.userId, profile.user_id == userID, profiles.contains(where: { $0.id == profile.id }) else { return }
         activeProfile = profile
+        profileSelectionSkipped = false
         UserDefaults.standard.set(profile.id, forKey: "peep_tv_profile_id")
     }
 
@@ -197,8 +202,17 @@ final class SupabaseService: ObservableObject {
         let id = UUID()
         let started = Date()
         let transport = send
+        let token = session?.accessToken
         let task = Task<Data, Error> {
-            let (data, response) = try await transport(request)
+            var (data, response) = try await transport(request)
+            // A token revoked before its local expiry gets one renewal and one retry, like playback.
+            if (response as? HTTPURLResponse)?.statusCode == 401, token != nil {
+                if self.session?.accessToken == token { try await self.refreshIfNeeded(force: true) }
+                guard let renewed = self.session, renewed.userId == owner else { throw AppError.noSession }
+                var retry = request
+                retry.setValue("Bearer \(renewed.accessToken)", forHTTPHeaderField: "Authorization")
+                (data, response) = try await transport(retry)
+            }
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                 throw AppError.networkError("Couldn't load \(table). Please try again.")
             }
@@ -492,8 +506,9 @@ final class SupabaseService: ObservableObject {
         if let eventID { query["event_id"] = "eq.\(eventID)" }
         return try await all("prediction_markets", query: query)
     }
+    /// Blackout polling only; selects the columns that decision needs.
     func fetchChannel(id: Int) async throws -> Channel? {
-        let rows: [Channel] = try await all("channels", query: ["id": "eq.\(id)", "limit": "1"])
+        let rows: [Channel] = try await get("channels", query: ["id": "eq.\(id)", "select": "id,name,blackout_enabled,blackout_message,blackout_starts_at,blackout_ends_at", "limit": "1"], timeout: 8)
         return rows.first
     }
     func fetchGuide() async throws -> [GuideEntry] {

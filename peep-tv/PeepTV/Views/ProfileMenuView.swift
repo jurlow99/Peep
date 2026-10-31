@@ -27,7 +27,7 @@ struct ProfileMenuView: View {
                     Image(systemName: "person.crop.circle").font(.system(size: 84)).foregroundStyle(.white.opacity(0.7))
                     Text("Welcome to Peep").font(.title2.bold())
                     Text("You can keep browsing and watching as a guest.").foregroundStyle(.secondary)
-                    Button("Sign In") { showSignIn = true }.buttonStyle(.borderedProminent).tint(Color(white: 0.22)).foregroundStyle(.white)
+                    Button { showSignIn = true } label: { Text("Sign In").font(.system(size: 24, weight: .semibold)).padding(.horizontal, 28).padding(.vertical, 16) }.buttonStyle(BrowseCardStyle())
                 } else if loading {
                     ProgressView("Loading your profile…")
                 } else if let account {
@@ -39,17 +39,17 @@ struct ProfileMenuView: View {
                             if let username = account.username, !username.isEmpty { Text("@\(username)").font(.system(size: 22)).foregroundStyle(.secondary) }
                         }
                     }
-                    Button("Profile Settings") { editing = account }.buttonStyle(.borderedProminent).tint(Color(white: 0.22)).foregroundStyle(.white)
+                    Button("Profile Settings") { editing = account }.buttonStyle(BrowseCardStyle())
                     if !supabase.profiles.isEmpty {
-                        Button("Viewer: \(supabase.activeProfile?.name ?? "Choose profile")") { showProfileSelect = true }
+                        Button("Viewer: \(supabase.activeProfile?.name ?? "Choose profile")") { showProfileSelect = true }.buttonStyle(BrowseCardStyle())
                         Text("Viewer selection does not sync watch history yet.").font(.system(size: 19)).foregroundStyle(.secondary)
                     }
-                    Button("Sign Out of This TV", role: .destructive) { confirmSignOut = true }
+                    Button("Sign Out of This TV", role: .destructive) { confirmSignOut = true }.buttonStyle(BrowseCardStyle())
                 }
                 if let error {
                     Text(error).font(.system(size: 22)).foregroundStyle(.secondary)
-                    Button("Retry") { Task { await load() } }
-                    Button("Sign Out of This TV", role: .destructive) { confirmSignOut = true }
+                    Button("Retry") { Task { await load() } }.buttonStyle(BrowseCardStyle())
+                    Button("Sign Out of This TV", role: .destructive) { confirmSignOut = true }.buttonStyle(BrowseCardStyle())
                 }
             }
             .frame(width: 650, alignment: .leading).padding(44)

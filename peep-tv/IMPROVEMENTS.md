@@ -38,7 +38,7 @@ by reading the code and should be reproduced before fixing.
 8. **Sign-in is keyboard-only.** A QR / device-code flow would remove the biggest TV
    friction; the app already draws QR codes (`ProfileMenuView.swift:416-447`). Needs a
    backend endpoint. **L**
-9. **Profile picker blocks launch without doing anything.** Every cold start forces
+9. **Profile picker blocks launch without doing anything.** *Partly done 2026-10-31: Menu now continues as the account (`skipProfileSelection`), and the picker says so. Per-viewer history remains open.* Every cold start forces
    "Who's watching" (`SupabaseService.swift:59`) but progress and My List are shared
    per account. `ProfileSelectView.swift:77` also swallows the Menu button at the root
    (App Review risk). Make the picker optional and always let Menu exit (**S**); scope
@@ -46,20 +46,20 @@ by reading the code and should be reproduced before fixing.
 
 ## 2. Correctness
 
-10. `AppConfiguration.swift:25-31` doesn't reject the two lost legacy projects the web
+10. ~~Done 2026-10-31.~~ `AppConfiguration.swift:25-31` doesn't reject the two lost legacy projects the web
     app blocks. **S**
-11. Catalog reads don't retry after a 401; only `sendPlayback` does
+11. ~~Done 2026-10-31 (one renewal + retry in `get`).~~ Catalog reads don't retry after a 401; only `sendPlayback` does
     (`SupabaseService.swift:146-221`). **S**
 12. Single-channel live playback doesn't auto-reconnect; Multiview already has stall
     detection to reuse (`PlayerView.swift:168-175`, `MultiviewView.swift:226-258`). **M**
-13. Search is a substring match over titles *and descriptions* for movies/series only,
+13. *Partly done 2026-10-31: podcasts and channels are searchable, descriptions only match terms of 3+ letters, and the spinner no longer flashes.* Search is a substring match over titles *and descriptions* for movies/series only,
     re-normalised on every keystroke (`SearchView.swift:15-23`, `Models.swift:475`).
     Precompute, prefer word-prefix matches, add channels and podcasts, consider
     `.searchable`. **M**
-14. Search flashes a spinner on every return to the app (`SearchView.swift:158`). **S**
-15. Home shelves keyed by position (`HomeView.swift:227`) can make focus jump during the
+14. ~~Done 2026-10-31.~~ Search flashes a spinner on every return to the app (`SearchView.swift:158`). **S**
+15. ~~Done 2026-10-31.~~ Home shelves keyed by position (`HomeView.swift:227`) can make focus jump during the
     15 s refresh; key by id. **S**
-16. Blackout polling selects `*` with limit 200 instead of the blackout columns
+16. ~~Done 2026-10-31.~~ Blackout polling selects `*` with limit 200 instead of the blackout columns
     (`SupabaseService.swift:420, 495-498`). **S**
 
 ## 3. Performance
@@ -67,12 +67,12 @@ by reading the code and should be reproduced before fixing.
 17. Images decode full-size on the main thread with no downsampling or request
     de-duplication (`CardViews.swift:78-84, 148-156`, `SeriesView.swift:240-269`,
     `HeroView.swift:137`). Use ImageIO thumbnailing off-main and a shared loader. **M**
-18. Home, Live TV and LiveSurf each refetch channels, packages and carousels every 15 s;
+18. ~~Done 2026-10-31 (60 s curation, 30 s multiview).~~ Home, Live TV and LiveSurf each refetch channels, packages and carousels every 15 s;
     Multiview refetches all channels every 10 s with `select=*`. Poll curation at ~60 s
     and select only needed columns. **S**
-19. `GuideEntry.date` builds two `ISO8601DateFormatter`s per call in hot loops
+19. ~~Done 2026-10-31.~~ `GuideEntry.date` builds two `ISO8601DateFormatter`s per call in hot loops
     (`Models.swift:119-126`). Use static formatters. **S**
-20. Debug-only `LiveInbandReader.fetch` reads segments one byte at a time
+20. ~~Done 2026-10-31.~~ Debug-only `LiveInbandReader.fetch` reads segments one byte at a time
     (`PlayerView.swift:1116-1123`). **S**
 
 ## 4. Platform features not yet built
@@ -86,24 +86,24 @@ by reading the code and should be reproduced before fixing.
 
 ## 5. Design rules and accessibility
 
-25. Yellow-rule mismatches vs `PLATFORM_SCOPE.md`: focused rail item uses a yellow
+25. *Mostly done 2026-10-31: rail selected = yellow fill / focus = outline, chips fill yellow when selected, StatusView and the remaining system buttons use BrowseCardStyle. The Multiview channel List is still system-styled.* Yellow-rule mismatches vs `PLATFORM_SCOPE.md`: focused rail item uses a yellow
     *fill* (`ContentView.swift:459-462`); selected filter chips are grey
     (`CardViews.swift:172-187`); `StatusView` Retry is `.borderedProminent`; several
     unstyled system buttons (`ProfileMenuView.swift:30-52`, `PodcastsView.swift:67`,
     `AuthView.swift:94`, `PlayerView.swift:300-301, 380`, `MultiviewView.swift:419-435`). **S**
-26. Low-contrast grey text (`Color(white: 0.4)` on black ≈ 3.7:1) at `HomeView.swift:51`,
+26. ~~Done 2026-10-31.~~ Low-contrast grey text (`Color(white: 0.4)` on black ≈ 3.7:1) at `HomeView.swift:51`,
     `AuthView.swift:40, 55`, `SearchView.swift:42, 95`. **S**
-27. VoiceOver: unplayable episodes are silently skipped (`SeriesView.swift:208`); Top-10
+27. *Mostly done 2026-10-31 (episodes announce "coming soon", Top-10 rank is read). Multiview picker still plain.* VoiceOver: unplayable episodes are silently skipped (`SeriesView.swift:208`); Top-10
     rank numbers hidden (`HomeView.swift:239`); Multiview picker has no logos/Now-Next. **S**
 
 ## 6. Release hygiene
 
-28. Privacy manifest declares only UserDefaults/boot time; no collected-data types
+28. ~~Done 2026-10-31 (email, user ID, usage data; no tracking).~~ Privacy manifest declares only UserDefaults/boot time; no collected-data types
     despite a persistent device id (`PlayerView.swift:590-592`), watch history, email
     and the IMA SDK. **S**
-29. `Production.xcconfig` doesn't exist; `Local.xcconfig` points `INFOPLIST_FILE` at an
+29. *Partly done 2026-10-31: `Config/Production.xcconfig.example` added. The local plist path is the owner's machine config.* `Production.xcconfig` doesn't exist; `Local.xcconfig` points `INFOPLIST_FILE` at an
     absolute path outside the repo. **S**
-30. Dead code: `PredictionsView`/`PredictionEventView` (~690 lines) are never reachable;
+30. *Partly done 2026-10-31: `CatalogArtwork` and `LiveBadge` removed, README claims corrected; Predictions screens remain unreachable on purpose.* Dead code: `PredictionsView`/`PredictionEventView` (~690 lines) are never reachable;
     `CatalogArtwork`, `LiveBadge`, `ChannelPrograms` unused. README lines 47/51 say
     podcasts, My List, progress sync and ads are not implemented — they are; line 299's
     "test tags bypass the cooldown" is not what the code does.

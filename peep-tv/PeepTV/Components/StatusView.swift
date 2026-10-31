@@ -11,7 +11,10 @@ struct StatusView: View {
             Text(title).font(.system(size: 40, weight: .semibold)).accessibilityAddTraits(.isHeader)
             Text(message).font(.system(size: 26)).foregroundStyle(Color(white: 0.75))
                 .multilineTextAlignment(.center).frame(maxWidth: 800)
-            if let retry { Button("Try Again", action: retry).buttonStyle(.borderedProminent) }
+            if let retry {
+                Button(action: retry) { Text("Try Again").font(.system(size: 22, weight: .semibold)).padding(.horizontal, 28).padding(.vertical, 16) }
+                    .buttonStyle(BrowseCardStyle())
+            }
         }
         .sidebarBoundary()
         .padding(60)

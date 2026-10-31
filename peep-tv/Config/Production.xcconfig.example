@@ -1,0 +1,7 @@
+// Copy to Production.xcconfig (gitignored). Release builds read it through Release.xcconfig.
+// Use the PRODUCTION Supabase project and its public (anon/publishable) key only; never a secret key.
+// The empty expansion prevents xcconfig treating // as a comment.
+PEEP_SUPABASE_URL = https:/$()/ffoiacnvcjlkgsazacrk.supabase.co
+PEEP_SUPABASE_ANON_KEY = YOUR-PRODUCTION-PUBLIC-KEY
+PEEP_STREAM_HOST = customer-x9w8t8qxjaf49jqb.cloudflarestream.com
+PEEP_ACCOUNT_MANAGEMENT_URL = https:/$()/watchpeep.tv/account/delete

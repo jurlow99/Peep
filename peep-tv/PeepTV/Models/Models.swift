@@ -488,8 +488,9 @@ enum CatalogSearch {
         let q = normalized(String(query.prefix(256)))
         guard !q.isEmpty else { return nil }
         let t = normalized(title), c = normalized(category ?? ""), tag = tags.map(normalized).joined(separator: " "), d = normalized(description ?? "")
-        let fields = [t, c, tag, d].joined(separator: " ")
-        guard q.split(separator: " ").allSatisfy({ fields.contains($0) }) else { return nil }
+        // Descriptions only count for terms of three or more letters, so "th" no longer matches everything.
+        let fields = [t, c, tag].joined(separator: " ")
+        guard q.split(separator: " ").allSatisfy({ term in fields.contains(term) || (term.count >= 3 && d.contains(term)) }) else { return nil }
         if t == q { return 500 }
         if t.hasPrefix(q) { return 400 }
         if t.contains(q) { return 300 }

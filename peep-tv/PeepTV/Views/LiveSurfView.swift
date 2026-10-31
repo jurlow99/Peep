@@ -162,7 +162,7 @@ struct LiveSurfView: View {
         .task {
             await loadPackages()
             while !Task.isCancelled {
-                do { try await Task.sleep(for: .seconds(15)) } catch { return }
+                do { try await Task.sleep(for: .seconds(60)) } catch { return }
                 async let nextChannels = supabase.fetchChannels()
                 async let nextFeeds = supabase.fetchFeeds()
                 async let nextPackages = supabase.fetchMultiviewPackages()

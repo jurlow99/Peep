@@ -49,7 +49,7 @@ struct HomeView: View {
                         .scaleEffect(1.5)
                     Text("Loading…")
                         .font(.system(size: 24))
-                        .foregroundColor(Color(white: 0.4))
+                        .foregroundColor(Color(white: 0.6))
                 }
             } else if let errorMessage {
                 StatusView(title: "Couldn't load Home", message: errorMessage, retry: { Task { await load() } })
@@ -116,7 +116,7 @@ struct HomeView: View {
         .task(id: contentEntryActive) {
             guard contentEntryActive else { return }
             while !Task.isCancelled {
-                do { try await Task.sleep(for: .seconds(15)) } catch { return }
+                do { try await Task.sleep(for: .seconds(60)) } catch { return }
                 if !isLoading {
                     async let nextPackages = supabase.fetchMultiviewPackages()
                     async let nextRows = supabase.fetchCarousels()
@@ -227,7 +227,7 @@ struct HomeView: View {
 
     private func catalogShelf(title: String, items: [HomeCatalogItem], layout: String = "standard") -> some View {
         ShelfView(title: title) {
-                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                     Group {
                         switch item {
                         case .movie(let video): VideoCardView(video: video, width: layout == "spotlight" ? 360 : 320) { playingVideo = video }
@@ -235,6 +235,7 @@ struct HomeView: View {
                         }
                     }
                     .sidebarBoundary(index == 0)
+                    .accessibilityValue(Text(layout == "top10" ? "Ranked number \(index + 1)" : ""))
                     .overlay(alignment: .bottomLeading) {
                         if layout == "top10" {
                             Text(String(index + 1)).font(.system(size: 68, weight: .black))

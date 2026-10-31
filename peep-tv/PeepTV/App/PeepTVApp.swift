@@ -25,7 +25,7 @@ struct RootView: View {
                 StatusView(title: "Connect your catalog", message: error, symbol: "gearshape")
             } else if supabase.isRestoring {
                 ProgressView("Opening peep…")
-            } else if supabase.session != nil && supabase.activeProfile == nil {
+            } else if supabase.session != nil && supabase.activeProfile == nil && !supabase.profileSelectionSkipped {
                 ProfileSelectView().id(supabase.session?.userId)
             } else {
                 ContentView()

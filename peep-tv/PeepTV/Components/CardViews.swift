@@ -169,8 +169,8 @@ enum ContentAppearance {
     static let controlCornerRadius: CGFloat = 14
 }
 
-/// Shared segmented control for filters throughout Apple TV. Selection stays
-/// neutral; yellow is reserved for the remote-focus outline.
+/// Shared segmented control for filters throughout Apple TV. A selected chip is
+/// filled yellow; remote focus draws a yellow outline just outside the chip.
 struct TVPillStyle: ButtonStyle {
     let selected: Bool
     @Environment(\.isFocused) private var focused
@@ -179,9 +179,9 @@ struct TVPillStyle: ButtonStyle {
             .font(.system(size: 21, weight: selected ? .bold : .semibold, design: .rounded))
             .frame(minHeight: ContentAppearance.pillHeight)
             .padding(.horizontal, 25)
-            .foregroundStyle(.white)
-            .background(Color(white: selected ? 0.25 : 0.095), in: Capsule())
-            .overlay(Capsule().strokeBorder(focused ? ContentAppearance.accent : (selected ? .white.opacity(0.28) : .clear), lineWidth: focused ? ContentAppearance.focusWidth : 1))
+            .foregroundStyle(selected ? .black : .white)
+            .background(selected ? ContentAppearance.accent : Color(white: 0.095), in: Capsule())
+            .overlay(Capsule().strokeBorder(ContentAppearance.accent, lineWidth: ContentAppearance.focusWidth).padding(-7).opacity(focused ? 1 : 0))
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
             .shadow(color: focused ? ContentAppearance.accent.opacity(0.28) : .clear, radius: 12)
     }
@@ -295,48 +295,8 @@ struct ShowCardView: View {
 
 // MARK: - Live Badge
 
-struct LiveBadge: View {
-    @State private var pulse = false
-
-    var body: some View {
-        HStack(spacing: 5) {
-            Circle()
-                .fill(Color.red)
-                .frame(width: 8, height: 8)
-                .scaleEffect(pulse ? 1.3 : 1.0)
-                .animation(.easeInOut(duration: 0.8).repeatForever(), value: pulse)
-            Text("LIVE")
-                .font(.system(size: 14, weight: .black))
-                .foregroundColor(.white)
-        }
-        .padding(.horizontal, 10).padding(.vertical, 5)
-        .background(Color.red)
-        .cornerRadius(6)
-        .onAppear { pulse = true }
-    }
-}
 
 
-private struct CatalogArtwork: View {
-    let url: URL?
-    let symbol: String
-    var body: some View {
-        AsyncImage(url: url) { phase in
-            if let image = phase.image {
-                image.resizable().scaledToFit()
-            } else {
-                ZStack {
-                    Color(white: 0.1)
-                    VStack(spacing: 12) {
-                        Image(systemName: symbol).font(.system(size: 38))
-                        Text(url == nil || phase.error != nil ? "Artwork unavailable" : "Loading artwork…")
-                            .font(.system(size: 17)).multilineTextAlignment(.center)
-                    }.foregroundStyle(Color(white: 0.65)).padding(20)
-                }
-            }
-        }.accessibilityHidden(true)
-    }
-}
 
 
 /// Hold Select on any catalog card to save/remove without changing its primary action.

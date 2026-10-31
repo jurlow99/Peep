@@ -44,11 +44,11 @@ Before shipping, check on a simulator and physical Apple TV:
 
 ## Scope and release work
 
-The Profile tab reads the signed-in user's `profiles` row and edits only `full_name`, `avatar_id`, and (when replacing a photo with a preset) `avatar_url`. Eight existing web avatar presets are available. Name-only edits preserve existing artwork. Profile settings use the current user's bearer token and own-row REST filter, and require the existing self-profile SELECT/UPDATE policies. No schema changes are needed. Sign-out clears the local TV session after confirmation. Existing viewer-profile selection is separate from account settings; this does not add household-profile creation, watch-history sync, or playback-preference placeholders.
+The Profile tab reads the signed-in user's `profiles` row and edits only `full_name`, `avatar_id`, and (when replacing a photo with a preset) `avatar_url`. Eight existing web avatar presets are available. Name-only edits preserve existing artwork. Profile settings use the current user's bearer token and own-row REST filter, and require the existing self-profile SELECT/UPDATE policies. No schema changes are needed. Sign-out clears the local TV session after confirmation. Existing viewer-profile selection is separate from account settings; this does not add household-profile creation; watch progress and My List are account-level and shared with the web. Pressing Menu on the launch picker continues as the account without choosing a viewer.
 
 Profile tests use an isolated mock HTTP transport to verify save/reload, payload restrictions, input validation, signed-out rejection, and denied/empty/wrong-owner responses. They do not write real account data or prove live RLS enforcement. Validate a disposable dev account before shipping.
 
-This is the core free viewing client, not full web feature parity. Premium titles/channels are excluded until native entitlement handling is integrated. Production preview-account tiers, podcasts, My List, synced watch progress, creator streams/chat, ads, and purchases are not implemented. Profile selection currently identifies the viewer; it does not sync viewing history. Website/embed URLs are not playable in AVPlayer; catalog URLs must point to compatible HTTPS media (normally HLS).
+This is the core free viewing client, not full web feature parity. Premium titles/channels are excluded until native entitlement handling is integrated. Production preview-account tiers, creator streams/chat and purchases are not implemented. Podcasts, My List, account-level watch progress and IMA pre-roll ads are. Profile selection identifies the viewer; it does not keep separate viewing history per viewer. Website/embed URLs are not playable in AVPlayer; catalog URLs must point to compatible HTTPS media (normally HLS).
 
 Add approved Apple TV app icon/Top Shelf assets, validate the app's privacy declarations and ad/entitlement requirements, configure release signing, and complete device QA before a TestFlight/App Store release. No backend migrations or production deployment are needed for this source change.
 
@@ -296,7 +296,7 @@ controls pre-rolls before movie/episode playback, Live TV entry and a single bre
 before multiview starts. Tags must explicitly include `tvos` in `platforms`.
 SDK ad playback uses its own surface while content remains paused. Back cancels
 without starting content; missing tags and ad-load errors fall back to playback.
-Test tags bypass the 30-minute in-process non-test cooldown.
+The 30-minute cooldown is stored in UserDefaults, survives relaunch, and applies to test tags as well.
 
 FARRIS dev's Home → Play sample has a Google sample pre-roll, scoped only to the
 1080p demo clip. Simulator visibly verified the ad and subsequent movie playback.

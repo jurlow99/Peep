@@ -456,10 +456,11 @@ struct ContentView: View {
                     .frame(width: navigation.expanded ? 312 : 64, height: 76, alignment: .leading)
                     .clipped()
                     .padding(.horizontal, 18)
-                    .foregroundStyle(railFocus == index ? .black : railFocus == nil && navigation.selected == index ? .yellow : .white.opacity(0.7))
-                    .background(railFocus == index ? Color.yellow : railFocus == nil && navigation.selected == index ? Color.yellow.opacity(0.12) : Color.white.opacity(0.035))
+                    // Selected destination: yellow fill. Focus: yellow outline just outside the item.
+                    .foregroundStyle(navigation.selected == index ? .black : .white.opacity(railFocus == index ? 1 : 0.7))
+                    .background(navigation.selected == index ? Color.yellow : Color.white.opacity(railFocus == index ? 0.12 : 0.035))
                     .clipShape(RoundedRectangle(cornerRadius: 20))
-                    .overlay(RoundedRectangle(cornerRadius: 20).stroke(railFocus == index || (railFocus == nil && navigation.selected == index) ? Color.yellow : .clear, lineWidth: railFocus == index ? ContentAppearance.focusWidth : 1))
+                    .overlay(RoundedRectangle(cornerRadius: 25).stroke(Color.yellow, lineWidth: ContentAppearance.focusWidth).padding(-7).opacity(railFocus == index ? 1 : 0))
                 }
                 .buttonStyle(RailButtonStyle())
                 .focused($railFocus, equals: index)

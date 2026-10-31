@@ -37,7 +37,7 @@ struct AuthView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("EMAIL")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(Color(white: 0.4))
+                            .foregroundColor(Color(white: 0.6))
                             .kerning(1.5)
                         TextField("you@example.com", text: $email)
                             .font(.system(size: 24))
@@ -54,7 +54,7 @@ struct AuthView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("PASSWORD")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(Color(white: 0.4))
+                            .foregroundColor(Color(white: 0.6))
                             .kerning(1.5)
                         SecureField("Password", text: $password)
                             .textContentType(.password)
@@ -91,7 +91,7 @@ struct AuthView: View {
                     .buttonStyle(BrowseCardStyle())
                     .disabled(isLoading || email.isEmpty || password.isEmpty)
                     .opacity(email.isEmpty || password.isEmpty ? 0.5 : 1)
-                    Button("Back to browsing") { dismiss() }
+                    Button("Back to browsing") { dismiss() }.buttonStyle(BrowseCardStyle())
                 }
                 .frame(maxWidth: 560)
                 .padding(80)

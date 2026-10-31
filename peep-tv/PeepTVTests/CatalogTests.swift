@@ -1038,6 +1038,35 @@ final class CatalogTests: XCTestCase {
         XCTAssertEqual(PlayerModel.metadataItems(title: "x", metadata: PlaybackMetadata(title: "Ep", subtitle: "Show", description: "")).map { $0.identifier }, [.commonIdentifierTitle, .iTunesMetadataTrackSubTitle])
     }
 
+    func testConfigurationRejectsRetiredProjectsAndSearchIgnoresTinyDescriptionHits() {
+        XCTAssertTrue(AppConfiguration.isLegacyHost("IUOZUJWTUZUWUBHSNHIX.supabase.co"))
+        XCTAssertFalse(AppConfiguration.isLegacyHost("cuwdyedmmnpklufduaho.supabase.co"))
+        XCTAssertNil(CatalogSearch.score(query: "th", title: "Full Force", category: nil, tags: [], description: "the thing"))
+        XCTAssertNotNil(CatalogSearch.score(query: "thing", title: "Full Force", category: nil, tags: [], description: "the thing"))
+        XCTAssertNotNil(CatalogSearch.score(query: "fu", title: "Full Force", category: nil, tags: [], description: nil))
+    }
+
+    @MainActor
+    func testCatalogReadRenewsRevokedTokenAndRetriesOnce() async throws {
+        let config = AppConfiguration(baseURL: URL(string: "https://renew.invalid")!, anonKey: "public-test", streamHost: "", isDevelopment: false)
+        let session = UserSession(accessToken: "stale", refreshToken: "refresh-1", userId: "owner", expiresAt: .distantFuture)
+        var calls: [String] = []
+        let service = SupabaseService(configuration: config, session: session, persistSession: { XCTAssertEqual($0.accessToken, "fresh") }) { request in
+            let auth = request.value(forHTTPHeaderField: "Authorization") ?? ""
+            if request.url!.path.contains("/auth/v1/token") {
+                calls.append("refresh")
+                return (Data(#"{"access_token":"fresh","refresh_token":"refresh-2","expires_in":3600,"user":{"id":"owner"}}"#.utf8), HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+            }
+            calls.append(auth)
+            let status = auth == "Bearer fresh" ? 200 : 401
+            return (Data("[]".utf8), HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!)
+        }
+        let rows: [WatchProgress] = try await service.get("watch_progress", query: ["user_id": "eq.owner"])
+        XCTAssertTrue(rows.isEmpty)
+        XCTAssertEqual(calls, ["Bearer stale", "refresh", "Bearer fresh"])
+        XCTAssertEqual(service.session?.accessToken, "fresh")
+    }
+
     func testChannelSurfingWrapsAndSkipsUnplayableChannels() throws {
         let a = try decode(Channel.self, #"{"id":1,"name":"A","hls_url":"https://s.example.com/a.m3u8"}"#)
         let b = try decode(Channel.self, #"{"id":2,"name":"B"}"#)

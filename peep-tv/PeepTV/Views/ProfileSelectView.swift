@@ -24,6 +24,9 @@ struct ProfileSelectView: View {
                 Text("Who's watching?")
                     .font(.system(size: 64, weight: .bold, design: .rounded)).tracking(-1.5)
                     .frame(maxWidth: .infinity)
+                if supabase.activeProfile == nil {
+                    Text("Or press Menu to continue without choosing.").font(.system(size: 21)).foregroundStyle(.secondary).frame(maxWidth: .infinity)
+                }
                 if loading {
                     ProgressView("Getting your viewers…").frame(maxWidth: .infinity, minHeight: 330)
                 } else if let error, supabase.profiles.isEmpty {
@@ -74,7 +77,12 @@ struct ProfileSelectView: View {
             }.padding(.horizontal, 100).padding(.vertical, 65)
         }.foregroundStyle(.white)
         .task { await load() }
-        .onExitCommand { if supabase.activeProfile != nil && !saving { dismiss() } }
+        // Menu always leaves this screen: with a viewer chosen it just closes; at launch it continues as the account.
+        .onExitCommand {
+            guard !saving else { return }
+            if supabase.activeProfile == nil { supabase.skipProfileSelection() }
+            dismiss()
+        }
         .sheet(isPresented: $adding, onDismiss: { focus = "add" }) { AddViewerView { profile in supabase.selectProfile(profile); adding = false; dismiss() } }
     }
     private func viewerCard(id: String, name: String, avatar: AccountProfile, action: @escaping () -> Void) -> some View {

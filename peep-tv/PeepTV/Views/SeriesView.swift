@@ -168,7 +168,7 @@ struct EpisodeRowView: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        Button(action: onPlay) {
+        Button(action: { if episode.videoURL != nil { onPlay() } }) {
             VStack(alignment: .leading, spacing: 12) {
                 EpisodeArtwork(url: episode.thumbURL, fallback: fallbackArtwork)
                     .aspectRatio(16 / 9, contentMode: .fit)
@@ -195,8 +195,13 @@ struct EpisodeRowView: View {
                         }
                     }
                     .overlay(alignment: .bottomTrailing) {
-                        Image(systemName: "play.fill").font(.system(size: 19, weight: .bold))
-                            .padding(13).background(.black.opacity(0.75), in: Circle()).padding(14)
+                        if episode.videoURL == nil {
+                            Text("Coming soon").font(.system(size: 16, weight: .semibold)).padding(.horizontal, 12).padding(.vertical, 8)
+                                .background(.black.opacity(0.8), in: Capsule()).padding(14)
+                        } else {
+                            Image(systemName: "play.fill").font(.system(size: 19, weight: .bold))
+                                .padding(13).background(.black.opacity(0.75), in: Circle()).padding(14)
+                        }
                     }
                 HStack {
                     Text("EPISODE \(episode.episode_number ?? 1)").tracking(1.5)
@@ -211,7 +216,8 @@ struct EpisodeRowView: View {
                 }
             }.frame(maxWidth: .infinity, alignment: .leading)
         }.buttonStyle(EpisodePosterStyle()).focused($focused)
-            .disabled(episode.videoURL == nil)
+            .opacity(episode.videoURL == nil ? 0.6 : 1)
+            .accessibilityLabel(episode.videoURL == nil ? "\(episode.displayTitle), coming soon" : episode.displayTitle)
     }
 }
 

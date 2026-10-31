@@ -132,7 +132,7 @@ struct StreamsView: View {
             await refreshCuration()
             focusFirstChannel()
             while !Task.isCancelled {
-                do { try await Task.sleep(for: .seconds(15)) } catch { return }
+                do { try await Task.sleep(for: .seconds(60)) } catch { return }
                 await refreshCuration()
                 if Date().timeIntervalSince(guideRefreshedAt) > 300 { await refreshGuide() }
             }

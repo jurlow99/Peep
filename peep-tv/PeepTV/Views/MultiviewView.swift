@@ -390,7 +390,7 @@ struct MultiviewView: View {
                 let channels = try? await supabase.fetchChannels()
                 guard !Task.isCancelled else { return }
                 if let channels { model.refreshBlackouts(from: channels) }
-                do { try await Task.sleep(for: .seconds(10)) } catch { return }
+                do { try await Task.sleep(for: .seconds(30)) } catch { return }
             }
         }
         .task {

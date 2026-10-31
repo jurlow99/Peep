@@ -7,19 +7,32 @@ struct SearchView: View {
     @State private var typeFilter = "All"
     @State private var allVideos: [Video] = []
     @State private var allShows: [Show] = []
+    @State private var allPodcasts: [Podcast] = []
+    @State private var allChannels: [Channel] = []
+    @State private var feeds: [PublicFeed] = []
     @State private var selectedVideo: Video?
     @State private var selectedShow: Show?
+    @State private var selectedPodcast: Podcast?
+    @State private var selectedChannel: Channel?
     @State private var isLoading = true
     @State private var errorMessage: String?
 
-    private var results: (videos: [Video], shows: [Show]) {
+    private var results: (videos: [Video], shows: [Show], podcasts: [Podcast], channels: [Channel]) {
         let videos = allVideos.compactMap { video -> (Video, Int)? in
             CatalogSearch.score(query: query, title: video.title, category: video.category, tags: video.tags?.values ?? [], description: video.description).map { (video, $0) }
         }.sorted { $0.1 == $1.1 ? $0.0.title.localizedStandardCompare($1.0.title) == .orderedAscending : $0.1 > $1.1 }.map { $0.0 }
         let shows = allShows.compactMap { show -> (Show, Int)? in
             CatalogSearch.score(query: query, title: show.title, category: show.category, tags: show.tags?.values ?? [], description: show.description).map { (show, $0) }
         }.sorted { $0.1 == $1.1 ? $0.0.title.localizedStandardCompare($1.0.title) == .orderedAscending : $0.1 > $1.1 }.map { $0.0 }
-        return (typeFilter == "Series" ? [] : videos, typeFilter == "Movies" ? [] : shows)
+        let podcasts = allPodcasts.compactMap { podcast -> (Podcast, Int)? in
+            CatalogSearch.score(query: query, title: podcast.title, category: podcast.host, tags: [], description: podcast.description).map { (podcast, $0) }
+        }.sorted { $0.1 == $1.1 ? $0.0.title.localizedStandardCompare($1.0.title) == .orderedAscending : $0.1 > $1.1 }.map { $0.0 }
+        let channels = allChannels.compactMap { channel -> (Channel, Int)? in
+            CatalogSearch.score(query: query, title: channel.name, category: channel.category, tags: [], description: channel.description).map { (channel, $0) }
+        }.sorted { $0.1 == $1.1 ? $0.0.name.localizedStandardCompare($1.0.name) == .orderedAscending : $0.1 > $1.1 }.map { $0.0 }
+        let only = typeFilter
+        return (only == "All" || only == "Movies" ? videos : [], only == "All" || only == "Series" ? shows : [],
+                only == "All" || only == "Podcasts" ? podcasts : [], only == "All" || only == "Live TV" ? channels : [])
     }
     private var genres: [String] {
         let values = allVideos.flatMap { BrowsePresentation.categories($0.category) + ($0.tags?.values ?? []) }
@@ -39,7 +52,7 @@ struct SearchView: View {
             // Search field
             HStack {
                 Image(systemName: "magnifyingglass")
-                    .foregroundColor(Color(white: 0.4))
+                    .foregroundColor(Color(white: 0.6))
                     .font(.system(size: 24))
                 TextField("Titles, genres or tags", text: $query)
                     .textInputAutocapitalization(.never).autocorrectionDisabled()
@@ -61,13 +74,13 @@ struct SearchView: View {
             .padding(.horizontal, 80)
 
             HStack(spacing: 18) {
-                ForEach(["All", "Movies", "Series"], id: \.self) { type in
+                ForEach(["All", "Movies", "Series", "Podcasts", "Live TV"], id: \.self) { type in
                     FilterChip(label: type, isSelected: typeFilter == type) { typeFilter = type }
                         .sidebarBoundary(type == "All")
                 }
                 Spacer()
                 if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isLoading {
-                    Text("\(matches.videos.count + matches.shows.count) results").font(.system(size: 23)).foregroundStyle(.secondary)
+                    Text("\(matches.videos.count + matches.shows.count + matches.podcasts.count + matches.channels.count) results").font(.system(size: 23)).foregroundStyle(.secondary)
                 }
             }.padding(.horizontal, 80)
 
@@ -88,11 +101,11 @@ struct SearchView: View {
                     }
                     Spacer()
                 }.padding(.horizontal, 80).padding(.top, 30)
-            } else if matches.videos.isEmpty && matches.shows.isEmpty {
+            } else if matches.videos.isEmpty && matches.shows.isEmpty && matches.podcasts.isEmpty && matches.channels.isEmpty {
                 VStack(spacing: 16) {
                     Image(systemName: "questionmark.circle")
                         .font(.system(size: 64))
-                        .foregroundColor(Color(white: 0.2))
+                        .foregroundColor(Color(white: 0.45))
                     Text("No results for \"\(query)\"")
                         .font(.system(size: 28))
                         .foregroundColor(Color(white: 0.75))
@@ -118,6 +131,42 @@ struct SearchView: View {
                                     }
                                     .padding(.horizontal, 80)
                                     .padding(.vertical, 28)
+                                }
+                            }
+                        }
+                        if !matches.podcasts.isEmpty {
+                            VStack(alignment: .leading, spacing: 16) {
+                                Text("Podcasts · \(matches.podcasts.count)").font(.system(size: 28, weight: .bold)).foregroundColor(.white).padding(.horizontal, 80)
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    LazyHStack(alignment: .top, spacing: 24) {
+                                        ForEach(matches.podcasts) { podcast in
+                                            Button { selectedPodcast = podcast } label: {
+                                                VStack(alignment: .leading, spacing: 12) {
+                                                    BoundedArtwork(url: podcast.artworkURL, symbol: "mic").frame(width: 240, height: 240).background(Color(white: 0.08)).clipShape(RoundedRectangle(cornerRadius: 12))
+                                                    Text(podcast.title).font(.system(size: 23, weight: .semibold)).lineLimit(2).frame(height: 58, alignment: .topLeading)
+                                                    Text(podcast.host ?? "Podcast").font(.system(size: 17)).foregroundStyle(.secondary).lineLimit(1)
+                                                }.frame(width: 240, alignment: .leading).padding(12)
+                                            }.buttonStyle(BrowseCardStyle()).sidebarBoundary(podcast.id == matches.podcasts.first?.id)
+                                        }
+                                    }.padding(.horizontal, 80).padding(.vertical, 28)
+                                }
+                            }
+                        }
+                        if !matches.channels.isEmpty {
+                            VStack(alignment: .leading, spacing: 16) {
+                                Text("Live TV · \(matches.channels.count)").font(.system(size: 28, weight: .bold)).foregroundColor(.white).padding(.horizontal, 80)
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    LazyHStack(alignment: .top, spacing: 24) {
+                                        ForEach(matches.channels) { channel in
+                                            Button { selectedChannel = channel } label: {
+                                                VStack(alignment: .leading, spacing: 12) {
+                                                    BoundedArtwork(url: channel.thumbURL, symbol: "tv").frame(width: 300, height: 169).background(Color(white: 0.1))
+                                                    Text(channel.name).font(.system(size: 22, weight: .semibold)).lineLimit(2).frame(height: 54, alignment: .topLeading).padding(.horizontal, 12).padding(.bottom, 10)
+                                                }.frame(width: 300)
+                                            }.buttonStyle(BrowseCardStyle()).saveToMyList(String(channel.id), type: "channel").sidebarBoundary(channel.id == matches.channels.first?.id)
+                                                .disabled(channel.playbackURL(streamHost: supabase.configuration?.streamHost ?? "", feeds: feeds) == nil)
+                                        }
+                                    }.padding(.horizontal, 80).padding(.vertical, 28)
                                 }
                             }
                         }
@@ -150,16 +199,28 @@ struct SearchView: View {
         .fullScreenCover(item: $selectedShow) { s in
             SeriesDetailView(show: s)
         }
+        .sheet(item: $selectedPodcast) { PodcastDetailView(podcast: $0) }
+        .fullScreenCover(item: $selectedChannel) { channel in
+            PlaybackView(url: channel.playbackURL(streamHost: supabase.configuration?.streamHost ?? "", feeds: feeds), title: channel.name, liveChannelID: channel.id,
+                         metadata: PlaybackMetadata(title: channel.name, subtitle: BrowsePresentation.category(channel.category), description: channel.description, artwork: channel.thumbURL, isLive: true))
+        }
     }
 
     private func load() async {
-        isLoading = true
+        // Returning from the background reloads the catalog; keep the results on screen meanwhile.
+        isLoading = allVideos.isEmpty && allShows.isEmpty
         errorMessage = nil
         defer { isLoading = false }
         do {
             async let v = supabase.fetchVideos()
             async let s = supabase.fetchShows()
+            async let p = supabase.fetchPodcasts()
+            async let c = supabase.fetchChannels()
+            async let f = supabase.fetchFeeds()
             (allVideos, allShows) = try await (v, s)
+            allPodcasts = (try? await p) ?? []
+            allChannels = ((try? await c) ?? []).filter { !BrowsePresentation.isDemo($0.name) }
+            feeds = (try? await f) ?? []
         } catch { errorMessage = error.localizedDescription }
     }
 }

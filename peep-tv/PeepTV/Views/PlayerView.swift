@@ -321,8 +321,10 @@ struct PlaybackView: View {
             } else if let resolutionError {
                 VStack {
                     StatusView(title: "Video unavailable", message: resolutionError, symbol: "play.slash")
-                    Button("Try again") { attempt = UUID() }.padding()
-                    Button("Back") { dismiss() }.padding(.bottom, 80)
+                    HStack(spacing: 20) {
+                        Button("Try again") { attempt = UUID() }.buttonStyle(BrowseCardStyle())
+                        Button("Back") { dismiss() }.buttonStyle(BrowseCardStyle())
+                    }.padding(.bottom, 80)
                 }.background(Color.black).onExitCommand { dismiss() }
             } else {
                 ProgressView("Preparing playback…").frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -414,7 +416,7 @@ struct PlayerView: View {
             } else if let error = model.errorMessage {
                 VStack {
                     StatusView(title: "Playback interrupted", message: error, retry: retry)
-                    Button("Back") { dismiss() }.padding(.bottom, 80)
+                    Button("Back") { dismiss() }.buttonStyle(BrowseCardStyle()).padding(.bottom, 80)
                 }.background(Color.black)
             } else {
                 if (!adGate.blocking || adGate.isMidroll) && !showNext && !showEnd {
@@ -1212,14 +1214,9 @@ actor LiveInbandReader {
     private func fetch(_ url: URL, limit: Int) async throws -> Data {
         guard url.scheme == "https" else { throw URLError(.unsupportedURL) }
         var request = URLRequest(url: url); request.timeoutInterval = 8; request.cachePolicy = .reloadIgnoringLocalCacheData
-        let (bytes,response) = try await session.bytes(for: request)
+        let (data,response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { throw URLError(.badServerResponse) }
-        var data = Data()
-        for try await byte in bytes {
-            try Task.checkCancellation()
-            guard data.count < limit else { throw URLError(.dataLengthExceedsMaximum) }
-            data.append(byte)
-        }
+        guard data.count <= limit else { throw URLError(.dataLengthExceedsMaximum) }
         return data
     }
     func poll(_ source: URL) async throws -> [String:LiveMidrollCue] {
