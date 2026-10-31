@@ -1011,6 +1011,19 @@ final class CatalogTests: XCTestCase {
         try JSONDecoder().decode(type, from: Data(json.utf8))
     }
 
+    func testRelatedTitlesRankLikeWebAndSkipSelfAndUnrelated() throws {
+        let source = try decode(Video.self, #"{"id":"a","title":"A","category":"Comedy","tags":["Family","road"],"year":2001,"rating":"PG"}"#)
+        let sameGenre = try decode(Video.self, #"{"id":"b","title":"B","category":"comedy","year":1990}"#)
+        let tagsAndYear = try decode(Video.self, #"{"id":"c","title":"C","category":"Drama","tags":"family, Road","year":2003,"rating":"PG"}"#)
+        let unrelated = try decode(Video.self, #"{"id":"d","title":"D","category":"Horror","year":1950}"#)
+        XCTAssertEqual(RelatedTitles.similarity(source, sameGenre), 46)   // category 40 + 11 years apart 6
+        XCTAssertEqual(RelatedTitles.similarity(source, tagsAndYear), 48) // two tags 30 + 2 years 10 + rating 8
+        XCTAssertEqual(RelatedTitles.similarity(source, unrelated), 0)
+        XCTAssertEqual(RelatedTitles.rank(source, in: [unrelated, source, sameGenre, tagsAndYear]).map(\.id), ["c", "b"])
+        XCTAssertEqual(RelatedTitles.rank(source, in: [sameGenre, tagsAndYear], limit: 1).map(\.id), ["c"])
+        XCTAssertTrue(RelatedTitles.rank(source, in: [source]).isEmpty)
+    }
+
     func testMovieUUIDAndFeaturedMatchWebSchema() throws {
         let movie = try decode(Video.self, #"{"id":"54a263b4-1833-44b1-bdf2-f791868c410a","title":"Sample","featured":true,"url":"https://media.example.com/movie.m3u8"}"#)
         XCTAssertEqual(movie.id, "54a263b4-1833-44b1-bdf2-f791868c410a")

@@ -489,3 +489,35 @@ enum ResumePosition {
         return min(saved, max(0, duration - 1))
     }
 }
+
+/// "More like this" scoring, kept in step with the web's lib/recommendations.js
+/// (category, shared tags, year proximity, matching rating).
+enum RelatedTitles {
+    static func tags(_ value: CatalogTags?) -> [String] {
+        (value?.values ?? []).map { $0.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+    }
+    static func similarity(_ source: Video, _ candidate: Video) -> Int {
+        var points = 0
+        if let a = source.category?.lowercased(), let b = candidate.category?.lowercased(), !a.isEmpty, a == b { points += 40 }
+        points += Set(tags(source.tags)).intersection(tags(candidate.tags)).count * 15
+        if let a = source.year, let b = candidate.year {
+            switch abs(a - b) {
+            case ...5: points += 10
+            case ...15: points += 6
+            case ...30: points += 2
+            default: break
+            }
+        }
+        if let a = source.rating, let b = candidate.rating, !a.isEmpty, a == b { points += 8 }
+        return points
+    }
+    static func rank(_ source: Video, in pool: [Video], limit: Int = 12) -> [Video] {
+        var scored: [(video: Video, points: Int)] = []
+        for candidate in pool where candidate.id != source.id {
+            let points = similarity(source, candidate)
+            if points > 0 { scored.append((candidate, points)) }
+        }
+        scored.sort { lhs, rhs in lhs.points != rhs.points ? lhs.points > rhs.points : lhs.video.title < rhs.video.title }
+        return scored.prefix(limit).map { $0.video }
+    }
+}

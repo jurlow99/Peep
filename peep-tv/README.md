@@ -1,6 +1,6 @@
 # Peep for Apple TV
 
-Native SwiftUI app for tvOS 17+, backed by the same Supabase catalog as the web app. Includes guest browsing, featured movies, category filters, series and season browsing, title/description search, FAST channels with now/next programming, and optional account/profile selection. Playback uses AVPlayerViewController for Siri Remote transport controls, seeking, audio tracks, and captions supplied by the stream.
+Native SwiftUI app for tvOS 17+, backed by the same Supabase catalog as the web app. Includes guest browsing, featured movies, category filters, series and season browsing, title/description search, FAST channels with now/next programming, and optional account/profile selection. Selecting a movie opens a detail page (artwork, year/rating/runtime/category, description, Play or Resume with a Start over option, Trailer, My List, and a "More like this" shelf ranked like the web's recommendations); the featured hero's Watch now still plays directly. Playback uses AVPlayerViewController for Siri Remote transport controls, seeking, audio tracks, and captions supplied by the stream. If a saved position can't be restored but the stream is ready, playback starts from the beginning with a notice instead of stopping.
 
 ## Run on a Mac
 

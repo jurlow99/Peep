@@ -17,6 +17,7 @@ struct HomeView: View {
     @State private var podcasts: [Podcast] = []
     @State private var selectedPodcast: Podcast?
     @State private var playingVideo: Video?
+    @State private var heroVideo: Video?
     @State private var playingShow: Show?
     @State private var isLoading = true
     @State private var errorMessage: String?
@@ -65,10 +66,10 @@ struct HomeView: View {
                         // Hero
                         if let promo = homeHero, promo.enabled == true {
                             HeroView(promo: promo, available: promoAvailable(promo)) { openPromo(promo) }
-                                .disabled(playingVideo != nil || playingShow != nil || playingResume != nil || channelPlayback != nil || selectedPodcast != nil)
+                                .disabled(playingVideo != nil || heroVideo != nil || playingShow != nil || playingResume != nil || channelPlayback != nil || selectedPodcast != nil)
                         } else if let hero {
                             switch hero {
-                            case .movie(let video): HeroView(video: video) { playingVideo = video }
+                            case .movie(let video): HeroView(video: video) { heroVideo = video }
                             case .show(let show): HeroView(show: show) { playingShow = show }
                             }
                         }
@@ -125,7 +126,8 @@ struct HomeView: View {
                 }
             }
         }
-        .fullScreenCover(item: $playingVideo) { v in
+        .fullScreenCover(item: $playingVideo) { MovieDetailView(video: $0) }
+        .fullScreenCover(item: $heroVideo) { v in
             PlaybackView(url: v.videoURL, title: v.title, identity: PlaybackIdentity(id: v.id, type: "movie"))
         }
         .fullScreenCover(item: $channelPlayback) { channel in

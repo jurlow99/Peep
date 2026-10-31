@@ -57,9 +57,7 @@ struct MoviesView: View {
         }
         .background(Color.black)
         .task(id: catalogRevision) { await load() }
-        .fullScreenCover(item: $selectedVideo) { v in
-            PlaybackView(url: v.videoURL, title: v.title, identity: PlaybackIdentity(id: v.id, type: "movie"))
-        }
+        .fullScreenCover(item: $selectedVideo) { MovieDetailView(video: $0) }
     }
 
     private func load() async {
@@ -178,7 +176,7 @@ struct MyListView: View {
         .task(id: "\(catalogRevision):\(supabase.session?.userId ?? "guest")") { await load() }
         .sheet(isPresented: $signIn) { AuthView() }
         .fullScreenCover(item: $show) { SeriesDetailView(show: $0) }
-        .fullScreenCover(item: $movie) { PlaybackView(url: $0.videoURL, title: $0.title, identity: PlaybackIdentity(id: $0.id, type: "movie")) }
+        .fullScreenCover(item: $movie) { MovieDetailView(video: $0) }
         .fullScreenCover(isPresented: Binding(get: { live != nil }, set: { if !$0 { live = nil } })) {
             if let channel = live, let url = channel.playbackURL(streamHost: supabase.configuration?.streamHost ?? "", feeds: feeds) {
                 LiveSurfView(channels: channels, initial: channel, url: url, feeds: feeds,
@@ -190,7 +188,7 @@ struct MyListView: View {
         } message: { Text(notice ?? "") }
     }
     private func open(_ entry: SavedLibraryEntry) {
-        if let video = entry.video, video.videoURL != nil { movie = video }
+        if let video = entry.video { movie = video }
         else if let series = entry.show { show = series }
         else if let channel = entry.channel,
                 channel.playbackURL(streamHost: supabase.configuration?.streamHost ?? "", feeds: feeds) != nil { live = channel }
@@ -224,4 +222,136 @@ private struct SavedLibraryEntry: Identifiable {
     var title: String { video?.title ?? show?.title ?? channel?.name ?? "Unavailable \(saved.type == "show" ? "series" : saved.type)" }
     var artwork: URL? { video?.thumbURL ?? show?.thumbURL ?? channel?.thumbURL }
     var available: Bool { video != nil || show != nil || channel != nil }
+}
+
+// MARK: - Movie detail
+
+/// Mirrors SeriesDetailView: artwork, facts, Play/Resume, Start over, Trailer, My List
+/// and a "More like this" shelf, instead of a card starting playback on its own.
+struct MovieDetailView: View {
+    @EnvironmentObject var supabase: SupabaseService
+    @Environment(\.dismiss) private var dismiss
+    let video: Video
+    @State private var progress: WatchProgress?
+    @State private var related: [Video] = []
+    @State private var playback: MoviePlayback?
+    @State private var relatedSelection: Video?
+
+    private enum MoviePlayback: Identifiable {
+        case movie(startOver: Bool), trailer
+        var id: String {
+            switch self {
+            case .movie(let startOver): return startOver ? "start" : "resume"
+            case .trailer: return "trailer"
+            }
+        }
+    }
+    private var canResume: Bool { progress?.canResume == true }
+    private var trailerURL: URL? { MediaURL.playback(video.trailer_url) }
+    private var facts: String {
+        [video.year.map(String.init), video.rating, video.duration, BrowsePresentation.category(video.category)]
+            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "  ·  ")
+    }
+    private var remaining: String? {
+        guard canResume, let position = progress?.progress_seconds, let duration = progress?.duration_seconds else { return nil }
+        let minutes = Int(((duration - position) / 60).rounded(.up))
+        return minutes > 0 ? "\(minutes) min left" : nil
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 32) {
+                Button { dismiss() } label: {
+                    Label("Back", systemImage: "chevron.left")
+                        .font(.system(size: 21, weight: .semibold)).padding(.horizontal, 20).padding(.vertical, 14)
+                }.buttonStyle(BrowseCardStyle())
+
+                HStack(alignment: .center, spacing: 44) {
+                    PosterArtwork(url: video.thumbURL, width: 260, symbol: "film")
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("MOVIE").font(.system(size: 16, weight: .bold)).tracking(3).foregroundStyle(.secondary)
+                        Text(video.title.trimmingCharacters(in: .whitespacesAndNewlines))
+                            .font(.system(size: 52, weight: .bold, design: .rounded)).lineLimit(2)
+                        if !facts.isEmpty {
+                            Text(facts).font(.system(size: 21, weight: .medium)).foregroundStyle(Color(white: 0.72))
+                        }
+                        if let description = video.description, !description.isEmpty {
+                            Text(description).font(.system(size: 23)).foregroundStyle(Color(white: 0.72))
+                                .lineLimit(5).frame(maxWidth: 1040, alignment: .leading)
+                        }
+                        if let progress, canResume {
+                            VStack(alignment: .leading, spacing: 8) {
+                                GeometryReader { geometry in
+                                    Rectangle().fill(Color.white.opacity(0.22))
+                                        .overlay(alignment: .leading) {
+                                            Rectangle().fill(ContentAppearance.accent).frame(width: geometry.size.width * progress.fraction)
+                                        }
+                                }.frame(height: 6).clipShape(Capsule())
+                                if let remaining { Text(remaining).font(.system(size: 18)).foregroundStyle(.secondary) }
+                            }.frame(maxWidth: 520)
+                        }
+                        HStack(spacing: 20) {
+                            if video.videoURL != nil {
+                                Button { playback = .movie(startOver: false) } label: {
+                                    Label(canResume ? "Resume" : "Play", systemImage: "play.fill")
+                                        .font(.system(size: 22, weight: .semibold)).padding(18)
+                                }.buttonStyle(BrowseCardStyle())
+                                if canResume {
+                                    Button { playback = .movie(startOver: true) } label: {
+                                        Label("Start over", systemImage: "arrow.counterclockwise")
+                                            .font(.system(size: 22, weight: .semibold)).padding(18)
+                                    }.buttonStyle(BrowseCardStyle())
+                                }
+                            }
+                            if trailerURL != nil {
+                                Button { playback = .trailer } label: {
+                                    Label("Trailer", systemImage: "film")
+                                        .font(.system(size: 22, weight: .semibold)).padding(18)
+                                }.buttonStyle(BrowseCardStyle())
+                            }
+                            MyListAction(id: video.id, type: "movie")
+                        }.padding(.top, 8)
+                        if video.videoURL == nil {
+                            Text("Not available to stream right now.").font(.system(size: 19)).foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }.focusSection()
+
+                if !related.isEmpty {
+                    Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1).padding(.top, 4)
+                    Text("More like this").font(.system(size: 32, weight: .bold, design: .rounded))
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LazyHStack(alignment: .top, spacing: 24) {
+                            ForEach(related) { item in
+                                VideoCardView(video: item) { relatedSelection = item }
+                            }
+                        }.padding(.vertical, 28)
+                    }.focusSection()
+                }
+            }.padding(.horizontal, 80).padding(.top, 36).padding(.bottom, 70)
+        }
+        .background(Color.black).foregroundStyle(.white)
+        .onExitCommand { dismiss() }
+        .task { await loadRelated() }
+        .task(id: "\(supabase.watchProgressRevision):\(supabase.session?.userId ?? "guest")") { await loadProgress() }
+        .fullScreenCover(item: $playback, onDismiss: { Task { await loadProgress() } }) { mode in
+            switch mode {
+            case .movie(let startOver):
+                PlaybackView(url: video.videoURL, title: video.title, identity: PlaybackIdentity(id: video.id, type: "movie"), startFromBeginning: startOver)
+            case .trailer:
+                PlaybackView(url: trailerURL, title: "\(video.title) · Trailer")
+            }
+        }
+        .fullScreenCover(item: $relatedSelection) { MovieDetailView(video: $0) }
+    }
+
+    private func loadProgress() async {
+        guard supabase.session != nil else { progress = nil; return }
+        progress = try? await supabase.fetchWatchPosition(identity: PlaybackIdentity(id: video.id, type: "movie"))
+    }
+    private func loadRelated() async {
+        guard let pool = try? await supabase.fetchVideos() else { return }
+        related = RelatedTitles.rank(video, in: pool.filter { !BrowsePresentation.isDemo($0.title) })
+    }
 }

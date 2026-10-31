@@ -146,9 +146,7 @@ struct SearchView: View {
         .background(Color.black)
         .environment(\.onDemandTypography, true)
         .task(id: catalogRevision) { await load() }
-        .fullScreenCover(item: $selectedVideo) { v in
-            PlaybackView(url: v.videoURL, title: v.title, identity: PlaybackIdentity(id: v.id, type: "movie"))
-        }
+        .fullScreenCover(item: $selectedVideo) { MovieDetailView(video: $0) }
         .fullScreenCover(item: $selectedShow) { s in
             SeriesDetailView(show: s)
         }

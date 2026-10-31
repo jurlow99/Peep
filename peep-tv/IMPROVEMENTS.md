@@ -7,12 +7,12 @@ by reading the code and should be reproduced before fixing.
 
 ## 1. Biggest wins for viewers
 
-1. **Movies have no detail page.** Selecting a movie starts playback immediately
+1. ~~**Movies have no detail page.**~~ **Done 2026-10-31** (`MovieDetailView` in `MoviesView.swift`, `RelatedTitles` in `Models.swift`). Original note: Selecting a movie starts playback immediately
    (`HomeView.swift:230`, `MoviesView.swift:49`, `SearchView.swift:116`). Viewers never
    see the description, year, rating, trailer, My List or "more like this". Add a
    `MovieDetailView` mirroring `SeriesDetailView`, with Play/Resume, Start over, My List,
    and a related shelf ported from the web's `lib/recommendations.js`. **M**
-2. **Resume is silent and can trap the viewer** (*bug*). Playback always resumes; if the
+2. ~~**Resume is silent and can trap the viewer**~~ **Done 2026-10-31**: the movie page offers Resume / Start over, and a failed seek on a ready stream now plays from the start with a notice. Original note: Playback always resumes; if the
    seek fails the whole start path exits, so no ad, no playback, no progress saves
    (`PlayerView.swift:446-449`). Offer "Resume from X / Start over", and fall back to
    zero when the seek fails. **S**

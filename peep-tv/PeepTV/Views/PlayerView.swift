@@ -272,6 +272,7 @@ struct PlaybackView: View {
     let title: String
     var identity: PlaybackIdentity? = nil
     var liveChannelID: Int? = nil
+    var startFromBeginning = false
     @Environment(\.dismiss) private var dismiss
     @State private var currentEpisode: Episode?
     @State private var nextEpisode: Episode?
@@ -285,7 +286,7 @@ struct PlaybackView: View {
     var body: some View {
         Group {
             if let resolvedURL {
-                PlayerView(url: resolvedURL, title: currentEpisode?.displayTitle ?? title, identity: playbackIdentity, liveChannelID: liveChannelID,
+                PlayerView(url: resolvedURL, title: currentEpisode?.displayTitle ?? title, identity: playbackIdentity, liveChannelID: liveChannelID, startFromBeginning: startFromBeginning,
                            nextEpisode: nextEpisode, seriesAllowsAutoplay: seriesAllowsAutoplay, playNext: {
                     guard let nextEpisode else { return }
                     currentEpisode = nextEpisode
@@ -340,6 +341,7 @@ struct PlayerView: View {
     @EnvironmentObject private var supabase: SupabaseService
     let identity: PlaybackIdentity?
     let liveChannelID: Int?
+    let startFromBeginning: Bool
     var nextEpisode: Episode?
     let seriesAllowsAutoplay: Bool
     let playNext: () -> Void
@@ -356,12 +358,13 @@ struct PlayerView: View {
     @Environment(\.dismiss) private var dismiss
     let retry: () -> Void
 
-    init(url: URL, title: String, identity: PlaybackIdentity? = nil, liveChannelID: Int? = nil, nextEpisode: Episode? = nil, seriesAllowsAutoplay: Bool = false, playNext: @escaping () -> Void = {}, retry: @escaping () -> Void) {
+    init(url: URL, title: String, identity: PlaybackIdentity? = nil, liveChannelID: Int? = nil, startFromBeginning: Bool = false, nextEpisode: Episode? = nil, seriesAllowsAutoplay: Bool = false, playNext: @escaping () -> Void = {}, retry: @escaping () -> Void) {
         self.nextEpisode = nextEpisode
         self.seriesAllowsAutoplay = seriesAllowsAutoplay
         self.playNext = playNext
         self.identity = identity
         self.liveChannelID = liveChannelID
+        self.startFromBeginning = startFromBeginning
         _model = StateObject(wrappedValue: PlayerModel(url: url, title: title))
         self.retry = retry
     }
@@ -443,9 +446,14 @@ struct PlayerView: View {
                 model.applyBlackout(channel.blackoutMessage())
             }
             progressUserID = supabase.session?.userId
-            if let identity, progressUserID != nil,
-               let progress = try? await supabase.fetchWatchPosition(identity: identity), progress.canResume {
-                guard await model.resume(at: progress.progress_seconds ?? 0) else { return }
+            if let identity, progressUserID != nil, !startFromBeginning,
+               let progress = try? await supabase.fetchWatchPosition(identity: identity), progress.canResume,
+               !(await model.resume(at: progress.progress_seconds ?? 0)) {
+                // A ready item that merely failed to seek still plays from the start; an item that
+                // never became ready keeps the error so Retry stays meaningful.
+                guard !Task.isCancelled, model.player.currentItem?.status == .readyToPlay else { return }
+                model.errorMessage = nil
+                model.subtitleNotice = "Couldn't restore your position, so this starts from the beginning."
             }
             guard !Task.isCancelled else { return }
             if model.blackoutMessage == nil, let scope = liveChannelID != nil ? "live" : identity?.type {
