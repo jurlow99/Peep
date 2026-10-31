@@ -82,6 +82,48 @@ is a revenue figure — the ad server's report is what gets paid. See
 3. Run **Play this tag** in admin and watch a real break on an Apple TV.
 4. Reconcile the ad server's numbers against Peep's delivery report for a week.
 
+### Getting a Google Ad Manager account (owner's checklist)
+
+Ad Manager is free and is the right first ad server for Peep. SpringServe
+(Magnite) would also work technically — it issues standard VAST tags — but it is
+an enterprise product aimed at publishers with real traffic; revisit it once Peep
+has viewing hours to show.
+
+1. **Pick the Google account that owns it.** Use one you control and will keep
+   (ideally a Google Workspace account on `watchpeep.tv`, not a personal Gmail).
+   Everything below lives under that account; losing it means losing the ad
+   setup again.
+2. **Have the site live first.** Google reviews `watchpeep.tv` before approving.
+   The coming-soon page won't pass: it needs real, licensed content you have the
+   right to monetize, a privacy policy page, and a contact page. (This is why ads
+   wait on licensed channels/titles.)
+3. **Sign up at admanager.google.com** with that account. Small publishers go
+   through the standard (free) Ad Manager; Google may ask for an AdSense
+   account to be created/approved as part of it. Give it the business name,
+   the site and your payment details.
+4. **Verify the site and add the ads.txt / app-ads.txt files.** Google gives you
+   a line to put in `https://watchpeep.tv/ads.txt`. For the Apple TV app the
+   same line goes in `app-ads.txt`, and the app must be published in the App
+   Store with the website listed as its developer site. Tell Claude; adding
+   those files to the Pages deploy is a two-minute change.
+5. **Create video inventory.** In Ad Manager: *Inventory → Ad units → New*,
+   type **Video**, one unit for web (e.g. `peep_web_video`) and one for the
+   Apple TV app once it's in the App Store (e.g. `peep_tvos_video`).
+6. **Generate the VAST tag.** On the ad unit: *Generate tags → Google
+   Publisher Tag for video*, environment **Video**, copy the tag URL (it looks
+   like `https://pubads.g.doubleclick.net/gampad/ads?iu=/…/peep_web_video&…output=vast…`).
+7. **Paste it into Peep.** Admin → Monetization → Ads → **+ New tag** → paste →
+   position Pre-roll, applies to All content, players Browser (and Apple TV when
+   that unit exists) → **untick Test tag** → **Play this tag** → activate.
+8. **Get demand.** A tag with no buyers returns no ads ("Breaks that filled"
+   stays at 0). In Ad Manager apply for **Ad Exchange / Open Bidding** (needs
+   Google approval, which again depends on real traffic), or create direct line
+   items for deals you sell yourself. Until then the tag is a working pipe with
+   nothing flowing through it.
+9. **Watch the first week.** Compare Ad Manager's impressions with Peep's
+   "Delivery, last 30 days". They won't match exactly (Ad Manager counts guests
+   too); big gaps mean something is wrong with the tag or the players.
+
 ## What has been checked
 
 - Apple TV simulator visibly played Google's sample pre-roll and then the demo
