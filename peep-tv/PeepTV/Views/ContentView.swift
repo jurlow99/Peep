@@ -153,6 +153,9 @@ struct ContentView: View {
     @State private var visitedPages: Set<Int> = [0]
     @StateObject private var adGate = CSAIGate()
     @State private var entryTask: Task<Void, Never>?
+    // Stays black from "Select" until the channel view is on screen, so the home
+    // screen never peeks through between the entry ad ending and playback starting.
+    @State private var entryCover = false
     @AppStorage("peep.live.lastChannelID") private var lastLiveChannelID = 0
     @State private var liveGuide: LiveGuideSession?
     @State private var livePlayback: LiveGuideSession?
@@ -300,6 +303,7 @@ struct ContentView: View {
         .onChange(of: multiview?.id) { _, id in
             if id != nil { stopLiveChannel() }
         }
+        .overlay { if entryCover && !adGate.blocking { Color.black.ignoresSafeArea() } }
         .overlay { CSAIOverlay(gate: adGate, cancel: { entryTask?.cancel() }) }
         .task(id: supabase.session?.userId) {
             if supabase.session != nil { _ = try? await supabase.fetchAccountProfile() }
@@ -351,7 +355,9 @@ struct ContentView: View {
     private func openLiveChannel(_ session: LiveGuideSession) {
         if livePlayback?.initial.id == session.initial.id, livePlayer != nil { liveGuide = session; return }
         entryTask?.cancel(); adGate.cancel(); stopLiveChannel()
+        entryCover = true
         entryTask = Task { @MainActor in
+            defer { entryCover = false }
             if session.initial.blackoutMessage() == nil {
                 guard await adGate.run(service: supabase, scope: "live", contentID: String(session.initial.id)), !Task.isCancelled else { return }
             }
@@ -361,7 +367,9 @@ struct ContentView: View {
 
     private func openMultiview(_ session: MultiviewSession) {
         entryTask?.cancel(); adGate.cancel(); stopLiveChannel()
+        entryCover = true
         entryTask = Task { @MainActor in
+            defer { entryCover = false }
             guard await adGate.run(service: supabase, scope: "multiview", contentID: ""), !Task.isCancelled else { return }
             multiview = session
         }
