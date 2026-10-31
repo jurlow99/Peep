@@ -296,7 +296,11 @@ controls pre-rolls before movie/episode playback, Live TV entry and a single bre
 before multiview starts. Tags must explicitly include `tvos` in `platforms`.
 SDK ad playback uses its own surface while content remains paused. Back cancels
 without starting content; missing tags and ad-load errors fall back to playback.
-The 30-minute cooldown is stored in UserDefaults, survives relaunch, and applies to test tags as well.
+The gap between entry ads (admin "Ad rules", default 30 minutes), the master ads
+switch and the Live TV / multiview entry toggles come from `app_settings.ads_policy`
+(`AdPolicy` in `PlayerView.swift`, read once per break with a 4-second timeout).
+The last ad start is stored in UserDefaults, survives relaunch, and applies to test
+tags as well. Mid-roll and post-roll rules are browser only.
 
 FARRIS dev's Home → Play sample has a Google sample pre-roll, scoped only to the
 1080p demo clip. Simulator visibly verified the ad and subsequent movie playback.

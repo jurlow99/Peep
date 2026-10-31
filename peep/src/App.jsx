@@ -28,6 +28,7 @@ import { Spinner } from "./components/ui/Spinner";
 import { Wordmark, LogoHorizontal } from "./components/Wordmark";
 import { filterByTier } from "./lib/tiers";
 import { loadFlags, getFlags } from "./lib/flags";
+import { loadAdPolicy } from "./lib/adPolicy";
 import { contentSelect } from "./lib/contentQueries";
 import { contentKey } from "./lib/contentIds";
 import { SUPABASE_URL } from "./lib/config";
@@ -120,7 +121,7 @@ export default function App() {
     });
   }, []);
 
-  useEffect(() => { loadFlags().then(setFlags); }, []);
+  useEffect(() => { loadFlags().then(setFlags); loadAdPolicy(); }, []);
 
   // Check if viewer-role user is also a creator partner (for in-app creator portal link)
   useEffect(() => {

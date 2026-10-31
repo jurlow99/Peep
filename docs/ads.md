@@ -1,81 +1,86 @@
-# CSAI ads in Peep
+# Ads in Peep
 
-Peep uses Google IMA to request VAST ads and handle provider playback/tracking.
-The current rollout focuses on **pre-roll entry breaks** for the browser and
-Apple TV. Changes and sample configuration are in FARRIS dev; production has not
-received the new metadata migration. See [database.md](database.md).
+Peep sells ad breaks through **VAST tags** played by Google IMA (browser SDK on the
+website, IMA tvOS SDK on Apple TV). Peep decides *when* a break runs and *which* tag
+to ask; the ad server behind the tag decides what plays and keeps the money records.
+Nothing in Peep moves money.
 
-## Admin workflow
+Everything lives in **Monetization → Ads** in web admin (`AdsPanel.jsx`). The same
+rules and tags drive both players.
 
-Open **Monetization → Ads & performance** in web admin and add/edit a VAST tag.
+## Ad rules
 
-1. Give the tag an internal name and HTTPS URL.
-2. Choose **Pre-roll** and the scope: all supported content, movies, episodes,
-   Live Channels or Multiview entry.
-3. For movies/episodes/channels, optionally enter the exact content ID. Movie IDs
-   can be UUIDs. Blank means all content of that type. Multiview entry is type-wide.
-4. Choose Browser, Apple TV or both, according to provider support.
-5. Leave **Test tag** on during testing. **Use Google sample ad** supplies a sample
-   VAST URL with no earnings. Enable the tag when ready to test playback.
+One JSON row, `app_settings.ads_policy`, readable by every player, written by admins
+(`db/features/ads-policy.sql`, `lib/adPolicy.js`, `AdPolicy` in `PlayerView.swift`).
 
-An exact content match wins over a type-wide tag, then global. Lowest tag ID wins
-when several tags have equal priority. Disabling a tag affects subsequent requests;
-it does not retract an ad already requested by a player.
+| Rule | Default | Browser | Apple TV |
+|---|---|---|---|
+| Ads on/off | on | ✓ | ✓ |
+| Minimum gap between **entry** ads (movie/episode/channel/multiview start) | 30 min | ✓ | ✓ |
+| Ad before a live channel / before multiview | on / on | ✓ | ✓ |
+| Mid-rolls: every N min, only in titles over M min, at most K breaks | 15 / 20 / 4 | ✓ | — |
+| Post-roll after a movie or episode | on | ✓ | — |
 
-Mid/post-roll code exists in the legacy browser player but is outside this verified
-pre-roll rollout. Apple TV rejects those positions in admin. Show-level targeting
-and podcast playback are not enabled by this rollout. Use a single-break VAST tag;
-a VMAP schedule is not a substitute for a pre-roll placement.
+The gap is one clock per device (`localStorage` / `UserDefaults`), reset by **any**
+ad start including mid-rolls and test ads, so hopping between titles can't chain ads.
+Mid-roll break points are computed from the title's duration when metadata loads;
+never inside the last two minutes; seeking past several points plays one break.
+Players read the rules when they start a break, so changes apply to the next break.
+
+## Tags
+
+A tag is a row in `vast_tags`: name, HTTPS URL, **position** (`pre_roll` /
+`mid_roll` / `post_roll`), **scope** (`global`, `movie`, `episode`, `live`,
+`multiview`), optional exact `content_id` (text; movies are UUIDs), `platforms`
+(`web`, `tvos`), `is_test`, `active`. The database rejects unknown positions and
+scopes.
+
+Selection, identical on both players (`selectAdTag` / `CSAITag.select`): active,
+right platform, HTTPS, and either the exact title → the whole type → global; ties go
+to the lowest id. Post-roll can't target live or multiview; mid-roll can't target
+multiview; a live mid-roll is an Apple TV development test only (see below).
+
+The tag page in admin has a **title picker** (search movies, episodes or channels by
+name — no raw ids), sample buttons (Google sample, Peep's own IAB fixture served by
+`iab-vast-sample`), and **Play this tag**, which runs the URL through the browser IMA
+SDK right there and says in words whether it played.
 
 ## Viewer behavior
 
-- Movies and episodes: ad runs before content starts/resumes.
-- Live TV: entry ad precedes joining the channel. It does not replace commercials
-  already inside an HLS stream. Returning to the same background-playing channel
-  in the Live TV page does not request another entry ad.
-- Multiview: one entry break runs before any channel tiles start; there is no ad
-  request for each muted tile. Per-tile ad monetization has not been implemented.
-- All entry pre-rolls, including test tags, share a 30-minute client cooldown
-  after an ad starts. Switching channels or multiview packages does not reset it.
-  Browser cooldown uses local storage (with an in-memory fallback); Apple TV uses
-  UserDefaults, so reloads/relaunches preserve the cap. Failed requests before
-  playback do not consume it. This is not a cross-device/account frequency cap,
-  and it does not control ads already embedded in third-party live streams.
-- Metadata/SDK startup errors and no-fill fall back to content. Browser discovery
-  is bounded to 5 seconds and ad startup to 10 seconds; native metadata fetch is
-  bounded to 4 seconds and ad startup to 10 seconds. SDK media loading is bounded
-  separately. Back cancels an entry break and returns without starting content.
-- Ads use IMA's controls and skip rules. Peep does not invent a skip entitlement.
-- Ad time must not enter content watch progress or Live TV viewing reports.
-
-Browser browse rows omit playback URLs. The player resolves the full entitled row
-before mounting the ad/content player; missing access or missing URLs show a retry
-state. Native AVPlayer remains paused and detached from the ad surface during ads.
+- Movies and episodes: entry ad before content starts or resumes; mid-rolls and a
+  post-roll on the browser per the rules. Watch progress never counts ad time.
+- Live TV: entry ad before joining a channel. It does not replace commercials
+  already inside the HLS stream. Returning to a channel already playing in the
+  background does not request another ad.
+- Multiview: one entry break before any tiles start; no per-tile ads.
+- No tag, no fill, SDK errors, timeouts: content plays. Discovery is bounded to
+  5 s, ad start to 10 s, ad media load to 8 s (native: 4 s / 10 s / 8 s). Back during
+  an entry ad cancels it and does not start content.
+- Ads use IMA's own controls and skip rules.
 
 ## Reporting and money
 
-IMA sends the VAST provider's tracking events for guest and signed-in playback.
-Peep's internal delivery report covers **signed-in viewers only**, using existing
-own-account event permissions. Guest internal reporting was intentionally not
-added. A proposed anonymous telemetry endpoint was rejected by automatic approval
-review; the implementation uses existing permissions instead.
+IMA fires the ad server's own tracking for every viewer. Peep's internal count
+(`ad_impressions`) is **signed-in viewers only**, written with the viewer's own
+permissions: `request`, `impression`, `complete`, `skip`, `error`, `timeout`,
+`cancel`, each tied to a break session and ad/pod position (deduplicated by a unique
+index). Browser logs the impression on IMA `IMPRESSION`, native on `STARTED`.
 
-Internal events include request, playback impression, complete, skip, error,
-timeout and cancel. Events identify a break and individual ad/pod position.
-Native IMA's STARTED event records the local playback impression; browser uses
-IMA's IMPRESSION event. Provider measurement remains authoritative for its billing.
+Admin's **Delivery, last 30 days** shows ads shown, signed-in viewers, completion
+(completes ÷ shown), "breaks that filled" (requests with at least one impression),
+skips/errors, a 14-day bar chart, and splits by player, by position and by tag.
+Test tags, sample tags and simulator traffic are hidden unless **Include test
+delivery** is ticked; **Clear test history** deletes test rows only. None of this
+is a revenue figure — the ad server's report is what gets paid. See
+`finances.md`.
 
-Test tags, sample tags and simulator delivery are excluded from normal internal
-ad reports. **Include test ad delivery** shows those records for QA. Historical
-rows default to test/unclassified because their billing status is unknown.
+## Before this earns anything
 
-**Ad break start rate** means requested breaks with at least one playback
-impression divided by requested breaks. It is not provider fill rate. Completion
-rate is local complete events divided by local playback impressions. Neither
-metric establishes revenue. The report does not calculate earnings or send money.
-
-The account behind the tag and partner agreements determine who receives revenue.
-See [finances.md](finances.md) for money flow, reconciliation and payout gaps.
+1. An ad server / SSP account (Google Ad Manager, or a partner that sells your
+   inventory) that issues you VAST tags for CTV and web.
+2. Replace the sample tags with those, **untick Test tag**, keep them active.
+3. Run **Play this tag** in admin and watch a real break on an Apple TV.
+4. Reconcile the ad server's numbers against Peep's delivery report for a week.
 
 ## What has been checked
 

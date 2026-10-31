@@ -2,8 +2,8 @@ import {nextSeriesEpisode, allowsEpisodeAutoplay} from "../../lib/seriesPlayback
 import { resolveVODPlayback } from "../../lib/vodStorage";
 import { SUPABASE_URL } from "../../lib/config";
 import { useChannelBlackout } from "../../hooks/useChannelBlackout";
-import { startPreroll } from "../../lib/preroll";
-import { selectAdTag, recordAdEvent } from "../../lib/ads";
+import { playAdBreak, resizeAdBreak } from "../../lib/adBreak";
+import { midrollCuePoints } from "../../lib/adPolicy";
 import { trackLiveVideo } from "../../lib/liveViewing";
 import { useState, useEffect, useRef, useMemo } from "react";
 import Hls from "hls.js";
@@ -78,13 +78,13 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
   const countdownTimerRef = useRef(null);
   const adContainerRef = useRef(null);
   const adsManagerRef = useRef(null);
-  const displayContainerRef = useRef(null);
-  const midRollFiredRef = useRef(false);
+  const midrollCuesRef = useRef([]);      // seconds into the title where a mid-roll plays
+  const midrollNextRef = useRef(0);       // index of the next cue not yet passed
+  const adBreakStopRef = useRef(null);    // disposer of the mid/post-roll in flight
   const postRollFiredRef = useRef(false);
   const [adPlaying, setAdPlaying] = useState(false);
   const adBusyRef = useRef(false);
   adBusyRef.current = adPlaying;
-  const [adVastUrl, setAdVastUrl] = useState(null);
   const [liveChannels, setLiveChannels] = useState([]);
   const [liveEpg, setLiveEpg] = useState([]);
 
@@ -318,7 +318,7 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
   useEffect(() => {
     if (getEmbedUrl(video.url)) return;
     adsClearedRef.current = false;
-    const stop = startPreroll({ client: supabase, video: videoRef.current, container: adContainerRef.current,
+    const stop = playAdBreak({ client: supabase, video: videoRef.current, container: adContainerRef.current, placement: "pre_roll",
       scope: isLive ? "live" : isEpisode ? "episode" : "movie",
       contentId: isLive ? String(video.id).replace(/^ch[-_]/, "") : video.id,
       onBusy: setAdPlaying, onManager: manager => { adsManagerRef.current = manager; },
@@ -333,8 +333,17 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
         element?.play().catch(() => {});
       },
     });
-    return () => { stop(); adsClearedRef.current = false; midRollFiredRef.current = false; postRollFiredRef.current = false; };
+    return () => {
+      stop(); adBreakStopRef.current?.(); adBreakStopRef.current = null;
+      adsClearedRef.current = false; midrollCuesRef.current = []; midrollNextRef.current = 0; postRollFiredRef.current = false;
+    };
   }, [video.id]);
+
+  // The ad surface follows the player into and out of fullscreen.
+  useEffect(() => {
+    const element = videoRef.current;
+    if (adsManagerRef.current && element) resizeAdBreak(adsManagerRef.current, element.clientWidth, element.clientHeight);
+  }, [isFullscreen]);
 
   useEffect(() => {
     if (!isFullscreen) return;
@@ -470,120 +479,36 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
     const { currentTime, duration } = e.currentTarget;
     if (!duration || isNaN(duration)) return;
 
-    // Mid-roll: fire once at 50% for videos over 20 minutes
-    if (!adPlaying && !isLive && !midRollFiredRef.current && !getEmbedUrl(video.url) && duration >= 1200 && currentTime / duration >= 0.5) {
-      midRollFiredRef.current = true;
+    // Mid-roll: the next cue point we've reached. Seeking past several cues
+    // plays one break, not one per cue.
+    const cues = midrollCuesRef.current;
+    if (!isLive && !getEmbedUrl(video.url) && midrollNextRef.current < cues.length && currentTime >= cues[midrollNextRef.current]) {
+      while (midrollNextRef.current < cues.length && currentTime >= cues[midrollNextRef.current]) midrollNextRef.current++;
       playMidRoll();
     }
-
-
   }
 
-  async function playMidRoll() {
-    if (!window.google?.ima) return;
-    const contentScope = isEpisode ? "episode" : "movie";
-    const { data } = await supabase.from("vast_tags")
-      .select("id, tag_url, scope, content_id, active, is_test, platforms")
-      .eq("active", true)
-      .eq("ad_type", "mid_roll")
-      .or(`scope.eq.global,scope.eq.${contentScope}`);
-    if (!data || data.length === 0) return;
-
-    const tag = selectAdTag(data, contentScope, video.id);
-    if (!tag) return;
-
-    const adSession = crypto.randomUUID();
-    const logAdEvent = event => recordAdEvent(tag, adSession, event, contentScope, video.id);
-
-    const ima = window.google.ima;
-    const videoEl = videoRef.current;
-    const adContainer = adContainerRef.current;
-    if (!videoEl || !adContainer) return;
-
-    videoEl.pause();
-    setAdPlaying(true);
-
-    if (!displayContainerRef.current) {
-      displayContainerRef.current = new ima.AdDisplayContainer(adContainer, videoEl);
-      displayContainerRef.current.initialize();
-    }
-    const adsLoader = new ima.AdsLoader(displayContainerRef.current);
-
-    const resume = () => { setAdPlaying(false); videoEl.play().catch(() => {}); };
-
-    adsLoader.addEventListener(ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED, (e) => {
-      const mgr = e.getAdsManager(videoEl);
-      mgr.addEventListener(ima.AdEvent.Type.CONTENT_PAUSE_REQUESTED, () => { videoEl.pause(); setAdPlaying(true); });
-      mgr.addEventListener(ima.AdEvent.Type.CONTENT_RESUME_REQUESTED, resume);
-      mgr.addEventListener(ima.AdEvent.Type.STARTED, () => logAdEvent("impression"));
-      mgr.addEventListener(ima.AdEvent.Type.COMPLETE, () => logAdEvent("complete"));
-      mgr.addEventListener(ima.AdEvent.Type.SKIPPED, () => logAdEvent("skip"));
-      mgr.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, () => { logAdEvent("error"); mgr.destroy(); resume(); });
-      try {
-        mgr.init(videoEl.clientWidth || 640, videoEl.clientHeight || 360, ima.ViewMode.NORMAL);
-        mgr.start();
-      } catch { mgr.destroy(); resume(); }
+  // Mid- and post-rolls go through the same break player as the pre-roll, so
+  // they share its timeouts, cleanup and reporting.
+  function runAdBreak(placement, onDone) {
+    const element = videoRef.current;
+    if (!element || !adContainerRef.current) { onDone(); return; }
+    adBreakStopRef.current?.();
+    adBreakStopRef.current = playAdBreak({ client: supabase, video: element, container: adContainerRef.current, placement,
+      scope: isEpisode ? "episode" : "movie", contentId: video.id,
+      onBusy: setAdPlaying, onManager: manager => { adsManagerRef.current = manager; },
+      onReady: () => { adBreakStopRef.current = null; onDone(); },
     });
-    adsLoader.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, () => { logAdEvent("error"); resume(); });
+  }
 
-    const req = new ima.AdsRequest();
-    req.adTagUrl = tag.tag_url;
-    req.linearAdSlotWidth = videoEl.clientWidth || 640;
-    req.linearAdSlotHeight = videoEl.clientHeight || 360;
-    adsLoader.requestAds(req);
+  function playMidRoll() {
+    runAdBreak("mid_roll", () => { videoRef.current?.play().catch(() => {}); });
   }
 
   function playPostRoll(onComplete) {
-    if (!window.google?.ima || postRollFiredRef.current) { onComplete(); return; }
+    if (postRollFiredRef.current) { onComplete(); return; }
     postRollFiredRef.current = true;
-    const contentScope = isEpisode ? "episode" : "movie";
-    supabase.from("vast_tags")
-      .select("id, tag_url, scope, content_id, active, is_test, platforms")
-      .eq("active", true)
-      .eq("ad_type", "post_roll")
-      .or(`scope.eq.global,scope.eq.${contentScope}`)
-      .then(({ data }) => {
-        if (!data || data.length === 0) { onComplete(); return; }
-        const tag = selectAdTag(data, contentScope, video.id);
-        if (!tag) { onComplete(); return; }
-
-        const adSession = crypto.randomUUID();
-        const logAdEvent = event => recordAdEvent(tag, adSession, event, contentScope, video.id);
-
-        const ima = window.google.ima;
-        const videoEl = videoRef.current;
-        const adContainer = adContainerRef.current;
-        if (!videoEl || !adContainer) { onComplete(); return; }
-
-        setAdPlaying(true);
-        if (!displayContainerRef.current) {
-          displayContainerRef.current = new ima.AdDisplayContainer(adContainer, videoEl);
-          displayContainerRef.current.initialize();
-        }
-        const adsLoader = new ima.AdsLoader(displayContainerRef.current);
-        const done = () => { setAdPlaying(false); onComplete(); };
-
-        adsLoader.addEventListener(ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED, (e) => {
-          const mgr = e.getAdsManager(videoEl);
-          mgr.addEventListener(ima.AdEvent.Type.CONTENT_PAUSE_REQUESTED, () => { videoEl.pause(); setAdPlaying(true); });
-          mgr.addEventListener(ima.AdEvent.Type.CONTENT_RESUME_REQUESTED, done);
-          mgr.addEventListener(ima.AdEvent.Type.STARTED, () => logAdEvent("impression"));
-          mgr.addEventListener(ima.AdEvent.Type.COMPLETE, () => logAdEvent("complete"));
-          mgr.addEventListener(ima.AdEvent.Type.SKIPPED, () => logAdEvent("skip"));
-          mgr.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, () => { logAdEvent("error"); mgr.destroy(); done(); });
-          try {
-            mgr.init(videoEl.clientWidth || 640, videoEl.clientHeight || 360, ima.ViewMode.NORMAL);
-            mgr.start();
-          } catch { mgr.destroy(); done(); }
-        });
-        adsLoader.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, () => { logAdEvent("error"); done(); });
-
-        const req = new ima.AdsRequest();
-        req.adTagUrl = tag.tag_url;
-        req.linearAdSlotWidth = videoEl.clientWidth || 640;
-        req.linearAdSlotHeight = videoEl.clientHeight || 360;
-        adsLoader.requestAds(req);
-      });
+    runAdBreak("post_roll", onComplete);
   }
 
   async function handleEnded() {
@@ -629,6 +554,10 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
 
   function handleLoadedMetadata() {
     if (!videoRef.current || adBusyRef.current) return;
+    if (!isLive && !getEmbedUrl(video.url)) {
+      midrollCuesRef.current = midrollCuePoints(videoRef.current.duration);
+      midrollNextRef.current = 0;
+    }
     if ((video._type === "live_epg") && video._elapsed > 0 && !getEmbedUrl(video.url)) {
       const { duration } = videoRef.current;
       if (duration && video._elapsed < duration) videoRef.current.currentTime = video._elapsed;

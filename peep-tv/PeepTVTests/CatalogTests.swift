@@ -226,6 +226,9 @@ final class CatalogTests: XCTestCase {
                 events.append(try JSONSerialization.jsonObject(with: request.httpBody!) as! [String: Any]); delivered.fulfill()
                 return (Data(), HTTPURLResponse(url: request.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!)
             }
+            if request.url!.path.hasSuffix("app_settings") {
+                return (Data(#"[{"key":"ads_policy","value":"{\"enabled\":true,\"min_gap_minutes\":30}"}]"#.utf8), HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+            }
             tagRequests += 1
             return (Data(#"[{"id":1,"tag_url":"https://example.com/vast","scope":"multiview","content_id":null,"active":true,"is_test":true,"platforms":["tvos"]}]"#.utf8), HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
         }
@@ -450,6 +453,30 @@ final class CatalogTests: XCTestCase {
         XCTAssertTrue(pacer.accept(.down, at: 10.80))
         XCTAssertTrue(pacer.accept(.down, at: 12))
     }
+    func testAdPolicyReadsAdminRulesAndFallsBackSafely() {
+        let rules = AdPolicy.parse(#"{"enabled":true,"min_gap_minutes":5,"live_entry":false,"multiview_entry":true,"midroll_enabled":false}"#)
+        XCTAssertEqual(rules.gap, 300)
+        XCTAssertFalse(rules.allowsEntry(scope: "live"))
+        XCTAssertTrue(rules.allowsEntry(scope: "multiview"))
+        XCTAssertTrue(rules.allowsEntry(scope: "movie"))
+        XCTAssertFalse(AdPolicy.parse(#"{"enabled":false}"#).allowsEntry(scope: "movie"))
+        XCTAssertEqual(AdPolicy.parse(#"{"min_gap_minutes":99999}"#).min_gap_minutes, 1440)
+        XCTAssertEqual(AdPolicy.parse("not json").min_gap_minutes, 30)
+        XCTAssertTrue(AdPolicy.parse(nil).allowsEntry(scope: "live"))
+    }
+
+    func testAdFrequencyHonoursAConfiguredGap() throws {
+        let suite = "PeepAdGapTests." + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let now = Date(timeIntervalSince1970: 2_000_000_000)
+        let policy = AdFrequencyPolicy(defaults: defaults)
+        policy.recordStart(at: now)
+        XCTAssertFalse(policy.allowsAd(at: now.addingTimeInterval(299), gap: 300))
+        XCTAssertTrue(policy.allowsAd(at: now.addingTimeInterval(300), gap: 300))
+        XCTAssertTrue(policy.allowsAd(at: now.addingTimeInterval(1), gap: 0))
+    }
+
     func testAdFrequencyPersistsAcrossInstancesAndExpiresAfterThirtyMinutes() throws {
         let suite = "PeepAdFrequencyTests." + UUID().uuidString
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

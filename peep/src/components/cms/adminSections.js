@@ -29,7 +29,7 @@ export const ADMIN_NAV = [
     { key: 'moderation', label: 'Content reports', target: { tab: 'moderation' } },
   ] },
   { key: 'monetization', label: 'Monetization', description: 'Configure advertising, manage subscriptions and track partner payouts.', sections: [
-    { key: 'ads', label: 'Ads & performance', target: { tab: 'analytics', analyticsTab: 'ads' } },
+    { key: 'ads', label: 'Ads', target: { tab: 'ads' } },
     { key: 'subscriptions', label: 'Subscriptions', target: { tab: 'members', membersTab: 'subscriptions' } },
     { key: 'payouts', label: 'Partner payouts', target: { tab: 'creators', creatorsTab: 'payouts' } },
   ] },

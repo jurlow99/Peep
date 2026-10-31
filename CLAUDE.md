@@ -137,7 +137,8 @@ Legacy `/streamer-signin`, `/apply-to-stream`, `/create-channel` redirect to
 | `peep/src/components/player/PlayerView.jsx` | Player: `PlayerView` → `AvailablePlayerView` (loads playable row) → `ResolvedPlayerView` |
 | `peep/src/lib/vodStorage.js` | `resolveVODPlayback` — R2 / Supabase signed / external passthrough |
 | `peep/src/lib/r2VOD.js` | R2 multipart upload + playback signing client |
-| `peep/src/lib/preroll.js`, `lib/ads.js` | Pre-roll policy and VAST tag selection |
+| `peep/src/lib/adPolicy.js`, `adBreak.js`, `ads.js` | Ad rules (`app_settings.ads_policy`), the one IMA break player for pre/mid/post-roll, tag selection |
+| `peep/src/components/cms/AdsPanel.jsx` | Monetization → Ads: rules, tags (with title picker + "Play this tag"), 30-day delivery report |
 | `peep/src/lib/contentIds.ts` | `parseContentId`, `contentKey` — preserve UUID vs bigint ids |
 | `peep/src/lib/tiers.js`, `lib/flags.js` | Tier gating (no-op on dev); feature flags |
 | `peep/src/pages/LiveTV.jsx` | Streams tab (channel mosaic, now/next) |

@@ -14,7 +14,6 @@ import AdminNavigation from "./cms/AdminNavigation";
 import ChannelBlackoutEditor from "./cms/ChannelBlackoutEditor";
 import { blackoutFields, channelBlackout } from "../lib/channelBlackout";
 import LiveChannelRowPicker from "./cms/LiveChannelRowPicker";
-import { TEST_VAST_URL, appleTVPlacementError } from "../lib/ads";
 import LiveTVViewingDashboard from "./cms/LiveTVViewingDashboard";
 import { useMultiviewPackages } from "../hooks/useMultiviewPackages";
 import MultiviewPackagesPanel, { MultiviewRowPicker } from "./cms/MultiviewPackagesPanel";
@@ -40,6 +39,7 @@ import FlagsPanel from "./cms/FlagsPanel";
 import StoragePanel from "./cms/StoragePanel";
 import AuditPanel from "./cms/AuditPanel";
 import SecurityPanel from "./cms/SecurityPanel";
+import AdsPanel from "./cms/AdsPanel";
 import Drawer from "./cms/Drawer";
 import ModerationPanel from "./cms/ModerationPanel";
 import { getAdminToken } from "./cms/adminAuth";
@@ -48,17 +48,6 @@ import SubscriptionsPanel from "./cms/SubscriptionsPanel";
 import SupportPanel from "./cms/SupportPanel";
 import ReviewPanel from "./cms/ReviewPanel";
 import EventsPanel from "./cms/EventsPanel";
-
-const EMPTY_AD = {
-  name: "",
-  tag_url: "",
-  ad_type: "pre_roll",
-  scope: "global",
-  content_id: "",
-  active: true,
-  is_test: true,
-  platforms: ["web"],
-};
 
 // SUPABASE_URL comes from lib/config — see the import at the top of this file.
 
@@ -340,20 +329,7 @@ export function CMS({ onExit, currentUser }) {
   const [contentCreators, setContentCreators] = useState([]);
   const [contentCreatorsLoading, setContentCreatorsLoading] = useState(false);
 
-  // Ads state
-  const [adList, setAdList] = useState([]);
-  const [adLoading, setAdLoading] = useState(false);
-  const [editingAdId, setEditingAdId] = useState(null);
-  const [adForm, setAdForm] = useState(EMPTY_AD);
-  const [adLastFetched, setAdLastFetched] = useState(null);
   const [reportLastFetched, setReportLastFetched] = useState(null);
-  const [adSaving, setAdSaving] = useState(false);
-  const [deleteAdConfirm, setDeleteAdConfirm] = useState(null);
-  const [adTableMissing, setAdTableMissing] = useState(false);
-  const adIncludeTestsRef = useRef(false);
-  const adReportGenerationRef = useRef(0);
-  const [adIncludeTests, setAdIncludeTests] = useState(false);
-  const [adAnalytics, setAdAnalytics] = useState(null);
 
   // Reports state
   const [reportData, setReportData] = useState(null);
@@ -414,8 +390,6 @@ export function CMS({ onExit, currentUser }) {
     loadPodcasts();
     loadLiveStreams();
     loadApplications();
-    loadAds();
-    loadAdAnalytics();
 
     return () => {
       if (subscriptionRef.current) subscriptionRef.current.unsubscribe();
@@ -473,7 +447,7 @@ export function CMS({ onExit, currentUser }) {
   }, []);
 
   useEffect(() => {
-    if (tab === "analytics") { loadReports(); loadAdAnalytics(); loadTodayStats(); loadOnlineUsers(); }
+    if (tab === "analytics") { loadReports(); loadTodayStats(); loadOnlineUsers(); }
     if (tab === "settings") { loadPromos(); loadBossSettings(); supabase.from("episodes").select("id", { count: "exact", head: true }).eq("status", "pending").then(({ count }) => setPendingCount(count || 0)); }
     if (tab === "creators") { loadCreators(); loadContentCreators(); }
     if (tab === "storage") {
@@ -496,7 +470,7 @@ export function CMS({ onExit, currentUser }) {
 
   useEffect(() => {
     if (tab !== "analytics") return;
-    const fiveMin = setInterval(() => { loadAdAnalytics(); loadReports(); loadTodayStats(); }, 5 * 60 * 1000);
+    const fiveMin = setInterval(() => { loadReports(); loadTodayStats(); }, 5 * 60 * 1000);
     const oneMin = setInterval(() => { loadTodayStats(); loadOnlineUsers(); }, 60 * 1000);
     return () => { clearInterval(fiveMin); clearInterval(oneMin); };
   }, [tab]);
@@ -2043,122 +2017,6 @@ export function CMS({ onExit, currentUser }) {
   }
 
   // ──── MUSIC VIDEOS ────
-
-  // ──── ADS / VAST TAGS ────
-
-  async function loadAds() {
-    setAdLoading(true);
-    const { data, error } = await supabase.from("vast_tags").select("*").order("id", { ascending: true });
-    if (error) {
-      if (error.code === "42P01") setAdTableMissing(true);
-      else showToast("Failed to load ads: " + error.message, "error");
-    } else {
-      setAdTableMissing(false);
-      setAdList(data || []);
-    }
-    setAdLoading(false);
-  }
-
-  function startAdEdit(ad) {
-    setEditingAdId(ad.id);
-    setAdForm({ name: ad.name ?? "", tag_url: ad.tag_url ?? "", ad_type: ad.ad_type ?? "pre_roll", scope: ad.scope ?? "global", content_id: ad.content_id ?? "", active: ad.active ?? true, is_test: ad.is_test ?? true, platforms: ad.platforms ?? ["web"] });
-    setDrawerOpen(true);
-  }
-
-  function cancelAdEdit() { setEditingAdId(null); setAdForm(EMPTY_AD); setDrawerOpen(false); }
-
-  async function saveAd() {
-    if (!adForm.name.trim()) { showToast("Name is required.", "error"); return; }
-    if (!adForm.tag_url.trim()) { showToast("VAST tag URL is required.", "error"); return; }
-    try { if (new URL(adForm.tag_url).protocol !== "https:") throw new Error(); } catch { showToast("Use a valid HTTPS VAST tag URL.", "error"); return; }
-    if (!["global", "movie", "episode", "live", "multiview"].includes(adForm.scope)) { showToast("This rollout supports movies, episodes, Live TV and multiview entry placements.", "error"); return; }
-    const placementError = appleTVPlacementError(adForm, IS_DEV_DB);
-    if (placementError) { showToast(placementError, "error"); return; }
-    if (!(adForm.platforms || ["web"]).length) { showToast("Choose at least one player platform.", "error"); return; }
-    setAdSaving(true);
-    const payload = { name: adForm.name.trim(), tag_url: adForm.tag_url.trim(), ad_type: adForm.ad_type, scope: adForm.scope, content_id: !["global", "multiview"].includes(adForm.scope) && adForm.content_id !== "" ? String(adForm.content_id).trim() : null, active: adForm.active, is_test: adForm.is_test ?? true, platforms: adForm.platforms ?? ["web"] };
-    try {
-      if (editingAdId) {
-        const { error } = await supabase.from("vast_tags").update(payload).eq("id", editingAdId);
-        if (error) throw error;
-        showToast("Ad tag updated"); cancelAdEdit();
-      } else {
-        const { error } = await supabase.from("vast_tags").insert([payload]);
-        if (error) throw error;
-        showToast("Ad tag added"); setAdForm(EMPTY_AD); setDrawerOpen(false);
-      }
-      await loadAds();
-    } catch (error) { showToast("Save failed: " + error.message, "error"); }
-    setAdSaving(false);
-  }
-
-  async function toggleAdActive(ad) {
-    const { error } = await supabase.from("vast_tags").update({ active: !ad.active }).eq("id", ad.id);
-    if (error) showToast("Update failed: " + error.message, "error");
-    else await loadAds();
-  }
-
-  async function deleteAd(id) {
-    const { error } = await supabase.from("vast_tags").delete().eq("id", id);
-    if (error) showToast("Delete failed: " + error.message, "error");
-    else { showToast("Ad tag deleted"); setDeleteAdConfirm(null); await loadAds(); }
-  }
-
-  async function loadAdAnalytics(includeTests = adIncludeTestsRef.current) {
-    const generation = ++adReportGenerationRef.current;
-    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    let request = supabase.from("ad_impressions")
-      .select("vast_tag_id,event,created_at,user_id,session_id,is_test")
-      .gte("created_at", since).order("created_at", { ascending: false });
-    if (!includeTests) request = request.eq("is_test", false);
-    const data = [];
-    for (let page = 0; ; page++) {
-      const result = await request.range(page * 1000, page * 1000 + 999);
-      if (result.error) { showToast("Ad reporting could not load: " + result.error.message, "error"); return; }
-      data.push(...(result.data || []));
-      if ((result.data || []).length < 1000) break;
-    }
-    if (!data) return;
-
-    const impressions = data.filter(r => r.event === "impression").length;
-    const completes   = data.filter(r => r.event === "complete").length;
-    const skips       = data.filter(r => r.event === "skip").length;
-    const errors      = data.filter(r => r.event === "error").length;
-
-    const completionRate = impressions > 0 ? Math.round(completes / impressions * 100) : null;
-    const requested = new Set(data.filter(r => r.event === "request").map(r => r.session_id));
-    const started = new Set(data.filter(r => r.event === "impression" && requested.has(r.session_id)).map(r => r.session_id));
-    const fillRate = requested.size ? Math.round(started.size / requested.size * 100) : null;
-    const uniqueViewers = new Set(data.filter(r => r.event === "impression" && r.user_id).map(r => r.user_id)).size;
-
-    // Last 14 days bucketed
-    const today = new Date();
-    const dayBuckets = {};
-    for (let i = 13; i >= 0; i--) {
-      const d = new Date(today); d.setDate(d.getDate() - i);
-      dayBuckets[d.toISOString().slice(0, 10)] = 0;
-    }
-    data.filter(r => r.event === "impression").forEach(r => {
-      const key = r.created_at.slice(0, 10);
-      if (key in dayBuckets) dayBuckets[key]++;
-    });
-    const dailyData = Object.entries(dayBuckets).map(([date, count]) => ({ date, count }));
-
-    // Per-tag stats
-    const tagStats = {};
-    data.forEach(r => {
-      const tid = r.vast_tag_id;
-      if (!tagStats[tid]) tagStats[tid] = { impressions: 0, completes: 0, skips: 0, errors: 0 };
-      if (r.event === "impression") tagStats[tid].impressions++;
-      if (r.event === "complete")   tagStats[tid].completes++;
-      if (r.event === "skip")       tagStats[tid].skips++;
-      if (r.event === "error")      tagStats[tid].errors++;
-    });
-
-    if (generation !== adReportGenerationRef.current) return;
-    setAdAnalytics({ impressions, completionRate, fillRate, skips, uniqueViewers, dailyData, tagStats });
-    setAdLastFetched(new Date());
-  }
 
   // ──── LIVE STREAMS ────
 
@@ -4345,221 +4203,6 @@ export function CMS({ onExit, currentUser }) {
         )}
 
 
-        {/* ────── ADS TAB ────── */}
-        {tab === "analytics" && analyticsTab === "ads" && (
-          <div>
-
-            {/* ── Ad Performance ── */}
-            <label style={{ display: "block", padding: 12, fontSize: 13 }}><input type="checkbox" checked={adIncludeTests} onChange={e => { adIncludeTestsRef.current = e.target.checked; setAdIncludeTests(e.target.checked); loadAdAnalytics(e.target.checked); }} /> Include test ad delivery (no earnings)</label><p style={{ padding: "0 12px", fontSize: 12, color: "#64748b" }}>Peep delivery reports cover signed-in viewers. IMA sends provider tracking for guests too. These counts are not billable revenue or payout confirmations.</p>
-            {adAnalytics && (
-              <div style={{ marginBottom: 36 }}>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 18 }}>
-                  <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Ad Performance <span style={{ fontSize: 12, fontWeight: 400, color: "#9ca3af" }}>last 30 days</span></h2>
-                  {adLastFetched && <span style={{ fontSize: 11, color: "#9ca3af", marginLeft: "auto" }}>Updated {adLastFetched.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>}
-                  <button onClick={loadAdAnalytics} style={{ background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)", borderRadius: 6, padding: "5px 12px", color: "#6366f1", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Refresh</button>
-                  <button onClick={async () => { if (!window.confirm("Clear all ad impression history?")) return; const { error, count } = await supabase.from("ad_impressions").delete({ count: "exact" }).lte("created_at", new Date().toISOString()); if (error) { showToast("Delete failed: " + error.message, "error"); return; } showToast(`Cleared ${count ?? "all"} ad impression records`, "success"); setAdAnalytics(null); loadAdAnalytics(); }} style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 6, padding: "5px 12px", color: "#ef4444", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Clear History</button>
-                </div>
-
-                {/* Today row */}
-                {todayStats && (
-                  <div style={{ background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)", borderRadius: 12, padding: "16px 20px", marginBottom: 24, display: "flex", alignItems: "center", gap: 32, flexWrap: "wrap" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#a5f3fc", display: "inline-block", animation: "adpulse 1.5s ease-in-out infinite" }} />
-                      <span style={{ fontSize: 12, fontWeight: 700, color: "#c7d2fe", textTransform: "uppercase", letterSpacing: 0.8 }}>Today</span>
-                      <span style={{ fontSize: 11, color: "#6366f1" }}>{new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-                    </div>
-                    {[
-                      { label: "Impressions", value: todayStats.adImpressionsToday },
-                      { label: "Skips", value: todayStats.adSkipsToday },
-                      { label: "Completion", value: todayStats.adImpressionsToday > 0 ? Math.round(((todayStats.adImpressionsToday - todayStats.adSkipsToday) / todayStats.adImpressionsToday) * 100) + "%" : "—" },
-                    ].map(({ label, value }) => (
-                      <div key={label}>
-                        <div style={{ fontSize: 10, color: "#818cf8", textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 2 }}>{label}</div>
-                        <div style={{ fontSize: 22, fontWeight: 700, color: "#fff" }}>{value}</div>
-                      </div>
-                    ))}
-                    <style>{`@keyframes adpulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.4;transform:scale(1.3);}}`}</style>
-                  </div>
-                )}
-
-                {/* Summary cards */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 16, marginBottom: 28 }}>
-                  {[
-                    { label: "Impressions", value: adAnalytics.impressions.toLocaleString(), color: "#6366f1", hint: "How many times an ad started playing" },
-                    { label: "Signed-in viewers", value: adAnalytics.uniqueViewers.toLocaleString(), color: "#8b5cf6", hint: "Distinct logged-in users who saw at least one ad" },
-                    { label: "Skips", value: adAnalytics.skips.toLocaleString(), color: "#64748b", hint: "How many viewers skipped the ad before it finished" },
-                    { label: "Completion Rate", value: adAnalytics.completionRate !== null ? adAnalytics.completionRate + "%" : "—", color: "#22c55e", hint: "Recorded ad completions divided by recorded playback impressions. Signed-in delivery only; not a billing measurement." },
-                    { label: "Ad break start rate", value: adAnalytics.fillRate !== null ? adAnalytics.fillRate + "%" : "—", color: "#f59e0b", hint: "Requested breaks with at least one playback impression. This is delivery telemetry, not provider fill, billable revenue or payout confirmation." },
-                  ].map(({ label, value, color, hint }) => (
-                    <div key={label} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-                      <div style={{ fontSize: 12, color: "#6b7280", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 6 }}>{label}</div>
-                      <div style={{ fontSize: 28, fontWeight: 700, color, marginBottom: 8 }}>{value}</div>
-                      <div style={{ fontSize: 11, color: "#9ca3af", lineHeight: 1.5 }}>{hint}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Daily impressions chart */}
-                {(() => {
-                  const max = Math.max(...adAnalytics.dailyData.map(d => d.count), 1);
-                  return (
-                    <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px 24px", marginBottom: 28, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 16 }}>Impressions / Day (last 14 days)</div>
-                      <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 80 }}>
-                        {adAnalytics.dailyData.map(({ date, count }) => (
-                          <div key={date} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                            <div title={`${date}: ${count}`} style={{ width: "100%", background: count > 0 ? "#6366f1" : "#e2e8f0", borderRadius: "3px 3px 0 0", height: Math.max(count / max * 68, count > 0 ? 4 : 2), transition: "height 0.3s" }} />
-                            <div style={{ fontSize: 10, color: "#374151", transform: "rotate(-45deg)", transformOrigin: "top center", whiteSpace: "nowrap", fontWeight: 500 }}>
-                              {new Date(date + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Per-tag breakdown */}
-                {adList.length > 0 && Object.keys(adAnalytics.tagStats).length > 0 && (
-                  <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden", marginBottom: 28, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                      <thead>
-                        <tr style={{ borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
-                          {["Tag", "Impressions", "Completions", "Skips", "Completion %"].map(h => (
-                            <th key={h} style={{ padding: "11px 16px", textAlign: "left", color: "#6b7280", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.7 }}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {adList.map((ad, i) => {
-                          const s = adAnalytics.tagStats[ad.id];
-                          if (!s) return null;
-                          const pct = s.impressions > 0 ? Math.round(s.completes / s.impressions * 100) : null;
-                          return (
-                            <tr key={ad.id} style={{ borderBottom: i < adList.length - 1 ? "1px solid #f1f5f9" : "none" }}>
-                              <td style={{ padding: "11px 16px", fontWeight: 600, color: "#0f172a" }}>{ad.name}<div style={{ fontWeight: 400, fontSize: 11, color: "#64748b", marginTop: 4 }}>{ad.is_test ? "TEST · no earnings" : "Non-test delivery"} · {(ad.platforms || ["web"]).map(p => p === "tvos" ? "Apple TV" : "Browser").join(" + ")}</div></td>
-                              <td style={{ padding: "11px 16px", color: "#6366f1", fontWeight: 600 }}>{s.impressions.toLocaleString()}</td>
-                              <td style={{ padding: "11px 16px", color: "#374151" }}>{s.completes.toLocaleString()}</td>
-                              <td style={{ padding: "11px 16px", color: "#374151" }}>{s.skips.toLocaleString()}</td>
-                              <td style={{ padding: "11px 16px" }}>
-                                {pct !== null ? (
-                                  <span style={{ background: pct >= 70 ? "rgba(34,197,94,0.1)" : pct >= 40 ? "rgba(245,158,11,0.1)" : "rgba(239,68,68,0.1)", color: pct >= 70 ? "#15803d" : pct >= 40 ? "#92400e" : "#dc2626", borderRadius: 5, padding: "2px 8px", fontWeight: 600 }}>{pct}%</span>
-                                ) : "—"}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
-              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a" }}>VAST Ad Tags</h2>
-              {!adTableMissing && (
-                <button onClick={() => { setEditingAdId(null); setAdForm(EMPTY_AD); setDrawerOpen(true); }}
-                  style={{ marginLeft: "auto", background: "#f59e0b", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                  + Add Tag
-                </button>
-              )}
-            </div>
-
-            {/* SQL setup callout */}
-            {adTableMissing && (
-              <div style={{ background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 12, padding: "20px 24px", marginBottom: 24 }}>
-                <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, color: "#92400e" }}>Table setup required</p>
-                <p style={{ margin: "0 0 14px", fontSize: 13, color: "#78350f" }}>Run this SQL once in your Supabase dashboard (SQL Editor) to enable ad tag management:</p>
-                <pre style={{ margin: 0, background: "#1e293b", color: "#e2e8f0", borderRadius: 8, padding: "16px 18px", fontSize: 12, overflowX: "auto", lineHeight: 1.6 }}>{`create table vast_tags (
-  id bigserial primary key,
-  name text not null,
-  tag_url text not null,
-  ad_type text not null default 'pre_roll',
-  scope text not null default 'global',
-  content_id bigint,
-  active boolean not null default true,
-  created_at timestamptz default now()
-);`}</pre>
-                <button onClick={loadAds} style={{ marginTop: 14, background: "#f59e0b", border: "none", borderRadius: 7, padding: "9px 18px", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-                  Retry
-                </button>
-              </div>
-            )}
-
-            {adLoading && <div style={{ display: "flex", justifyContent: "center", padding: 80 }}><Spinner /></div>}
-
-            {!adLoading && !adTableMissing && adList.length === 0 && (
-              <div style={{ textAlign: "center", padding: 80, color: "#9ca3af" }}>
-                <p style={{ margin: "0 0 6px", fontSize: 16 }}>No ad tags yet</p>
-                <p style={{ margin: 0, fontSize: 13 }}>Add a VAST tag URL to start serving ads</p>
-              </div>
-            )}
-
-            {!adLoading && !adTableMissing && adList.length > 0 && (() => {
-              const AD_TYPE_LABELS = { pre_roll: "Pre-roll", mid_roll: "Mid-roll", post_roll: "Post-roll" };
-              const SCOPE_LABELS = { global: "All content", movie: "Movies", show: "TV Shows", episode: "Episodes", podcast_episode: "Podcasts", live: "Live Channels" };
-              const AD_TYPE_COLORS = { pre_roll: "#6366f1", mid_roll: "#f59e0b", post_roll: "#ec4899" };
-              return (
-                <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                    <thead>
-                      <tr style={{ borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
-                        {["Active", "Name", "Type", "Scope", "VAST Tag URL", ""].map(h => (
-                          <th key={h} style={{ padding: "11px 16px", textAlign: "left", color: "#6b7280", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.7, whiteSpace: "nowrap" }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {adList.map((ad, i) => (
-                        <tr key={ad.id} style={{ borderBottom: i < adList.length - 1 ? "1px solid #f1f5f9" : "none" }}>
-                          <td style={{ padding: "12px 16px" }}>
-                            <button onClick={() => toggleAdActive(ad)}
-                              style={{ width: 36, height: 20, borderRadius: 10, border: "none", background: ad.active ? "#22c55e" : "#d1d5db", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
-                              <span style={{ position: "absolute", top: 2, left: ad.active ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left 0.2s", display: "block" }} />
-                            </button>
-                          </td>
-                          <td style={{ padding: "12px 16px", fontWeight: 600, color: "#0f172a" }}>{ad.name}</td>
-                          <td style={{ padding: "12px 16px" }}>
-                            <span style={{ background: `${AD_TYPE_COLORS[ad.ad_type] || "#94a3b8"}18`, border: `1px solid ${AD_TYPE_COLORS[ad.ad_type] || "#94a3b8"}40`, borderRadius: 5, padding: "2px 8px", color: AD_TYPE_COLORS[ad.ad_type] || "#94a3b8", fontSize: 11, fontWeight: 600 }}>
-                              {AD_TYPE_LABELS[ad.ad_type] || ad.ad_type}
-                            </span>
-                          </td>
-                          <td style={{ padding: "12px 16px", color: "#6b7280" }}>
-                            {SCOPE_LABELS[ad.scope] || ad.scope}{ad.content_id ? ` #${ad.content_id}` : ""}
-                          </td>
-                          <td style={{ padding: "12px 16px", color: "#6b7280", maxWidth: 320 }}>
-                            <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "monospace", fontSize: 12 }} title={ad.tag_url}>{ad.tag_url}</span>
-                          </td>
-                          <td style={{ padding: "12px 16px" }}>
-                            <div style={{ display: "flex", gap: 8 }}>
-                              <button onClick={() => startAdEdit(ad)} style={{ background: "rgba(79,70,229,0.07)", border: "1px solid rgba(79,70,229,0.2)", borderRadius: 6, padding: "5px 12px", color: "#4f46e5", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Edit</button>
-                              <button onClick={() => setDeleteAdConfirm(ad)} style={{ background: "rgba(220,38,38,0.06)", border: "1px solid rgba(220,38,38,0.15)", borderRadius: 6, padding: "5px 12px", color: "#dc2626", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Delete</button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              );
-            })()}
-
-            {/* Delete confirm */}
-            {deleteAdConfirm && (
-              <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <div style={{ background: "#fff", borderRadius: 14, padding: "36px 40px", width: 400, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
-                  <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "#0f172a" }}>Delete ad tag?</p>
-                  <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 28 }}>"{deleteAdConfirm.name}"</p>
-                  <div style={{ display: "flex", gap: 10 }}>
-                    <button onClick={() => setDeleteAdConfirm(null)} style={{ flex: 1, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "11px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
-                    <button onClick={() => deleteAd(deleteAdConfirm.id)} style={{ flex: 1, background: "#dc2626", border: "none", borderRadius: 7, padding: "11px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* ────── REPORTS TAB ────── */}
         {tab === "analytics" && analyticsTab === "live_tv" && <LiveTVViewingDashboard />}
@@ -5235,6 +4878,8 @@ export function CMS({ onExit, currentUser }) {
           <SecurityPanel showToast={showToast} onBack={() => setCreatorsTab("list")} />
         )}
 
+        {tab === "ads" && <AdsPanel showToast={showToast} logAudit={logAudit} />}
+
         {tab === "settings" && (
           <div style={{ maxWidth: 700 }}>
             <div style={{ marginBottom: 32 }}>
@@ -5586,7 +5231,6 @@ export function CMS({ onExit, currentUser }) {
             {tab === "live" && liveSubTab !== "channels" && drawerFormType !== "epg" && drawerFormType !== "bulk" && (editingLiveId ? "Edit Stream" : "Add Stream")}
             {tab === "live" && drawerFormType === "epg" && (editingEpgId ? "Edit Program" : "Add Program")}
             {tab === "live" && drawerFormType === "bulk" && "Auto-Schedule Block"}
-            {tab === "analytics" && analyticsTab === "ads" && (editingAdId ? "Edit Ad Tag" : "Add Ad Tag")}
           </>
         );
         return (
@@ -6608,76 +6252,6 @@ export function CMS({ onExit, currentUser }) {
                   );
                 })()}
 
-                {/* ── ADS FORM ── */}
-                {tab === "analytics" && analyticsTab === "ads" && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Name *</label>
-                      <input value={adForm.name} onChange={e => setAdForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Global Pre-roll"
-                        style={{ width: "100%", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" }}
-                        onFocus={e => (e.target.style.borderColor = "#f59e0b")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
-                    </div>
-                    <div>
-                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>VAST Tag URL *</label>
-                      <input value={adForm.tag_url} onChange={e => setAdForm(f => ({ ...f, tag_url: e.target.value }))} placeholder="https://..."
-                        style={{ width: "100%", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box", fontFamily: "monospace" }}
-                        onFocus={e => (e.target.style.borderColor = "#f59e0b")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
-                    </div>
-                    <div style={{ padding: 12, background: "#f8fafc", borderRadius: 8 }}>
-                      <label><input type="checkbox" checked={adForm.is_test ?? true} onChange={e => setAdForm(f => ({ ...f, is_test: e.target.checked }))} /> Test tag — exclude delivery from normal ad reports</label>
-                      <p style={{ fontSize: 12 }}>Tags request ads; they do not transfer money or establish a revenue split. Paid tags require the provider's approved account, parameters and platform support.</p>
-                      <button type="button" onClick={() => setAdForm(f => ({ ...f, tag_url: TEST_VAST_URL, is_test: true }))}>Use Google sample ad (no earnings)</button>
-                      <div style={{ marginTop: 12 }}>{[["web", "Browser"], ["tvos", "Apple TV"]].map(([key,label]) => <label key={key} style={{ marginRight: 16 }}><input type="checkbox" checked={(adForm.platforms || ["web"]).includes(key)} onChange={e => setAdForm(f => ({ ...f, platforms: e.target.checked ? [...(f.platforms || ["web"]),key] : (f.platforms || ["web"]).filter(p => p !== key) }))} />{label}</label>)}</div>
-                      <p style={{ fontSize: 12 }}>Use a VAST pre-roll tag for entry breaks, not a VMAP schedule. Apple TV: pre-roll, plus dev-only Live TV mid-roll testing with a test tag and one channel ID. Mid-roll requires player-delivered SCTE35-OUT date ranges with known duration. Multiview remains entry ads only.</p>
-                    </div>
-                    <div>
-                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Ad Position</label>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        {[{ value: "pre_roll", label: "Pre-roll" }, { value: "mid_roll", label: "Mid-roll" }, { value: "post_roll", label: "Post-roll" }].map(opt => (
-                          <button key={opt.value} onClick={() => setAdForm(f => ({ ...f, ad_type: opt.value }))}
-                            style={{ flex: 1, background: adForm.ad_type === opt.value ? "#f59e0b" : "#f1f5f9", border: `1px solid ${adForm.ad_type === opt.value ? "#f59e0b" : "#e2e8f0"}`, borderRadius: 7, padding: "9px", color: adForm.ad_type === opt.value ? "#fff" : "#374151", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>
-                            {opt.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Applies To</label>
-                      <select value={adForm.scope} onChange={e => setAdForm(f => ({ ...f, scope: e.target.value, content_id: "" }))}
-                        style={{ width: "100%", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", cursor: "pointer" }}
-                        onFocus={e => (e.target.style.borderColor = "#f59e0b")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")}>
-                        <option value="global">All Content</option>
-                        <option value="movie">Shorts</option>
-                        <option value="show" disabled>TV Shows (use episode scope)</option>
-                        <option value="episode">Episodes</option>
-                        <option value="podcast_episode" disabled>Podcasts (not enabled)</option>
-                        <option value="live">Live Channels</option>
-                        <option value="multiview">Multiview entry</option>
-                      </select>
-                    </div>
-                    {!["global", "multiview"].includes(adForm.scope) && (
-                      <div>
-                        <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>Content ID <span style={{ textTransform: "none", color: "#94a3b8" }}>(leave blank for all in type)</span></label>
-                        <input value={adForm.content_id} onChange={e => setAdForm(f => ({ ...f, content_id: e.target.value }))} placeholder="Exact content ID" type="text"
-                          style={{ width: "100%", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" }}
-                          onFocus={e => (e.target.style.borderColor = "#f59e0b")} onBlur={e => (e.target.style.borderColor = "#e2e8f0")} />
-                      </div>
-                    )}
-                    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "4px 0" }}>
-                      <button onClick={() => setAdForm(f => ({ ...f, active: !f.active }))}
-                        style={{ width: 40, height: 22, borderRadius: 11, border: "none", background: adForm.active ? "#22c55e" : "#d1d5db", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
-                        <span style={{ position: "absolute", top: 3, left: adForm.active ? 20 : 3, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left 0.2s", display: "block" }} />
-                      </button>
-                      <span style={{ fontSize: 13, color: "#374151" }}>{adForm.active ? "Active — tag will be served" : "Inactive — tag is paused"}</span>
-                    </div>
-                    <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-                      <button onClick={saveAd} disabled={adSaving} style={{ flex: 1, background: "#f59e0b", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: adSaving ? "not-allowed" : "pointer", opacity: adSaving ? 0.7 : 1 }}>
-                        {adSaving ? "Saving…" : editingAdId ? "Save Changes" : "Add Tag"}
-                      </button>
-                      <button onClick={cancelAdEdit} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
-                    </div>
-                  </div>
-                )}
 
           </Drawer>
         );

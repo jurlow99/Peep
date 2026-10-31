@@ -809,12 +809,43 @@ struct CSAITag: Decodable, Identifiable {
     }
 }
 
+// Admin "Ad rules" (app_settings.ads_policy). Apple TV honours the master switch,
+// the gap between entry ads and the Live TV toggles; mid/post-roll rules are
+// browser only. Anything unreadable falls back to the defaults the browser uses.
+struct AdPolicy: Decodable {
+    var enabled = true
+    var min_gap_minutes = 30
+    var live_entry = true
+    var multiview_entry = true
+    static let fallback = AdPolicy()
+    init() {}
+    private enum CodingKeys: String, CodingKey { case enabled, min_gap_minutes, live_entry, multiview_entry }
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = (try? values.decode(Bool.self, forKey: .enabled)) ?? true
+        min_gap_minutes = max(0, min(1440, (try? values.decode(Int.self, forKey: .min_gap_minutes)) ?? 30))
+        live_entry = (try? values.decode(Bool.self, forKey: .live_entry)) ?? true
+        multiview_entry = (try? values.decode(Bool.self, forKey: .multiview_entry)) ?? true
+    }
+    static func parse(_ value: String?) -> AdPolicy {
+        guard let data = value?.data(using: .utf8), let policy = try? JSONDecoder().decode(AdPolicy.self, from: data) else { return fallback }
+        return policy
+    }
+    var gap: TimeInterval { TimeInterval(min_gap_minutes * 60) }
+    func allowsEntry(scope: String) -> Bool {
+        guard enabled else { return false }
+        if scope == "live" { return live_entry }
+        if scope == "multiview" { return multiview_entry }
+        return true
+    }
+}
+
 struct AdFrequencyPolicy {
     let defaults: UserDefaults
     private let key = "peep.preroll.lastStartedAt"
-    func allowsAd(at now: Date = Date()) -> Bool {
+    func allowsAd(at now: Date = Date(), gap: TimeInterval = 1800) -> Bool {
         let last = defaults.double(forKey: key)
-        return last <= 0 || now.timeIntervalSince1970 - last >= 1800
+        return last <= 0 || now.timeIntervalSince1970 - last >= gap
     }
     func recordStart(at now: Date = Date()) {
         defaults.set(now.timeIntervalSince1970, forKey: key)
@@ -835,21 +866,32 @@ struct AdFrequencyPolicy {
     private var seen = Set<String>()
     private(set) var isMidroll = false
     private let frequency: AdFrequencyPolicy
+    // Rules last read this launch. A stored cooldown under these skips the network.
+    private(set) static var policy: AdPolicy?
     init(defaults: UserDefaults = .standard) {
         frequency = AdFrequencyPolicy(defaults: defaults)
+    }
+
+    static func loadPolicy(_ service: SupabaseService) async -> AdPolicy {
+        let rows: [PublicSetting]? = try? await service.get("app_settings", query: ["select": "key,value", "key": "eq.ads_policy"], timeout: 4)
+        if let rows { policy = AdPolicy.parse(rows.first?.value) }
+        return policy ?? .fallback
     }
 
     func run(service: SupabaseService, scope: String, contentID: String) async -> Bool {
         cancel()
         isMidroll = false
-        guard frequency.allowsAd() else { return true }
+        if let known = Self.policy, !frequency.allowsAd(gap: known.gap) { return true }
         let current = UUID(); generation = current
         self.service = service; self.reportingUserID = service.session?.userId; self.scope = scope; self.contentID = contentID
         session = UUID().uuidString; seen = []; blocking = true
+        let policy = await Self.loadPolicy(service)
+        guard !Task.isCancelled, generation == current else { return false }
+        guard policy.allowsEntry(scope: scope), frequency.allowsAd(gap: policy.gap) else { blocking = false; return true }
         let tags: [CSAITag] = (try? await service.get("vast_tags", query: ["select":"id,tag_url,scope,content_id,active,is_test,platforms", "active":"eq.true", "ad_type":"eq.pre_roll", "order":"id.asc"], timeout: 4)) ?? []
         guard !Task.isCancelled, generation == current else { return false }
         guard let selected = CSAITag.select(tags, scope: scope, contentID: contentID),
-              frequency.allowsAd() else {
+              frequency.allowsAd(gap: policy.gap) else {
             blocking = false; return true
         }
         return await withTaskCancellationHandler {

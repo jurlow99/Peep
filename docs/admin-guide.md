@@ -166,10 +166,10 @@ Shows platform-wide stats:
 - Revenue summary
 
 ### Ads
-Manage VAST ad tags:
-- Add pre-roll or mid-roll ad tags
-- Set scope (global or specific to a piece of content)
-- Toggle active/inactive without deleting
+Monetization → Ads is one page in three parts (full detail in `ads.md`):
+- **Ad rules** — on/off for everything, minimum minutes between entry ads, Live TV entry ads, mid-roll timing (browser), post-roll (browser). Apply to the website and Apple TV.
+- **Tags** — one full page per VAST tag: name, URL, test flag, position (pre/mid/post), what it applies to (all, movies, episodes, live channels, multiview, or one exact title picked by name), which players, and a **Play this tag** check that runs the ad right in admin.
+- **Delivery, last 30 days** — ads shown, viewers, completion, fill, by player and by position. Test delivery is hidden unless you tick "Include test delivery".
 
 ---
 
