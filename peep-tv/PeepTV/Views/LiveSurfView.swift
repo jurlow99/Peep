@@ -139,7 +139,9 @@ struct LiveSurfView: View {
         .ignoresSafeArea()
         .background(Color.black)
         .overlay { CSAIOverlay(gate: adGate, cancel: onClose) }
-        .liveMidroll(player: player.player, channelID: keepsPlaying ? nil : selectedID, gate: adGate, ready: midrollReady)
+        // Viewing is counted by the owner of a shared player, but mid-roll cues are
+        // only watched here, so arm them whether or not the player arrived already playing.
+        .liveMidroll(player: player.player, channelID: selectedID, gate: adGate, ready: keepsPlaying || midrollReady)
         .liveViewing(player: player.player, channelID: keepsPlaying || adGate.blocking ? nil : selectedID)
         .task {
             focus = "video"
