@@ -2,7 +2,7 @@ import {useEffect,useState} from 'react';
 import {supabase} from '../../supabase';
 import {SUPABASE_URL} from '../../lib/config';
 import {resolveVODPlayback} from '../../lib/vodStorage';
-import {contentReadiness,contentPlacements} from '../../lib/publicationStatus';
+import {contentReadiness,contentPlacements,discoveryGaps} from '../../lib/publicationStatus';
 import Drawer from './Drawer';
 import './PublicationStatus.css';
 
@@ -29,7 +29,7 @@ export function useSeriesInventory(shows) {
 }
 export default function PublicationStatus({item,type,rows=[],episodes}) {
   const [open,setOpen]=useState(false),[preview,setPreview]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
-  const status=contentReadiness(item,type,episodes),placements=contentPlacements(item,type,rows);
+  const status=contentReadiness(item,type,episodes),placements=contentPlacements(item,type,rows),gaps=discoveryGaps(item);
   const playable=type==='movie'?item:episodes?.filter(e=>e.url&&['approved','published'].includes(e.status)).sort((a,b)=>(a.season||1)-(b.season||1)||(a.episode_number||0)-(b.episode_number||0))[0];
   async function play(){
     setBusy(true);setError('');
@@ -37,7 +37,7 @@ export default function PublicationStatus({item,type,rows=[],episodes}) {
     catch(e){setError(e.message);}finally{setBusy(false);}
   }
   return <div className="publication-status">
-    <div className="publication-badges"><span className={`publication-badge ${status.tone}`}>{status.label}</span><span className="publication-badge">{item.visibility_tier==='test'?'Test accounts':item.visibility_tier==='stage'?'Stage accounts':'Production catalog'}{item.is_premium?' · Subscription':''}</span></div>
+    <div className="publication-badges"><span className={`publication-badge ${status.tone}`}>{status.label}</span><span className="publication-badge">{item.visibility_tier==='test'?'Test accounts':item.visibility_tier==='stage'?'Stage accounts':'Production catalog'}{item.is_premium?' · Subscription':''}</span>{gaps.includes('category or tags')&&<span className="publication-badge notice" title="Without a category or tags this title stays out of genre rows, search by genre and More like this">Add category or tags</span>}</div>
     <button className="publication-placement" onClick={()=>setOpen(!open)} aria-expanded={open}>{placements.length?`${placements.length} row placement${placements.length===1?'':'s'}`:'Not in a configured row'} {open?'▴':'▾'}</button>
     {open&&<div className="publication-details">
       {placements.length?<ul>{placements.map((p,i)=><li key={i}><strong>{p.page==='shorts'?'Movies':p.page==='shows'?'Series':p.page}</strong> · {p.title}{p.tier!=='production'?` · ${p.tier} row`:''}</li>)}</ul>:<p>Add this title through Curation → Screens & rows. It may still appear in browsing, search, or personalized rows.</p>}

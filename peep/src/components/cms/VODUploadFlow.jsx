@@ -179,8 +179,10 @@ export default function VODUploadFlow({shows=[],categories=[],showToast,onSaved,
   const seriesName=selected?.title||details.series_title;
   const visibilityLabel=details.visibility_tier==='test'?'Test accounts only':'All eligible users';
   const inherited=isEpisode&&selected?{visibility:selected.visibility_tier==='test'?'Test accounts only':'All eligible users',premium:!!selected.is_premium}:null;
-  const hint=saving?'Saving…':thumbnailBusy?'Capturing thumbnail…':busy?`Uploading ${progress}% · fill in the details meanwhile`:blockers.length?`To save: ${blockers[0]}`:'Ready · Save to add it to the catalog';
-  const hintTone=saving||thumbnailBusy||busy?'':blockers.length?'blocked':'ready';
+  // Category/tags drive genre rows, search and "More like this"; a thin title is saveable but worth a nudge.
+  const thin=isMovie?!details.category.trim()&&!cleanTags(details.tags):!details.show_id&&!details.series_category.trim()&&!cleanTags(details.series_tags);
+  const hint=saving?'Saving…':thumbnailBusy?'Capturing thumbnail…':busy?`Uploading ${progress}% · fill in the details meanwhile`:blockers.length?`To save: ${blockers[0]}`:thin?`Ready · add a category or tags so it shows in genre rows and “More like this”`:'Ready · Save to add it to the catalog';
+  const hintTone=saving||thumbnailBusy||busy?'':blockers.length?'blocked':thin?'notice':'ready';
 
   return <section className="vod-library vod-upload-first" aria-label="Add VOD">
     <header><div><span className="vod-eyebrow">CONTENT LIBRARY</span><h2>Add a video</h2><p>From finished MP4 to your catalog in one pass.</p></div><div style={{display:"flex",gap:12,alignItems:"center"}}><span className="vod-private">Protected playback</span>{asset&&!saved&&<button type="button" disabled={saving} onClick={newUpload}>+ New upload</button>}</div></header>
@@ -195,6 +197,7 @@ export default function VODUploadFlow({shows=[],categories=[],showToast,onSaved,
         <li className={details.poster||selected?.poster?'ok':''}>{details.poster||selected?.poster?'Poster set':'No poster'}</li>
         <li className={details.thumbnail?'ok':'muted'}>{details.thumbnail?'Thumbnail set':'No thumbnail yet · add one from the editor later'}</li>
         <li className={details.description.trim()?'ok':'muted'}>{details.description.trim()?'Description added':'No description yet'}</li>
+        {(isMovie||!selected)&&<li className={thin?'muted':'ok'}>{thin?'No category or tags · it stays out of genre rows and “More like this” until you add some':'Category or tags set'}</li>}
         <li className="ok">{inherited?`${inherited.visibility} · ${inherited.premium||details.is_premium?'Subscription required':'Free'}`:`${visibilityLabel} · ${details.is_premium?'Subscription required':'Free'}`}</li>
         {isEpisode&&<li className="ok">Approved · plays right away</li>}
       </ul>

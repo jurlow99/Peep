@@ -94,11 +94,14 @@ it('sends the movie extras and normalises tags',async()=>{
   await chooseFile(host,'movie.mp4');await click(host,'Movie');await click(host,'Upload poster');
   const inputs=[...host.querySelectorAll<HTMLInputElement>('input')];
   const tags=inputs.find(i=>i.placeholder==='Comedy, Family')!,rating=inputs.find(i=>i.placeholder==='PG-13')!;
+  expect(host.querySelector('.vod-hint')?.textContent).toContain('add a category or tags');
   await type(tags,' comedy ,family,, ');await type(rating,'PG');
+  expect(host.querySelector('.vod-hint')?.textContent).toBe('Ready · Save to add it to the catalog');
   expect(host.querySelector('datalist#vod-categories option')?.getAttribute('value')).toBe('Comedy');
   mocks.rpc.mockResolvedValue({data:{id:'m',type:'movie'},error:null});
   await click(host,'3. Save movie');
   expect(mocks.rpc.mock.calls[0][1].p_details).toMatchObject({type:'movie',tags:'comedy, family',rating:'PG',storage_provider:'supabase'});
+  expect(host.textContent).toContain('Category or tags set');
  }finally{await cleanup();}
 });
 it('rejects unsupported files before upload',async()=>{const {host,cleanup}=await setup();try{await chooseFile(host,'movie.mov');expect(host.textContent).toContain('Choose a finished MP4');expect(mocks.upload).not.toHaveBeenCalled();}finally{await cleanup();}});
