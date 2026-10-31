@@ -1,8 +1,9 @@
 import { corsHeaders, handleCors, errorResponse, jsonResponse } from "../_shared/cors.ts";
 import { getServiceClient, requireAdmin } from "../_shared/supabase.ts";
 
-// Manage a Cloudflare Stream Live Input for a Feed (the DESTINATION the Pi pushes to).
-// action: "create" | "status" | "delete". Admin-only. Cloudflare creds stay server-side.
+// Manage a Cloudflare Stream Live Input for a Feed: the destination the relay pushes to,
+// or the input a provider pushes to directly. action: "create" | "status" | "delete" | "ingest".
+// Admin-only. Cloudflare creds stay server-side.
 
 const CF_CUSTOMER = "customer-x9w8t8qxjaf49jqb.cloudflarestream.com";
 
@@ -15,7 +16,7 @@ Deno.serve(async (req) => {
 
     const { action, feed_id } = await req.json();
     if (!feed_id) throw new Error("feed_id is required");
-    if (!["create", "status", "delete"].includes(action)) throw new Error("Unknown action");
+    if (!["create", "status", "delete", "ingest"].includes(action)) throw new Error("Unknown action");
 
     const cfAccountId = Deno.env.get("CLOUDFLARE_ACCOUNT_ID")!;
     const cfToken = Deno.env.get("CLOUDFLARE_API_TOKEN")!;
@@ -64,6 +65,23 @@ Deno.serve(async (req) => {
         cloudflare_status: cfStatus, playback_status: playback, last_checked_at: new Date().toISOString(),
       }).eq("id", feed_id);
       return jsonResponse({ ok: true, cloudflare_status: cfStatus, playback_status: playback, state });
+    }
+
+    // ── INGEST: what a provider needs to push to this input (they are the SRT caller) ──
+    // Fetched from Cloudflare on demand and returned to the admin only; never stored in a
+    // client-readable table.
+    if (action === "ingest") {
+      if (!feed.cloudflare_live_input_uid) throw new Error("Create the Cloudflare input first");
+      const res = await fetch(`${cfBase}/${feed.cloudflare_live_input_uid}`, { headers: cfHeaders });
+      const data = await res.json();
+      if (!data.success) throw new Error("Cloudflare: " + (data.errors?.[0]?.message || "lookup failed"));
+      const r = data.result || {};
+      return jsonResponse({
+        ok: true,
+        state: r.status?.current?.state || null,
+        srt: r.srt ? { url: r.srt.url, streamId: r.srt.streamId, passphrase: r.srt.passphrase } : null,
+        rtmps: r.rtmps ? { url: r.rtmps.url, streamKey: r.rtmps.streamKey } : null,
+      });
     }
 
     // ── DELETE ──

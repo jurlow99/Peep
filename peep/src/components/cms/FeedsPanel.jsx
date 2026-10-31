@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../../supabase";
 import { SUPABASE_URL } from "../../lib/config";
+import { PUSH_SOURCE_TYPE, PULL_SOURCE_TYPE, isPushFeed, formatPushDetails, SUGGESTED_PUSH_LATENCY_MS } from "../../lib/feedIngest";
 const EMPTY_FEED = { name: "", source_type: "srt", source_host: "", source_port: "", source_mode: "caller", source_stream_id: "", source_latency: 200, notes: "", enabled: true, passphrase: "" };
 
 const STATUS = {
@@ -51,6 +52,8 @@ export default function FeedsPanel({ showToast }) {
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [clearPass, setClearPass] = useState(false);
+  const [pushDetails, setPushDetails] = useState(null); // { feed, srt, rtmps, state }
+  const [copied, setCopied] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -104,6 +107,19 @@ export default function FeedsPanel({ showToast }) {
     setBusyId(null);
   }
 
+  // Fetched from Cloudflare each time; the panel never keeps the passphrase around.
+  async function showPushDetails(feed) {
+    setBusyId(feed.id);
+    try { const r = await edgeCall("cf-live-input", { action: "ingest", feed_id: feed.id }); setPushDetails({ feed, ...r }); setCopied(false); }
+    catch (e) { showToast(e.message, "error"); }
+    setBusyId(null);
+  }
+  async function copyPushDetails() {
+    const text = formatPushDetails({ feedName: pushDetails.feed.name, srt: pushDetails.srt, rtmps: pushDetails.rtmps });
+    try { await navigator.clipboard.writeText(text); setCopied(true); showToast("Copied — paste it to the provider"); }
+    catch { showToast("Couldn't copy. Select the text and copy it by hand.", "error"); }
+  }
+
   async function refreshStatus(feed) {
     setBusyId(feed.id);
     try {
@@ -141,7 +157,7 @@ export default function FeedsPanel({ showToast }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div>
           <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Live Feeds ({feeds.length})</h2>
-          <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Incoming broadcast sources (SRT). Relayed by the Pi → Cloudflare → your channels.</p>
+          <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Incoming live sources. A provider either <strong>pushes to Cloudflare</strong> (no relay needed) or the relay <strong>pulls</strong> it from them. Channels with a plain HLS link don't need a feed at all.</p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={checkRelayServer} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 16px", color: "#374151", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Check relay server</button>
@@ -166,21 +182,26 @@ export default function FeedsPanel({ showToast }) {
                   {!feed.enabled && <span style={{ fontSize: 10, fontWeight: 700, color: "#888", background: "#f1f5f9", borderRadius: 4, padding: "1px 7px" }}>DISABLED</span>}
                 </div>
                 <p style={{ margin: 0, fontSize: 12, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {feed.source_host ? `srt://${feed.source_host}:${feed.source_port || "?"} · ${feed.source_mode}` : "No source configured"}
+                  {isPushFeed(feed) ? "Provider pushes to our Cloudflare input · no relay" : feed.source_host ? `srt://${feed.source_host}:${feed.source_port || "?"} · ${feed.source_mode}` : "No source configured"}
                 </p>
               </div>
               <div style={{ display: "flex", gap: 18, flexWrap: "wrap", fontSize: 11 }}>
-                <div><div style={{ color: "#9ca3af", fontWeight: 600, marginBottom: 2 }}>SOURCE</div><Chip status={feed.source_status} /></div>
-                <div><div style={{ color: "#9ca3af", fontWeight: 600, marginBottom: 2 }}>RELAY</div><Chip status={feed.relay_status} /></div>
+                {!isPushFeed(feed) && <div><div style={{ color: "#9ca3af", fontWeight: 600, marginBottom: 2 }}>SOURCE</div><Chip status={feed.source_status} /></div>}
+                {!isPushFeed(feed) && <div><div style={{ color: "#9ca3af", fontWeight: 600, marginBottom: 2 }}>RELAY</div><Chip status={feed.relay_status} /></div>}
                 <div><div style={{ color: "#9ca3af", fontWeight: 600, marginBottom: 2 }}>CLOUDFLARE</div><Chip status={feed.cloudflare_status} /></div>
                 <div><div style={{ color: "#9ca3af", fontWeight: 600, marginBottom: 2 }}>PLAYBACK</div><Chip status={feed.playback_status} /></div>
                 <div><div style={{ color: "#9ca3af", fontWeight: 600, marginBottom: 2 }}>CHANNEL</div><span style={{ fontSize: 11, fontWeight: 600, color: ch ? "#0f172a" : "#cbd5e1" }}>{ch ? ch.name : "None"}</span></div>
               </div>
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-              <button disabled={busy} onClick={() => testSource(feed)} style={btn("#f8fafc", "#374151", "#e2e8f0")}>{busy ? "…" : "Test Source"}</button>
+              {!isPushFeed(feed) && <button disabled={busy} onClick={() => testSource(feed)} style={btn("#f8fafc", "#374151", "#e2e8f0")}>{busy ? "…" : "Test Source"}</button>}
               {!feed.cloudflare_live_input_uid ? (
                 <button disabled={busy} onClick={() => act(feed, "cf-live-input", { action: "create", feed_id: feed.id }, "Cloudflare input created")} style={btn("rgba(59,130,246,0.08)", "#2563eb", "rgba(59,130,246,0.25)")}>{busy ? "…" : "Create Cloudflare Input"}</button>
+              ) : isPushFeed(feed) ? (
+                <>
+                  <button disabled={busy} onClick={() => showPushDetails(feed)} style={btn("rgba(34,197,94,0.1)", "#15803d", "rgba(34,197,94,0.3)")}>{busy ? "…" : "Push details"}</button>
+                  <button disabled={busy} onClick={() => act(feed, "cf-live-input", { action: "status", feed_id: feed.id }, "Status refreshed")} style={btn("rgba(59,130,246,0.08)", "#2563eb", "rgba(59,130,246,0.25)")}>{busy ? "…" : "Refresh Status"}</button>
+                </>
               ) : (
                 <>
                   {feed.relay_status === "running"
@@ -198,14 +219,53 @@ export default function FeedsPanel({ showToast }) {
         );
       })}
 
+      {/* Push details for a provider that is the SRT caller */}
+      {pushDetails && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={e => { if (e.target === e.currentTarget) setPushDetails(null); }}>
+          <div style={{ background: "#fff", borderRadius: 14, width: "100%", maxWidth: 640, maxHeight: "90vh", overflowY: "auto", padding: "24px 26px", boxShadow: "0 24px 64px rgba(0,0,0,0.25)" }}>
+            <h3 style={{ margin: "0 0 4px", fontSize: 17, fontWeight: 700, color: "#0f172a" }}>Push details · {pushDetails.feed.name}</h3>
+            <p style={{ margin: "0 0 16px", fontSize: 12, color: "#6b7280" }}>Send these to the provider. They connect as the SRT caller; nothing runs on our side until they do. Cloudflare state: <strong>{pushDetails.state || "unknown"}</strong>.</p>
+            {pushDetails.srt ? (
+              <div style={{ display: "grid", gap: 10, marginBottom: 16 }}>
+                {[["SRT address", pushDetails.srt.url], ["Stream ID", pushDetails.srt.streamId], ["Passphrase", pushDetails.srt.passphrase], ["Suggested latency", `${SUGGESTED_PUSH_LATENCY_MS} ms`]].map(([k, v]) => (
+                  <div key={k}><label style={lbl}>{k}</label><input readOnly value={v || ""} onFocus={e => e.target.select()} style={{ ...inp, fontFamily: "ui-monospace, monospace" }} /></div>
+                ))}
+              </div>
+            ) : <p style={{ color: "#b45309", fontSize: 13 }}>Cloudflare returned no SRT details for this input.</p>}
+            {pushDetails.rtmps && (
+              <details style={{ marginBottom: 16 }}><summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#374151" }}>RTMPS alternative</summary>
+                <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
+                  {[["Server", pushDetails.rtmps.url], ["Stream key", pushDetails.rtmps.streamKey]].map(([k, v]) => (
+                    <div key={k}><label style={lbl}>{k}</label><input readOnly value={v || ""} onFocus={e => e.target.select()} style={{ ...inp, fontFamily: "ui-monospace, monospace" }} /></div>
+                  ))}
+                </div>
+              </details>
+            )}
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={copyPushDetails} style={{ flex: 1, background: "#0f172a", border: "none", borderRadius: 8, padding: "12px", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>{copied ? "Copied ✓" : "Copy for provider"}</button>
+              <button onClick={() => setPushDetails(null)} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Add / Edit form */}
       {formOpen && (
         <div style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={e => { if (e.target === e.currentTarget) setFormOpen(false); }}>
           <div style={{ background: "#fff", borderRadius: 14, width: "100%", maxWidth: 520, maxHeight: "90vh", overflowY: "auto", padding: "24px 26px", boxShadow: "0 24px 64px rgba(0,0,0,0.25)" }}>
-            <h3 style={{ margin: "0 0 4px", fontSize: 17, fontWeight: 700, color: "#0f172a" }}>{editingId ? "Edit Feed" : "Add SRT Feed"}</h3>
-            <p style={{ margin: "0 0 18px", fontSize: 12, color: "#6b7280" }}>The <strong>source</strong> the provider gave you. Cloudflare (destination) is created separately.</p>
+            <h3 style={{ margin: "0 0 4px", fontSize: 17, fontWeight: 700, color: "#0f172a" }}>{editingId ? "Edit Feed" : "Add Live Feed"}</h3>
+            <p style={{ margin: "0 0 18px", fontSize: 12, color: "#6b7280" }}>How does this provider's video reach us? Cloudflare (the destination) is created separately after saving.</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div><label style={lbl}>Feed name *</label><input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Provider Sports East" style={inp} /></div>
+              <div style={{ display: "grid", gap: 8 }}>
+                {[[PUSH_SOURCE_TYPE, "Provider pushes to Cloudflare", "They connect to us (they are the SRT caller). No relay, no open ports. Ask for this first."], [PULL_SOURCE_TYPE, "We pull it with the relay", "They give us a host, port and passphrase, or wait for us to connect. Needs the relay running."]].map(([value, title, hint]) => (
+                  <label key={value} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 12px", border: `1px solid ${form.source_type === value ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 8, cursor: "pointer", background: form.source_type === value ? "#eef2ff" : "#fff" }}>
+                    <input type="radio" name="feed-arrival" checked={form.source_type === value} onChange={() => setForm(f => ({ ...f, source_type: value }))} style={{ marginTop: 3 }} />
+                    <span><strong style={{ fontSize: 13, color: "#0f172a" }}>{title}</strong><br /><span style={{ fontSize: 12, color: "#6b7280" }}>{hint}</span></span>
+                  </label>
+                ))}
+              </div>
+              {form.source_type !== PUSH_SOURCE_TYPE && <>
               <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}>
                 <div><label style={lbl}>Host / IP</label><input value={form.source_host} onChange={e => setForm(f => ({ ...f, source_host: e.target.value }))} placeholder="provider.example.com" style={inp} /></div>
                 <div><label style={lbl}>Port</label><input type="number" value={form.source_port} onChange={e => setForm(f => ({ ...f, source_port: e.target.value }))} placeholder="1234" style={inp} /></div>
@@ -228,6 +288,7 @@ export default function FeedsPanel({ showToast }) {
                   </label>
                 )}
               </div>
+              </>}
               <div><label style={lbl}>Notes</label><input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Anything useful…" style={inp} /></div>
               <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
                 <input type="checkbox" checked={form.enabled} onChange={e => setForm(f => ({ ...f, enabled: e.target.checked }))} /> <span style={{ fontSize: 13, color: "#374151" }}>Enabled</span>

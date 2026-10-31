@@ -281,7 +281,10 @@ Server RLS also enforces production visibility for anon.
   `save_channel_guide` RPC (atomic), and a legacy delete+insert in `CMS.jsx`.
   `refresh-epg` streams each `epg_channel_sources.source_url`; `db/epg_scheduler.sql`
   is a pg_cron job every 6 h (dev URL, token in Vault) — not confirmed enabled.
-- **Feeds (SRT ingest):** provider SRT → Pi (`relay/server.js`, `relay-manager.js`,
+- **Feeds:** two roads, see `docs/live-feeds.md`. *Push* (`source_type='push'`): the provider is
+  the SRT caller and sends straight to the feed's Cloudflare live input; the Feeds panel's **Push
+  details** fetches the SRT address/stream ID/passphrase from Cloudflare via `cf-live-input`
+  `ingest` (never stored). *Pull* (`source_type='srt'`): provider SRT → Pi (`relay/server.js`, `relay-manager.js`,
   FFmpeg stream-copy) → Cloudflare live input → HLS → `live_feeds` row linked to a
   channel. CMS Feeds panel calls `save-feed`, `cf-live-input`, `relay-control` (over a
   Cloudflare Tunnel at `relay.watchpeep.tv`, Bearer `RELAY_TOKEN`).
