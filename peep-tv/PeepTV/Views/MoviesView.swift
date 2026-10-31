@@ -236,6 +236,7 @@ struct MovieDetailView: View {
     @State private var related: [Video] = []
     @State private var playback: MoviePlayback?
     @State private var relatedSelection: Video?
+    @State private var pendingRelated: Video?
 
     private enum MoviePlayback: Identifiable {
         case movie(startOver: Bool), trailer
@@ -335,10 +336,14 @@ struct MovieDetailView: View {
         .onExitCommand { dismiss() }
         .task { await loadRelated() }
         .task(id: "\(supabase.watchProgressRevision):\(supabase.session?.userId ?? "guest")") { await loadProgress() }
-        .fullScreenCover(item: $playback, onDismiss: { Task { await loadProgress() } }) { mode in
+        .fullScreenCover(item: $playback, onDismiss: {
+            Task { await loadProgress() }
+            if let next = pendingRelated { pendingRelated = nil; relatedSelection = next }
+        }) { mode in
             switch mode {
             case .movie(let startOver):
-                PlaybackView(url: video.videoURL, title: video.title, identity: PlaybackIdentity(id: video.id, type: "movie"), startFromBeginning: startOver)
+                PlaybackView(url: video.videoURL, title: video.title, identity: PlaybackIdentity(id: video.id, type: "movie"), startFromBeginning: startOver,
+                             related: related, openRelated: { pendingRelated = $0; playback = nil })
             case .trailer:
                 PlaybackView(url: trailerURL, title: "\(video.title) · Trailer")
             }

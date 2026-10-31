@@ -99,7 +99,7 @@ enum PosterGrid {
 
 /// Small in-memory artwork cache avoids re-downloading the same channel logo
 /// whenever a card re-enters the viewport. Failed requests remain retryable.
-@MainActor private enum ArtworkMemory {
+@MainActor enum ArtworkMemory {
     static let images: NSCache<NSURL, UIImage> = {
         let cache = NSCache<NSURL, UIImage>()
         cache.countLimit = 120

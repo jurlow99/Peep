@@ -521,3 +521,12 @@ enum RelatedTitles {
         return scored.prefix(limit).map { $0.video }
     }
 }
+
+/// When the native Up Next proposal appears: the last 30 seconds (or final tenth of a
+/// short item), never for clips under a minute or while the length is still unknown.
+enum UpNextTiming {
+    static func transitionTime(duration: Double) -> Double? {
+        guard duration.isFinite, duration >= 60 else { return nil }
+        return duration - min(30, duration * 0.1)
+    }
+}

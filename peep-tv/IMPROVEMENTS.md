@@ -16,7 +16,7 @@ by reading the code and should be reproduced before fixing.
    seek fails the whole start path exits, so no ad, no playback, no progress saves
    (`PlayerView.swift:446-449`). Offer "Resume from X / Start over", and fall back to
    zero when the seek fails. **S**
-3. **Up Next only after the credits roll, movies dead-end.** The card appears only on
+3. ~~**Up Next only after the credits roll, movies dead-end.**~~ **Done 2026-10-31**: native `AVContentProposal` Up Next panel over the last 30 s (auto-accept after 10 s when the series allows autoplay), a movie end card with Watch again / Back / More like this, and autoplay now requires an explicit `autoplay_next == true` like the web. Original note: The card appears only on
    `AVPlayerItemDidPlayToEndTime` (`PlayerView.swift:412-418`); a finished movie sits on
    its last frame. Show Up Next during the credits (`contentProposalViewController` or a
    timed overlay) and show related titles after a movie. Also align autoplay with web:

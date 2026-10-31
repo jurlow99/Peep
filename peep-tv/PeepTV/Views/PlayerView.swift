@@ -273,6 +273,8 @@ struct PlaybackView: View {
     var identity: PlaybackIdentity? = nil
     var liveChannelID: Int? = nil
     var startFromBeginning = false
+    var related: [Video] = []
+    var openRelated: (Video) -> Void = { _ in }
     @Environment(\.dismiss) private var dismiss
     @State private var currentEpisode: Episode?
     @State private var nextEpisode: Episode?
@@ -287,7 +289,7 @@ struct PlaybackView: View {
         Group {
             if let resolvedURL {
                 PlayerView(url: resolvedURL, title: currentEpisode?.displayTitle ?? title, identity: playbackIdentity, liveChannelID: liveChannelID, startFromBeginning: startFromBeginning,
-                           nextEpisode: nextEpisode, seriesAllowsAutoplay: seriesAllowsAutoplay, playNext: {
+                           nextEpisode: nextEpisode, seriesAllowsAutoplay: seriesAllowsAutoplay, related: related, openRelated: openRelated, playNext: {
                     guard let nextEpisode else { return }
                     currentEpisode = nextEpisode
                     self.resolvedURL = nil
@@ -324,7 +326,7 @@ struct PlaybackView: View {
                         let (episodes, shows) = try await (episodeRequest, showRequest)
                         guard !Task.isCancelled else { return }
                         nextEpisode = SeriesPlayback.next(after: episode, in: episodes)
-                        seriesAllowsAutoplay = shows.first?.autoplay_next != false && !shows.isEmpty
+                        seriesAllowsAutoplay = shows.first?.autoplay_next == true // explicit, like the web
                     }
                 }
             } catch {
@@ -342,9 +344,15 @@ struct PlayerView: View {
     let identity: PlaybackIdentity?
     let liveChannelID: Int?
     let startFromBeginning: Bool
+    let title: String
     var nextEpisode: Episode?
     let seriesAllowsAutoplay: Bool
+    let related: [Video]
+    let openRelated: (Video) -> Void
     let playNext: () -> Void
+    @State private var proposal: AVContentProposal?
+    @State private var showEnd = false
+    @FocusState private var endFocused: Bool
     @ObservedObject private var preferences = PlaybackPreferences.shared
     @State private var showNext = false
     @State private var countdown = 10
@@ -358,7 +366,10 @@ struct PlayerView: View {
     @Environment(\.dismiss) private var dismiss
     let retry: () -> Void
 
-    init(url: URL, title: String, identity: PlaybackIdentity? = nil, liveChannelID: Int? = nil, startFromBeginning: Bool = false, nextEpisode: Episode? = nil, seriesAllowsAutoplay: Bool = false, playNext: @escaping () -> Void = {}, retry: @escaping () -> Void) {
+    init(url: URL, title: String, identity: PlaybackIdentity? = nil, liveChannelID: Int? = nil, startFromBeginning: Bool = false, nextEpisode: Episode? = nil, seriesAllowsAutoplay: Bool = false, related: [Video] = [], openRelated: @escaping (Video) -> Void = { _ in }, playNext: @escaping () -> Void = {}, retry: @escaping () -> Void) {
+        self.title = title
+        self.related = related
+        self.openRelated = openRelated
         self.nextEpisode = nextEpisode
         self.seriesAllowsAutoplay = seriesAllowsAutoplay
         self.playNext = playNext
@@ -383,7 +394,9 @@ struct PlayerView: View {
                     Button("Back") { dismiss() }.padding(.bottom, 80)
                 }.background(Color.black)
             } else {
-                if (!adGate.blocking || adGate.isMidroll) && !showNext { NativePlayer(player: model.player).ignoresSafeArea() }
+                if (!adGate.blocking || adGate.isMidroll) && !showNext && !showEnd {
+                    NativePlayer(player: model.player, proposal: proposal, onAcceptProposal: nextEpisode == nil ? nil : playNext).ignoresSafeArea()
+                }
             }
         }
         .overlay {
@@ -410,7 +423,45 @@ struct PlayerView: View {
                         }.frame(width: 650, alignment: .leading)
                     }.padding(80)
                 }.onAppear { nextFocused = true }
+            } else if showEnd {
+                ZStack {
+                    LinearGradient(colors: [Color(white: 0.09), .black], startPoint: .topTrailing, endPoint: .bottomLeading).ignoresSafeArea()
+                    VStack(alignment: .leading, spacing: 28) {
+                        Text("THAT'S THE END").font(.system(size: 18, weight: .bold)).tracking(4).foregroundStyle(.secondary)
+                        Text(title).font(.system(size: 42, weight: .bold, design: .rounded)).lineLimit(2)
+                        HStack(spacing: 20) {
+                            Button(action: watchAgain) { Label("Watch again", systemImage: "arrow.counterclockwise").padding(16) }
+                                .buttonStyle(BrowseCardStyle()).focused($endFocused)
+                            Button("Back") { dismiss() }.buttonStyle(BrowseCardStyle())
+                        }
+                        if !related.isEmpty {
+                            Text("More like this").font(.system(size: 28, weight: .bold, design: .rounded)).padding(.top, 12)
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                LazyHStack(alignment: .top, spacing: 24) {
+                                    ForEach(related.prefix(6)) { item in
+                                        VideoCardView(video: item, width: 220) { openRelated(item) }
+                                    }
+                                }.padding(.vertical, 20)
+                            }.focusSection()
+                        }
+                    }.padding(80).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                }.onAppear { endFocused = true }
             }
+        }
+        // Build the native Up Next proposal once the item's length is known.
+        .task(id: "\(contentStarted):\(nextEpisode?.id ?? 0):\(preferences.autoplayNext)") {
+            guard contentStarted, let episode = nextEpisode else { proposal = nil; return }
+            var duration = model.player.currentItem?.duration.seconds ?? .nan
+            while !(duration.isFinite && duration > 0) {
+                do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
+                duration = model.player.currentItem?.duration.seconds ?? .nan
+            }
+            guard let transition = UpNextTiming.transitionTime(duration: duration) else { return }
+            let image = await UpNextArtwork.load(episode.thumbURL)
+            guard !Task.isCancelled else { return }
+            let next = AVContentProposal(contentTimeForTransition: CMTime(seconds: transition, preferredTimescale: 600), title: episode.displayTitle, previewImage: image)
+            next.automaticAcceptanceInterval = preferences.autoplayNext && seriesAllowsAutoplay ? 10 : -1
+            proposal = next
         }
         .onReceive(NotificationCenter.default.publisher(for: .AVPlayerItemDidPlayToEndTime)) { notification in
             guard contentStarted, !adGate.blocking, !endHandled,
@@ -418,6 +469,7 @@ struct PlayerView: View {
             endHandled = true
             Task { await saveProgress() }
             if nextEpisode != nil { showNext = true }
+            else if liveChannelID == nil, identity != nil { showEnd = true }
         }
         .task(id: "\(showNext):\(scenePhase == .active)") {
             guard showNext, scenePhase == .active, preferences.autoplayNext, seriesAllowsAutoplay else { return }
@@ -481,6 +533,11 @@ struct PlayerView: View {
         }
         .onExitCommand { dismiss() }
     }
+    private func watchAgain() {
+        showEnd = false; endHandled = false
+        model.player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
+        model.player.play()
+    }
     private func saveProgress() async {
         guard contentStarted, let identity, let userID = progressUserID else { return }
         try? await supabase.saveWatchProgress(identity: identity, position: model.player.currentTime().seconds,
@@ -510,9 +567,15 @@ struct NativePlayer: UIViewControllerRepresentable {
     var pauseOnDismantle = true
     var videoGravity: AVLayerVideoGravity = .resizeAspect
     var onVideoReady: ((AVPlayerItem) -> Void)? = nil
+    var proposal: AVContentProposal? = nil
+    var onAcceptProposal: (() -> Void)? = nil
 
     final class Coordinator: NSObject, AVPlayerViewControllerDelegate {
         var pauseOnDismantle = true
+        var onAcceptProposal: (() -> Void)?
+        func playerViewController(_ playerViewController: AVPlayerViewController, shouldPresent proposal: AVContentProposal) -> Bool { onAcceptProposal != nil }
+        func playerViewController(_ playerViewController: AVPlayerViewController, didAccept proposal: AVContentProposal) { onAcceptProposal?() }
+        func playerViewController(_ playerViewController: AVPlayerViewController, didReject proposal: AVContentProposal) {}
         var displayObservation: NSKeyValueObservation?
         var onVideoReady: ((AVPlayerItem) -> Void)?
         var onExit: (() -> Void)?
@@ -534,6 +597,8 @@ struct NativePlayer: UIViewControllerRepresentable {
         controller.showsPlaybackControls = interactive
         controller.view.isUserInteractionEnabled = interactive
         context.coordinator.onVideoReady = onVideoReady
+        context.coordinator.onAcceptProposal = onAcceptProposal
+        controller.player?.currentItem?.nextContentProposal = proposal
         context.coordinator.displayObservation = controller.observe(\.isReadyForDisplay, options: [.initial, .new]) { [weak coordinator = context.coordinator, weak controller] _, _ in
             Task { @MainActor in
                 guard let controller, controller.isReadyForDisplay, let item = controller.player?.currentItem else { return }
@@ -544,6 +609,8 @@ struct NativePlayer: UIViewControllerRepresentable {
     }
     func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
         context.coordinator.onExit = onExit
+        context.coordinator.onAcceptProposal = onAcceptProposal
+        if let item = controller.player?.currentItem, item.nextContentProposal !== proposal { item.nextContentProposal = proposal }
         context.coordinator.onVideoReady = onVideoReady
         context.coordinator.pauseOnDismantle = pauseOnDismantle
         let becameInteractive = !controller.view.isUserInteractionEnabled && interactive
@@ -1175,5 +1242,18 @@ actor LiveInbandReader {
         cues = cues.filter { $0.value.end > Date().addingTimeInterval(-300) }
         ends = ends.filter { $0.value > Date().addingTimeInterval(-300) }
         return cues
+    }
+}
+
+/// Preview image for the native Up Next panel, sharing the poster cache.
+@MainActor enum UpNextArtwork {
+    static func load(_ url: URL?) async -> UIImage? {
+        guard let url else { return nil }
+        if let cached = ArtworkMemory.images.object(forKey: url as NSURL) { return cached }
+        var request = URLRequest(url: url); request.timeoutInterval = 8
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200, let image = UIImage(data: data) else { return nil }
+        ArtworkMemory.images.setObject(image, forKey: url as NSURL, cost: Int(image.size.width * image.size.height * 4))
+        return image
     }
 }

@@ -1011,6 +1011,13 @@ final class CatalogTests: XCTestCase {
         try JSONDecoder().decode(type, from: Data(json.utf8))
     }
 
+    func testUpNextProposalLeadsByThirtySecondsAndSkipsShortOrUnknownItems() {
+        XCTAssertNil(UpNextTiming.transitionTime(duration: .nan))
+        XCTAssertNil(UpNextTiming.transitionTime(duration: 45))
+        XCTAssertEqual(UpNextTiming.transitionTime(duration: 90), 81)      // final tenth of a short item
+        XCTAssertEqual(UpNextTiming.transitionTime(duration: 1500), 1470)  // last 30 seconds otherwise
+    }
+
     func testRelatedTitlesRankLikeWebAndSkipSelfAndUnrelated() throws {
         let source = try decode(Video.self, #"{"id":"a","title":"A","category":"Comedy","tags":["Family","road"],"year":2001,"rating":"PG"}"#)
         let sameGenre = try decode(Video.self, #"{"id":"b","title":"B","category":"comedy","year":1990}"#)
