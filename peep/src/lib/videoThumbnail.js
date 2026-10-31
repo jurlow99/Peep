@@ -60,3 +60,36 @@ export function captureVideoThumbnail(url, {signal} = {}) {
     video.src=url;
   });
 }
+
+// Duration and frame size of a local file, read without decoding more than the
+// header. Used to prefill runtime and describe the upload.
+export function readVideoMetadata(url, timeoutMs = 20000) {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    video.muted = true; video.preload = 'metadata'; video.playsInline = true;
+    let done = false;
+    const timer = setTimeout(() => finish(new Error('Could not read the video details.')), timeoutMs);
+    function finish(error, value) {
+      if (done) return; done = true; clearTimeout(timer);
+      video.onloadedmetadata = video.onerror = null;
+      video.removeAttribute('src'); video.load();
+      error ? reject(error) : resolve(value);
+    }
+    video.onerror = () => finish(new Error('This file cannot be previewed in the browser.'));
+    video.onloadedmetadata = () => finish(null, { duration: video.duration, width: video.videoWidth, height: video.videoHeight });
+    video.src = url;
+  });
+}
+
+// Snapshot whatever frame a <video> element is paused on, as a JPEG file.
+export function captureCurrentFrame(video, maxWidth = 1280) {
+  return new Promise((resolve, reject) => {
+    if (!video?.videoWidth) { reject(new Error('Wait for the preview to load, then try again.')); return; }
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.min(maxWidth, video.videoWidth);
+    canvas.height = Math.round(canvas.width * video.videoHeight / video.videoWidth);
+    try { canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height); }
+    catch { reject(new Error('This frame cannot be captured.')); return; }
+    canvas.toBlob(blob => blob ? resolve(new File([blob], 'episode-thumbnail.jpg', { type: 'image/jpeg' })) : reject(new Error('Could not capture this frame.')), 'image/jpeg', 0.85);
+  });
+}

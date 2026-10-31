@@ -19,6 +19,16 @@ history entry). Apply only once; policy names are intentionally not replaced.
    automatically. Episodes saved by an admin are approved. The separate manual
    Episodes editor still follows its existing approval behavior.
 
+Details can be filled in while the file is still transferring; Save unlocks once the
+upload lands. The upload card shows size, resolution, runtime (read from the file and
+prefilled), progress with time left, Pause and Cancel, and a local preview whose
+paused frame can be used as the thumbnail. Choosing an existing series lists what
+that season already has, suggests the next number and blocks duplicates before Save.
+Movies also take rating, tags and a trailer URL; a series created here takes
+description, category, year, rating and tags (`vod-upload-details.sql`, applied to
+FARRIS dev on 2026-10-31 with `execute_sql`). The saved screen offers Preview
+playback and jumps to the series workspace or the Movies list.
+
 **Add next episode** keeps the series and increments the episode number. Add
 movies/series to rows separately under Curation when ready to feature them.
 New movies/series default to the existing all-eligible-users visibility; test-only

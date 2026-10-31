@@ -7651,7 +7651,8 @@ export function CMS({ onExit, currentUser }) {
         {/* ────── STORAGE TAB ────── */}
         {tab === "storage" && (
           <StoragePanel showToast={showToast} logAudit={logAudit}
-            videosList={videosList} showsList={showsList} podcastsList={podcastsList} onVODSaved={() => { loadRows(); loadShows(); }} />
+            videosList={videosList} showsList={showsList} podcastsList={podcastsList} onVODSaved={() => { loadRows(); loadShows(); }}
+            onOpenSaved={saved => { setTab("content"); if (saved.type === "episode") { setVideoSubTab("series"); setWorkspaceShowID(saved.show_id); } else setVideoSubTab("shorts"); }} />
         )}
 
     </div>

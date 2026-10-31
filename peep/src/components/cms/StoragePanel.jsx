@@ -8,7 +8,9 @@ import { PAD } from "./constants";
 // Storage tab: lists video/audio files in the public "content" bucket and turns
 // them into content rows. Owns everything it touches except the content pools,
 // which the shell already loads for other tabs, and toast/audit.
-export default function StoragePanel({ showToast, logAudit, videosList, showsList, podcastsList, onVODSaved }) {
+export default function StoragePanel({ showToast, logAudit, videosList, showsList, podcastsList, onVODSaved, onOpenSaved }) {
+  // Existing categories feed the Add VOD suggestions so spelling stays consistent across titles.
+  const categories = [...new Set([...(videosList || []), ...(showsList || [])].map(item => item.category?.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   const [storageFiles, setStorageFiles] = useState([]);
   const [storageLoading, setStorageLoading] = useState(true);
   const [bulkPublishing, setBulkPublishing] = useState(false);
@@ -110,7 +112,7 @@ export default function StoragePanel({ showToast, logAudit, videosList, showsLis
 
   return (
     <div className="vod-workspace">
-      <VODUploadFlow shows={showsList} showToast={showToast} onSaved={onVODSaved} />
+      <VODUploadFlow shows={showsList} categories={categories} showToast={showToast} onSaved={onVODSaved} onOpenSaved={onOpenSaved} />
       <details className="vod-tools"><summary><span>Media library</span><small>Original files & manual linking</small></summary><VODSourceLibrary movies={videosList} shows={showsList} showToast={showToast} logAudit={logAudit} /></details>
       <details className="vod-tools"><summary><span>Legacy importer</span><small>Older uploads & URL imports</small></summary>
       <div style={{ maxWidth: 1600, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
