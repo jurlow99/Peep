@@ -1,33 +1,19 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../../supabase";
 import { SUPABASE_URL } from "../../lib/config";
-import { PUSH_SOURCE_TYPE, PULL_SOURCE_TYPE, isPushFeed, formatPushDetails, SUGGESTED_PUSH_LATENCY_MS } from "../../lib/feedIngest";
-const EMPTY_FEED = { name: "", source_type: "srt", source_host: "", source_port: "", source_mode: "caller", source_stream_id: "", source_latency: 200, notes: "", enabled: true, passphrase: "" };
+import { PUSH_SOURCE_TYPE, isPushFeed, formatPushDetails, SUGGESTED_PUSH_LATENCY_MS } from "../../lib/feedIngest";
+import { ARRIVALS, EMPTY_FEED_FORM, feedSteps, sourceProblem, slugify, arrivalLabel } from "../../lib/feedWorkflow";
+import "./FeedsPanel.css";
 
 const STATUS = {
-  live:        { c: "#22c55e", t: "LIVE" },
-  available:   { c: "#22c55e", t: "AVAILABLE" },
-  connected:   { c: "#22c55e", t: "CONNECTED" },
-  running:     { c: "#22c55e", t: "RUNNING" },
-  receiving:   { c: "#3b82f6", t: "RECEIVING" },
-  created:     { c: "#3b82f6", t: "CREATED" },
-  connecting:  { c: "#f59e0b", t: "CONNECTING" },
-  ready:       { c: "#f59e0b", t: "READY" },
-  offline:     { c: "#6b7280", t: "OFFLINE" },
-  stopped:     { c: "#6b7280", t: "STOPPED" },
-  unavailable: { c: "#6b7280", t: "UNAVAILABLE" },
-  disabled:    { c: "#6b7280", t: "DISABLED" },
-  error:       { c: "#ef4444", t: "ERROR" },
-  none:        { c: "#cbd5e1", t: "—" },
-  unknown:     { c: "#cbd5e1", t: "UNKNOWN" },
+  live: ["#15803d", "LIVE"], available: ["#15803d", "AVAILABLE"], connected: ["#15803d", "CONNECTED"], running: ["#15803d", "RUNNING"],
+  receiving: ["#2563eb", "WAITING FOR PROVIDER"], created: ["#2563eb", "CREATED"], connecting: ["#b45309", "CONNECTING"], ready: ["#b45309", "READY"],
+  offline: ["#6b7280", "OFFLINE"], stopped: ["#6b7280", "STOPPED"], unavailable: ["#6b7280", "NOT PLAYING"], disabled: ["#6b7280", "DISABLED"],
+  error: ["#dc2626", "ERROR"], none: ["#cbd5e1", "—"], unknown: ["#cbd5e1", "UNKNOWN"],
 };
 function Chip({ status }) {
-  const s = STATUS[status] || STATUS.unknown;
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, color: s.c }}>
-      <span style={{ width: 8, height: 8, borderRadius: "50%", background: s.c }} />{s.t}
-    </span>
-  );
+  const [color, text] = STATUS[status] || STATUS.unknown;
+  return <span className="feeds-chip" style={{ color }}>{text}</span>;
 }
 
 async function edgeCall(fn, body) {
@@ -42,24 +28,26 @@ async function edgeCall(fn, body) {
   return json;
 }
 
+// One page per feed, no dialogs: source → Cloudflare input → provider or relay → channel.
 export default function FeedsPanel({ showToast }) {
   const [feeds, setFeeds] = useState([]);
   const [channels, setChannels] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [formOpen, setFormOpen] = useState(false);
-  const [form, setForm] = useState(EMPTY_FEED);
-  const [editingId, setEditingId] = useState(null);
-  const [saving, setSaving] = useState(false);
-  const [busyId, setBusyId] = useState(null);
+  const [selectedId, setSelectedId] = useState(null); // null = list, "new" = blank page, else feed id
+  const [form, setForm] = useState(EMPTY_FEED_FORM);
   const [clearPass, setClearPass] = useState(false);
-  const [pushDetails, setPushDetails] = useState(null); // { feed, srt, rtmps, state }
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [pushDetails, setPushDetails] = useState(null); // { feedId, srt, rtmps, state }
   const [copied, setCopied] = useState(false);
+  const [attachId, setAttachId] = useState("");
+  const [newChannel, setNewChannel] = useState({ name: "", category: "" });
 
   async function load() {
     setLoading(true);
     const [f, c] = await Promise.all([
       supabase.rpc("admin_live_feeds").order("created_at", { ascending: false }),
-      supabase.from("channels").select("id, name, live_feed_id"),
+      supabase.from("channels").select("id, name, live_feed_id, category").order("name"),
     ]);
     setFeeds(f.data || []);
     setChannels(c.data || []);
@@ -67,240 +55,229 @@ export default function FeedsPanel({ showToast }) {
   }
   useEffect(() => { load(); }, []);
 
-  const channelFor = feedId => channels.find(c => c.live_feed_id === feedId);
+  const feed = feeds.find(f => f.id === selectedId) || null;
+  const channel = feed ? channels.find(c => c.live_feed_id === feed.id) : null;
+  const channelFor = id => channels.find(c => c.live_feed_id === id);
+  const steps = feedSteps(feed, channel);
+  const push = form.source_type === PUSH_SOURCE_TYPE;
 
-  function openAdd() { setForm(EMPTY_FEED); setEditingId(null); setClearPass(false); setFormOpen(true); }
-  function openEdit(feed) {
-    setForm({ ...EMPTY_FEED, ...feed, source_port: feed.source_port ?? "", passphrase: "" });
-    setEditingId(feed.id); setClearPass(false); setFormOpen(true);
+  function open(target) {
+    setError(""); setPushDetails(null); setCopied(false); setClearPass(false); setAttachId(""); setNewChannel({ name: "", category: "" });
+    if (target === "new") { setForm(EMPTY_FEED_FORM); setSelectedId("new"); return; }
+    setForm({ ...EMPTY_FEED_FORM, ...target, source_port: target.source_port ?? "", source_latency: target.source_latency ?? 200, passphrase: "" });
+    setSelectedId(target.id);
+  }
+  async function run(label, work) {
+    setBusy(true); setError("");
+    try { const result = await work(); if (label) showToast(label); await load(); return result; }
+    catch (e) { setError(e.message); showToast(e.message, "error"); return null; }
+    finally { setBusy(false); }
   }
 
-  async function save() {
-    if (!form.name.trim()) { showToast("Feed name is required", "error"); return; }
-    setSaving(true);
-    try {
-      await edgeCall("save-feed", { ...form, id: editingId || undefined, clear_passphrase: clearPass });
-      showToast(editingId ? "Feed updated" : "Feed created");
-      setFormOpen(false); await load();
-    } catch (e) { showToast("Save failed: " + e.message, "error"); }
-    setSaving(false);
+  async function saveSource() {
+    const problem = sourceProblem(form);
+    if (problem) { setError(problem); return; }
+    const result = await run(feed ? "Feed saved" : "Feed created", () =>
+      edgeCall("save-feed", { ...form, id: feed?.id, source_mode: "caller", clear_passphrase: clearPass }));
+    if (result?.id) { setSelectedId(result.id); setClearPass(false); setForm(f => ({ ...f, passphrase: "" })); }
   }
-
-  async function act(feed, fn, body, okMsg) {
-    setBusyId(feed.id);
-    try { await edgeCall(fn, body); if (okMsg) showToast(okMsg); await load(); }
-    catch (e) { showToast(e.message, "error"); }
-    setBusyId(null);
+  async function createInput() {
+    const created = await run("Cloudflare input created", () => edgeCall("cf-live-input", { action: "create", feed_id: feed.id }));
+    if (created && isPushFeed(feed)) await fetchPushDetails();
   }
-
-  async function testSource(feed) {
-    setBusyId(feed.id);
-    try {
-      const r = await edgeCall("relay-control", { action: "test", feed_id: feed.id });
-      if (r.status === "CONNECTED") {
-        showToast(`Connected · ${r.video || "?"} ${r.width || "?"}×${r.height || "?"}${r.fps ? " " + r.fps + "fps" : ""} · ${r.audio || "no audio"}${r.bitrate_kbps ? " · " + r.bitrate_kbps + "kbps" : ""}`);
-      } else {
-        showToast(`Test: ${r.status}${r.detail ? " — " + r.detail : ""}`, "error");
-      }
-      await load();
-    } catch (e) { showToast("Test failed: " + e.message, "error"); }
-    setBusyId(null);
-  }
-
-  // Fetched from Cloudflare each time; the panel never keeps the passphrase around.
-  async function showPushDetails(feed) {
-    setBusyId(feed.id);
-    try { const r = await edgeCall("cf-live-input", { action: "ingest", feed_id: feed.id }); setPushDetails({ feed, ...r }); setCopied(false); }
-    catch (e) { showToast(e.message, "error"); }
-    setBusyId(null);
+  async function fetchPushDetails() {
+    const r = await run(null, () => edgeCall("cf-live-input", { action: "ingest", feed_id: feed.id }));
+    if (r) { setPushDetails({ feedId: feed.id, ...r }); setCopied(false); }
   }
   async function copyPushDetails() {
-    const text = formatPushDetails({ feedName: pushDetails.feed.name, srt: pushDetails.srt, rtmps: pushDetails.rtmps });
+    const text = formatPushDetails({ feedName: feed.name, srt: pushDetails.srt, rtmps: pushDetails.rtmps });
     try { await navigator.clipboard.writeText(text); setCopied(true); showToast("Copied — paste it to the provider"); }
-    catch { showToast("Couldn't copy. Select the text and copy it by hand.", "error"); }
+    catch { showToast("Couldn't copy. Click a field and copy it by hand.", "error"); }
   }
-
-  async function refreshStatus(feed) {
-    setBusyId(feed.id);
-    try {
+  async function refreshStatus() {
+    await run("Status refreshed", async () => {
       await edgeCall("cf-live-input", { action: "status", feed_id: feed.id });
-      await edgeCall("relay-control", { action: "status", feed_id: feed.id }).catch(() => {});
-      showToast("Status refreshed"); await load();
-    } catch (e) { showToast(e.message, "error"); }
-    setBusyId(null);
+      if (!isPushFeed(feed)) await edgeCall("relay-control", { action: "status", feed_id: feed.id }).catch(() => {});
+    });
   }
-
+  async function testSource() {
+    await run(null, async () => {
+      const r = await edgeCall("relay-control", { action: "test", feed_id: feed.id });
+      if (r.status === "CONNECTED") showToast(`Connected · ${r.video || "?"} ${r.width || "?"}×${r.height || "?"}${r.fps ? " " + r.fps + "fps" : ""} · ${r.audio || "no audio"}`);
+      else throw new Error(`Test: ${r.status}${r.detail ? " — " + r.detail : ""}`);
+    });
+  }
   async function checkRelayServer() {
-    try {
+    await run(null, async () => {
       const h = await edgeCall("relay-control", { action: "health" });
-      showToast(`Relay ONLINE · FFmpeg ${h.ffmpeg ? "ok" : "missing"} · ${h.activeRelays} active · CPU ${h.cpuLoadPct}% · Mem ${h.memUsedPct}%`);
-    } catch (e) { showToast("Relay unreachable: " + e.message, "error"); }
+      showToast(`Relay online · FFmpeg ${h.ffmpeg ? "ok" : "missing"} · ${h.activeRelays} active · CPU ${h.cpuLoadPct}%`);
+    });
+  }
+  async function attachExisting() {
+    if (!attachId) { setError("Choose a channel to attach."); return; }
+    await run("Channel attached", async () => {
+      const { error } = await supabase.from("channels").update({ live_feed_id: feed.id }).eq("id", attachId);
+      if (error) throw error;
+    });
+  }
+  async function createChannel() {
+    const name = newChannel.name.trim();
+    if (!name) { setError("Give the channel a name."); return; }
+    await run(`Channel "${name}" created`, async () => {
+      const { error } = await supabase.from("channels").insert({ name, slug: slugify(name), category: newChannel.category.trim() || "general", live_feed_id: feed.id, is_active: true });
+      if (error) throw error;
+    });
+  }
+  async function detachChannel() {
+    await run("Channel detached", async () => {
+      const { error } = await supabase.from("channels").update({ live_feed_id: null }).eq("id", channel.id);
+      if (error) throw error;
+    });
+  }
+  async function deleteInput() {
+    if (!confirm("Remove this feed's Cloudflare input? The provider's push details stop working.")) return;
+    setPushDetails(null);
+    await run("Cloudflare input removed", () => edgeCall("cf-live-input", { action: "delete", feed_id: feed.id }));
+  }
+  async function deleteFeed() {
+    if (!confirm(`Delete feed "${feed.name}"? This also removes its Cloudflare input and detaches its channel.`)) return;
+    const ok = await run("Feed deleted", async () => {
+      await edgeCall("cf-live-input", { action: "delete", feed_id: feed.id }).catch(() => {});
+      if (channel) await supabase.from("channels").update({ live_feed_id: null }).eq("id", channel.id);
+      const { error } = await supabase.from("live_feeds").delete().eq("id", feed.id);
+      if (error) throw error;
+      return true;
+    });
+    if (ok) setSelectedId(null);
   }
 
-  async function del(feed) {
-    if (!confirm(`Delete feed "${feed.name}"? This also removes its Cloudflare Live Input.`)) return;
-    setBusyId(feed.id);
-    try {
-      await edgeCall("cf-live-input", { action: "delete", feed_id: feed.id });
-      await supabase.from("live_feeds").delete().eq("id", feed.id);
-      showToast("Feed deleted"); await load();
-    } catch (e) { showToast(e.message, "error"); }
-    setBusyId(null);
-  }
-
-  const btn = (bg, color, border) => ({ background: bg, border: `1px solid ${border}`, borderRadius: 7, padding: "7px 12px", color, fontSize: 12, fontWeight: 600, cursor: "pointer" });
-  const lbl = { display: "block", fontSize: 12, color: "#6b7280", marginBottom: 5, fontWeight: 600 };
-  const inp = { width: "100%", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "9px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" };
-
-  return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <div>
-          <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Live Feeds ({feeds.length})</h2>
-          <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Incoming live sources. A provider either <strong>pushes to Cloudflare</strong> (no relay needed) or the relay <strong>pulls</strong> it from them. Channels with a plain HLS link don't need a feed at all.</p>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={checkRelayServer} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 16px", color: "#374151", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Check relay server</button>
-          <button onClick={openAdd} style={{ background: "#ef4444", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add Feed</button>
-        </div>
+  if (selectedId === null) {
+    return <section className="feeds" aria-label="Live feeds">
+      <div className="feeds-header">
+        <div><h2>Live feeds</h2><p>A feed is how a provider's live video reaches Peep. If a provider gives you a plain HLS link, you don't need a feed at all; paste it into the channel under Channels &amp; schedules.</p></div>
+        <div className="feeds-header-actions"><button disabled={busy} onClick={checkRelayServer}>Check relay server</button><button className="feeds-primary" onClick={() => open("new")}>+ New feed</button></div>
       </div>
+      {loading ? <p className="feeds-muted">Loading…</p> : feeds.length === 0 ? (
+        <div className="feeds-empty"><h3>No feeds yet</h3><p>Create one when a provider wants to send you a live stream over SRT.</p><button className="feeds-primary" onClick={() => open("new")}>+ New feed</button></div>
+      ) : <div className="feeds-list">{feeds.map(f => {
+        const ch = channelFor(f.id);
+        return <div key={f.id} className="feeds-row">
+          <div><strong>{f.name}</strong><small>{arrivalLabel(f)}{!f.enabled ? " · disabled" : ""}</small></div>
+          <div><span className="feeds-label">CLOUDFLARE</span><Chip status={f.cloudflare_live_input_uid ? f.cloudflare_status : "none"} /></div>
+          <div><span className="feeds-label">PLAYBACK</span><Chip status={f.playback_status} /></div>
+          {!isPushFeed(f) ? <div><span className="feeds-label">RELAY</span><Chip status={f.relay_status} /></div> : <div />}
+          <div><span className="feeds-label">CHANNEL</span><span className={ch ? "" : "feeds-muted"}>{ch ? ch.name : "None"}</span></div>
+          <button onClick={() => open(f)}>Open</button>
+        </div>;
+      })}</div>}
+    </section>;
+  }
 
-      {loading ? (
-        <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>Loading…</div>
-      ) : feeds.length === 0 ? (
-        <div style={{ color: "#6b7280", padding: 40, textAlign: "center", border: "1px dashed #e2e8f0", borderRadius: 10 }}>No feeds yet. Add an SRT source above.</div>
-      ) : feeds.map(feed => {
-        const ch = channelFor(feed.id);
-        const busy = busyId === feed.id;
-        return (
-          <div key={feed.id} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 18px", marginBottom: 10 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-              <div style={{ flex: 1, minWidth: 200 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>{feed.name}</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: "#6366f1", textTransform: "uppercase", background: "#eef2ff", borderRadius: 4, padding: "1px 7px" }}>{feed.source_type}</span>
-                  {!feed.enabled && <span style={{ fontSize: 10, fontWeight: 700, color: "#888", background: "#f1f5f9", borderRadius: 4, padding: "1px 7px" }}>DISABLED</span>}
-                </div>
-                <p style={{ margin: 0, fontSize: 12, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {isPushFeed(feed) ? "Provider pushes to our Cloudflare input · no relay" : feed.source_host ? `srt://${feed.source_host}:${feed.source_port || "?"} · ${feed.source_mode}` : "No source configured"}
-                </p>
-              </div>
-              <div style={{ display: "flex", gap: 18, flexWrap: "wrap", fontSize: 11 }}>
-                {!isPushFeed(feed) && <div><div style={{ color: "#9ca3af", fontWeight: 600, marginBottom: 2 }}>SOURCE</div><Chip status={feed.source_status} /></div>}
-                {!isPushFeed(feed) && <div><div style={{ color: "#9ca3af", fontWeight: 600, marginBottom: 2 }}>RELAY</div><Chip status={feed.relay_status} /></div>}
-                <div><div style={{ color: "#9ca3af", fontWeight: 600, marginBottom: 2 }}>CLOUDFLARE</div><Chip status={feed.cloudflare_status} /></div>
-                <div><div style={{ color: "#9ca3af", fontWeight: 600, marginBottom: 2 }}>PLAYBACK</div><Chip status={feed.playback_status} /></div>
-                <div><div style={{ color: "#9ca3af", fontWeight: 600, marginBottom: 2 }}>CHANNEL</div><span style={{ fontSize: 11, fontWeight: 600, color: ch ? "#0f172a" : "#cbd5e1" }}>{ch ? ch.name : "None"}</span></div>
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-              {!isPushFeed(feed) && <button disabled={busy} onClick={() => testSource(feed)} style={btn("#f8fafc", "#374151", "#e2e8f0")}>{busy ? "…" : "Test Source"}</button>}
-              {!feed.cloudflare_live_input_uid ? (
-                <button disabled={busy} onClick={() => act(feed, "cf-live-input", { action: "create", feed_id: feed.id }, "Cloudflare input created")} style={btn("rgba(59,130,246,0.08)", "#2563eb", "rgba(59,130,246,0.25)")}>{busy ? "…" : "Create Cloudflare Input"}</button>
-              ) : isPushFeed(feed) ? (
-                <>
-                  <button disabled={busy} onClick={() => showPushDetails(feed)} style={btn("rgba(34,197,94,0.1)", "#15803d", "rgba(34,197,94,0.3)")}>{busy ? "…" : "Push details"}</button>
-                  <button disabled={busy} onClick={() => act(feed, "cf-live-input", { action: "status", feed_id: feed.id }, "Status refreshed")} style={btn("rgba(59,130,246,0.08)", "#2563eb", "rgba(59,130,246,0.25)")}>{busy ? "…" : "Refresh Status"}</button>
-                </>
-              ) : (
-                <>
-                  {feed.relay_status === "running"
-                    ? <button disabled={busy} onClick={() => act(feed, "relay-control", { action: "stop", feed_id: feed.id }, "Relay stopped")} style={btn("rgba(239,68,68,0.08)", "#dc2626", "rgba(239,68,68,0.25)")}>{busy ? "…" : "Stop"}</button>
-                    : <button disabled={busy} onClick={() => act(feed, "relay-control", { action: "start", feed_id: feed.id }, "Relay starting…")} style={btn("rgba(34,197,94,0.1)", "#15803d", "rgba(34,197,94,0.3)")}>{busy ? "…" : "Start"}</button>}
-                  <button disabled={busy} onClick={() => act(feed, "relay-control", { action: "restart", feed_id: feed.id }, "Relay restarting…")} style={btn("#f8fafc", "#374151", "#e2e8f0")}>Restart</button>
-                  <button disabled={busy} onClick={() => refreshStatus(feed)} style={btn("rgba(59,130,246,0.08)", "#2563eb", "rgba(59,130,246,0.25)")}>{busy ? "…" : "Refresh Status"}</button>
-                </>
-              )}
-              <button disabled={busy} onClick={() => openEdit(feed)} style={btn("#f1f5f9", "#374151", "#e2e8f0")}>Edit</button>
-              <button disabled={busy} onClick={() => del(feed)} style={btn("rgba(239,68,68,0.07)", "#dc2626", "rgba(239,68,68,0.2)")}>Delete</button>
-            </div>
-            {feed.cloudflare_hls_url && <p style={{ margin: "10px 0 0", fontSize: 11, color: "#9ca3af", wordBreak: "break-all" }}>HLS: {feed.cloudflare_hls_url}</p>}
-          </div>
-        );
-      })}
-
-      {/* Push details for a provider that is the SRT caller */}
-      {pushDetails && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={e => { if (e.target === e.currentTarget) setPushDetails(null); }}>
-          <div style={{ background: "#fff", borderRadius: 14, width: "100%", maxWidth: 640, maxHeight: "90vh", overflowY: "auto", padding: "24px 26px", boxShadow: "0 24px 64px rgba(0,0,0,0.25)" }}>
-            <h3 style={{ margin: "0 0 4px", fontSize: 17, fontWeight: 700, color: "#0f172a" }}>Push details · {pushDetails.feed.name}</h3>
-            <p style={{ margin: "0 0 16px", fontSize: 12, color: "#6b7280" }}>Send these to the provider. They connect as the SRT caller; nothing runs on our side until they do. Cloudflare state: <strong>{pushDetails.state || "unknown"}</strong>.</p>
-            {pushDetails.srt ? (
-              <div style={{ display: "grid", gap: 10, marginBottom: 16 }}>
-                {[["SRT address", pushDetails.srt.url], ["Stream ID", pushDetails.srt.streamId], ["Passphrase", pushDetails.srt.passphrase], ["Suggested latency", `${SUGGESTED_PUSH_LATENCY_MS} ms`]].map(([k, v]) => (
-                  <div key={k}><label style={lbl}>{k}</label><input readOnly value={v || ""} onFocus={e => e.target.select()} style={{ ...inp, fontFamily: "ui-monospace, monospace" }} /></div>
-                ))}
-              </div>
-            ) : <p style={{ color: "#b45309", fontSize: 13 }}>Cloudflare returned no SRT details for this input.</p>}
-            {pushDetails.rtmps && (
-              <details style={{ marginBottom: 16 }}><summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#374151" }}>RTMPS alternative</summary>
-                <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
-                  {[["Server", pushDetails.rtmps.url], ["Stream key", pushDetails.rtmps.streamKey]].map(([k, v]) => (
-                    <div key={k}><label style={lbl}>{k}</label><input readOnly value={v || ""} onFocus={e => e.target.select()} style={{ ...inp, fontFamily: "ui-monospace, monospace" }} /></div>
-                  ))}
-                </div>
-              </details>
-            )}
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={copyPushDetails} style={{ flex: 1, background: "#0f172a", border: "none", borderRadius: 8, padding: "12px", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>{copied ? "Copied ✓" : "Copy for provider"}</button>
-              <button onClick={() => setPushDetails(null)} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add / Edit form */}
-      {formOpen && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={e => { if (e.target === e.currentTarget) setFormOpen(false); }}>
-          <div style={{ background: "#fff", borderRadius: 14, width: "100%", maxWidth: 520, maxHeight: "90vh", overflowY: "auto", padding: "24px 26px", boxShadow: "0 24px 64px rgba(0,0,0,0.25)" }}>
-            <h3 style={{ margin: "0 0 4px", fontSize: 17, fontWeight: 700, color: "#0f172a" }}>{editingId ? "Edit Feed" : "Add Live Feed"}</h3>
-            <p style={{ margin: "0 0 18px", fontSize: 12, color: "#6b7280" }}>How does this provider's video reach us? Cloudflare (the destination) is created separately after saving.</p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <div><label style={lbl}>Feed name *</label><input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Provider Sports East" style={inp} /></div>
-              <div style={{ display: "grid", gap: 8 }}>
-                {[[PUSH_SOURCE_TYPE, "Provider pushes to Cloudflare", "They connect to us (they are the SRT caller). No relay, no open ports. Ask for this first."], [PULL_SOURCE_TYPE, "We pull it with the relay", "They give us a host, port and passphrase, or wait for us to connect. Needs the relay running."]].map(([value, title, hint]) => (
-                  <label key={value} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 12px", border: `1px solid ${form.source_type === value ? "#4f46e5" : "#e2e8f0"}`, borderRadius: 8, cursor: "pointer", background: form.source_type === value ? "#eef2ff" : "#fff" }}>
-                    <input type="radio" name="feed-arrival" checked={form.source_type === value} onChange={() => setForm(f => ({ ...f, source_type: value }))} style={{ marginTop: 3 }} />
-                    <span><strong style={{ fontSize: 13, color: "#0f172a" }}>{title}</strong><br /><span style={{ fontSize: 12, color: "#6b7280" }}>{hint}</span></span>
-                  </label>
-                ))}
-              </div>
-              {form.source_type !== PUSH_SOURCE_TYPE && <>
-              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}>
-                <div><label style={lbl}>Host / IP</label><input value={form.source_host} onChange={e => setForm(f => ({ ...f, source_host: e.target.value }))} placeholder="provider.example.com" style={inp} /></div>
-                <div><label style={lbl}>Port</label><input type="number" value={form.source_port} onChange={e => setForm(f => ({ ...f, source_port: e.target.value }))} placeholder="1234" style={inp} /></div>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <div><label style={lbl}>Mode</label>
-                  <select value={form.source_mode} onChange={e => setForm(f => ({ ...f, source_mode: e.target.value }))} style={{ ...inp, cursor: "pointer" }}>
-                    <option value="caller">caller</option><option value="listener">listener</option><option value="rendezvous">rendezvous</option>
-                  </select>
-                </div>
-                <div><label style={lbl}>Latency (ms)</label><input type="number" value={form.source_latency} onChange={e => setForm(f => ({ ...f, source_latency: e.target.value }))} placeholder="200" style={inp} /></div>
-              </div>
-              <div><label style={lbl}>Stream ID (optional)</label><input value={form.source_stream_id} onChange={e => setForm(f => ({ ...f, source_stream_id: e.target.value }))} placeholder="#!::r=example" style={inp} /></div>
-              <div>
-                <label style={lbl}>Passphrase (optional)</label>
-                <input type="password" value={form.passphrase} onChange={e => setForm(f => ({ ...f, passphrase: e.target.value }))} placeholder={editingId && form.has_passphrase ? "•••••••• CONFIGURED — leave blank to keep" : "AES passphrase"} style={inp} autoComplete="new-password" />
-                {editingId && form.has_passphrase && (
-                  <label style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 6, fontSize: 12, color: "#6b7280", cursor: "pointer" }}>
-                    <input type="checkbox" checked={clearPass} onChange={e => setClearPass(e.target.checked)} /> Remove saved passphrase
-                  </label>
-                )}
-              </div>
-              </>}
-              <div><label style={lbl}>Notes</label><input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Anything useful…" style={inp} /></div>
-              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                <input type="checkbox" checked={form.enabled} onChange={e => setForm(f => ({ ...f, enabled: e.target.checked }))} /> <span style={{ fontSize: 13, color: "#374151" }}>Enabled</span>
-              </label>
-              <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-                <button onClick={save} disabled={saving} style={{ flex: 1, background: "#ef4444", border: "none", borderRadius: 8, padding: "12px", color: "#fff", fontSize: 14, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1 }}>{saving ? "Saving…" : editingId ? "Save Feed" : "Create Feed"}</button>
-                <button onClick={() => setFormOpen(false)} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+  const sectionClass = key => `feeds-section${steps.find(s => s.key === key)?.current ? " current" : ""}`;
+  const attachable = channels.filter(c => !c.live_feed_id || c.live_feed_id === feed?.id);
+  return <section className="feeds" aria-label={feed ? `Feed ${feed.name}` : "New feed"}>
+    <button className="feeds-back" onClick={() => setSelectedId(null)}>← All feeds</button>
+    <div className="feeds-overview">
+      <div>
+        <span className="feeds-label">LIVE FEED</span>
+        <h2>{feed?.name || form.name || "New feed"}</h2>
+        <span className="feeds-badge">{arrivalLabel(feed || form)}</span>
+      </div>
+      {feed && <div className="feeds-overview-status">
+        <div><span className="feeds-label">CLOUDFLARE</span><Chip status={feed.cloudflare_live_input_uid ? feed.cloudflare_status : "none"} /></div>
+        <div><span className="feeds-label">PLAYBACK</span><Chip status={feed.playback_status} /></div>
+        {!isPushFeed(feed) && <div><span className="feeds-label">RELAY</span><Chip status={feed.relay_status} /></div>}
+        <div><span className="feeds-label">CHANNEL</span><span className={channel ? "" : "feeds-muted"}>{channel ? channel.name : "None"}</span></div>
+      </div>}
+      {feed && <div className="feeds-header-actions"><button disabled={busy} onClick={refreshStatus}>Refresh status</button><button className="feeds-danger" disabled={busy} onClick={deleteFeed}>Delete feed</button></div>}
     </div>
-  );
+    <ol className="feeds-steps" aria-label="Feed progress">{steps.map((s, i) => <li key={s.key} className={s.done ? "done" : s.current ? "current" : ""} aria-current={s.current ? "step" : undefined}><span>{s.done ? "✓" : i + 1}</span>{s.label}</li>)}</ol>
+    {error && <p role="alert" className="feeds-error">{error}</p>}
+
+    <div className={sectionClass("source")}>
+      <h3>1. Where the video comes from</h3>
+      <p>Ask the provider one question: can they send to us, or do we have to connect to them?</p>
+      <label>Feed name<input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Rally TV East" /></label>
+      <div className="feeds-arrival">{ARRIVALS.map(a => (
+        <label key={a.value} className={form.source_type === a.value ? "selected" : ""}>
+          <input type="radio" name="feed-arrival" checked={form.source_type === a.value} onChange={() => setForm(f => ({ ...f, source_type: a.value }))} />
+          <div><strong>{a.title}</strong><span>{a.hint}</span></div>
+        </label>))}
+      </div>
+      {!push && <>
+        <div className="feeds-fields">
+          <label>Host or IP they gave you<input value={form.source_host} onChange={e => setForm(f => ({ ...f, source_host: e.target.value }))} placeholder="srt.provider.com" /></label>
+          <label>Port<input type="number" value={form.source_port} onChange={e => setForm(f => ({ ...f, source_port: e.target.value }))} placeholder="9000" /></label>
+          <label>Latency (ms)<input type="number" value={form.source_latency} onChange={e => setForm(f => ({ ...f, source_latency: e.target.value }))} placeholder="200" /></label>
+          <label>Stream ID · if they gave one<input value={form.source_stream_id} onChange={e => setForm(f => ({ ...f, source_stream_id: e.target.value }))} placeholder="#!::r=example" /></label>
+          <label>Passphrase · if they gave one<input type="password" autoComplete="new-password" value={form.passphrase} onChange={e => setForm(f => ({ ...f, passphrase: e.target.value }))} placeholder={feed?.has_passphrase ? "Saved — leave blank to keep" : "AES passphrase"} /></label>
+        </div>
+        {feed?.has_passphrase && <label className="feeds-check" style={{ marginTop: 12 }}><input type="checkbox" checked={clearPass} onChange={e => setClearPass(e.target.checked)} /> Remove the saved passphrase</label>}
+        <p className="feeds-note">Our relay will connect to them as the caller. The relay must be online: use <em>Check relay server</em> on the feeds list.</p>
+      </>}
+      <div className="feeds-fields">
+        <label>Notes<input value={form.notes || ""} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Contact, contract dates, anything useful" /></label>
+        <label className="feeds-check" style={{ alignSelf: "end" }}><input type="checkbox" checked={form.enabled} onChange={e => setForm(f => ({ ...f, enabled: e.target.checked }))} /> Enabled</label>
+      </div>
+      <div className="feeds-actions"><button className="feeds-primary" disabled={busy} onClick={saveSource}>{busy ? "Saving…" : feed ? "Save changes" : "Create feed"}</button>{!feed && <span className="feeds-muted">Save first; the next steps unlock after that.</span>}</div>
+    </div>
+
+    {feed && <div className={sectionClass("cloudflare")}>
+      <h3>2. Cloudflare live input</h3>
+      <p>The place the video lands and gets turned into something every TV and browser can play. Recording stays off, so an idle channel costs nothing.</p>
+      {feed.cloudflare_live_input_uid ? <>
+        <p className="feeds-note ok">Input created. Playback link: <span className="feeds-link">{feed.cloudflare_hls_url}</span></p>
+        <div className="feeds-actions"><button disabled={busy} onClick={refreshStatus}>Refresh status</button><button className="feeds-danger" disabled={busy} onClick={deleteInput}>Remove input</button></div>
+      </> : <div className="feeds-actions"><button className="feeds-primary" disabled={busy} onClick={createInput}>{busy ? "…" : "Create Cloudflare input"}</button></div>}
+    </div>}
+
+    {feed && isPushFeed(feed) && <div className={sectionClass("provider")}>
+      <h3>3. Send these to the provider</h3>
+      <p>They connect as the caller with the details below. When their stream arrives, the status above turns LIVE.</p>
+      {!feed.cloudflare_live_input_uid ? <p className="feeds-note">Create the Cloudflare input first.</p> : pushDetails?.feedId === feed.id ? <>
+        {pushDetails.srt ? <div className="feeds-fields">
+          {[["SRT address", pushDetails.srt.url], ["Stream ID", pushDetails.srt.streamId], ["Passphrase", pushDetails.srt.passphrase], ["Suggested latency", `${SUGGESTED_PUSH_LATENCY_MS} ms`]].map(([k, v]) => (
+            <label key={k}>{k}<input readOnly value={v || ""} onFocus={e => e.target.select()} /></label>))}
+        </div> : <p className="feeds-note warn">Cloudflare returned no SRT details for this input.</p>}
+        {pushDetails.rtmps && <div className="feeds-fields">
+          <label>RTMPS server · alternative<input readOnly value={pushDetails.rtmps.url || ""} onFocus={e => e.target.select()} /></label>
+          <label>RTMPS stream key<input readOnly value={pushDetails.rtmps.streamKey || ""} onFocus={e => e.target.select()} /></label>
+        </div>}
+        <div className="feeds-actions"><button className="feeds-primary" onClick={copyPushDetails}>{copied ? "Copied ✓" : "Copy everything for the provider"}</button><button disabled={busy} onClick={fetchPushDetails}>Reload</button><span className="feeds-muted">Cloudflare state: {pushDetails.state || "unknown"}</span></div>
+      </> : <div className="feeds-actions"><button className="feeds-primary" disabled={busy} onClick={fetchPushDetails}>{busy ? "…" : "Show push details"}</button></div>}
+    </div>}
+
+    {feed && !isPushFeed(feed) && <div className={sectionClass("relay")}>
+      <h3>3. Relay</h3>
+      <p>Our relay connects to the provider and forwards the stream into the Cloudflare input.</p>
+      {!feed.cloudflare_live_input_uid ? <p className="feeds-note">Create the Cloudflare input first.</p> : <div className="feeds-actions">
+        <button disabled={busy} onClick={testSource}>Test connection to provider</button>
+        {feed.relay_status === "running"
+          ? <button className="feeds-danger" disabled={busy} onClick={() => run("Relay stopped", () => edgeCall("relay-control", { action: "stop", feed_id: feed.id }))}>Stop relay</button>
+          : <button className="feeds-primary" disabled={busy} onClick={() => run("Relay starting…", () => edgeCall("relay-control", { action: "start", feed_id: feed.id }))}>Start relay</button>}
+        <button disabled={busy} onClick={() => run("Relay restarting…", () => edgeCall("relay-control", { action: "restart", feed_id: feed.id }))}>Restart</button>
+        <button disabled={busy} onClick={checkRelayServer}>Check relay server</button>
+      </div>}
+    </div>}
+
+    {feed && <div className={sectionClass("channel")}>
+      <h3>4. Channel</h3>
+      <p>Viewers never see a feed, only a channel. Attach this feed to the channel that should play it.</p>
+      {channel ? <>
+        <p className="feeds-note ok">Playing on <strong>{channel.name}</strong>. Finish artwork, category and the guide under Channels &amp; schedules.</p>
+        <div className="feeds-actions"><button className="feeds-danger" disabled={busy} onClick={detachChannel}>Detach</button></div>
+      </> : <div className="feeds-fields">
+        <div>
+          <label>Attach an existing channel<select value={attachId} onChange={e => setAttachId(e.target.value)}><option value="">Choose a channel…</option>{attachable.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+          <div className="feeds-actions"><button disabled={busy || !attachId} onClick={attachExisting}>Attach</button></div>
+        </div>
+        <div>
+          <label>Or create a new channel<input value={newChannel.name} onChange={e => setNewChannel(c => ({ ...c, name: e.target.value }))} placeholder="Channel name as viewers see it" /></label>
+          <label style={{ marginTop: 10 }}>Category<input list="feeds-categories" value={newChannel.category} onChange={e => setNewChannel(c => ({ ...c, category: e.target.value }))} placeholder="sports" /></label>
+          <datalist id="feeds-categories">{[...new Set(channels.map(c => c.category).filter(Boolean))].map(c => <option key={c} value={c} />)}</datalist>
+          <div className="feeds-actions"><button className="feeds-primary" disabled={busy || !newChannel.name.trim()} onClick={createChannel}>Create channel &amp; attach</button></div>
+        </div>
+      </div>}
+    </div>}
+  </section>;
 }
