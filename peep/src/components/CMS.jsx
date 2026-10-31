@@ -154,8 +154,6 @@ export function CMS({ onExit, currentUser }) {
   const [toast, setToast] = useState(null);
   const [searchFilter, setSearchFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
-  const [livePasscodeEntered, setLivePasscodeEntered] = useState(() => sessionStorage.getItem("cms_live_unlocked") === "1");
-  const [livePasscodeInput, setLivePasscodeInput] = useState("");
   
   // Carousels state
   const [carousels, setCarousels] = useState([]);
@@ -3597,32 +3595,7 @@ export function CMS({ onExit, currentUser }) {
           </div>
         )}
         {/* ────── LIVE TAB ────── */}
-        {tab === "live" && !livePasscodeEntered && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 400 }}>
-            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "48px 40px", width: 360, textAlign: "center", boxShadow: "0 8px 32px rgba(0,0,0,0.08)" }}>
-              <div style={{ fontSize: 36, marginBottom: 16 }}>🔒</div>
-              <h2 style={{ margin: "0 0 6px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Live TV</h2>
-              <p style={{ margin: "0 0 24px", fontSize: 13, color: "#6b7280" }}>Enter the passcode to access Live settings</p>
-              <input
-                type="text"
-                inputMode="numeric"
-                autoComplete="off"
-                value={livePasscodeInput}
-                onChange={e => setLivePasscodeInput(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter") { if (livePasscodeInput === "1234") { setLivePasscodeEntered(true); sessionStorage.setItem("cms_live_unlocked", "1"); } else { setLivePasscodeInput(""); showToast("Incorrect passcode", "error"); } } }}
-                placeholder="····"
-                autoFocus
-                style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 14px", fontSize: 24, textAlign: "center", letterSpacing: 8, outline: "none", marginBottom: 12, boxSizing: "border-box" }}
-              />
-              <button
-                onClick={() => { if (livePasscodeInput === "1234") { setLivePasscodeEntered(true); sessionStorage.setItem("cms_live_unlocked", "1"); } else { setLivePasscodeInput(""); showToast("Incorrect passcode", "error"); } }}
-                style={{ width: "100%", background: "#0f172a", color: "#fff", border: "none", borderRadius: 8, padding: "12px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
-                Unlock
-              </button>
-            </div>
-          </div>
-        )}
-        {tab === "live" && livePasscodeEntered && (
+        {tab === "live" && (
           <div>
             {/* Sub-tab nav (retired — replaced by section nav) */}
             {false && (
@@ -5259,8 +5232,7 @@ export function CMS({ onExit, currentUser }) {
 
         {/* ────── THE BOSS TAB ────── */}
         {tab === "security" && (
-          <SecurityPanel showToast={showToast} saveSetting={saveSetting}
-            onBack={() => setCreatorsTab("list")} />
+          <SecurityPanel showToast={showToast} onBack={() => setCreatorsTab("list")} />
         )}
 
         {tab === "settings" && (
@@ -5270,10 +5242,8 @@ export function CMS({ onExit, currentUser }) {
               <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Platform controls and admin access.</p>
             </div>
 
-            {/* ── Admin Access (owner only) ── */}
-            {currentUser?.email?.toLowerCase() === "jacob.furlow@outlook.com" && (
-              <AdminAccessCard supabaseUrl={SUPABASE_URL} currentUser={currentUser} />
-            )}
+            {/* ── Admin Access: any admin can add or remove other admins ── */}
+            <AdminAccessCard supabaseUrl={SUPABASE_URL} currentUser={currentUser} />
 
             {/* ── Boss Goals + TODO ── */}
             {(() => {
@@ -5483,7 +5453,7 @@ export function CMS({ onExit, currentUser }) {
                 </div>
                 <div>
                   <p style={{ margin: "0 0 3px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Security</p>
-                  <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Login attempts, blocked users, lockout settings, active sessions</p>
+                  <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Blocked users and active sessions</p>
                 </div>
               </div>
               <span style={{ fontSize: 18, color: "#d1d5db" }}>→</span>
@@ -7794,7 +7764,7 @@ function AdminAccessCard({ supabaseUrl, currentUser }) {
   return (
     <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 28 }}>
       <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: "#0f172a" }}>Admin Access</p>
-      <p style={{ margin: "0 0 18px", fontSize: 13, color: "#9ca3af" }}>Promote or demote accounts. Only visible to you.</p>
+      <p style={{ margin: "0 0 18px", fontSize: 13, color: "#9ca3af" }}>Give another account admin access, or take it away. You can't change your own account.</p>
       <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
         <input style={{ ...inp, flex: 1 }} placeholder="Enter their email address" value={searchEmail}
           onChange={e => { setSearchEmail(e.target.value); setResult(null); setMsg(null); }}

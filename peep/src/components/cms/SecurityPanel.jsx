@@ -1,31 +1,24 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../../supabase";
 
-// Security tab: blocked accounts, admin lockout policy, failed logins and live
-// sessions. Owns all of it; the shell supplies toast, the shared app_settings
-// writer, and where "Back" goes.
-export default function SecurityPanel({ showToast, saveSetting, onBack }) {
-  const [loginAttempts, setLoginAttempts] = useState([]);
+// Security tab: blocked accounts and who is online. The shell supplies toast and
+// where "Back" goes. (The PIN lockout settings that used to live here went with
+// the PIN login; admin sign-in is email + password now.)
+export default function SecurityPanel({ showToast, onBack }) {
   const [blockedUsers, setBlockedUsers] = useState([]);
   const [blockEmail, setBlockEmail] = useState("");
   const [blockReason, setBlockReason] = useState("");
   const [blockLoading, setBlockLoading] = useState(false);
   const [activeSessions, setActiveSessions] = useState([]);
-  const [lockoutSettings, setLockoutSettings] = useState({ lockout_max_attempts: "5", lockout_duration_mins: "15" });
 
   // Mount-only: the panel is created when its tab opens, and Refresh re-runs it.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadSecurityData(); }, []);
 
-  async function loadLoginAttempts() {
-    const { data } = await supabase.from("admin_login_attempts").select("*").order("attempted_at", { ascending: false }).limit(50);
-    setLoginAttempts(data || []);
-  }
   async function loadSecurityData() {
-    const [{ data: blocked }, { data: sessions }, { data: settings }] = await Promise.all([
+    const [{ data: blocked }, { data: sessions }] = await Promise.all([
       supabase.from("blocked_users").select("*").order("blocked_at", { ascending: false }),
       supabase.from("user_presence").select("user_id, last_seen, current_page").order("last_seen", { ascending: false }).limit(20),
-      supabase.from("app_settings").select("key, value").in("key", ["lockout_max_attempts", "lockout_duration_mins"]),
     ]);
     setBlockedUsers(blocked || []);
 
@@ -43,11 +36,6 @@ export default function SecurityPanel({ showToast, saveSetting, onBack }) {
     } else {
       setActiveSessions([]);
     }
-
-    const s = {};
-    (settings || []).forEach(r => { s[r.key] = r.value; });
-    if (Object.keys(s).length) setLockoutSettings(prev => ({ ...prev, ...s }));
-    loadLoginAttempts();
   }
   async function blockUser() {
     if (!blockEmail.trim()) return;
@@ -73,68 +61,11 @@ export default function SecurityPanel({ showToast, saveSetting, onBack }) {
         </button>
         <div>
           <h2 style={{ margin: "0 0 2px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Security</h2>
-          <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>Access control, blocked accounts, session monitoring</p>
+          <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>Blocked accounts and who is online right now</p>
         </div>
         <button onClick={loadSecurityData} style={{ marginLeft: "auto", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: 7, padding: "8px 16px", color: "#ef4444", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
           Refresh
         </button>
-      </div>
-
-      {/* Lockout Settings */}
-      <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
-        <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Admin Lockout</p>
-        <p style={{ margin: "0 0 18px", fontSize: 13, color: "#9ca3af" }}>Lock the admin login after too many wrong PINs.</p>
-        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-          <div>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Max Attempts</label>
-            <input type="number" min="1" max="20"
-              value={lockoutSettings.lockout_max_attempts}
-              onChange={e => setLockoutSettings(p => ({ ...p, lockout_max_attempts: e.target.value }))}
-              onBlur={e => saveSetting("lockout_max_attempts", e.target.value)}
-              style={{ width: 80, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 14, color: "#0f172a", outline: "none", textAlign: "center" }} />
-          </div>
-          <div>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Lockout Duration (mins)</label>
-            <input type="number" min="1" max="1440"
-              value={lockoutSettings.lockout_duration_mins}
-              onChange={e => setLockoutSettings(p => ({ ...p, lockout_duration_mins: e.target.value }))}
-              onBlur={e => saveSetting("lockout_duration_mins", e.target.value)}
-              style={{ width: 100, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", fontSize: 14, color: "#0f172a", outline: "none", textAlign: "center" }} />
-          </div>
-        </div>
-      </div>
-
-      {/* Failed Login Attempts */}
-      <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-          <div>
-            <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Failed Login Attempts</p>
-            <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Wrong PINs entered on the admin login screen.</p>
-          </div>
-          {loginAttempts.length > 0 && (
-            <button onClick={async () => { await supabase.from("admin_login_attempts").delete().neq("id", "00000000-0000-0000-0000-000000000000"); loadLoginAttempts(); showToast("Cleared"); }}
-              style={{ background: "none", border: "none", fontSize: 12, color: "#9ca3af", cursor: "pointer", textDecoration: "underline" }}>Clear all</button>
-          )}
-        </div>
-        {loginAttempts.length === 0 ? (
-          <p style={{ margin: 0, fontSize: 13, color: "#9ca3af", textAlign: "center", padding: "16px 0" }}>No failed attempts — all clear</p>
-        ) : (
-          <div style={{ borderRadius: 10, overflow: "hidden", border: "1px solid #f1f5f9" }}>
-            {loginAttempts.map((a, i) => {
-              const date = new Date(a.attempted_at);
-              const masked = a.pin_entered ? a.pin_entered.slice(0, 1) + "*".repeat(Math.max(0, a.pin_entered.length - 1)) : "?";
-              return (
-                <div key={a.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 16px", background: i % 2 === 0 ? "#fafafa" : "#fff", borderBottom: i < loginAttempts.length - 1 ? "1px solid #f1f5f9" : "none" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ fontSize: 16 }}>🚨</span>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: "#0f172a" }}>Tried <code style={{ background: "rgba(239,68,68,0.08)", color: "#dc2626", padding: "1px 6px", borderRadius: 4, letterSpacing: "0.1em" }}>{masked}</code></span>
-                  </div>
-                  <span style={{ fontSize: 11, color: "#9ca3af" }}>{date.toLocaleDateString()} {date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
       </div>
 
       {/* Block User */}

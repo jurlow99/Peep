@@ -294,7 +294,7 @@ const TABS = [
   { id: "preferences", label: "Preferences", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3v1m0 16v1M3 12h1m16 0h1M5.6 5.6l.7.7m11.4-.7-.7.7M5.6 18.4l.7-.7m11.4.7-.7-.7"/><circle cx="12" cy="12" r="4"/></svg> },
 ];
 
-export function SettingsPage({ user, isOwner, isStreamer = false, onApplyToStream, onBack, onGoHome, onProfileUpdate, onSignOut }) {
+export function SettingsPage({ user, isAdmin, isStreamer = false, onApplyToStream, onBack, onGoHome, onProfileUpdate, onSignOut }) {
   const [activeTab, setActiveTab] = useState("profile");
   const isMobile = typeof window !== "undefined" && window.innerWidth < 700;
 
@@ -358,7 +358,7 @@ export function SettingsPage({ user, isOwner, isStreamer = false, onApplyToStrea
           )}
 
           {/* Admin shortcut */}
-          {isOwner && (
+          {isAdmin && (
             <div style={{ marginTop: 32, padding: "14px 18px", background: "rgba(250,204,21,0.04)", border: "1px solid rgba(250,204,21,0.12)", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div>
                 <p style={{ margin: "0 0 2px", fontSize: 14, fontWeight: 600, color: "#e0e0e0" }}>Admin Dashboard</p>

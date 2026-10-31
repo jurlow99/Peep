@@ -18,7 +18,7 @@ import { useAuth } from "./hooks/useAuth";
 import { useMyList } from "./hooks/useMyList";
 import { useSubscription, hasActiveSubscription } from "./hooks/useSubscription";
 import { PaywallPage } from "./pages/PaywallPage";
-import { isOwnerEmail } from "./lib/auth";
+import { isAdminRole } from "./lib/auth";
 import { PAD, CARD_W, SAFE_TOP } from "./lib/theme";
 import { useAppNavigation } from "./app/useAppNavigation";
 import { useIsMobile } from "./hooks/useIsMobile";
@@ -95,7 +95,9 @@ export default function App() {
   } = useAuth();
   const { myList, toggleList } = useMyList(user?.id, () => setAuthOpen(true));
   const { subscription } = useSubscription(user?.id);
-  const isPremiumUser = hasActiveSubscription(subscription, isOwnerEmail(user?.email));
+  // Admins see everything; nobody gets a bypass by email address.
+  const isAdmin = isAdminRole(userRole);
+  const isPremiumUser = hasActiveSubscription(subscription, isAdmin);
   const [paywallOpen, setPaywallOpen] = useState(false);
   const isLocked = (item) => !!item?.is_premium && !isPremiumUser;
   const openGate = (item) => { if (!user) setAuthOpen(true); else setPaywallOpen(true); };
@@ -297,7 +299,7 @@ export default function App() {
         {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
         <SettingsPage
           user={user}
-          isOwner={isOwnerEmail(user?.email)}
+          isAdmin={isAdmin}
           isStreamer={!!streamRecord}
           onApplyToStream={() => setPage("studio")}
           onBack={() => setPage("home")}

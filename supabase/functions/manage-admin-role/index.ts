@@ -1,19 +1,15 @@
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { getServiceClient, requireUser } from "../_shared/supabase.ts";
+import { getServiceClient, requireAdmin } from "../_shared/supabase.ts";
 
-const OWNER_EMAIL = "jacob.furlow@outlook.com";
-
+// Any admin can promote or demote another account. Nobody can change their own
+// role here, so an admin can't lock themselves out by accident.
 Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
 
   try {
     const supabase = getServiceClient();
-    const user = await requireUser(req, supabase);
-
-    if (user.email?.toLowerCase() !== OWNER_EMAIL.toLowerCase()) {
-      throw new Error("Only the owner can manage admin roles");
-    }
+    const actor = await requireAdmin(req, supabase);
 
     const { targetEmail, action } = await req.json();
     if (!targetEmail?.trim()) throw new Error("targetEmail is required");
@@ -30,7 +26,7 @@ Deno.serve(async (req) => {
 
     if (findErr) throw new Error(findErr.message);
     if (!profile) throw new Error(`No account found for ${targetEmail}`);
-    if (profile.email === OWNER_EMAIL.toLowerCase()) throw new Error("Cannot change owner role");
+    if (profile.id === actor.id) throw new Error("You can't change your own admin access");
 
     const { error: updateErr } = await supabase
       .from("profiles")

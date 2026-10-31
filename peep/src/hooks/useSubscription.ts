@@ -49,8 +49,8 @@ export function useSubscription(userId: string | undefined) {
 
 export function hasActiveSubscription(
   subscription: SubscriptionRow | null,
-  isOwner: boolean
+  isAdmin: boolean
 ): boolean {
-  if (isOwner) return true;
+  if (isAdmin) return true;
   return subscription?.status === "active";
 }

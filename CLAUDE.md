@@ -250,9 +250,12 @@ payouts) · **Reports** (Live TV viewing, Platform analytics) · **Platform** (S
 Security, Flags, Audit, Planned tools). Tab state is not in the URL. Movies are still
 keyed `videoSubTab === "shorts"` internally (legacy naming).
 
-Weak spots to fix before launch: the Live TV tab's `"1234"` client-side passcode
-(`CMS.jsx` ~3600); Admin Access card gated on a hardcoded owner email; Security panel's
-PIN/lockout UI is dead; `grant-access` wired in two places; "Planned tools" (Regions &
+Cleaned up 2026-10-31: the Live TV passcode is gone; the Settings → Admin Access card
+shows for every admin and `manage-admin-role` uses `requireAdmin` (you can't change
+your own role); no owner email is hardcoded anywhere — admins get premium content by
+role; Security panel is just Block user + Active sessions (`blocked_users` has a
+`self_read` policy, `db/features/blocked_users_self_read.sql`, so blocking works).
+Still open: `grant-access` wired in two places; "Planned tools" (Regions &
 packages, Resources, Devices) are placeholders.
 
 **Carousels:** `filter_value` is JSON for handpicked rows (`[{id,type}]`); the handpick
