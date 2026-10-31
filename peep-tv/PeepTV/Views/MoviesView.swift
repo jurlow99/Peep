@@ -95,6 +95,7 @@ struct MyListView: View {
     @State private var shows: [Show] = []
     @State private var channels: [Channel] = []
     @State private var feeds: [PublicFeed] = []
+    @State private var guide: [GuideEntry] = []
     @State private var filter = "All"
     @State private var loading = true
     @State private var error: String?
@@ -180,7 +181,7 @@ struct MyListView: View {
         .fullScreenCover(isPresented: Binding(get: { live != nil }, set: { if !$0 { live = nil } })) {
             if let channel = live, let url = channel.playbackURL(streamHost: supabase.configuration?.streamHost ?? "", feeds: feeds) {
                 LiveSurfView(channels: channels, initial: channel, url: url, feeds: feeds,
-                             streamHost: supabase.configuration?.streamHost ?? "", guide: [], onClose: { live = nil })
+                             streamHost: supabase.configuration?.streamHost ?? "", guide: guide, onClose: { live = nil })
             }
         }
         .alert("Currently unavailable", isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) {
@@ -204,10 +205,12 @@ struct MyListView: View {
             async let s = supabase.fetchShows()
             async let c = supabase.fetchChannels()
             async let f = supabase.fetchFeeds()
+            async let g = supabase.fetchGuide()
             try await supabase.refreshSavedList()
             let catalog = try await (v, s, c, f)
             guard !Task.isCancelled, userID == supabase.session?.userId else { return }
             (videos, shows, channels, feeds) = catalog
+            guide = (try? await g) ?? []
         } catch { if userID == supabase.session?.userId { self.error = error.localizedDescription } }
     }
 }

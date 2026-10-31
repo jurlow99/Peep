@@ -116,13 +116,16 @@ struct GuideEntry: Identifiable, Decodable {
     let title: String?
     let start_time: String?
     let end_time: String?
+    // Parsed on every guide card refresh, so the formatters are built once.
+    private static let fractionalFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter(); formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return formatter
+    }()
+    private static let plainFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter(); formatter.formatOptions = [.withInternetDateTime]; return formatter
+    }()
     static func date(_ text: String?) -> Date? {
         guard let text else { return nil }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: text) { return date }
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: text)
+        return fractionalFormatter.date(from: text) ?? plainFormatter.date(from: text)
     }
     func isOnAir(at date: Date) -> Bool {
         guard let start = Self.date(start_time), let end = Self.date(end_time) else { return false }
@@ -540,5 +543,19 @@ enum UpNextTiming {
     static func transitionTime(duration: Double) -> Double? {
         guard duration.isFinite, duration >= 60 else { return nil }
         return duration - min(30, duration * 0.1)
+    }
+}
+
+/// Up/Down channel surfing: the next playable channel in the visible order, wrapping around.
+enum LiveSurf {
+    static func neighbor(of id: Int, in channels: [Channel], step: Int, playable: (Channel) -> Bool) -> Channel? {
+        guard !channels.isEmpty, step != 0 else { return nil }
+        let start = channels.firstIndex { $0.id == id } ?? (step > 0 ? channels.count - 1 : 0)
+        for offset in 1...channels.count {
+            let index = ((start + offset * step) % channels.count + channels.count) % channels.count
+            let candidate = channels[index]
+            if candidate.id != id, playable(candidate) { return candidate }
+        }
+        return nil
     }
 }

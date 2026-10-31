@@ -1027,6 +1027,18 @@ final class CatalogTests: XCTestCase {
         XCTAssertNil(SeriesPlayback.nextUp(in: [unreleased], progress: [:]))
     }
 
+    func testChannelSurfingWrapsAndSkipsUnplayableChannels() throws {
+        let a = try decode(Channel.self, #"{"id":1,"name":"A","hls_url":"https://s.example.com/a.m3u8"}"#)
+        let b = try decode(Channel.self, #"{"id":2,"name":"B"}"#)
+        let c = try decode(Channel.self, #"{"id":3,"name":"C","hls_url":"https://s.example.com/c.m3u8"}"#)
+        let playable: (Channel) -> Bool = { $0.playbackURL(streamHost: "", feeds: []) != nil }
+        XCTAssertEqual(LiveSurf.neighbor(of: 1, in: [a, b, c], step: 1, playable: playable)?.id, 3)   // skips the channel with no stream
+        XCTAssertEqual(LiveSurf.neighbor(of: 3, in: [a, b, c], step: 1, playable: playable)?.id, 1)   // wraps around
+        XCTAssertEqual(LiveSurf.neighbor(of: 1, in: [a, b, c], step: -1, playable: playable)?.id, 3)
+        XCTAssertEqual(LiveSurf.neighbor(of: 9, in: [a, b, c], step: 1, playable: playable)?.id, 1)   // current channel filtered out of the list
+        XCTAssertNil(LiveSurf.neighbor(of: 1, in: [a, b], step: 1, playable: playable))
+    }
+
     func testUpNextProposalLeadsByThirtySecondsAndSkipsShortOrUnknownItems() {
         XCTAssertNil(UpNextTiming.transitionTime(duration: .nan))
         XCTAssertNil(UpNextTiming.transitionTime(duration: 45))

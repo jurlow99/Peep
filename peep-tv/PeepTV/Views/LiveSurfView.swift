@@ -29,6 +29,9 @@ struct LiveSurfView: View {
     @State private var selectedID: Int
     @State private var guide: [GuideEntry]
     @State private var showHint = true
+    @State private var hintVersion = 0
+    @State private var previousID: Int?
+    @State private var guideRefreshedAt: Date
     @State private var drawerOpen = false
     @State private var controlsOpen = false
     @State private var searchOpen = false
@@ -53,6 +56,7 @@ struct LiveSurfView: View {
         self.streamHost = streamHost
         _selectedID = State(initialValue: initial.id)
         _guide = State(initialValue: guide)
+        _guideRefreshedAt = State(initialValue: guide.isEmpty ? .distantPast : Date())
         _player = StateObject(wrappedValue: sharedPlayer ?? PlayerModel(url: url, title: initial.name))
     }
     private var selected: Channel? { channels.first { $0.id == selectedID } }
@@ -83,7 +87,14 @@ struct LiveSurfView: View {
                 Button { if player.blackoutMessage == nil { controlsOpen = true } else { revealDrawer() } } label: { Color.clear.contentShape(Rectangle()) }
                     .buttonStyle(VideoSurfaceButtonStyle()).focused($focus, equals: "video")
                     .accessibilityLabel("\(selected?.name ?? "Live TV"). Select for playback controls. Swipe right for channels.")
-                    .onRemoteMove { direction in if direction == .right { revealDrawer() } }
+                    .onRemoteMove { direction in
+                        switch direction {
+                        case .right: revealDrawer()
+                        case .up: surf(-1)
+                        case .down: surf(1)
+                        default: break
+                        }
+                    }
                     .onPlayPauseCommand { if player.player.rate == 0 { player.play() } else { player.player.pause() } }
             }
             if let message = player.blackoutMessage, !drawerOpen {
@@ -100,10 +111,20 @@ struct LiveSurfView: View {
             if showHint && !drawerOpen && !controlsOpen && !adGate.blocking {
                 VStack {
                     Spacer()
-                    HStack {
-                        Text(selected?.name ?? "Live TV").font(.system(size: 26, weight: .semibold))
+                    HStack(alignment: .bottom) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(selected?.name ?? "Live TV").font(.system(size: 26, weight: .semibold))
+                            let programs = ChannelPrograms(entries: guide, channelID: selectedID, now: Date())
+                            if let current = programs.current {
+                                Text("Now · \(current.title ?? "Program information unavailable")").foregroundStyle(Color(white: 0.8)).lineLimit(1)
+                            }
+                            if let next = programs.next {
+                                Text("Next · \(next.title ?? "Schedule unavailable")").foregroundStyle(.secondary).lineLimit(1)
+                            }
+                        }
                         Spacer()
-                        Label("Swipe right for channels", systemImage: "arrow.right")
+                        Label("Right for channels", systemImage: "arrow.right")
+                        Label("Up/Down to surf", systemImage: "arrow.up.arrow.down")
                         Text("· Select for controls")
                     }.font(.system(size: 20)).padding(28)
                         .background(LinearGradient(colors: [.clear, .black.opacity(0.85)], startPoint: .top, endPoint: .bottom))
@@ -150,9 +171,11 @@ struct LiveSurfView: View {
                 if let value = try? await nextFeeds { feeds = value }
                 if let value = try? await nextPackages { packages = value }
                 if let value = try? await nextRows { rows = value }
+                // Now/Next drifts without this; the guide window is only six hours deep.
+                if Date().timeIntervalSince(guideRefreshedAt) > 300, let value = try? await supabase.fetchGuide() { guide = value; guideRefreshedAt = Date() }
             }
         }
-        .task {
+        .task(id: hintVersion) {
             do { try await Task.sleep(for: .seconds(6)) } catch { return }
             showHint = false
         }
@@ -170,6 +193,11 @@ struct LiveSurfView: View {
                 Button("Close", systemImage: "xmark") { dismissDrawer() }.labelStyle(.iconOnly).buttonStyle(BrowseCardStyle())
             }
             Text("Playing · \(selected?.name ?? "Live TV")").font(.system(size: 23)).foregroundStyle(.secondary).lineLimit(1)
+            if let previousID, let previous = channels.first(where: { $0.id == previousID }), previous.playbackURL(streamHost: streamHost, feeds: feeds) != nil {
+                Button { tune(previous) } label: {
+                    Label("Back to \(previous.name)", systemImage: "arrow.uturn.backward").font(.system(size: 21, weight: .semibold)).padding(14)
+                }.buttonStyle(BrowseCardStyle()).focused($focus, equals: "previous")
+            }
             HStack(spacing: 12) {
                 FilterChip(label: "Channels", isSelected: !showingMultiview && !searchOpen) { showingMultiview = false; searchOpen = false; searchText = ""; focusChannel() }
                     .focused($focus, equals: "channels")
@@ -213,13 +241,17 @@ struct LiveSurfView: View {
                         } else {
                             if visible.isEmpty { Text("No channels match your search.").foregroundStyle(.secondary).padding(20) }
                             ForEach(visible) { channel in
+                                let programs = ChannelPrograms(entries: guide, channelID: channel.id, now: Date())
                                 Button { tune(channel) } label: {
                                     HStack(spacing: 16) {
                                         BoundedArtwork(url: channel.thumbURL, symbol: "tv").frame(width: 100, height: 60).clipShape(RoundedRectangle(cornerRadius: 8))
                                         VStack(alignment: .leading, spacing: 6) {
                                             Text(channel.name).font(.system(size: 27, weight: .semibold, design: .rounded)).lineLimit(2)
-                                            Text(channel.id == selectedID ? "Watching now" : BrowsePresentation.category(channel.category) ?? "Live channel")
-                                                .font(.system(size: 21)).foregroundStyle(channel.id == selectedID ? ContentAppearance.accent : .secondary)
+                                            Text(channel.id == selectedID ? "Watching now" : programs.current?.title.map { "Now · \($0)" } ?? BrowsePresentation.category(channel.category) ?? "Live channel")
+                                                .font(.system(size: 21)).foregroundStyle(channel.id == selectedID ? ContentAppearance.accent : .secondary).lineLimit(1)
+                                            if let next = programs.next?.title {
+                                                Text("Next · \(next)").font(.system(size: 18)).foregroundStyle(.secondary).lineLimit(1)
+                                            }
                                         }
                                         Spacer(minLength: 0)
                                     }.frame(maxWidth: .infinity, minHeight: 70, alignment: .leading).padding(16)
@@ -266,13 +298,21 @@ struct LiveSurfView: View {
     private func tune(_ channel: Channel) {
         guard let url = channel.playbackURL(streamHost: streamHost, feeds: feeds) else { return }
         if selectedID != channel.id {
+            previousID = selectedID
             selectedID = channel.id
+            showHint = true; hintVersion += 1
             onTune(channel, url)
             player.applyBlackout(channel.blackoutMessage())
             player.tune(url: url, title: channel.name)
             player.startIfEnabled()
         }
         dismissDrawer()
+    }
+    /// Up/Down on the video surface steps through the drawer's current channel order.
+    private func surf(_ step: Int) {
+        guard !drawerOpen, !controlsOpen, !adGate.blocking,
+              let channel = LiveSurf.neighbor(of: selectedID, in: visible, step: step, playable: { $0.playbackURL(streamHost: streamHost, feeds: feeds) != nil }) else { return }
+        tune(channel)
     }
     private func exitPlayback() {
         let now = ProcessInfo.processInfo.systemUptime

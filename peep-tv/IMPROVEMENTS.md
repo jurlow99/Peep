@@ -21,14 +21,14 @@ by reading the code and should be reproduced before fixing.
    its last frame. Show Up Next during the credits (`contentProposalViewController` or a
    timed overlay) and show related titles after a movie. Also align autoplay with web:
    TV treats a null `autoplay_next` as on (`PlayerView.swift:326`), web requires `true`. **M**
-4. **Series Resume and Continue Watching are weak.** `firstPlayable` only looks in the
+4. ~~**Series Resume and Continue Watching are weak.**~~ **Done 2026-10-31**: `SeriesPlayback.nextUp` picks the furthest unfinished episode across all seasons, the page opens on that season, Continue Watching shows on Home without a configured row, and the progress query filters `completed=eq.false`. Original note: `firstPlayable` only looks in the
    selected (first) season (`SeriesView.swift:55-66, 146`); Continue Watching only exists
    if an admin made a "continue" carousel (`HomeView.swift:76-85`); progress fetch pulls
    completed rows too (`SupabaseService.swift:366`, add `completed=eq.false`). **S–M**
-5. **No channel surfing.** Up/Down on the video surface does nothing; only Right is
+5. ~~**No channel surfing.**~~ **Done 2026-10-31**: Up/Down on the video surface tunes the previous/next playable channel (`LiveSurf.neighbor`), the overlay and drawer show Now/Next, and the drawer offers "Back to <last channel>". My List now passes the guide through. Original note: Up/Down on the video surface does nothing; only Right is
    handled (`LiveSurfView.swift:86`); the drawer shows no Now/Next; `ChannelPrograms` is
    never used; My List opens channels with an empty guide (`MoviesView.swift:185`). **M**
-6. **Guide goes stale.** The EPG is a 6-hour window fetched once per catalog load
+6. ~~**Guide goes stale.**~~ **Done 2026-10-31** (refresh every 5 min on Live TV and in the player; a failed refresh keeps the last guide; date formatters are static). A time-grid guide remains open. Original note: The EPG is a 6-hour window fetched once per catalog load
    (`SupabaseService.swift:499-503`, `StreamsView.swift:240`); the 15 s refresh loop never
    reloads it, errors silently clear it. Refresh every 5–10 min; consider a time grid. **M**
 7. **Podcasts are second-class.** Audio plays in the video player on black with no

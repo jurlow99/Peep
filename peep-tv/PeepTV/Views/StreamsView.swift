@@ -18,6 +18,7 @@ struct StreamsView: View {
     @State private var packages: [MultiviewPackage] = []
     @State private var rows: [Carousel] = []
     @State private var guide: [GuideEntry] = []
+    @State private var guideRefreshedAt = Date.distantPast
     @State private var feeds: [PublicFeed] = []
     @State private var selected: ChannelPlayback?
     let isActive: Bool
@@ -133,6 +134,7 @@ struct StreamsView: View {
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(15)) } catch { return }
                 await refreshCuration()
+                if Date().timeIntervalSince(guideRefreshedAt) > 300 { await refreshGuide() }
             }
         }
         .onChange(of: focus) { _, target in
@@ -241,10 +243,9 @@ struct StreamsView: View {
         } catch { errorMessage = error.localizedDescription }
     }
 
+    // A failed refresh keeps the last guide rather than blanking every card.
     private func refreshGuide() async {
-        do {
-            guide = try await supabase.fetchGuide()
-        } catch { guide = [] }
+        if let value = try? await supabase.fetchGuide() { guide = value; guideRefreshedAt = Date() }
     }
     private func refreshCuration() async {
         async let nextPackages = supabase.fetchMultiviewPackages()
