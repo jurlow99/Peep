@@ -57,7 +57,7 @@ struct LiveSurfView: View {
         _selectedID = State(initialValue: initial.id)
         _guide = State(initialValue: guide)
         _guideRefreshedAt = State(initialValue: guide.isEmpty ? .distantPast : Date())
-        _player = StateObject(wrappedValue: sharedPlayer ?? PlayerModel(url: url, title: initial.name))
+        _player = StateObject(wrappedValue: sharedPlayer ?? PlayerModel(url: url, title: initial.name, live: true))
     }
     private var selected: Channel? { channels.first { $0.id == selectedID } }
     private var categories: [String] { Array(Set(channels.flatMap { BrowsePresentation.categories($0.category) })).sorted() }

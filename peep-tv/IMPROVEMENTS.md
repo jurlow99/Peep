@@ -50,7 +50,7 @@ by reading the code and should be reproduced before fixing.
     app blocks. **S**
 11. ~~Done 2026-10-31 (one renewal + retry in `get`).~~ Catalog reads don't retry after a 401; only `sendPlayback` does
     (`SupabaseService.swift:146-221`). **S**
-12. Single-channel live playback doesn't auto-reconnect; Multiview already has stall
+12. ~~Done 2026-10-31 (two quiet retunes on failure or a 15 s stall, budget resets after 20 s of healthy playback).~~ Single-channel live playback doesn't auto-reconnect; Multiview already has stall
     detection to reuse (`PlayerView.swift:168-175`, `MultiviewView.swift:226-258`). **M**
 13. *Partly done 2026-10-31: podcasts and channels are searchable, descriptions only match terms of 3+ letters, and the spinner no longer flashes.* Search is a substring match over titles *and descriptions* for movies/series only,
     re-normalised on every keystroke (`SearchView.swift:15-23`, `Models.swift:475`).

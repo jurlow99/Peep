@@ -117,12 +117,52 @@ final class PlayerModel: ObservableObject {
     private let preferences: PlaybackPreferences
     @Published var subtitleNotice: String?
     var metadata: PlaybackMetadata?
+    /// Live channels retune themselves after a failure or a long stall, like Multiview tiles.
+    let live: Bool
+    private var recoveryAttempts = 0
+    private var stallWatch: Task<Void, Never>?
 
-    init(url: URL, title: String, metadata: PlaybackMetadata? = nil, preferences: PlaybackPreferences? = nil) {
+    init(url: URL, title: String, metadata: PlaybackMetadata? = nil, live: Bool = false, preferences: PlaybackPreferences? = nil) {
         self.preferences = preferences ?? .shared
         self.metadata = metadata
+        self.live = live
         player = AVPlayer()
         tune(url: url, title: title)
+    }
+
+    /// Two quiet retunes before the viewer sees an error; a healthy stretch resets the budget.
+    private func recover(from item: AVPlayerItem, reason: String) -> Bool {
+        guard live, player.currentItem === item, blackoutMessage == nil, recoveryAttempts < 2, let currentURL else { return false }
+        recoveryAttempts += 1
+        subtitleNotice = "Reconnecting…"
+        let title = currentTitle
+        Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(2)) } catch { return }
+            guard let self, self.player.currentItem === item else { return }
+            self.tune(url: currentURL, title: title)
+            self.startIfEnabled()
+        }
+        return true
+    }
+    private func watchForStalls(_ item: AVPlayerItem) {
+        stallWatch?.cancel()
+        guard live else { return }
+        stallWatch = Task { [weak self] in
+            var stalledFor = 0, healthyFor = 0
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(1)) } catch { return }
+                guard let self, self.player.currentItem === item else { return }
+                switch self.player.timeControlStatus {
+                case .playing:
+                    stalledFor = 0; healthyFor += 1
+                    if healthyFor >= 20 { self.recoveryAttempts = 0; if self.subtitleNotice == "Reconnecting…" { self.subtitleNotice = nil } }
+                case .waitingToPlayAtSpecifiedRate:
+                    healthyFor = 0; stalledFor += 1
+                    if stalledFor >= 15, self.recover(from: item, reason: "stall") { return }
+                default: stalledFor = 0
+                }
+            }
+        }
     }
 
     nonisolated static func metadataItems(title: String, metadata: PlaybackMetadata?) -> [AVMetadataItem] {
@@ -190,9 +230,10 @@ final class PlayerModel: ObservableObject {
             let message = item.error?.localizedDescription ?? "This video can't be played right now."
             Task { @MainActor [weak self] in
                 guard let self, self.player.currentItem === item else { return }
-                self.errorMessage = message
+                if !self.recover(from: item, reason: "failed") { self.errorMessage = message }
             }
         }
+        watchForStalls(item)
     }
 
     func applyBlackout(_ message: String?) {
@@ -280,6 +321,7 @@ final class PlayerModel: ObservableObject {
     }
 
     func stop() {
+        stallWatch?.cancel()
         audioTask?.cancel()
         subtitleTask?.cancel()
         player.pause()
@@ -401,7 +443,7 @@ struct PlayerView: View {
         self.identity = identity
         self.liveChannelID = liveChannelID
         self.startFromBeginning = startFromBeginning
-        _model = StateObject(wrappedValue: PlayerModel(url: url, title: title, metadata: metadata))
+        _model = StateObject(wrappedValue: PlayerModel(url: url, title: title, metadata: metadata, live: liveChannelID != nil))
         self.retry = retry
     }
 
