@@ -108,6 +108,16 @@ describe('series folder import', () => {
     expect(plan.episodes.map(e => `${e.season}x${e.number} ${e.title}${e.placed ? ' *' : ''}`)).toEqual(['2x1 Pilot', '2x9 Some Christmas Special *', '0x1 Making of *']);
   });
 
+  it('imports a season folder picked on its own into a chosen series', () => {
+    const show = { id: 7, title: 'South Park', episodes: [{ season: 1, episode_number: 1 }] };
+    const plan = planSeriesImport([f('Season 2/01 - Not Without My Anus.mp4'), f('Season 2/S02E02 Cartman_s Mom.mp4')], [], {}, { show });
+    expect(plan.show?.id).toBe(7);
+    expect(plan.showTitle).toBe('South Park');
+    expect(plan.episodes.map(e => `${e.season}x${e.number} ${e.title}`)).toEqual(['2x1 Not Without My Anus', '2x2 Cartman s Mom']);
+    // Without a chosen series, a bare season folder still doesn't become a series called "Season 2".
+    expect(planSeriesImport([f('Season 2/S02E01 Pilot.mp4')]).showTitle).toBe('');
+  });
+
   it('numbers new extras after the ones a series already has and leaves repeats alone', () => {
     const existing = [{ id: 4, title: 'Show', episodes: [{ season: 0, episode_number: 1, title: 'Choomah Island 2 Trailer' }, { season: 0, episode_number: 2, title: 'Blooper reel' }] }];
     const plan = planSeriesImport([f('Show/Season 3/Choomah Island 2 TRAILER.mp4'), f('Show/Season 4/Teaser Trailer #1.mp4')], existing);

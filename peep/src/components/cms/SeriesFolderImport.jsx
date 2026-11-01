@@ -17,7 +17,9 @@ const artworkBucket = IS_DEV_DB ? 'promo-images' : undefined;
 // Pick a show folder (Show / Season N / SxxEyy Title.mp4), review what was
 // found, then every episode uploads and saves through the same
 // save_uploaded_vod path as Add VOD. One file at a time; the page must stay open.
-export default function SeriesFolderImport({ shows = [], showToast, logAudit, onSaved }) {
+// `show`: import straight into this series (Manage series → Import folder); the folder
+// can then be the whole show or just one season.
+export default function SeriesFolderImport({ shows = [], show: fixedShow = null, showToast, logAudit, onSaved }) {
   const [plan, setPlan] = useState(null);
   const [titles, setTitles] = useState({});          // key → edited episode title
   const [showTitle, setShowTitle] = useState('');
@@ -40,11 +42,13 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
   // What's already in Peep is read fresh every time a folder is picked, so
   // re-picking the same folder after an import only surfaces what's new.
   async function loadExisting() {
-    const { data } = await supabase.from('episodes').select('show_id,season,episode_number');
+    const { data } = await supabase.from('episodes').select('show_id,season,episode_number,title');
     const bySlot = {};
-    (data || []).forEach(e => { (bySlot[e.show_id] ||= []).push({ season: e.season, episode_number: e.episode_number }); });
-    return shows.map(s => ({ ...s, episodes: bySlot[s.id] || [] }));
+    (data || []).forEach(e => { (bySlot[e.show_id] ||= []).push({ season: e.season, episode_number: e.episode_number, title: e.title }); });
+    const all = fixedShow && !shows.some(s => s.id === fixedShow.id) ? [...shows, fixedShow] : shows;
+    return all.map(s => ({ ...s, episodes: bySlot[s.id] || [] }));
   }
+  function planOptions() { return fixedShow ? { show: known.current.find(s => s.id === fixedShow.id) || fixedShow } : {}; }
 
   async function choose(event) {
     const files = Array.from(event.target.files || []).map(file => ({ name: file.name, size: file.size, path: file.webkitRelativePath || file.name, file }));
@@ -53,7 +57,7 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
     known.current = await loadExisting();
     if (!alive.current) return;
     picked.current = files;
-    const next = planSeriesImport(files, known.current);
+    const next = planSeriesImport(files, known.current, {}, planOptions());
     setPlan(next); setTitles({}); setResults({}); setBadCodec({}); setOverrides({}); setPlacing({}); setShowTitle(next.showTitle); setPoster(next.show?.poster || ''); setShowID(next.show ? String(next.show.id) : '');
     if (!next.ready) showToast?.(next.episodes.length ? 'Everything in that folder is already in Peep.' : 'No importable episodes found in that folder.');
     // An MP4 can hide AV1 or HEVC video, which plays as sound over black on Safari and Apple TV. Check before anything uploads.
@@ -70,7 +74,7 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
   function place(key, where) {
     const next = { ...overrides, [key]: where };
     setOverrides(next);
-    setPlan(planSeriesImport(picked.current, known.current, next));
+    setPlan(planSeriesImport(picked.current, known.current, next, planOptions()));
   }
 
   const limit = r2Ready ? R2_VOD_LIMIT : VOD_SOURCE_LIMIT;
@@ -166,8 +170,8 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
       <input ref={fileInput} className="vod-import-file" type="file" webkitdirectory="" directory="" multiple onChange={choose} disabled={running} />
       <div className="vod-import-head">
         <div>
-          <h3>Import a series folder</h3>
-          <p>Pick the show's folder: <code>Show / Season 1 / S01E02 Title.mp4</code>.</p>
+          <h3>{fixedShow ? `Import a folder into ${fixedShow.title}` : 'Import a series folder'}</h3>
+          <p>{fixedShow ? <>Pick a season folder (<code>Season 2 / S02E01 Title.mp4</code>) or the whole show folder.</> : <>Pick the show's folder: <code>Show / Season 1 / S01E02 Title.mp4</code>.</>}</p>
         </div>
         <button type="button" className="vod-import-start" onClick={() => fileInput.current?.click()} disabled={running}>{plan ? 'Pick folder again' : 'Choose folder'}</button>
       </div>
@@ -196,7 +200,7 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
           <div className="vod-import-grid">
             <label>Series
               <input value={showTitle} onChange={e => setShowTitle(e.target.value)} disabled={!!plan.show || running} />
-              <small>{plan.show ? 'Existing series — episodes are added to it.' : 'New series.'}</small>
+              <small>{fixedShow ? 'Episodes are added to this series.' : plan.show ? 'Existing series — episodes are added to it.' : 'New series.'}</small>
             </label>
             <label>Visibility
               <select value={tier} onChange={e => setTier(e.target.value)} disabled={running}>

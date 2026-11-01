@@ -73,15 +73,17 @@ function normalTitle(title) { return String(title || '').trim().toLowerCase().re
 // existingShows: [{ id, title, poster, episodes?: [{ season, episode_number }] }]
 // overrides: { [key]: { extra: true } | { season, number } } — the admin's answer for
 // files the name parser couldn't place.
-export function planSeriesImport(files, existingShows = [], overrides = {}) {
+// options.show: import into this series regardless of folder names (Manage series → Import folder).
+export function planSeriesImport(files, existingShows = [], overrides = {}, options = {}) {
   const items = [];
   let showTitle = '';
   for (const file of files || []) {
     const segments = String(file.path || file.name).split('/').filter(Boolean);
-    if (segments.length > 1 && !showTitle) showTitle = segments[0];
+    // The picked folder may be the show ("South Park/Season 2/…") or a season itself ("Season 2/…").
+    if (segments.length > 1 && !showTitle && parseSeasonFolder(segments[0]) === null) showTitle = segments[0];
     const name = segments[segments.length - 1];
     if (name.startsWith('.')) continue; // .DS_Store and friends
-    const folderSeason = segments.length > 2 ? parseSeasonFolder(segments[segments.length - 2]) : null;
+    const folderSeason = segments.length > 1 ? parseSeasonFolder(segments[segments.length - 2]) : null;
     const parsed = parseEpisodeFile(name);
     const extension = extensionOf(name);
     const base = { key: segments.join('/'), file, name, size: file.size || 0, folder: segments.slice(0, -1).join('/') };
@@ -115,9 +117,11 @@ export function planSeriesImport(files, existingShows = [], overrides = {}) {
     item.converted = true;
     item.reason = 'Original file — the MP4 version next to it is used instead. Safe to delete.';
   }
-  showTitle = tidyTitle(showTitle) || tidyTitle(items[0]?.folder.split('/')[0] || '');
+  const topFolder = items[0]?.folder.split('/')[0] || '';
+  showTitle = tidyTitle(showTitle) || (parseSeasonFolder(topFolder) === null ? tidyTitle(topFolder) : '');
+  const show = options.show || existingShows.find(candidate => normalTitle(candidate.title) === normalTitle(showTitle)) || null;
+  if (options.show) showTitle = options.show.title;
   for (const item of items) if (item.title) item.title = episodeTitle(item.title, showTitle) || item.title;
-  const show = existingShows.find(candidate => normalTitle(candidate.title) === normalTitle(showTitle)) || null;
   const taken = new Set((show?.episodes || []).map(e => `${e.season}x${e.episode_number}`));
   // Extras are numbered after whatever the series already has, in name order, and an
   // extra whose title is already on the shelf is left alone.

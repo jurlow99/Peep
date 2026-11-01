@@ -7,6 +7,7 @@ import {ImageUploader} from '../ImageUploader';
 import EpisodeAutoThumbnail from './EpisodeAutoThumbnail';
 import VODUploadFlow from './VODUploadFlow';
 import ReplaceVideo from './ReplaceVideo';
+import SeriesFolderImport from './SeriesFolderImport';
 import Drawer from './Drawer';
 import './SeriesWorkspace.css';
 
@@ -18,7 +19,7 @@ export function episodeReadiness(episode){
 function detailDraft(show){try{return JSON.parse(sessionStorage.getItem(`peep-series-${show.id}-details`));}catch{return null;}}
 export default function SeriesWorkspace({show,onBack,onUpdated,showToast,curationRows=[]}){
   const [episodes,setEpisodes]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState('');
-  const [season,setSeason]=useState('all'),[tab,setTab]=useState('episodes'),[uploading,setUploading]=useState(false);
+  const [season,setSeason]=useState('all'),[tab,setTab]=useState('episodes'),[uploading,setUploading]=useState(false),[importing,setImporting]=useState(false);
   const [draft]=useState(()=>detailDraft(show));
   const [form,setForm]=useState(()=>draft||({...show})),[dirty,setDirty]=useState(!!draft),[saving,setSaving]=useState(false);
   function editForm(update){setDirty(true);setForm(update);}
@@ -74,12 +75,16 @@ export default function SeriesWorkspace({show,onBack,onUpdated,showToast,curatio
     <button className="series-back" onClick={onBack}>← All series</button>
     <header className="series-overview">{show.poster?<img src={show.poster} alt="Series poster"/>:<div className="series-poster-empty">No poster</div>}
       <div><span className="series-eyebrow">SERIES WORKSPACE</span><h2>{show.title}</h2><p>{[show.category,show.year].filter(Boolean).join(' · ')||'Manage this series in one place.'}</p><div className="series-stats"><span>{episodes.length} episodes</span><span>{seasons.length} seasons</span><span>{episodes.filter(e=>episodeReadiness(e).tone==='ready').length} ready</span>{!show.poster&&<span className="series-status warning">Needs poster</span>}</div></div>
-      <button className="series-primary" disabled={loading} onClick={()=>{setTab('episodes');setUploading(true);}}>+ Upload episode</button>
+      <div className="series-head-actions">
+        <button className="series-secondary" disabled={loading} onClick={()=>{setTab('episodes');setUploading(false);setImporting(true);}}>Import folder</button>
+        <button className="series-primary" disabled={loading} onClick={()=>{setTab('episodes');setImporting(false);setUploading(true);}}>+ Upload episode</button>
+      </div>
     </header>
     <PublicationStatus item={show} type="show" rows={curationRows} episodes={loading?undefined:episodes} />
     <nav className="series-tabs" aria-label="Series workspace">{[['episodes','Episodes'],['details','Details & artwork']].map(([value,label])=><button key={value} aria-current={tab===value?'page':undefined} onClick={()=>setTab(value)}>{label}</button>)}</nav>
     {error&&<p role="alert" className="series-error">{error}</p>}
-    {tab==='episodes'&&(uploading?<div className="series-upload"><button className="series-back" onClick={()=>setUploading(false)}>← Episode list</button><VODUploadFlow key={show.id} shows={[show]} showToast={showToast} initialShowID={show.id} initialSeason={currentSeason} initialEpisodeNumber={nextNumber} lockSeries draftKey={`peep-series-${show.id}-upload`} onSaved={()=>{load();onUpdated?.();}}/></div>:<>
+    {tab==='episodes'&&importing&&<div className="series-upload"><button className="series-back" onClick={()=>setImporting(false)}>← Episode list</button><SeriesFolderImport show={show} shows={[show]} showToast={showToast} onSaved={()=>{load();onUpdated?.();}}/></div>}
+    {tab==='episodes'&&!importing&&(uploading?<div className="series-upload"><button className="series-back" onClick={()=>setUploading(false)}>← Episode list</button><VODUploadFlow key={show.id} shows={[show]} showToast={showToast} initialShowID={show.id} initialSeason={currentSeason} initialEpisodeNumber={nextNumber} lockSeries draftKey={`peep-series-${show.id}-upload`} onSaved={()=>{load();onUpdated?.();}}/></div>:<>
       <div className="series-episode-toolbar"><h3>Episodes</h3><label>Season<select value={season} onChange={e=>setSeason(e.target.value)}><option value="all">All seasons</option>{seasons.map(n=><option key={n} value={n}>{Number(n)===0?'Extras':`Season ${n}`}</option>)}</select></label><button onClick={load} disabled={loading}>Refresh</button></div>
       {loading?<p role="status">Loading episodes…</p>:visible.length===0?<div className="series-empty"><h3>No episodes yet</h3><p>Upload your first MP4 to get started.</p><button className="series-primary" onClick={()=>setUploading(true)}>Upload episode</button></div>:<div className="series-episode-list">{visible.map(episode=>{const status=episodeReadiness(episode);return <article key={episode.id}>
         <div className="series-episode-art">{episode.thumbnail?<img src={episode.thumbnail} alt="Episode snapshot"/>:<span>No snapshot</span>}</div>
