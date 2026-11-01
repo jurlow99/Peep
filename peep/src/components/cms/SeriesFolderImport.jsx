@@ -28,7 +28,6 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState({});        // key → { state, progress, message }
   const [showID, setShowID] = useState('');
-  const [existing, setExisting] = useState([]);      // shows with their episode slots
   const stop = useRef(false), current = useRef(null), alive = useRef(true);
 
   useEffect(() => { alive.current = true; return () => { alive.current = false; stop.current = true; current.current?.abort?.(); }; }, []);
@@ -39,11 +38,8 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
     const { data } = await supabase.from('episodes').select('show_id,season,episode_number');
     const bySlot = {};
     (data || []).forEach(e => { (bySlot[e.show_id] ||= []).push({ season: e.season, episode_number: e.episode_number }); });
-    const next = shows.map(s => ({ ...s, episodes: bySlot[s.id] || [] }));
-    if (alive.current) setExisting(next);
-    return next;
+    return shows.map(s => ({ ...s, episodes: bySlot[s.id] || [] }));
   }
-  useEffect(() => { loadExisting(); }, [shows]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function choose(event) {
     const files = Array.from(event.target.files || []).map(file => ({ name: file.name, size: file.size, path: file.webkitRelativePath || file.name, file }));
@@ -133,7 +129,7 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
       }
     }
     current.current = null;
-    if (alive.current) { setRunning(false); onSaved?.(); loadExisting(); showToast?.(stop.current ? 'Import stopped. Saved episodes are kept.' : 'Series import finished.'); }
+    if (alive.current) { setRunning(false); onSaved?.(); showToast?.(stop.current ? 'Import stopped. Saved episodes are kept.' : 'Series import finished.'); }
   }
 
   function cancel() { stop.current = true; current.current?.abort?.(); }
