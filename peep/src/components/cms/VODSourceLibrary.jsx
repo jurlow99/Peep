@@ -66,10 +66,9 @@ export default function VODSourceLibrary({movies=[],shows=[],showToast,logAudit}
   }
   const visible=files.filter(item=>item.path.toLowerCase().includes(search.toLowerCase()));
   return <section className="vod-library" aria-label="VOD media library">
-    <header><div><h2>VOD media library</h2><p>Private originals and protected playback, organized by title.</p></div><span className="vod-private">Private · admin uploads</span></header>
+    <header><div><h2>File library</h2><p>{playback?'Upload a finished MP4 for an existing title, then click Use for playback to swap it in.':'Private archive of originals and supporting files. Nothing here is published.'}</p></div></header>
     {!IS_DEV_DB && <p className="vod-notice">This storage setup was applied to FARRIS dev. Deploy its bucket policies before using it in another environment.</p>}
-    <div className="vod-tabs">{[[VOD_SOURCE_BUCKET,'Originals & supporting files'],[VOD_PLAYBACK_BUCKET,'Finished playback']].map(([id,label])=><button key={id} type="button" aria-pressed={bucket===id} disabled={busy} onClick={()=>{setFiles([]);setBucket(id);setSelection(s=>({...s,type:'movies',id:'',episodeID:'',role:'masters'}));setFile(null);}}>{label}</button>)}</div>
-    <p className="vod-notice">{playback?'Required for protected VOD playback: create the movie or episode first, upload its playback-ready H.264/AAC MP4 here, then click Use for playback. Uploading alone does not attach the video. Viewers must sign in and pass the catalog’s access rules to obtain a temporary playback URL.':'Optional archive: masters and supporting files are not required to publish VOD. You can upload finished MP4s directly in Finished playback. Uploading a source does not attach trailers or captions to the viewer experience or publish artwork.'}</p>
+    <div className="vod-tabs">{[[VOD_SOURCE_BUCKET,'Originals'],[VOD_PLAYBACK_BUCKET,'Playback files']].map(([id,label])=><button key={id} type="button" aria-pressed={bucket===id} disabled={busy} onClick={()=>{setFiles([]);setBucket(id);setSelection(s=>({...s,type:'movies',id:'',episodeID:'',role:'masters'}));setFile(null);}}>{label}</button>)}</div>
     <fieldset disabled={busy} className="vod-upload"><legend>Upload {playback?'finished video':'source asset'}</legend>
       <div className="vod-fields">
         <label>Collection<select value={selection.type} onChange={e=>chooseType(e.target.value)}>{!playback&&<option value="inbox">Inbox · not linked yet</option>}<option value="movies">Movies</option><option value="series">Series</option></select></label>
@@ -80,7 +79,7 @@ export default function VODSourceLibrary({movies=[],shows=[],showToast,logAudit}
       <p className="vod-path">{bucket}/{folder}/</p>
       <input aria-label="VOD file" type="file" accept={playback?'.mp4':selection.role==='artwork'?'.jpg,.jpeg,.png,.webp':selection.role==='captions'?'.vtt,.srt':'.mp4,.mov,.webm,.mkv'} onChange={e=>setFile(e.target.files?.[0]||null)} />
       <button type="button" onClick={upload} disabled={!file}>Upload privately</button>
-      <small>50 MiB dev upload limit (Supabase Free). Larger files require a plan/global-limit and bucket-limit change. Large uploads use 6 MiB chunks with network retries. Keep this page open until complete.</small>
+      <small>Up to 50 MiB on Supabase Free. Keep this page open until it finishes.</small>
     </fieldset>
     {busy&&<div className="vod-progress"><progress max={100} value={progress}/><span>{progress}% {paused?'· paused':''}</span><button type="button" onClick={async()=>{if(!uploadRef.current)return;if(paused){uploadRef.current?.start();setPaused(false);}else{await uploadRef.current?.abort();setPaused(true);}}}>{paused?'Resume':'Pause'}</button></div>}
     {error&&<p role="alert" className="vod-error">{error}</p>}

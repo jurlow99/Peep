@@ -185,23 +185,18 @@ export default function VODUploadFlow({shows=[],categories=[],showToast,onSaved,
   const hintTone=saving||thumbnailBusy||busy?'':blockers.length?'blocked':thin?'notice':'ready';
 
   return <section className="vod-library vod-upload-first" aria-label="Add VOD">
-    <header><div><span className="vod-eyebrow">CONTENT LIBRARY</span><h2>Add a video</h2><p>From finished MP4 to your catalog in one pass.</p></div><div style={{display:"flex",gap:12,alignItems:"center"}}><span className="vod-private">Protected playback</span>{asset&&!saved&&<button type="button" disabled={saving} onClick={newUpload}>+ New upload</button>}</div></header>
-    <ol className="vod-steps" aria-label="Upload progress">{['Upload video','Add details','Save'].map((label,index)=><li key={label} className={index<stage?'done':index===stage?'current':''} aria-current={index===stage?'step':undefined}><span>{index<stage?'✓':index===0&&busy?'…':index+1}</span>{label}</li>)}</ol>
+    <header><div><h2>{lockSeries?'Add an episode':'Add a video'}</h2><p>{stage===0?'Pick the MP4 first; you fill in the details while it uploads.':stage===1?'Fill in the details, then save.':'Saved.'}</p></div>{asset&&!saved&&<button type="button" disabled={saving} onClick={newUpload}>+ New upload</button>}</header>
     {!working&&!saved&&pending.length>0&&<div className="vod-pending"><strong>Unfinished uploads</strong>{pending.map(d=><button key={d.asset.id} type="button" disabled={busy} onClick={()=>resume(d)}>Resume: {d.details.title || d.asset.name}</button>)}</div>}
     {saved?<div className="vod-complete" role="status">
       <div className="vod-success-art">{(details.thumbnail||details.poster||selected?.poster)?<img src={details.thumbnail||details.poster||selected?.poster} alt="Saved video artwork"/>:<span aria-hidden="true">▶</span>}<span className="vod-success-check" aria-hidden="true">✓</span></div>
       <div className="vod-success-copy"><span className="vod-success-label">Saved to your library</span><h3>{details.title}</h3>
       <p className="vod-success-meta">{isEpisode?`${seriesName} · Season ${details.season} · Episode ${details.episode_number}`:'Movie'}{details.duration?` · ${details.duration}`:''}</p>
       <ul className="vod-success-list">
-        <li className="ok">Video attached · {asset?.provider==='r2'?'private R2':'private storage'}</li>
-        <li className={details.poster||selected?.poster?'ok':''}>{details.poster||selected?.poster?'Poster set':'No poster'}</li>
-        <li className={details.thumbnail?'ok':'muted'}>{details.thumbnail?'Thumbnail set':'No thumbnail yet · add one from the editor later'}</li>
-        <li className={details.description.trim()?'ok':'muted'}>{details.description.trim()?'Description added':'No description yet'}</li>
-        {(isMovie||!selected)&&<li className={thin?'muted':'ok'}>{thin?'No category or tags · it stays out of genre rows and “More like this” until you add some':'Category or tags set'}</li>}
         <li className="ok">{inherited?`${inherited.visibility} · ${inherited.premium||details.is_premium?'Subscription required':'Free'}`:`${visibilityLabel} · ${details.is_premium?'Subscription required':'Free'}`}</li>
-        {isEpisode&&<li className="ok">Approved · plays right away</li>}
+        <li className={details.thumbnail?'ok':'muted'}>{details.thumbnail?'Thumbnail set':'No thumbnail yet'}</li>
+        {(isMovie||!selected)&&<li className={thin?'muted':'ok'}>{thin?'No category or tags yet · it stays out of genre rows until you add some':'Category or tags set'}</li>}
       </ul>
-      <p>{isMovie?'It shows under Movies now. Add it to a row in Curation to feature it.':'It shows in the series now. Add the series to a row in Curation to feature it.'}</p>
+      <p>{isMovie?'Live under Movies. Feature it from Curation.':'Live in the series. Feature the series from Curation.'}</p>
       <div className="vod-success-actions">
         <button type="button" onClick={next}>{isEpisode?'Add next episode':'Add another video'} <span aria-hidden="true">→</span></button>
         <button type="button" className="vod-secondary" disabled={playbackBusy} onClick={previewSaved}>{playbackBusy?'Preparing…':'▶ Preview playback'}</button>
@@ -219,7 +214,7 @@ export default function VODUploadFlow({shows=[],categories=[],showToast,onSaved,
             {!busy&&!asset&&error&&pendingFile.current&&<div className="vod-progress-row"><span>The upload did not finish.</span><span className="vod-actions"><button type="button" onClick={()=>startFile(pendingFile.current,true)}>Retry upload</button><button type="button" onClick={cancelUpload}>Cancel</button></span></div>}
           </div>
         </div>
-        {previewURL&&<div className="vod-preview"><video ref={previewVideo} src={previewURL} controls muted playsInline preload="metadata" aria-label="Preview of the chosen video"/><div className="vod-preview-actions"><button type="button" disabled={frameBusy} onClick={useFrame}>{frameBusy?'Saving frame…':'Use this frame as thumbnail'}</button><small>Pause the preview on a frame you like, then use it as the thumbnail. The automatic snapshot is picked for you otherwise.</small></div></div>}
+        {previewURL&&<div className="vod-preview"><video ref={previewVideo} src={previewURL} controls muted playsInline preload="metadata" aria-label="Preview of the chosen video"/><div className="vod-preview-actions"><button type="button" disabled={frameBusy} onClick={useFrame}>{frameBusy?'Saving frame…':'Use this frame as thumbnail'}</button><small>Pause on a good frame first. Otherwise the automatic snapshot is used.</small></div></div>}
       </div>
       <fieldset disabled={saving} className="vod-upload"><legend>2. Add details</legend>
         <div className="vod-tabs">{(lockSeries?['episode']:['movie','episode']).map(type=><button key={type} type="button" aria-pressed={details.type===type} onClick={()=>field('type',type)}>{type==='movie'?'Movie':'Episode'}</button>)}</div>
@@ -249,7 +244,7 @@ export default function VODUploadFlow({shows=[],categories=[],showToast,onSaved,
         <datalist id="vod-categories">{categories.map(c=><option key={c} value={c}/>)}</datalist>
         <datalist id="vod-ratings">{RATINGS.map(r=><option key={r} value={r}/>)}</datalist>
         <label style={{marginTop:16}}>Description<textarea rows="3" value={details.description} onChange={e=>field('description',e.target.value)}/></label>
-        {needsPoster?<div style={{marginTop:20}}><label>{isEpisode?'Series poster':'Poster'} · required</label><p className="vod-muted" style={{margin:'4px 0 10px'}}>1200 × 1800 preferred · Portrait 2:3 · JPG/WebP · No borders or padding</p><ImageUploader appearance="light" label="Upload poster" allowUrlImport folder={artworkFolder('posters')} bucket={artworkBucket} onUploadSuccess={url=>field('poster',url)} onError={setError}/>{details.poster&&<img src={details.poster} alt="Poster preview" style={{width:100,aspectRatio:'2/3',objectFit:'contain',marginTop:8}}/>}</div>:<p className="vod-inherit">✓ Using {selected?.title}’s poster and access settings.</p>}
+        {needsPoster?<div style={{marginTop:20}}><label>{isEpisode?'Series poster':'Poster'} · required</label><p className="vod-muted" style={{margin:'4px 0 10px'}}>Portrait 2:3, 1200 × 1800 preferred</p><ImageUploader appearance="light" label="Upload poster" allowUrlImport folder={artworkFolder('posters')} bucket={artworkBucket} onUploadSuccess={url=>field('poster',url)} onError={setError}/>{details.poster&&<img src={details.poster} alt="Poster preview" style={{width:100,aspectRatio:'2/3',objectFit:'contain',marginTop:8}}/>}</div>:<p className="vod-inherit">✓ Uses {selected?.title}’s poster and access settings.</p>}
         <div className="vod-media-access">
           <section><h4>Thumbnail</h4>
             {thumbnailBusy?<p role="status" className="vod-muted">Capturing thumbnail…</p>:notice?<p className="vod-muted">{notice}</p>:null}
@@ -258,16 +253,18 @@ export default function VODUploadFlow({shows=[],categories=[],showToast,onSaved,
           </section>
           <section><h4>Access</h4>
             {inherited?<p className="vod-muted">Follows {selected.title}: {inherited.visibility} · {inherited.premium?'Subscription required':'Free'}</p>:<label>Visibility<select value={details.visibility_tier} onChange={e=>field('visibility_tier',e.target.value)}><option value="production">All eligible users</option><option value="test">Test accounts only</option></select></label>}
-            <label className="vod-check"><input type="checkbox" checked={details.is_premium} onChange={e=>field('is_premium',e.target.checked)}/><span>Requires subscription{inherited?' for this episode':''}<small>{inherited?'The series’ own access settings still apply on top of this.':'Viewers need an active subscription to play it. Leave off for free content.'}</small></span></label>
+            <label className="vod-check"><input type="checkbox" checked={details.is_premium} onChange={e=>field('is_premium',e.target.checked)}/><span>Requires subscription</span></label>
           </section>
         </div>
       </fieldset>
       <div className="vod-save-bar"><span className={`vod-hint ${hintTone}`}>{hint}</span><button className="vod-save" type="button" disabled={saving||thumbnailBusy||!asset} onClick={save}>{saving?'Saving…':'3. Save '+(isMovie?'movie':'episode')}</button></div>
     </>:<div className="vod-upload-start">
-      {provider==='r2'&&<label className="vod-provider-field">Content provider<select value={providerID} disabled={busy} onChange={e=>setProviderID(e.target.value)}><option value="">Peep · managed uploads</option>{contentProviders.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><small>Who supplied this video? Leave Peep selected for your own uploads.</small></label>}
       <div className="vod-file-picker"><span className="vod-upload-symbol" aria-hidden="true">↑</span><label>1. Upload your video<input aria-label="Upload VOD MP4" type="file" accept=".mp4,video/mp4" disabled={busy} onChange={e=>startFile(e.target.files?.[0])}/></label>
-      <small>Finished MP4 (H.264 + AAC) · {provider==='r2'?'up to 10 GiB with private R2':'up to 50 MiB with Supabase Free'} · the upload starts straight away and you add details while it runs</small></div>
-      <details><summary>Video storage</summary><label>Upload to<select value={provider} disabled={busy} onChange={e=>setProvider(e.target.value)}><option value="supabase">Supabase</option><option value="r2" disabled={!r2Ready}>Cloudflare R2{r2Ready?'':' · setup required'}</option></select></label>{!r2Ready&&<small>R2 is not connected yet. Existing Supabase uploads still work.</small>}</details>
+      <small>MP4 (H.264 + AAC) · {provider==='r2'?'up to 10 GiB':'up to 50 MiB'}</small></div>
+      {(provider==='r2'||!r2Ready)&&<details><summary>Options</summary>
+        {provider==='r2'&&<label className="vod-provider-field">Content provider<select value={providerID} disabled={busy} onChange={e=>setProviderID(e.target.value)}><option value="">Peep · own upload</option>{contentProviders.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>}
+        <label>Upload to<select value={provider} disabled={busy} onChange={e=>setProvider(e.target.value)}><option value="supabase">Supabase</option><option value="r2" disabled={!r2Ready}>Cloudflare R2{r2Ready?'':' · setup required'}</option></select></label>
+      </details>}
     </div>}
     {error&&<p role="alert" className="vod-error">{error}</p>}
     {playback&&<Drawer title={`Preview · ${playback.title}`} onClose={()=>setPlayback(null)}><video src={playback.url} controls autoPlay playsInline style={{width:'100%',maxHeight:'65vh',background:'#000',borderRadius:12}}/><p className="vod-muted" style={{marginTop:10}}>Admin playback preview. Viewer access can differ by subscription and visibility settings.</p></Drawer>}
