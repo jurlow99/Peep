@@ -336,7 +336,8 @@ export function Homepage({ onPlay, onShowSelect, onPodcastSelect, onChannelPlay,
   const sections = useMemo(() => activeNav === "My List"
     ? []
     : visibleCarousels.length > 0
-    ? visibleCarousels.map(c => {
+    // Multiview is an Apple TV feature; the browser skips those rows entirely.
+    ? visibleCarousels.filter(c => c.type !== "multiview").map(c => {
         if (c.type === "multiview") return { id: String(c.id), title: c.title, isMultiview: true, row: c };
         const filterVal = c.filter_value?.trim().toLowerCase();
         // Live TV channels row (admin-controlled): all live channels, by category, or handpicked.

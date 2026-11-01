@@ -38,7 +38,7 @@ export default function MultiviewPackagesPanel({ packages, error, reload }) {
   }
   return <section style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: 20, marginBottom: 28 }}>
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}><h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Multiview packages</h2><button type="button" style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }} onClick={() => { setForm({ ...empty, channel_count: 2, position: packages.length }); setMessage(""); }}>+ New package</button></div>
-    <p style={{ color: "#64748b", fontSize: 13 }}>Curate two or four channels to watch together. Place packages in Home or Live TV shelves using a Multiview row. Disable a package to remove it from every row.</p>
+    <p style={{ color: "#64748b", fontSize: 13 }}>Two or four channels watched together on Apple TV. The browser never shows multiview. Place packages on Home or Live TV with a Multiview row. Disable a package to remove it from every row.</p>
     {(error || message) && <p role="status">{error || message}</p>}
     {packages.map(pkg => <div key={pkg.id} style={{ display: "flex", gap: 12, alignItems: "center", padding: "12px 0", borderTop: "1px solid #e2e8f0" }}>
       <div style={{ flex: 1 }}><strong>{pkg.title}</strong> <span style={{ color: "#64748b" }}>{pkg.enabled ? "Enabled" : "Off"}</span><div style={{ fontSize: 12, color: "#64748b" }}>{packageChannelIDs(pkg).map(id => channels.find(c => c.id === id)?.name || "Unavailable channel").join(" + ")}</div></div>

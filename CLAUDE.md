@@ -291,7 +291,8 @@ Server RLS also enforces production visibility for anon.
   `stream_uid` manifest. Playing requires sign-in. Live ids are `ch-<id>`.
 - **Blackouts:** `channels.blackout_*` manual flag or scheduled window; client polls
   every 10 s (`hooks/useChannelBlackout.js`). Client-side only — the URL stays readable.
-- **Multiview:** `multiview_packages` (2 or 4 free active channels), `MultiviewShelf.jsx`.
+- **Multiview:** `multiview_packages` (2 or 4 free active channels). **Apple TV only** since
+  2026-11-01: the web Homepage skips `multiview` rows (`MultiviewShelf.jsx` is unused on web).
 - **Live viewing telemetry:** `lib/liveViewing.js` → `record_live_viewing` RPC every
   ≤15 s → `live_watch_sessions`; admin Reports → Live TV viewing. Legacy `live_viewers`
   30-s heartbeat also runs (channel_id is bigint — the player strips the `ch-` prefix).

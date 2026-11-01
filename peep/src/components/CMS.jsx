@@ -5466,7 +5466,7 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
                       <p style={{ margin: "0 0 10px", fontSize: 11, color: "#6b7280" }}>What kind of row is this?</p>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                         {[
-                          { k: "multiview", icon: "▥", label: "Multiview", desc: "Channel packages · Home / Live TV" },
+                          { k: "multiview", icon: "▥", label: "Multiview", desc: "Channel packages · Apple TV only" },
                           { k: "continue", icon: "⏱️", label: "Continue Watching", desc: "Personalized unfinished titles · Home" },
                           { k: "vod",     icon: "🎬", label: "VOD",             desc: "Movies & series" },
                           { k: "live",    icon: "📡", label: "Live TV",         desc: "Your FAST channels" },
