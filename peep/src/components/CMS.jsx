@@ -39,6 +39,7 @@ import FlagsPanel from "./cms/FlagsPanel";
 import StoragePanel from "./cms/StoragePanel";
 import DuplicateSeries from "./cms/DuplicateSeries";
 import StaffPanel from "./cms/StaffPanel";
+import ReplaceVideo from "./cms/ReplaceVideo";
 import { navForRole, allowedTarget } from "../lib/staff";
 import ComboInput from "./cms/ComboInput";
 import { duplicateShowGroups } from "../lib/duplicateShows";
@@ -5318,6 +5319,7 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
                       )}
                     </div>
                     <FieldInput label="Video URL — required to save movie" value={form.url} onChange={v => setForm(f => ({ ...f, url: v }))} placeholder="https://..." />
+                    {editingId && <ReplaceVideo type="movie" id={editingId} title={form.title} showToast={showToast} logAudit={logAudit} onReplaced={({ url, duration }) => { setForm(f => ({ ...f, url, duration: f.duration || duration })); loadRows(); }} />}
                     <FieldInput label="Trailer URL — optional" value={form.trailer_url} onChange={v => setForm(f => ({ ...f, trailer_url: v }))} placeholder="https://youtube.com/watch?v=... (optional)" />
                     <FieldInput label="Tags · search & genre rows (comma-separated)" value={form.tags} onChange={v => setForm(f => ({ ...f, tags: v }))} placeholder="Silent, Epic, Classic" />
                     <div>
@@ -5401,6 +5403,7 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
                     <FieldInput label="Title — required" value={episodeForm.title} onChange={v => setEpisodeForm(f => ({ ...f, title: v }))} placeholder="e.g. Pilot" />
                     <FieldInput label="Duration" value={episodeForm.duration} onChange={v => setEpisodeForm(f => ({ ...f, duration: v }))} placeholder="42 min" />
                     <FieldInput label="Video URL — required for playback" value={episodeForm.url} onChange={v => setEpisodeForm(f => ({ ...f, url: v }))} placeholder="https://archive.org/..." />
+                    {editingEpisodeId && <ReplaceVideo type="episode" id={editingEpisodeId} title={episodeForm.title} showToast={showToast} logAudit={logAudit} onReplaced={({ url, duration }) => { setEpisodeForm(f => ({ ...f, url, duration: f.duration || duration })); if (episodeForm.show_id) loadEpisodes(episodeForm.show_id); }} />}
                     <div>
                       <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Episode thumbnail — recommended</label>
                       <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>16:9 still from the episode (optional)</p>

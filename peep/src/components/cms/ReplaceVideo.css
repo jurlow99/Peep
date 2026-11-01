@@ -1,0 +1,6 @@
+.replace-video{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+.replace-video button{font:inherit;font-size:12px;font-weight:600;cursor:pointer;padding:8px 14px;border:1px solid #c7d2fe;border-radius:7px;background:#eef2ff;color:#4338ca;white-space:nowrap}
+.replace-video button:disabled{opacity:.6;cursor:default}
+.replace-video.compact button{padding:6px 10px;font-size:11px}
+.replace-video .replace-video-cancel{background:#fff;border-color:#dbe2ec;color:#475569}
+.replace-video-error{flex-basis:100%;color:#b91c1c;font-size:12px}

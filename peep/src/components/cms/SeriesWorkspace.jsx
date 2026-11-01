@@ -6,6 +6,7 @@ import {resolveVODPlayback} from '../../lib/vodStorage';
 import {ImageUploader} from '../ImageUploader';
 import EpisodeAutoThumbnail from './EpisodeAutoThumbnail';
 import VODUploadFlow from './VODUploadFlow';
+import ReplaceVideo from './ReplaceVideo';
 import Drawer from './Drawer';
 import './SeriesWorkspace.css';
 
@@ -84,7 +85,7 @@ export default function SeriesWorkspace({show,onBack,onUpdated,showToast,curatio
         <div className="series-episode-art">{episode.thumbnail?<img src={episode.thumbnail} alt="Episode snapshot"/>:<span>No snapshot</span>}</div>
         <div className="series-episode-copy"><span className="series-eyebrow">SEASON {episode.season||1} · EPISODE {episode.episode_number||1}</span><h4>{episode.title}</h4><p>{episode.duration||'Runtime not entered'}{!episode.thumbnail?' · Needs snapshot':''}</p></div>
         <span className={`series-status ${status.tone}`}>{status.label}</span>
-        <div className="series-episode-actions"><button disabled={!episode.url||previewBusy===episode.id} onClick={()=>play(episode)}>{previewBusy===episode.id?'Loading…':'▶ Preview'}</button><button onClick={()=>{setError('');setEditing({...episode});}}>Edit</button></div>
+        <div className="series-episode-actions"><button disabled={!episode.url||previewBusy===episode.id} onClick={()=>play(episode)}>{previewBusy===episode.id?'Loading…':'▶ Preview'}</button><button onClick={()=>{setError('');setEditing({...episode});}}>Edit</button><ReplaceVideo compact type="episode" id={episode.id} title={episode.title} showToast={showToast} onReplaced={()=>{load();onUpdated?.();}}/></div>
       </article>;})}</div>}
     </>)}
     {tab==='details'&&<div className="series-details"><section className="series-details-copy"><h3>Series details</h3><label>Title · required<input value={form.title||''} onChange={e=>editForm(f=>({...f,title:e.target.value}))}/></label><label>Description<textarea rows="5" value={form.description||''} onChange={e=>editForm(f=>({...f,description:e.target.value}))}/></label><div className="series-fields">{[['category','Category'],['year','Year'],['rating','Rating']].map(([key,label])=><label key={key}>{label}<input type={key==='year'?'number':'text'} value={form[key]||''} onChange={e=>editForm(f=>({...f,[key]:e.target.value}))}/></label>)}</div>
@@ -96,6 +97,7 @@ export default function SeriesWorkspace({show,onBack,onUpdated,showToast,curatio
     {editing&&<Drawer title={`Edit episode · ${show.title}`} onClose={()=>{if(!saving){setEditing(null);setError('');}}}><div className="series-workspace series-episode-form">
       {error&&<p role="alert" className="series-error">{error}</p>}
       {['title','season','episode_number','duration','url'].map(key=><label key={key}>{({title:'Title',season:'Season',episode_number:'Episode number',duration:'Duration',url:'Video URL'})[key]}<input type={['season','episode_number'].includes(key)?'number':'text'} value={editing[key]??''} onChange={e=>setEditing(f=>({...f,[key]:e.target.value}))}/></label>)}
+      <ReplaceVideo type="episode" id={editing.id} title={editing.title} showToast={showToast} disabled={saving} onReplaced={({url,duration})=>{setEditing(f=>f?{...f,url,duration:f.duration||duration}:f);load();onUpdated?.();}}/>
       <label>Description<textarea rows="4" value={editing.description||''} onChange={e=>setEditing(f=>({...f,description:e.target.value}))}/></label>
       {editing.thumbnail&&<img src={editing.thumbnail} alt="Episode snapshot preview" style={{width:'100%',borderRadius:8}}/>}
       <EpisodeAutoThumbnail url={editing.url} thumbnail={editing.thumbnail} onGenerated={(thumbnail,source,replace)=>setEditing(f=>f&&f.url===source&&(replace||!f.thumbnail)?{...f,thumbnail}:f)}/>

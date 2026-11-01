@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../../supabase';
 import { IS_DEV_DB } from '../../lib/config';
-import { createVODUpload } from '../../lib/vodUpload';
-import { createR2VODUpload, r2VODRequest, R2_VOD_LIMIT } from '../../lib/r2VOD';
-import { VOD_PLAYBACK_BUCKET, VOD_SOURCE_LIMIT, vodFilePath } from '../../lib/vodStorage';
+import { uploadToInbox } from '../../lib/inboxUpload';
+import { r2VODRequest, R2_VOD_LIMIT } from '../../lib/r2VOD';
+import { VOD_SOURCE_LIMIT } from '../../lib/vodStorage';
 import { captureVideoThumbnail, readVideoMetadata } from '../../lib/videoThumbnail';
 import { formatBytes, formatDuration } from '../../lib/uploadProgress';
 import { uploadImage } from '../../lib/storageUtils';
@@ -71,27 +71,8 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
 
   function update(key, patch) { setResults(r => ({ ...r, [key]: { ...(r[key] || {}), ...patch } })); }
 
-  async function uploadOne(episode, id) {
-    const file = episode.file.file;
-    return new Promise((resolve, reject) => {
-      const options = {
-        file, id,
-        onProgress: percent => update(episode.key, { progress: percent }),
-        onSuccess: ({ path }) => resolve(path),
-        onError: reject,
-      };
-      (async () => {
-        try {
-          let task;
-          if (r2Ready) task = await createR2VODUpload(options);
-          else {
-            const path = vodFilePath({ type: 'inbox', id, role: 'playback' }, file.name);
-            task = await createVODUpload({ ...options, bucket: VOD_PLAYBACK_BUCKET, path, contentType: 'video/mp4', onSuccess: () => resolve(path) });
-          }
-          current.current = task; task.start();
-        } catch (error) { reject(error); }
-      })();
-    });
+  function uploadOne(episode) {
+    return uploadToInbox({ file: episode.file.file, r2Ready, onTask: task => { current.current = task; }, onProgress: percent => update(episode.key, { progress: percent }) });
   }
 
   async function run() {
@@ -103,10 +84,9 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
       if (stop.current) break;
       const previous = results[episode.key];
       if (previous?.state === 'saved') continue;
-      const id = crypto.randomUUID();
       update(episode.key, { state: 'uploading', progress: 0, message: '' });
       try {
-        const path = await uploadOne(episode, id);
+        const { id, path } = await uploadOne(episode);
         if (stop.current) break;
         let thumbnail = '', duration = '';
         const local = URL.createObjectURL(episode.file.file);
