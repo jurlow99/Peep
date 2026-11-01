@@ -3,6 +3,7 @@ import VODUploadFlow from "./VODUploadFlow";
 import SeriesFolderImport from "./SeriesFolderImport";
 import VODSourceLibrary from "./VODSourceLibrary";
 import StorageCleanup from "./StorageCleanup";
+import ConversionList from "./ConversionList";
 
 const MODE_KEY = "peep-addvod-mode";
 const MODES = [
@@ -15,6 +16,8 @@ function remembered() { try { return sessionStorage.getItem(MODE_KEY) || "single
 // library (replace a playback file, keep originals) stays tucked away below.
 export default function StoragePanel({ showToast, logAudit, videosList, showsList, onVODSaved, onOpenSaved }) {
   const [mode, setMode] = useState(remembered);
+  const [queueVersion, setQueueVersion] = useState(0);
+  const bumpQueue = () => setQueueVersion(v => v + 1);
   // Existing categories feed the Add VOD suggestions so spelling stays consistent across titles.
   const categories = [...new Set([...(videosList || []), ...(showsList || [])].map(item => item.category?.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   function choose(next) { setMode(next); try { sessionStorage.setItem(MODE_KEY, next); } catch { /* fine without */ } }
@@ -28,9 +31,10 @@ export default function StoragePanel({ showToast, logAudit, videosList, showsLis
           </button>
         ))}
       </div>
+      <ConversionList showToast={showToast} reloadKey={queueVersion} />
       {mode === "single"
         ? <VODUploadFlow shows={showsList} categories={categories} showToast={showToast} onSaved={onVODSaved} onOpenSaved={onOpenSaved} />
-        : <SeriesFolderImport shows={showsList} showToast={showToast} logAudit={logAudit} onSaved={onVODSaved} />}
+        : <SeriesFolderImport shows={showsList} showToast={showToast} logAudit={logAudit} onSaved={onVODSaved} onQueueChanged={bumpQueue} />}
       <StorageCleanup showToast={showToast} logAudit={logAudit} />
       <details className="vod-tools"><summary><span>File library</span><small>Replace a playback file or keep originals · advanced</small></summary><VODSourceLibrary movies={videosList} shows={showsList} showToast={showToast} logAudit={logAudit} /></details>
     </div>

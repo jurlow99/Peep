@@ -1,0 +1,13 @@
+.convert-list{background:#fffbeb;border:1px solid #fde68a;border-radius:10px;margin:0 0 18px;padding:14px 20px;color:#334155;font-size:13px}
+.convert-head{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
+.convert-head strong{display:block;font-size:13px;color:#92400e}
+.convert-head small{display:block;color:#a16207;font-size:11px;margin-top:3px}
+.convert-actions{display:flex;gap:8px}
+.convert-list button{font:inherit;font-size:12px;font-weight:600;cursor:pointer;padding:7px 12px;border:1px solid #fcd34d;border-radius:7px;background:#fff;color:#92400e;white-space:nowrap}
+.convert-primary{background:#f59e0b!important;border-color:#f59e0b!important;color:#fff!important}
+.convert-error{margin:10px 0 0;color:#b91c1c}
+.convert-list ul{list-style:none;margin:10px 0 0;padding:0;max-height:260px;overflow:auto}
+.convert-list li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:6px 0;border-top:1px solid #fde68a}
+.convert-list li span{min-width:0}
+.convert-list li strong{display:block;font-size:12px;color:#0f172a;overflow-wrap:anywhere}
+.convert-list li small{display:block;color:#a16207;font-size:11px}

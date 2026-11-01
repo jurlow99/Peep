@@ -9,6 +9,7 @@ import { formatBytes, formatDuration } from '../../lib/uploadProgress';
 import { uploadImage } from '../../lib/storageUtils';
 import { planSeriesImport, STATUS, seasonLabel } from '../../lib/seriesImport';
 import { codecLabel, detectMP4VideoCodec, mp4CodecProblem } from '../../lib/mp4Codec';
+import { finishConversions, queueConversions } from '../../lib/conversionQueue';
 import { ImageUploader } from '../ImageUploader';
 
 const artworkFolder = name => (IS_DEV_DB ? `hero/${name}` : name);
@@ -19,7 +20,7 @@ const artworkBucket = IS_DEV_DB ? 'promo-images' : undefined;
 // save_uploaded_vod path as Add VOD. One file at a time; the page must stay open.
 // `show`: import straight into this series (Manage series → Import folder); the folder
 // can then be the whole show or just one season.
-export default function SeriesFolderImport({ shows = [], show: fixedShow = null, showToast, logAudit, onSaved }) {
+export default function SeriesFolderImport({ shows = [], show: fixedShow = null, showToast, logAudit, onSaved, onQueueChanged }) {
   const [plan, setPlan] = useState(null);
   const [titles, setTitles] = useState({});          // key → edited episode title
   const [showTitle, setShowTitle] = useState('');
@@ -60,6 +61,9 @@ export default function SeriesFolderImport({ shows = [], show: fixedShow = null,
     const next = planSeriesImport(files, known.current, {}, planOptions());
     setPlan(next); setTitles({}); setResults({}); setBadCodec({}); setOverrides({}); setPlacing({}); setShowTitle(next.showTitle); setPoster(next.show?.poster || ''); setShowID(next.show ? String(next.show.id) : '');
     if (!next.ready) showToast?.(next.episodes.length ? 'Everything in that folder is already in Peep.' : 'No importable episodes found in that folder.');
+    // Originals whose MP4 twin has arrived come off the "to convert" list by themselves.
+    const converted = next.skipped.filter(s => s.converted).map(s => s.key);
+    if (converted.length) finishConversions(converted).then(() => onQueueChanged?.()).catch(() => {});
     // An MP4 can hide AV1 or HEVC video, which plays as sound over black on Safari and Apple TV. Check before anything uploads.
     const problems = {};
     for (const item of next.episodes) {
@@ -68,6 +72,15 @@ export default function SeriesFolderImport({ shows = [], show: fixedShow = null,
       if (mp4CodecProblem(codec)) problems[item.key] = codecLabel(codec);
     }
     if (alive.current && Object.keys(problems).length) setBadCodec(problems);
+  }
+
+  async function queueForConversion() {
+    const items = [...unsupported, ...plan.episodes.filter(e => badCodec[e.key]).map(e => ({ ...e, reason: `${badCodec[e.key]} video` }))];
+    try {
+      const n = await queueConversions(items);
+      showToast?.(`${n} file${n === 1 ? '' : 's'} added to the conversion list.`);
+      onQueueChanged?.();
+    } catch (e) { showToast?.(e.message, 'error'); }
   }
 
   // The admin's answer for a file the parser couldn't place: Extras, or a season/episode.
@@ -263,7 +276,10 @@ export default function SeriesFolderImport({ shows = [], show: fixedShow = null,
             <details className="vod-import-skipped">
               <summary>{[unsupported.length ? `${unsupported.length} need converting` : '', rest.length ? `${rest.length} need placing` : '', twins.length ? `${twins.length} original${twins.length === 1 ? '' : 's'} already converted` : ''].filter(Boolean).join(' · ')}</summary>
               {unsupported.length > 0 && (
-                <p className="vod-import-hint"><strong>{unsupported.length} file{unsupported.length === 1 ? '' : 's'} can't be played by Peep</strong> ({[...new Set(unsupported.map(u => `.${u.name.split('.').pop().toLowerCase()}`))].join(', ')}). Convert them to H.264 MP4 first, then pick the folder again. <span className="vod-import-filenames">{unsupported.map(u => u.name).join(' · ')}</span></p>
+                <p className="vod-import-hint"><strong>{unsupported.length} file{unsupported.length === 1 ? '' : 's'} can't be played by Peep</strong> ({[...new Set(unsupported.map(u => `.${u.name.split('.').pop().toLowerCase()}`))].join(', ')}). <button type="button" className="vod-import-mini" onClick={queueForConversion}>Add {unsupported.length + badCount} to conversion list</button> <span className="vod-import-filenames">{unsupported.map(u => u.name).join(' · ')}</span></p>
+              )}
+              {unsupported.length === 0 && badCount > 0 && (
+                <p className="vod-import-hint"><button type="button" className="vod-import-mini" onClick={queueForConversion}>Add {badCount} to conversion list</button></p>
               )}
               {rest.length > 0 && (
                 <ul>
