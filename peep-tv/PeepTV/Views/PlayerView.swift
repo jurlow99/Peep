@@ -470,16 +470,19 @@ struct PlayerView: View {
         .overlay {
             if showNext, let episode = nextEpisode {
                 ZStack {
-                    LinearGradient(colors: [Color(white: 0.09), .black], startPoint: .topTrailing, endPoint: .bottomLeading).ignoresSafeArea()
+                    // The next episode's own artwork, blurred, is the backdrop: no banded gradient.
+                    EndScreenBackdrop(url: episode.thumbURL)
                     HStack(spacing: 54) {
                         EpisodeArtwork(url: episode.thumbURL, fallback: nil)
-                            .frame(width: 560, height: 315).clipShape(RoundedRectangle(cornerRadius: 20))
+                            .frame(width: 560, height: 315).clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                            .shadow(color: .black.opacity(0.55), radius: 30, y: 14)
                         VStack(alignment: .leading, spacing: 22) {
                             Text("UP NEXT").font(.system(size: 18, weight: .bold)).tracking(4).foregroundStyle(.secondary)
                             Text(episode.displayTitle).font(.system(size: 42, weight: .bold, design: .rounded)).lineLimit(2)
                             Text(SeriesPlayback.isExtra(episode) ? "Extras" : "Season \(episode.season ?? 1) · Episode \(episode.episode_number ?? 1)").font(.system(size: 23)).foregroundStyle(.secondary)
                             if !countdownCancelled && preferences.autoplayNext && seriesAllowsAutoplay {
-                                Text("Playing in \(countdown) seconds").font(.system(size: 23)).monospacedDigit()
+                                Text("Playing in \(countdown) second\(countdown == 1 ? "" : "s")").font(.system(size: 23)).monospacedDigit()
+                                    .contentTransition(.numericText(countsDown: true)).animation(.easeInOut(duration: 0.3), value: countdown)
                             }
                             HStack(spacing: 20) {
                                 Button(action: playNext) { Label("Play next", systemImage: "play.fill").padding(16) }
@@ -490,10 +493,10 @@ struct PlayerView: View {
                             }
                         }.frame(width: 650, alignment: .leading)
                     }.padding(80)
-                }.onAppear { nextFocused = true }
+                }.transition(.opacity).onAppear { nextFocused = true }
             } else if showEnd {
                 ZStack {
-                    LinearGradient(colors: [Color(white: 0.09), .black], startPoint: .topTrailing, endPoint: .bottomLeading).ignoresSafeArea()
+                    EndScreenBackdrop(url: metadata?.artwork)
                     VStack(alignment: .leading, spacing: 28) {
                         Text("THAT'S THE END").font(.system(size: 18, weight: .bold)).tracking(4).foregroundStyle(.secondary)
                         Text(title).font(.system(size: 42, weight: .bold, design: .rounded)).lineLimit(2)
@@ -513,9 +516,11 @@ struct PlayerView: View {
                             }.focusSection()
                         }
                     }.padding(80).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                }.onAppear { endFocused = true }
+                }.transition(.opacity).onAppear { endFocused = true }
             }
         }
+        .animation(.easeInOut(duration: 0.6), value: showNext)
+        .animation(.easeInOut(duration: 0.6), value: showEnd)
         // Build the native Up Next proposal once the item's length is known.
         .task(id: "\(contentStarted):\(nextEpisode?.id ?? 0):\(preferences.autoplayNext)") {
             guard contentStarted, let episode = nextEpisode else { proposal = nil; return }
@@ -1451,6 +1456,28 @@ actor LiveInbandReader {
               (response as? HTTPURLResponse)?.statusCode == 200, let image = UIImage(data: data) else { return nil }
         ArtworkMemory.images.setObject(image, forKey: url as NSURL, cost: Int(image.size.width * image.size.height * 4))
         return image
+    }
+}
+
+/// Full-screen backdrop for the Up Next / end screens: the artwork blurred under a dark
+/// scrim. A flat gradient bands visibly on large TVs; a blurred photo does not.
+struct EndScreenBackdrop: View {
+    let url: URL?
+    var body: some View {
+        ZStack {
+            Color.black
+            if url != nil {
+                EpisodeArtwork(url: url, fallback: nil)
+                    .scaleEffect(1.15)
+                    .blur(radius: 70)
+                    .saturation(0.8)
+                    .opacity(0.55)
+            }
+            Color.black.opacity(0.45)
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 
