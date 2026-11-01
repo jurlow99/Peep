@@ -676,33 +676,39 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
             </button>
           )}
           {countdownActive && nextEpisode && (
-            <div style={{ position: "absolute", bottom: isFullscreen ? 80 : 20, right: 20, background: "rgba(15,15,15,0.96)", backdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 14, padding: "18px 20px", display: "flex", alignItems: "center", gap: 18, minWidth: 290, zIndex: 1000, boxShadow: "0 8px 32px rgba(0,0,0,0.7)" }}>
-              {countdown > 0 && <div style={{ position: "relative", flexShrink: 0, width: 54, height: 54 }}>
-                <svg width="54" height="54" viewBox="0 0 54 54" style={{ transform: "rotate(-90deg)" }}>
-                  <circle cx="27" cy="27" r="21" fill="none" stroke="#222" strokeWidth="4" />
-                  <circle cx="27" cy="27" r="21" fill="none" stroke="#facc15" strokeWidth="4"
-                    strokeDasharray={2 * Math.PI * 21}
-                    strokeDashoffset={2 * Math.PI * 21 * (1 - countdown / 10)}
-                    strokeLinecap="round"
-                    style={{ transition: "stroke-dashoffset 0.9s linear" }}
-                  />
-                </svg>
-                <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 700, color: "#fff" }}>{countdown}</span>
-              </div>}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ margin: "0 0 2px", fontSize: 10, color: "#666", textTransform: "uppercase", letterSpacing: 1 }}>Next Episode</p>
-                <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "#e5e5e5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  S{nextEpisode.season} E{nextEpisode.episode_number} · {nextEpisode.title}
-                </p>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => { clearInterval(countdownTimerRef.current); onSelect(nextEpisode); }}
-                    style={{ background: "#facc15", border: "none", borderRadius: 6, padding: "6px 14px", color: "#0a0a0a", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                    Play Now
-                  </button>
-                  <button onClick={cancelCountdown}
-                    style={{ background: "transparent", border: "1px solid #2a2a2a", borderRadius: 6, padding: "6px 12px", color: "#666", fontSize: 12, cursor: "pointer" }}>
-                    Cancel
-                  </button>
+            <div role="dialog" aria-label="Next up" style={{ position: "absolute", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", background: "#0a0a0a" }}>
+              {/* The next episode's own artwork, blurred, is the backdrop: no banded gradient. */}
+              {nextEpisode.thumbnail && <div aria-hidden="true" style={{ position: "absolute", inset: -40, backgroundImage: `url(${nextEpisode.thumbnail})`, backgroundSize: "cover", backgroundPosition: "center", filter: "blur(40px) saturate(0.8)", opacity: 0.45 }} />}
+              <div aria-hidden="true" style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)" }} />
+              <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 36, padding: "0 6%", maxWidth: 1100, width: "100%", boxSizing: "border-box" }}>
+                <div style={{ flex: "0 0 38%", maxWidth: 420, aspectRatio: "16/9", borderRadius: 14, overflow: "hidden", background: "#161616", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+                  {nextEpisode.thumbnail ? <img src={nextEpisode.thumbnail} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /> : <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: "#444", fontSize: 40 }}>▶</div>}
+                </div>
+                <div style={{ flex: 1, minWidth: 0, color: "#fff" }}>
+                  <p style={{ margin: "0 0 10px", fontSize: 12, fontWeight: 700, letterSpacing: 3, color: "rgba(255,255,255,0.55)" }}>NEXT UP</p>
+                  <p style={{ margin: "0 0 6px", fontSize: "clamp(20px, 2.6vw, 34px)", fontWeight: 800, lineHeight: 1.15, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{nextEpisode.title}</p>
+                  <p style={{ margin: "0 0 22px", fontSize: 15, color: "rgba(255,255,255,0.6)" }}>{Number(nextEpisode.season) === 0 ? "Extras" : `Season ${nextEpisode.season} · Episode ${nextEpisode.episode_number}`}</p>
+                  <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                    <button onClick={() => { clearInterval(countdownTimerRef.current); onSelect(nextEpisode); }}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 10, background: "#facc15", border: "none", borderRadius: 10, padding: "12px 22px", color: "#0a0a0a", fontSize: 15, fontWeight: 800, cursor: "pointer" }}>
+                      {countdown > 0 && (
+                        <span style={{ position: "relative", width: 26, height: 26, display: "inline-grid", placeItems: "center" }}>
+                          <svg width="26" height="26" viewBox="0 0 26 26" style={{ position: "absolute", inset: 0, transform: "rotate(-90deg)" }}>
+                            <circle cx="13" cy="13" r="10.5" fill="none" stroke="rgba(0,0,0,0.18)" strokeWidth="3" />
+                            <circle cx="13" cy="13" r="10.5" fill="none" stroke="#0a0a0a" strokeWidth="3" strokeLinecap="round"
+                              strokeDasharray={2 * Math.PI * 10.5} strokeDashoffset={2 * Math.PI * 10.5 * (1 - countdown / 10)} style={{ transition: "stroke-dashoffset 0.9s linear" }} />
+                          </svg>
+                          <span style={{ fontSize: 11, fontWeight: 800 }}>{countdown}</span>
+                        </span>
+                      )}
+                      {countdown > 0 ? "Play now" : "Play next"}
+                    </button>
+                    <button onClick={cancelCountdown}
+                      style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 10, padding: "12px 18px", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                      {countdown > 0 ? "Cancel" : "Back"}
+                    </button>
+                  </div>
+                  {countdown > 0 && <p style={{ margin: "14px 0 0", fontSize: 12, color: "rgba(255,255,255,0.45)" }}>Playing in {countdown} second{countdown === 1 ? "" : "s"} · turn autoplay off in Settings</p>}
                 </div>
               </div>
             </div>
