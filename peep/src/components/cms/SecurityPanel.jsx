@@ -4,7 +4,7 @@ import { supabase } from "../../supabase";
 // Security tab: blocked accounts and who is online. The shell supplies toast and
 // where "Back" goes. (The PIN lockout settings that used to live here went with
 // the PIN login; admin sign-in is email + password now.)
-export default function SecurityPanel({ showToast, onBack }) {
+export default function SecurityPanel({ showToast }) {
   const [blockedUsers, setBlockedUsers] = useState([]);
   const [blockEmail, setBlockEmail] = useState("");
   const [blockReason, setBlockReason] = useState("");
@@ -56,14 +56,11 @@ export default function SecurityPanel({ showToast, onBack }) {
     <div style={{ maxWidth: 760 }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 32 }}>
-        <button onClick={() => onBack()} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 14px", fontSize: 13, color: "#374151", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-          ← Back
-        </button>
         <div>
           <h2 style={{ margin: "0 0 2px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Security</h2>
           <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>Blocked accounts and who is online right now</p>
         </div>
-        <button onClick={loadSecurityData} style={{ marginLeft: "auto", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: 7, padding: "8px 16px", color: "#ef4444", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+        <button onClick={loadSecurityData} style={{ marginLeft: "auto", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 16px", color: "#374151", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
           Refresh
         </button>
       </div>

@@ -39,6 +39,7 @@ import FlagsPanel from "./cms/FlagsPanel";
 import StoragePanel from "./cms/StoragePanel";
 import DuplicateSeries from "./cms/DuplicateSeries";
 import StaffPanel from "./cms/StaffPanel";
+import StorageToolsPanel from "./cms/StorageToolsPanel";
 import ReplaceVideo from "./cms/ReplaceVideo";
 import { navForRole, allowedTarget } from "../lib/staff";
 import ComboInput from "./cms/ComboInput";
@@ -3019,7 +3020,7 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
         onNavigate={applyTarget} pendingReports={pendingReportCount} padding={PAD} nav={nav}
       />
 
-      <div style={{ maxWidth: 1600, margin: "0 auto", padding: tab === "storage" ? 0 : `40px ${PAD} 80px` }}>
+      <div style={{ maxWidth: 1600, margin: "0 auto", padding: tab === "storage" || tab === "creators" ? 0 : `40px ${PAD} 80px` }}>
 
         {tab === "scaffold" && (
           <div style={{ maxWidth: 800 }}>
@@ -3055,7 +3056,7 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
               {/* Header row with Add button */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
                 <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#0f172a" }}>Movies ({rows.length})</h2>
-                <span style={{ fontSize: 12, color: "#9ca3af" }}>Upload and manage files in Content → VOD library</span>
+                <span style={{ fontSize: 12, color: "#9ca3af" }}>Add movies through Content → Add VOD.</span>
               </div>
 
           {/* Controls */}
@@ -3533,7 +3534,7 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
                       Import M3U
                     </button>
                     <button onClick={() => { setChannelForm(EMPTY_CHANNEL); setEditingChannelId(null); setDrawerOpen(true); }}
-                      style={{ background: "#ef4444", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                      style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                       + Add Channel
                     </button>
                   </div>
@@ -3721,7 +3722,7 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
               </div>
               <button
                 onClick={() => { setLiveForm(EMPTY_LIVE_STREAM); setEditingLiveId(null); setDrawerOpen(true); }}
-                style={{ background: "#ef4444", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+                style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
               >
                 + Add Stream
               </button>
@@ -4256,7 +4257,6 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
               </button>
             </div>
 
-            {reportSection === "overview" && <LiveTVViewingDashboard compact />}
 
             {/* ── User Search ── */}
             <div style={{ marginBottom: 28, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, overflow: "hidden" }}>
@@ -4905,80 +4905,21 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
 
         {/* ────── THE BOSS TAB ────── */}
         {tab === "security" && (
-          <SecurityPanel showToast={showToast} onBack={() => setCreatorsTab("list")} />
+          <SecurityPanel showToast={showToast} />
         )}
 
         {tab === "ads" && <AdsPanel showToast={showToast} logAudit={logAudit} />}
 
         {tab === "staff" && <StaffPanel staffRole={staffRole} showToast={showToast} logAudit={logAudit} />}
 
+        {tab === "storage_tools" && <StorageToolsPanel videosList={videosList} showsList={showsList} showToast={showToast} logAudit={logAudit} />}
+
         {tab === "settings" && (
           <div style={{ maxWidth: 700 }}>
-            <div style={{ marginBottom: 32 }}>
+            <div style={{ marginBottom: 28 }}>
               <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Settings</h2>
-              <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Platform controls.</p>
+              <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Platform-wide switches.</p>
             </div>
-
-            {/* ── Boss Goals + TODO ── */}
-            {(() => {
-              const goals = bossTodos.filter(t => t.section === "goal");
-              const todos = bossTodos.filter(t => t.section === "todo");
-              const totalDone = bossTodos.filter(t => t.done).length;
-              const renderItem = t => {
-                const labelMeta = TODO_LABELS.find(l => l.name === t.label);
-                return (
-                  <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: t.done ? "#f8fafc" : "#fff", border: "1px solid #f1f5f9", borderRadius: 8 }}>
-                    <button onClick={() => toggleTodo(t.id)} style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${t.done ? "#7c3aed" : "#d1d5db"}`, background: t.done ? "#7c3aed" : "#fff", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>
-                      {t.done && <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1.5 5L4 7.5L8.5 2.5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                    </button>
-                    <span style={{ flex: 1, fontSize: 13, color: t.done ? "#9ca3af" : "#0f172a", textDecoration: t.done ? "line-through" : "none" }}>{t.text}</span>
-                    {labelMeta && <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 99, background: labelMeta.color + "18", color: labelMeta.color, whiteSpace: "nowrap" }}>{labelMeta.name}</span>}
-                    <button onClick={() => deleteTodo(t.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#d1d5db", fontSize: 16, lineHeight: 1, padding: "0 2px" }}>×</button>
-                  </div>
-                );
-              };
-              const renderAddRow = (val, setVal, labelVal, setLabelVal, onAdd, placeholder) => (
-                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                  <select value={labelVal} onChange={e => setLabelVal(e.target.value)} style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 10px", fontSize: 12, color: labelVal ? "#0f172a" : "#9ca3af", outline: "none", background: "#fff", flexShrink: 0 }}>
-                    <option value="">Label</option>
-                    {TODO_LABELS.map(l => <option key={l.name} value={l.name}>{l.name}</option>)}
-                  </select>
-                  <input value={val} onChange={e => setVal(e.target.value)} onKeyDown={e => e.key === "Enter" && onAdd()} placeholder={placeholder} style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 12px", fontSize: 13, color: "#0f172a", outline: "none" }} />
-                  <button onClick={onAdd} style={{ background: "#facc15", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 700, color: "#0a0a0a", cursor: "pointer", whiteSpace: "nowrap" }}>Add</button>
-                </div>
-              );
-              return (
-                <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-                    <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#0f172a" }}>Boss Board</p>
-                    <span style={{ fontSize: 12, color: "#9ca3af" }}>{totalDone} of {bossTodos.length} done</span>
-                  </div>
-
-                  {/* Goals */}
-                  <div style={{ marginBottom: 24 }}>
-                    <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6 }}>Goals — {goals.filter(t => t.done).length}/{goals.length}</p>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      {goals.length === 0 && <p style={{ margin: 0, fontSize: 13, color: "#d1d5db", padding: "8px 0" }}>No goals yet</p>}
-                      {goals.map(renderItem)}
-                    </div>
-                    {renderAddRow(newGoal, setNewGoal, newGoalLabel, setNewGoalLabel, addGoal, "Add a goal...")}
-                  </div>
-
-                  <div style={{ height: 1, background: "#f1f5f9", marginBottom: 20 }} />
-
-                  {/* To-Do */}
-                  <div>
-                    <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6 }}>To-Do — {todos.filter(t => t.done).length}/{todos.length}</p>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      {todos.length === 0 && <p style={{ margin: 0, fontSize: 13, color: "#d1d5db", padding: "8px 0" }}>No tasks yet</p>}
-                      {todos.map(renderItem)}
-                    </div>
-                    {renderAddRow(newTodo, setNewTodo, newTodoLabel, setNewTodoLabel, addTodo, "Add a task...")}
-                  </div>
-                </div>
-              );
-            })()}
-
             {/* ── Maintenance Mode ── */}
             <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
@@ -4999,31 +4940,6 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
               )}
             </div>
 
-
-            {/* ── Grant Access ── */}
-            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
-              <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Grant Access by Email</p>
-              <p style={{ margin: "0 0 16px", fontSize: 13, color: "#9ca3af" }}>Give any existing account free access instantly. Shows as COMP in subscriptions.</p>
-              <div style={{ display: "flex", gap: 10 }}>
-                <input
-                  value={grantEmail}
-                  onChange={e => { setGrantEmail(e.target.value); setGrantResult(null); }}
-                  onKeyDown={e => e.key === "Enter" && grantAccessByEmail()}
-                  placeholder="user@email.com"
-                  type="email"
-                  style={{ flex: 1, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px", fontSize: 14, color: "#0f172a", outline: "none" }}
-                />
-                <button onClick={grantAccessByEmail} disabled={grantLoading || !grantEmail.trim()}
-                  style={{ background: "#facc15", border: "none", borderRadius: 8, padding: "10px 24px", color: "#0a0a0a", fontSize: 14, fontWeight: 700, cursor: "pointer", opacity: grantLoading ? 0.6 : 1, whiteSpace: "nowrap" }}>
-                  {grantLoading ? "…" : "Grant Access"}
-                </button>
-              </div>
-              {grantResult && (
-                <p style={{ margin: "10px 0 0", fontSize: 13, color: grantResult.success ? "#059669" : "#dc2626", fontWeight: 500 }}>
-                  {grantResult.success ? "✓ " : "✗ "}{grantResult.msg}
-                </p>
-              )}
-            </div>
 
             {/* ── Fraud Detection Toggle ── */}
             <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
@@ -5062,75 +4978,107 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
               </div>
             </div>
 
-            {/* ── Creators Card ── */}
-            <div onClick={() => { setTab("creators"); setCreatorsTab("list"); }}
-              style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "22px 28px", marginBottom: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "box-shadow 0.15s" }}
-              onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"}
-              onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
-              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(251,146,60,0.08)", border: "1px solid rgba(251,146,60,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fb923c" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-                </div>
-                <div>
-                  <p style={{ margin: "0 0 3px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Content Partners</p>
-                  <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Manage content partner agreements and revenue share</p>
-                </div>
-              </div>
-              <span style={{ fontSize: 18, color: "#d1d5db" }}>→</span>
-            </div>
+          </div>
+        )}
 
-            {/* ── Review Queue Card ── */}
-            <div onClick={() => { setTab("creators"); setCreatorsTab("review"); }}
-              style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "22px 28px", marginBottom: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "box-shadow 0.15s" }}
-              onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"}
-              onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
-              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, position: "relative" }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#facc15" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="12" y2="17"/></svg>
-                  {pendingCount > 0 && (
-                    <span style={{ position: "absolute", top: -6, right: -6, background: "#ef4444", color: "#fff", fontSize: 10, fontWeight: 700, borderRadius: 99, minWidth: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>{pendingCount}</span>
-                  )}
-                </div>
-                <div>
-                  <p style={{ margin: "0 0 3px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Review Queue</p>
-                  <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>{pendingCount > 0 ? `${pendingCount} episode${pendingCount !== 1 ? "s" : ""} waiting for review` : "No pending uploads"}</p>
-                </div>
-              </div>
-              <span style={{ fontSize: 18, color: "#d1d5db" }}>→</span>
+        {tab === "boss" && (
+          <div style={{ maxWidth: 700 }}>
+            <div style={{ marginBottom: 28 }}>
+              <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Boss board</h2>
+              <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Your own goals and to-do list. Nobody else sees this.</p>
             </div>
+            {/* ── Boss Goals + TODO ── */}
+            {(() => {
+              const goals = bossTodos.filter(t => t.section === "goal");
+              const todos = bossTodos.filter(t => t.section === "todo");
+              const totalDone = bossTodos.filter(t => t.done).length;
+              const renderItem = t => {
+                const labelMeta = TODO_LABELS.find(l => l.name === t.label);
+                return (
+                  <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: t.done ? "#f8fafc" : "#fff", border: "1px solid #f1f5f9", borderRadius: 8 }}>
+                    <button onClick={() => toggleTodo(t.id)} style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${t.done ? "#7c3aed" : "#d1d5db"}`, background: t.done ? "#7c3aed" : "#fff", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>
+                      {t.done && <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1.5 5L4 7.5L8.5 2.5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                    </button>
+                    <span style={{ flex: 1, fontSize: 13, color: t.done ? "#9ca3af" : "#0f172a", textDecoration: t.done ? "line-through" : "none" }}>{t.text}</span>
+                    {labelMeta && <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 99, background: labelMeta.color + "18", color: labelMeta.color, whiteSpace: "nowrap" }}>{labelMeta.name}</span>}
+                    <button onClick={() => deleteTodo(t.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#d1d5db", fontSize: 16, lineHeight: 1, padding: "0 2px" }}>×</button>
+                  </div>
+                );
+              };
+              const renderAddRow = (val, setVal, labelVal, setLabelVal, onAdd, placeholder) => (
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  <select value={labelVal} onChange={e => setLabelVal(e.target.value)} style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 10px", fontSize: 12, color: labelVal ? "#0f172a" : "#9ca3af", outline: "none", background: "#fff", flexShrink: 0 }}>
+                    <option value="">Label</option>
+                    {TODO_LABELS.map(l => <option key={l.name} value={l.name}>{l.name}</option>)}
+                  </select>
+                  <input value={val} onChange={e => setVal(e.target.value)} onKeyDown={e => e.key === "Enter" && onAdd()} placeholder={placeholder} style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 12px", fontSize: 13, color: "#0f172a", outline: "none" }} />
+                  <button onClick={onAdd} style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 700, color: "#fff", cursor: "pointer", whiteSpace: "nowrap" }}>Add</button>
+                </div>
+              );
+              return (
+                <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+                    <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#0f172a" }}>Boss Board</p>
+                    <span style={{ fontSize: 12, color: "#9ca3af" }}>{totalDone} of {bossTodos.length} done</span>
+                  </div>
 
-            {/* ── Payouts Card ── */}
-            <div onClick={() => { setTab("creators"); setCreatorsTab("payouts"); setPayoutView("current"); }}
-              style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "22px 28px", marginBottom: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "box-shadow 0.15s" }}
-              onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"}
-              onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
-              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-4 0v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
+                  {/* Goals */}
+                  <div style={{ marginBottom: 24 }}>
+                    <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6 }}>Goals — {goals.filter(t => t.done).length}/{goals.length}</p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {goals.length === 0 && <p style={{ margin: 0, fontSize: 13, color: "#d1d5db", padding: "8px 0" }}>No goals yet</p>}
+                      {goals.map(renderItem)}
+                    </div>
+                    {renderAddRow(newGoal, setNewGoal, newGoalLabel, setNewGoalLabel, addGoal, "Add a goal...")}
+                  </div>
+
+                  <div style={{ height: 1, background: "#f1f5f9", marginBottom: 20 }} />
+
+                  {/* To-Do */}
+                  <div>
+                    <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.6 }}>To-Do — {todos.filter(t => t.done).length}/{todos.length}</p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {todos.length === 0 && <p style={{ margin: 0, fontSize: 13, color: "#d1d5db", padding: "8px 0" }}>No tasks yet</p>}
+                      {todos.map(renderItem)}
+                    </div>
+                    {renderAddRow(newTodo, setNewTodo, newTodoLabel, setNewTodoLabel, addTodo, "Add a task...")}
+                  </div>
                 </div>
-                <div>
-                  <p style={{ margin: "0 0 3px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Payouts</p>
-                  <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Calculate and track monthly partner revenue share</p>
-                </div>
-              </div>
-              <span style={{ fontSize: 18, color: "#d1d5db" }}>→</span>
+              );
+            })()}
+
+          </div>
+        )}
+
+        {tab === "promos" && (
+          <div style={{ maxWidth: 700 }}>
+            <div style={{ marginBottom: 28 }}>
+              <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Promo codes & comps</h2>
+              <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Codes viewers redeem for a subscription, and free access you hand out by email.</p>
             </div>
-
-            {/* ── Security Card ── */}
-            <div onClick={() => { setTab("security"); }}
-              style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "22px 28px", marginBottom: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: "box-shadow 0.15s" }}
-              onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"}
-              onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
-              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                </div>
-                <div>
-                  <p style={{ margin: "0 0 3px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Security</p>
-                  <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Blocked users and active sessions</p>
-                </div>
+            {/* ── Grant Access ── */}
+            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "24px 28px", marginBottom: 20 }}>
+              <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 600, color: "#0f172a" }}>Grant Access by Email</p>
+              <p style={{ margin: "0 0 16px", fontSize: 13, color: "#9ca3af" }}>Give any existing account free access instantly. Shows as COMP in subscriptions.</p>
+              <div style={{ display: "flex", gap: 10 }}>
+                <input
+                  value={grantEmail}
+                  onChange={e => { setGrantEmail(e.target.value); setGrantResult(null); }}
+                  onKeyDown={e => e.key === "Enter" && grantAccessByEmail()}
+                  placeholder="user@email.com"
+                  type="email"
+                  style={{ flex: 1, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px", fontSize: 14, color: "#0f172a", outline: "none" }}
+                />
+                <button onClick={grantAccessByEmail} disabled={grantLoading || !grantEmail.trim()}
+                  style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "10px 24px", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", opacity: grantLoading ? 0.6 : 1, whiteSpace: "nowrap" }}>
+                  {grantLoading ? "…" : "Grant Access"}
+                </button>
               </div>
-              <span style={{ fontSize: 18, color: "#d1d5db" }}>→</span>
+              {grantResult && (
+                <p style={{ margin: "10px 0 0", fontSize: 13, color: grantResult.success ? "#059669" : "#dc2626", fontWeight: 500 }}>
+                  {grantResult.success ? "✓ " : "✗ "}{grantResult.msg}
+                </p>
+              )}
             </div>
 
             {/* Create new code */}
@@ -5159,7 +5107,7 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
                 </div>
                 <div style={{ display: "flex", alignItems: "flex-end" }}>
                   <button onClick={savePromo} disabled={promoSaving || !promoForm.name.trim() || !promoForm.code.trim()}
-                    style={{ background: "#facc15", border: "none", borderRadius: 8, padding: "10px 24px", color: "#0a0a0a", fontSize: 14, fontWeight: 700, cursor: "pointer", opacity: promoSaving ? 0.6 : 1, whiteSpace: "nowrap" }}>
+                    style={{ background: "#4f46e5", border: "none", borderRadius: 8, padding: "10px 24px", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", opacity: promoSaving ? 0.6 : 1, whiteSpace: "nowrap" }}>
                     {promoSaving ? "Saving…" : "Add Code"}
                   </button>
                 </div>
@@ -5958,7 +5906,7 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
                     </>}
                     actions={<>
 <div style={{ display: "flex", gap: 10 }}>
-                      <button onClick={saveChannel} disabled={channelSaving} style={{ flex: 1, background: "#ef4444", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: channelSaving ? "not-allowed" : "pointer", opacity: channelSaving ? 0.7 : 1 }}>
+                      <button onClick={saveChannel} disabled={channelSaving} style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: channelSaving ? "not-allowed" : "pointer", opacity: channelSaving ? 0.7 : 1 }}>
                         {channelSaving ? "Saving…" : editingChannelId ? "Save Changes" : "Add Channel"}
                       </button>
                       <button onClick={() => { setEditingChannelId(null); setChannelForm(EMPTY_CHANNEL); setDrawerOpen(false); }} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
@@ -6003,7 +5951,7 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
                     </div>
 
                     <div style={{ display: "flex", gap: 10 }}>
-                      <button onClick={saveLiveStream} disabled={liveSaving} style={{ flex: 1, background: "#ef4444", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: liveSaving ? "not-allowed" : "pointer", opacity: liveSaving ? 0.7 : 1 }}>
+                      <button onClick={saveLiveStream} disabled={liveSaving} style={{ flex: 1, background: "#4f46e5", border: "none", borderRadius: 7, padding: "12px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: liveSaving ? "not-allowed" : "pointer", opacity: liveSaving ? 0.7 : 1 }}>
                         {liveSaving ? "Saving…" : editingLiveId ? "Save Changes" : "Add Stream"}
                       </button>
                       <button onClick={cancelLiveEdit} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 7, padding: "12px 20px", color: "#374151", fontSize: 13, cursor: "pointer" }}>Cancel</button>
@@ -6781,7 +6729,7 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
                 <h2 style={{ margin: "0 0 2px", fontSize: 22, fontWeight: 700, color: "#0f172a" }}>Content Partners</h2>
                 <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>{creatorsList.length} partner{creatorsList.length !== 1 ? "s" : ""}</p>
               </div>
-              <button onClick={() => openCreatorModal()} style={{ marginLeft: "auto", background: "#fb923c", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>+ Add Partner</button>
+              <button onClick={() => openCreatorModal()} style={{ marginLeft: "auto", background: "#4f46e5", border: "none", borderRadius: 8, padding: "9px 18px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>+ Add Partner</button>
             </div>
 
             {creatorsLoading ? (
@@ -7021,7 +6969,8 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
         {tab === "creators" && creatorsTab === "payouts" && (
           <div style={{ maxWidth: 1600, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
             <div style={{ marginBottom: 24 }}>
-              <button onClick={() => setCreatorsTab("list")} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 14px", fontSize: 13, color: "#374151", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>← Back</button>
+              <h2 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 700, color: "#0f172a" }}>Partner payouts</h2>
+              <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Each partner's share of the month's revenue, worked out from watch time.</p>
             </div>
             {/* Sub-tab toggle */}
             <div style={{ display: "flex", gap: 8, marginBottom: 28 }}>

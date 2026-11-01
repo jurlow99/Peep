@@ -107,8 +107,8 @@ export default function ModerationPanel({ onPendingCount }) {
       <div style={{ maxWidth: 900 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, gap: 16, flexWrap: "wrap" }}>
           <div>
-            <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Moderation</h2>
-            <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>Content reports and global word filter.</p>
+            <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Content reports</h2>
+            <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>What viewers have flagged, plus the words blocked in live chat.</p>
           </div>
           <button onClick={loadContentReports} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 16px", fontSize: 13, color: "#374151", cursor: "pointer", fontWeight: 500 }}>Refresh</button>
         </div>

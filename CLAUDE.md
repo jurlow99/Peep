@@ -249,15 +249,21 @@ Reached at `admin.watchpeep.tv` or `localhost:5173/admin`. Email+password login,
 `profiles.role==='admin' || is_admin` (`lib/auth.ts isAdminProfile`); re-checked on
 every auth change. No PIN step.
 
-Navigation is two horizontal rows driven by `ADMIN_NAV` (8 groups):
-**Content** (Add VOD, Movies, Series, Episodes, Podcasts) · **Curation** (Screens & rows,
-incl. Home Hero with private background video) · **Live TV** (Channels & schedules,
-Feeds, Multiview packages, Predictions) · **Partners** (Content partners, Provider
-deliveries, Submission review, Creator streams, Streaming applications) · **Audience**
-(Users, Support, Content reports) · **Monetization** (Ads, Subscriptions, Partner
-payouts) · **Reports** (Live TV viewing, Platform analytics) · **Platform** (Settings,
-Security, Flags, Audit, Planned tools). Tab state is not in the URL. Movies are still
-keyed `videoSubTab === "shorts"` internally (legacy naming).
+Navigation is two horizontal rows driven by `ADMIN_NAV` (8 groups, one flow per page,
+reorganised 2026-11-01): **Content** (Add VOD, Movies, Series, Podcasts — the Episodes
+page was dropped; episodes live in Manage series) · **Curation** (Screens & rows) ·
+**Live TV** (Channels & schedules, Feeds, Multiview packages, Predictions) ·
+**Partners** (Content partners, Provider deliveries — the admin view hides the partner
+portal chrome and collapses access/series/create-on-behalf; Submission review was folded
+into it — Creator streams, Streaming applications) · **Audience** (Users, Support,
+Content reports) · **Monetization** (Ads, Subscriptions, Promo codes & comps, Partner
+payouts) · **Reports** (Live TV viewing, Platform analytics) · **Platform** (Staff,
+Settings = Maintenance/Fraud/Beta code only, Storage = clean-up + file library, Boss
+board, Security, Feature flags, Audit log, Planned tools). Primary buttons are indigo
+`#4f46e5`; red is for destructive actions only. Tab state is not in the URL. Movies are
+still keyed `videoSubTab === "shorts"` internally (legacy naming). To review every page
+visually: `scratchpad/admin-review/shoot-admin.js` logs in as a review account and
+screenshots each nav page with Playwright WebKit.
 
 Cleaned up 2026-10-31: the Live TV passcode is gone; the Settings → Admin Access card
 shows for every admin and `manage-admin-role` uses `requireAdmin` (you can't change

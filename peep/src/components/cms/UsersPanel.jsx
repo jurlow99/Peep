@@ -65,7 +65,7 @@ export default function UsersPanel({ showToast, logAudit }) {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
               <input value={usersSearch} onChange={e => setUsersSearch(e.target.value)} placeholder="Search by name or email…" style={{ border: "none", outline: "none", fontSize: 13, color: "#0f172a", background: "transparent", width: 220 }} />
             </div>
-            <button onClick={loadUsers} style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.2)", borderRadius: 7, padding: "8px 16px", color: "#f87171", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Refresh</button>
+            <button onClick={loadUsers} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 16px", color: "#374151", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Refresh</button>
           </div>
         </div>
 
