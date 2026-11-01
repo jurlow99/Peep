@@ -1789,7 +1789,7 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
   function startEpisodeEdit(ep) {
     setEditingEpisodeId(ep.id);
     setDrawerOpen(true);
-    setEpisodeForm({ show_id: ep.show_id, season: ep.season, episode_number: ep.episode_number, title: ep.title ?? "", description: ep.description ?? "", url: ep.url ?? "", thumbnail: ep.thumbnail ?? "", duration: ep.duration ?? "" });
+    setEpisodeForm({ show_id: ep.show_id, season: ep.season, episode_number: ep.episode_number, title: ep.title ?? "", description: ep.description ?? "", url: ep.url ?? "", thumbnail: ep.thumbnail ?? "", duration: ep.duration ?? "", intro_start_seconds: ep.intro_start_seconds ?? "", intro_end_seconds: ep.intro_end_seconds ?? "" });
   }
 
   function cancelEpisodeEdit() { setEditingEpisodeId(null); setEpisodeForm({ ...EMPTY_EPISODE, show_id: selectedShowForEpisodes }); setDrawerOpen(false); }
@@ -1798,6 +1798,9 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
     if (!episodeForm.title.trim() || !selectedShowForEpisodes) { showToast("Show and title are required.", "error"); return; }
     setEpisodeSaving(true);
     const payload = { ...episodeForm, show_id: selectedShowForEpisodes, season: Number(episodeForm.season), episode_number: Number(episodeForm.episode_number) };
+    // Skip-intro override: whole seconds or null (null = use the series default).
+    for (const key of ["intro_start_seconds", "intro_end_seconds"]) payload[key] = episodeForm[key] !== "" && episodeForm[key] != null ? Math.max(0, Math.round(Number(episodeForm[key]))) || null : null;
+    if (payload.intro_end_seconds && payload.intro_start_seconds && payload.intro_end_seconds <= payload.intro_start_seconds) { showToast("The intro must end after it starts.", "error"); setEpisodeSaving(false); return; }
     try {
       if (editingEpisodeId) {
         const { error } = await supabase.from("episodes").update(payload).eq("id", editingEpisodeId);
@@ -5404,6 +5407,10 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
                     <FieldInput label="Duration" value={episodeForm.duration} onChange={v => setEpisodeForm(f => ({ ...f, duration: v }))} placeholder="42 min" />
                     <FieldInput label="Video URL — required for playback" value={episodeForm.url} onChange={v => setEpisodeForm(f => ({ ...f, url: v }))} placeholder="https://archive.org/..." />
                     {editingEpisodeId && <ReplaceVideo type="episode" id={editingEpisodeId} title={episodeForm.title} showToast={showToast} logAudit={logAudit} onReplaced={({ url, duration }) => { setEpisodeForm(f => ({ ...f, url, duration: f.duration || duration })); if (episodeForm.show_id) loadEpisodes(episodeForm.show_id); }} />}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      <FieldInput label="Skip intro · starts at (seconds)" value={episodeForm.intro_start_seconds ?? ""} onChange={v => setEpisodeForm(f => ({ ...f, intro_start_seconds: v }))} placeholder="series default" type="number" />
+                      <FieldInput label="Skip intro · ends at (seconds)" value={episodeForm.intro_end_seconds ?? ""} onChange={v => setEpisodeForm(f => ({ ...f, intro_end_seconds: v }))} placeholder="series default" type="number" />
+                    </div>
                     <div>
                       <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Episode thumbnail — recommended</label>
                       <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>16:9 still from the episode (optional)</p>
