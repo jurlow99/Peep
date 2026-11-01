@@ -477,7 +477,7 @@ struct PlayerView: View {
                         VStack(alignment: .leading, spacing: 22) {
                             Text("UP NEXT").font(.system(size: 18, weight: .bold)).tracking(4).foregroundStyle(.secondary)
                             Text(episode.displayTitle).font(.system(size: 42, weight: .bold, design: .rounded)).lineLimit(2)
-                            Text("Season \(episode.season ?? 1) · Episode \(episode.episode_number ?? 1)").font(.system(size: 23)).foregroundStyle(.secondary)
+                            Text(SeriesPlayback.isExtra(episode) ? "Extras" : "Season \(episode.season ?? 1) · Episode \(episode.episode_number ?? 1)").font(.system(size: 23)).foregroundStyle(.secondary)
                             if !countdownCancelled && preferences.autoplayNext && seriesAllowsAutoplay {
                                 Text("Playing in \(countdown) seconds").font(.system(size: 23)).monospacedDigit()
                             }

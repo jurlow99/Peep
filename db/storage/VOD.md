@@ -284,3 +284,21 @@ its poster. Providers may upload an optional **Episode thumbnail** (16:9,
 1280 × 720 preferred) under Extra files; publication applies it to the episode's
 thumbnail, without replacing the series poster. Existing episode artwork files
 are retained. Movies and new series still require their own posters.
+
+## Series folder import and the Extras shelf (2026-11-01)
+
+Admin → Content → Add VOD → **Import a series folder** takes a whole show at once:
+`Show / Season N / S01E02 Title.mp4`. Each MP4 uploads (R2 when configured) and
+saves through `save_uploaded_vod` exactly like a single Add VOD, with an
+auto-grabbed thumbnail and duration. Files Peep can't play (`.mkv`, `.webm`) are
+listed, not uploaded; an original sitting next to its converted `.mp4` twin is
+explained as such. Re-picking the folder only surfaces what isn't in Peep yet.
+
+**Extras = season 0.** Files named trailer / teaser / promo / preview / bloopers /
+recap land on the series' Extras shelf as `season = 0`, numbered after any extras
+already there, in name order. `save_uploaded_vod` now accepts season 0 (dev
+updated 2026-11-01; prod still needs `vod-upload-details.sql`). The website,
+Apple TV and the CMS label season 0 "Extras", list it after the real seasons, and
+never treat an extra as "next up" or autoplay into one. The first imported file
+with "trailer" in its name also becomes `shows.trailer_url` when the series has no
+trailer yet.

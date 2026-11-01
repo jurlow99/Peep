@@ -1012,6 +1012,19 @@ final class CatalogTests: XCTestCase {
         XCTAssertEqual(exact, CGRect(origin: .zero, size: bounds))
     }
 
+    func testExtrasShelfSitsLastAndNeverAutoplays() throws {
+        func episode(_ id: Int, _ season: Int, _ number: Int) -> Episode {
+            try! JSONDecoder().decode(Episode.self, from: Data(#"{"id":\#(id),"show_id":1,"season":\#(season),"episode_number":\#(number),"title":"E","url":"https://cdn.example/\#(id).mp4"}"#.utf8))
+        }
+        let trailer = episode(9, 0, 1), e1 = episode(1, 1, 1), e2 = episode(2, 1, 2)
+        XCTAssertEqual([trailer, e2, e1].sorted(by: SeriesPlayback.before).map(\.id), [1, 2, 9])
+        XCTAssertEqual(SeriesPlayback.nextUp(in: [trailer, e1, e2], progress: [:])?.id, 1)
+        XCTAssertNil(SeriesPlayback.next(after: e2, in: [trailer, e1, e2]), "The last episode never runs into the trailers")
+        XCTAssertNil(SeriesPlayback.next(after: trailer, in: [trailer, e1, e2]))
+        XCTAssertEqual(SeriesPlayback.seasonLabel(0), "Extras")
+        XCTAssertEqual(SeriesPlayback.seasonLabel(3), "Season 3")
+    }
+
     func testSeriesPlaybackSkipsMissingStreamsAndAdvancesAcrossSeasons() throws {
         let episodes = try decode([Episode].self, #"[{"id":3,"show_id":1,"season":2,"episode_number":1,"url":"https://example.test/next.mp4"},{"id":1,"show_id":1,"season":1,"episode_number":1,"url":"https://example.test/current.mp4"},{"id":2,"show_id":1,"season":1,"episode_number":2}]"#)
         XCTAssertEqual(SeriesPlayback.next(after: episodes[1], in: episodes)?.id, 3)

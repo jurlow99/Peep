@@ -32,11 +32,13 @@ describe('series folder import', () => {
     expect(plan.showTitle).toBe('The Big Lez Show');
     expect(plan.show?.id).toBe(4);
     // The "Specials" pilot has no season folder, so it lands on 1x1 too — already taken.
-    expect(plan.episodes.map(e => [e.season, e.number, e.status])).toEqual([[1, 1, STATUS.EXISTS], [1, 1, STATUS.EXISTS], [1, 2, STATUS.READY], [2, 1, STATUS.READY]]);
-    expect(plan.skipped.map(s => s.status)).toEqual([STATUS.UNSUPPORTED, STATUS.UNRECOGNIZED]);
+    // …and the Season 3 trailer becomes the first item on the Extras shelf (season 0, listed last).
+    expect(plan.episodes.map(e => [e.season, e.number, e.status])).toEqual([[1, 1, STATUS.EXISTS], [1, 1, STATUS.EXISTS], [1, 2, STATUS.READY], [2, 1, STATUS.READY], [0, 1, STATUS.READY]]);
+    expect(plan.skipped.map(s => s.status)).toEqual([STATUS.UNSUPPORTED]);
     expect(plan.ready).toBe(2);
-    expect(plan.bytes).toBe(5000 + 7000);
-    expect(plan.seasons).toEqual([1, 2]);
+    expect(plan.extras).toBe(1);
+    expect(plan.bytes).toBe(5000 + 7000 + 1000);
+    expect(plan.seasons).toEqual([1, 2, 0]);
   });
 
   it('falls back to season 1 and a new series when nothing matches', () => {
@@ -61,7 +63,7 @@ describe('series folder import', () => {
     expect(plan.skipped.find(s => s.name.endsWith('.mkv'))?.reason).toContain('Convert it');
   });
 
-  it('never lets a trailer take an episode slot, and prefers the explicit code when names collide', () => {
+  it('sends trailers to the Extras shelf instead of an episode slot, and prefers the explicit code when names collide', () => {
     const plan = planSeriesImport([
       f('Show/Season 4/Season 4 ep2 trailer.mp4'),
       f('Show/Season 4/Season 4 trailer #2.mp4'),
@@ -69,9 +71,19 @@ describe('series folder import', () => {
       f('Show/Season 4/Episode 3 Vinally.mp4'),
       f('Show/Season 4/S04E03 Vinally.mp4'),
     ]);
-    expect(plan.episodes.map(e => `${e.season}x${e.number} ${e.name}`)).toEqual(['4x2 S04E02 Plac-Key.mp4', '4x3 S04E03 Vinally.mp4']);
-    expect(plan.skipped.map(s => s.name)).toEqual(['Episode 3 Vinally.mp4', 'Season 4 ep2 trailer.mp4', 'Season 4 trailer #2.mp4']);
-    expect(plan.skipped.find(s => s.name.startsWith('Episode 3'))?.reason).toContain('"S04E03 Vinally.mp4" is already S4E3');
-    expect(plan.skipped.find(s => s.name.includes('trailer'))?.reason).toContain('trailer or extra');
+    expect(plan.episodes.map(e => `${e.season}x${e.number} ${e.name}`)).toEqual([
+      '4x2 S04E02 Plac-Key.mp4', '4x3 S04E03 Vinally.mp4', '0x1 Season 4 ep2 trailer.mp4', '0x2 Season 4 trailer #2.mp4',
+    ]);
+    expect(plan.episodes.filter(e => e.extra).map(e => e.title)).toEqual(['Season 4 ep2 trailer', 'Season 4 trailer #2']);
+    expect(plan.seasons).toEqual([4, 0]);
+    expect(plan.ready).toBe(2); expect(plan.extras).toBe(2);
+    expect(plan.skipped.map(s => s.name)).toEqual(['Episode 3 Vinally.mp4']);
+    expect(plan.skipped[0].reason).toContain('"S04E03 Vinally.mp4" is already S4E3');
+  });
+
+  it('numbers new extras after the ones a series already has and leaves repeats alone', () => {
+    const existing = [{ id: 4, title: 'Show', episodes: [{ season: 0, episode_number: 1, title: 'Choomah Island 2 Trailer' }, { season: 0, episode_number: 2, title: 'Blooper reel' }] }];
+    const plan = planSeriesImport([f('Show/Season 3/Choomah Island 2 TRAILER.mp4'), f('Show/Season 4/Teaser Trailer #1.mp4')], existing);
+    expect(plan.episodes.map(e => [e.number, e.status, e.title])).toEqual([[0, STATUS.EXISTS, 'Choomah Island 2 TRAILER'], [3, STATUS.READY, 'Teaser Trailer #1']]);
   });
 });

@@ -455,14 +455,21 @@ struct SavedListItem: Decodable, Identifiable {
 
 /// Never advance backwards or repeat an episode with duplicate numbering.
 enum SeriesPlayback {
+    /// Season 0 is the Extras shelf: trailers, teasers, bloopers. Listed last,
+    /// never "next up", never autoplayed after an episode.
+    static let extrasSeason = 0
+    static func isExtra(_ episode: Episode) -> Bool { (episode.season ?? 1) == extrasSeason }
+    static func seasonLabel(_ season: Int) -> String { season == extrasSeason ? "Extras" : "Season \(season)" }
     static func before(_ a: Episode, _ b: Episode) -> Bool {
+        if isExtra(a) != isExtra(b) { return isExtra(b) }
         if (a.season ?? 1) != (b.season ?? 1) { return (a.season ?? 1) < (b.season ?? 1) }
         if (a.episode_number ?? 0) != (b.episode_number ?? 0) { return (a.episode_number ?? 0) < (b.episode_number ?? 0) }
         return a.id < b.id
     }
     static func next(after current: Episode, in episodes: [Episode]) -> Episode? {
-        episodes.filter { candidate in
-            candidate.videoURL != nil && candidate.id != current.id &&
+        guard !isExtra(current) else { return nil }
+        return episodes.filter { candidate in
+            candidate.videoURL != nil && candidate.id != current.id && !isExtra(candidate) &&
             ((candidate.season ?? 1) > (current.season ?? 1) ||
              ((candidate.season ?? 1) == (current.season ?? 1) && (candidate.episode_number ?? 0) > (current.episode_number ?? 0)))
         }.sorted(by: before).first
@@ -471,7 +478,7 @@ enum SeriesPlayback {
     /// episode, else the one after the last finished episode, else the first playable
     /// one (so a finished series starts again).
     static func nextUp(in episodes: [Episode], progress: [String: WatchProgress]) -> Episode? {
-        let ordered = episodes.filter { $0.videoURL != nil }.sorted(by: before)
+        let ordered = episodes.filter { $0.videoURL != nil && !isExtra($0) }.sorted(by: before)
         if let resumable = ordered.last(where: { progress[String($0.id)]?.canResume == true }) { return resumable }
         if let finished = ordered.last(where: { progress[String($0.id)]?.completed == true }) {
             return next(after: finished, in: ordered) ?? ordered.first

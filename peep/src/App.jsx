@@ -29,6 +29,7 @@ import { Wordmark, LogoHorizontal } from "./components/Wordmark";
 import { filterByTier } from "./lib/tiers";
 import { loadFlags, getFlags } from "./lib/flags";
 import { loadAdPolicy } from "./lib/adPolicy";
+import { seasonLabel, seasonOrder } from "./lib/seriesPlayback";
 import { contentSelect } from "./lib/contentQueries";
 import { contentKey } from "./lib/contentIds";
 import { SUPABASE_URL } from "./lib/config";
@@ -463,7 +464,7 @@ function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList
       });
   }, [episodes, user?.id]);
 
-  const seasons = [...new Set(episodes.map(e => e.season))].sort((a, b) => a - b);
+  const seasons = [...new Set(episodes.map(e => e.season))].sort(seasonOrder); // Extras (season 0) last
   const seasonEpisodes = episodes.filter(e => e.season === selectedSeason);
   const completedCount = episodes.filter(e => watchProgress[e.id]?.completed).length;
 
@@ -599,7 +600,7 @@ function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList
                       return (
                         <button key={s} onClick={() => setSelectedSeason(s)}
                           style={{ background: active ? "#facc15" : "#111", border: `1px solid ${active ? "#facc15" : "#242424"}`, borderRadius: 8, padding: "10px 20px", color: active ? "#0a0a0a" : "#888", fontSize: 13, fontWeight: active ? 700 : 400, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, transition: "all 0.15s" }}>
-                          <span>Season {s}</span>
+                          <span>{seasonLabel(s)}</span>
                           {sWatched > 0 && <span style={{ fontSize: 10, color: active ? "rgba(10,10,10,0.55)" : "#4ade80", fontWeight: 600 }}>{sWatched}/{sEps.length}</span>}
                         </button>
                       );
@@ -608,7 +609,7 @@ function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList
                 ) : (
                   <select value={selectedSeason ?? ""} onChange={e => setSelectedSeason(Number(e.target.value))}
                     style={{ background: "#111", border: "1px solid #2a2a2a", borderRadius: 8, padding: "10px 16px", color: "#fff", fontSize: 14, cursor: "pointer", outline: "none" }}>
-                    {seasons.map(s => <option key={s} value={s}>Season {s}</option>)}
+                    {seasons.map(s => <option key={s} value={s}>{seasonLabel(s)}</option>)}
                   </select>
                 )}
               </div>

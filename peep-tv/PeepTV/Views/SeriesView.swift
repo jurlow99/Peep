@@ -58,7 +58,7 @@ struct SeriesDetailView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
 
-    private var seasons: [Int] { Array(Set(episodes.map { $0.season ?? 1 })).sorted() }
+    private var seasons: [Int] { Array(Set(episodes.map { $0.season ?? 1 })).sorted { a, b in a == SeriesPlayback.extrasSeason ? false : b == SeriesPlayback.extrasSeason ? true : a < b } }
     private var visibleEpisodes: [Episode] { episodes.filter { ($0.season ?? 1) == selectedSeason } }
     private var nextUp: Episode? { SeriesPlayback.nextUp(in: episodes, progress: progress) }
     private enum Field: Hashable { case back, play }
@@ -115,7 +115,7 @@ struct SeriesDetailView: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 12) {
                                 ForEach(seasons, id: \.self) { season in
-                                    FilterChip(label: "Season \(season)", isSelected: selectedSeason == season) { seasonTouched = true; selectedSeason = season }
+                                    FilterChip(label: SeriesPlayback.seasonLabel(season), isSelected: selectedSeason == season) { seasonTouched = true; selectedSeason = season }
                                 }
                             }.padding(6)
                         }
@@ -152,7 +152,7 @@ struct SeriesDetailView: View {
         .task(id: "\(supabase.watchProgressRevision):\(supabase.session?.userId ?? "guest")") { await loadProgress() }
         .fullScreenCover(item: $selectedEpisode, onDismiss: { Task { await loadProgress() } }) {
             PlaybackView(url: $0.videoURL, title: $0.displayTitle, identity: PlaybackIdentity(id: String($0.id), type: "episode"),
-                         metadata: PlaybackMetadata(title: $0.displayTitle, subtitle: "\(show.title) · Season \($0.season ?? 1), Episode \($0.episode_number ?? 1)",
+                         metadata: PlaybackMetadata(title: $0.displayTitle, subtitle: SeriesPlayback.isExtra($0) ? "\(show.title) · Extras" : "\(show.title) · Season \($0.season ?? 1), Episode \($0.episode_number ?? 1)",
                                                     description: $0.description, artwork: $0.thumbURL ?? show.thumbURL))
         }
     }

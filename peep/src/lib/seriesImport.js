@@ -67,7 +67,8 @@ export function planSeriesImport(files, existingShows = []) {
       continue;
     }
     if (isExtra(name)) {
-      items.push({ ...base, status: UNRECOGNIZED, reason: 'Looks like a trailer or extra, not an episode. Add it from the series page instead.' });
+      // Trailers, teasers and bloopers go on the Extras shelf (season 0), numbered later.
+      items.push({ ...base, status: READY, season: EXTRAS_SEASON, number: 0, extra: true, title: tidyTitle(name.replace(/\.[a-z0-9]+$/i, '')), confidence: 9 });
       continue;
     }
     if (!parsed) {
@@ -87,10 +88,18 @@ export function planSeriesImport(files, existingShows = []) {
   showTitle = tidyTitle(showTitle) || tidyTitle(items[0]?.folder.split('/')[0] || '');
   const show = existingShows.find(candidate => normalTitle(candidate.title) === normalTitle(showTitle)) || null;
   const taken = new Set((show?.episodes || []).map(e => `${e.season}x${e.episode_number}`));
+  // Extras are numbered after whatever the series already has, in name order, and an
+  // extra whose title is already on the shelf is left alone.
+  const shelved = new Set((show?.episodes || []).filter(e => e.season === EXTRAS_SEASON).map(e => normalTitle(e.title)));
+  let extraNumber = Math.max(0, ...(show?.episodes || []).filter(e => e.season === EXTRAS_SEASON).map(e => e.episode_number || 0));
+  for (const item of items.filter(i => i.extra).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))) {
+    if (shelved.has(normalTitle(item.title))) { item.status = EXISTS; item.reason = 'This extra is already on the series\' Extras shelf.'; continue; }
+    item.number = ++extraNumber;
+  }
   // A slot goes to the file that names it most explicitly; the loser is reported, not guessed about.
   const claims = {};
   for (const item of items) {
-    if (item.status !== READY) continue;
+    if (item.status !== READY || item.extra) continue;
     const slot = `${item.season}x${item.number}`;
     if (taken.has(slot)) { item.status = EXISTS; item.reason = 'This season and episode number is already in Peep.'; continue; }
     const holder = claims[slot];
@@ -100,12 +109,18 @@ export function planSeriesImport(files, existingShows = []) {
     claims[slot] = winner;
     loser.status = UNRECOGNIZED; loser.reason = `"${winner.name}" is already S${item.season}E${item.number}.`;
   }
-  const episodes = items.filter(i => i.status === READY || i.status === EXISTS).sort((a, b) => a.season - b.season || a.number - b.number);
+  const seasonOrder = (a, b) => (a === EXTRAS_SEASON) - (b === EXTRAS_SEASON) || a - b; // Extras last
+  const episodes = items.filter(i => i.status === READY || i.status === EXISTS).sort((a, b) => seasonOrder(a.season, b.season) || a.number - b.number);
   const skipped = items.filter(i => i.status === UNSUPPORTED || i.status === UNRECOGNIZED).sort((a, b) => a.key.localeCompare(b.key));
-  const seasons = [...new Set(episodes.map(e => e.season))].sort((a, b) => a - b);
+  const seasons = [...new Set(episodes.map(e => e.season))].sort(seasonOrder);
+  const ready = episodes.filter(e => e.status === READY);
   return {
     showTitle, show, episodes, skipped, seasons,
-    ready: episodes.filter(e => e.status === READY).length,
-    bytes: episodes.filter(e => e.status === READY).reduce((n, e) => n + e.size, 0),
+    ready: ready.filter(e => !e.extra).length,
+    extras: ready.filter(e => e.extra).length,
+    bytes: ready.reduce((n, e) => n + e.size, 0),
   };
 }
+
+export const EXTRAS_SEASON = 0;
+export function seasonLabel(season) { return season === EXTRAS_SEASON ? 'Extras' : `Season ${season}`; }

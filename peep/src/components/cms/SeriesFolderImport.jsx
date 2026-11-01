@@ -7,7 +7,7 @@ import { VOD_PLAYBACK_BUCKET, VOD_SOURCE_LIMIT, vodFilePath } from '../../lib/vo
 import { captureVideoThumbnail, readVideoMetadata } from '../../lib/videoThumbnail';
 import { formatBytes, formatDuration } from '../../lib/uploadProgress';
 import { uploadImage } from '../../lib/storageUtils';
-import { planSeriesImport, STATUS } from '../../lib/seriesImport';
+import { planSeriesImport, STATUS, seasonLabel } from '../../lib/seriesImport';
 import { ImageUploader } from '../ImageUploader';
 
 const artworkFolder = name => (IS_DEV_DB ? `hero/${name}` : name);
@@ -120,8 +120,9 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
         const { data, error } = await supabase.rpc('save_uploaded_vod', { p_upload_id: id, p_path: path, p_details: details });
         if (error) throw error;
         if (!series && data?.show_id) { series = String(data.show_id); setShowID(series); posterURL = poster; }
-        logAudit?.('create', 'episode', data?.id, `folder import S${episode.season}E${episode.number}`);
-        update(episode.key, { state: 'saved', progress: 100, message: `Saved as S${episode.season}E${episode.number}` });
+        logAudit?.('create', 'episode', data?.id, episode.extra ? 'folder import extra' : `folder import S${episode.season}E${episode.number}`);
+        if (episode.extra && /trailer/i.test(episode.name) && series) await adoptTrailer(series, data?.id);
+        update(episode.key, { state: 'saved', progress: 100, message: episode.extra ? 'Saved to Extras' : `Saved as S${episode.season}E${episode.number}` });
       } catch (error) {
         if (!alive.current) return;
         const text = error?.message || 'Failed';
@@ -134,10 +135,19 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
 
   function cancel() { stop.current = true; current.current?.abort?.(); }
 
+  // The first imported trailer becomes the series trailer when the series has none.
+  async function adoptTrailer(seriesID, episodeID) {
+    if (!episodeID) return;
+    const { data: show } = await supabase.from('shows').select('trailer_url').eq('id', seriesID).maybeSingle();
+    if (show?.trailer_url) return;
+    const { data: saved } = await supabase.from('episodes').select('url').eq('id', episodeID).maybeSingle();
+    if (saved?.url) await supabase.from('shows').update({ trailer_url: saved.url }).eq('id', seriesID);
+  }
+
   const alreadyIn = plan ? plan.episodes.filter(e => e.status === STATUS.EXISTS) : [];
   const newSeasons = plan ? plan.seasons.filter(season => plan.episodes.some(e => e.season === season && e.status !== STATUS.EXISTS)) : [];
   const summary = plan && [
-    `${plan.ready} new episode${plan.ready === 1 ? '' : 's'}${plan.ready ? ` · ${formatBytes(plan.bytes)}` : ''}`,
+    `${plan.ready} new episode${plan.ready === 1 ? '' : 's'}${plan.extras ? ` + ${plan.extras} extra${plan.extras === 1 ? '' : 's'}` : ''}${plan.ready || plan.extras ? ` · ${formatBytes(plan.bytes)}` : ''}`,
     alreadyIn.length ? `${alreadyIn.length} already in Peep` : '',
     tooBig.length ? `${tooBig.length} too large for ${r2Ready ? 'R2' : 'Supabase (configure R2 for files over 50 MiB)'}` : '',
     plan.skipped.length ? `${plan.skipped.length} file${plan.skipped.length === 1 ? '' : 's'} skipped` : '',
@@ -148,7 +158,7 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
       <div className="vod-import-head">
         <div>
           <h3>Import a series folder</h3>
-          <p>Pick the show's top folder (e.g. <code>The Big Lez Show</code>) with <code>Season 1</code>, <code>Season 2</code>… inside and files named <code>S01E02 Title.mp4</code>. Everything uploads to {r2Ready ? 'R2' : 'Supabase'} and lands in Episodes, approved, one file at a time. Keep this tab open until it finishes. Pick the same folder again later and only new files show up — anything already in Peep is left alone.</p>
+          <p>Pick the show's top folder (e.g. <code>The Big Lez Show</code>) with <code>Season 1</code>, <code>Season 2</code>… inside and files named <code>S01E02 Title.mp4</code>. Everything uploads to {r2Ready ? 'R2' : 'Supabase'} and lands in Episodes, approved, one file at a time. Keep this tab open until it finishes. Files named trailer, teaser or bloopers go on the series' Extras shelf, and the first trailer becomes the series trailer. Pick the same folder again later and only new files show up — anything already in Peep is left alone.</p>
         </div>
         <label className="vod-import-pick">
           <input type="file" webkitdirectory="" directory="" multiple onChange={choose} disabled={running} />
@@ -189,11 +199,11 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
             </details>
           )}
 
-          {!plan.ready && !tooBig.length && <p className="vod-import-hint" style={{ marginTop: 14 }}>Nothing new to import from this folder.</p>}
+          {!plan.ready && !plan.extras && !tooBig.length && <p className="vod-import-hint" style={{ marginTop: 14 }}>Nothing new to import from this folder.</p>}
 
           {newSeasons.map(season => (
             <div key={season} className="vod-import-season">
-              <h4>Season {season}</h4>
+              <h4>{seasonLabel(season)}</h4>
               <table>
                 <tbody>
                   {plan.episodes.filter(e => e.season === season && e.status !== STATUS.EXISTS).map(episode => {
@@ -201,7 +211,7 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
                     const blocked = episode.size > limit ? 'Too large for this storage.' : '';
                     return (
                       <tr key={episode.key} className={blocked ? 'blocked' : ''}>
-                        <td className="num">E{episode.number}</td>
+                        <td className="num">{episode.extra ? '★' : `E${episode.number}`}</td>
                         <td><input value={titles[episode.key] ?? episode.title} onChange={e => setTitles(t => ({ ...t, [episode.key]: e.target.value }))} disabled={running || !!blocked} /><small>{episode.name} · {formatBytes(episode.size)}</small></td>
                         <td className="state">
                           {blocked ? <span className="vod-import-chip skip">Too large</span>
