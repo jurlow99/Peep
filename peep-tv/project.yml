@@ -18,22 +18,59 @@ targets:
     dependencies:
       - package: GoogleIMA
         product: GoogleInteractiveMediaAdsTvOS
+      - target: PeepTopShelf
     configFiles:
       Debug: Config/Debug.xcconfig
       Release: Config/Release.xcconfig
+    # Info.plist is generated from these properties so the peeptv:// URL scheme
+    # (used by the Top Shelf) lives in the spec, not in a hand-kept file.
+    info:
+      path: PeepTV/Info.plist
+      properties:
+        CFBundleDisplayName: peep
+        UIBackgroundModes: [audio]
+        SUPABASE_URL: $(PEEP_SUPABASE_URL)
+        SUPABASE_ANON_KEY: $(PEEP_SUPABASE_ANON_KEY)
+        CLOUDFLARE_STREAM_HOST: $(PEEP_STREAM_HOST)
+        PEEP_ACCOUNT_MANAGEMENT_URL: $(PEEP_ACCOUNT_MANAGEMENT_URL)
+        PEEP_ENVIRONMENT: $(PEEP_ENVIRONMENT)
+        CFBundleURLTypes:
+          - CFBundleURLName: tv.watchpeep.PeepTV
+            CFBundleURLSchemes: [peeptv]
     settings:
       base:
         ASSETCATALOG_COMPILER_APPICON_NAME: App Icon & Top Shelf Image
         PRODUCT_BUNDLE_IDENTIFIER: tv.watchpeep.PeepTV
         SWIFT_VERSION: '5.0'
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: peep
-        INFOPLIST_KEY_UIBackgroundModes: audio
-        INFOPLIST_KEY_SUPABASE_URL: $(PEEP_SUPABASE_URL)
-        INFOPLIST_KEY_SUPABASE_ANON_KEY: $(PEEP_SUPABASE_ANON_KEY)
-        INFOPLIST_KEY_CLOUDFLARE_STREAM_HOST: $(PEEP_STREAM_HOST)
-        INFOPLIST_KEY_PEEP_ACCOUNT_MANAGEMENT_URL: $(PEEP_ACCOUNT_MANAGEMENT_URL)
-        INFOPLIST_KEY_PEEP_ENVIRONMENT: $(PEEP_ENVIRONMENT)
+        MARKETING_VERSION: '1.0.0'
+        CURRENT_PROJECT_VERSION: 1
+        TARGETED_DEVICE_FAMILY: '3'
+        CODE_SIGN_STYLE: Automatic
+  PeepTopShelf:
+    # Xcode's Top Shelf template is a plain app extension (NSExtensionMain); the
+    # "tv-app-extension" product type links a different entry point and exits.
+    type: app-extension
+    platform: tvOS
+    sources: [PeepTopShelf]
+    configFiles:
+      Debug: Config/Debug.xcconfig
+      Release: Config/Release.xcconfig
+    info:
+      path: PeepTopShelf/Info.plist
+      properties:
+        CFBundleDisplayName: peep Top Shelf
+        # An extension is an XPC bundle; without this the system never launches it.
+        CFBundlePackageType: XPC!
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.tv-top-shelf
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ContentProvider
+        SUPABASE_URL: $(PEEP_SUPABASE_URL)
+        SUPABASE_ANON_KEY: $(PEEP_SUPABASE_ANON_KEY)
+        PEEP_ENVIRONMENT: $(PEEP_ENVIRONMENT)
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tv.watchpeep.PeepTV.TopShelf
+        SWIFT_VERSION: '5.0'
         MARKETING_VERSION: '1.0.0'
         CURRENT_PROJECT_VERSION: 1
         TARGETED_DEVICE_FAMILY: '3'

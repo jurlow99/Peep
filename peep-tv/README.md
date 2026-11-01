@@ -21,6 +21,13 @@ open PeepTV.xcodeproj
 
 Select the **PeepTV** scheme and an Apple TV simulator, then Run. For a physical Apple TV, select your Apple developer team under Signing & Capabilities and pair the device with Xcode. The generated project is ignored; `project.yml` is the source of truth. Regenerate after adding files.
 
+The project has two app targets: **PeepTV** and the **PeepTopShelf** extension
+(the strip above the app icon on the Apple TV home screen). The extension reads
+the same `Config/*.xcconfig` values, fetches featured titles and active channels
+from Supabase with the public key, and opens the app through `peeptv://movie/<uuid>`,
+`peeptv://show/<id>` and `peeptv://channel/<id>` links (`DeepLinks.swift`). Both
+targets sign automatically under your team; nothing extra to configure.
+
 Debug reads `Config/Local.xcconfig`. Release reads `Config/Production.xcconfig`, which uses the same keys and must be created separately. Both are ignored by Git. An unconfigured build shows setup instructions and makes no backend requests. Debug displays a FARRIS DEV badge and allows preview content; Release filters to the production catalog. Use a dev project for Debug.
 
 ## Validate

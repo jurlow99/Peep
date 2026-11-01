@@ -11,6 +11,7 @@ struct PeepTVApp: App {
                 .environmentObject(supabase)
                 .preferredColorScheme(.dark)
                 .tint(ContentAppearance.accent)
+                .onOpenURL { url in DeepLinkRouter.shared.pending = DeepLink.parse(url) }
         }
     }
 }

@@ -1,4 +1,5 @@
 import SwiftUI
+import OSLog
 
 /// Pace custom focus commands across views, so one swipe cannot accelerate as
 /// focus moves from one card to the next. Uses monotonic time, not the wall clock.
@@ -170,6 +171,10 @@ struct ContentView: View {
     @State private var confirmAccountSignOut = false
     @State private var onDemandSeries = false
     @State private var needsForegroundRefresh = false
+    // Top Shelf and other deep links land here once the browsing UI exists.
+    @ObservedObject private var links = DeepLinkRouter.shared
+    @State private var linkedVideo: Video?
+    @State private var linkedShow: Show?
     @State private var focusTransfer: Task<Void, Never>?
     @FocusState private var railFocus: Int?
     @Namespace private var contentFocus
@@ -311,6 +316,9 @@ struct ContentView: View {
         }
         .overlay { if entryCover && !adGate.blocking { Color.black.ignoresSafeArea() } }
         .overlay { CSAIOverlay(gate: adGate, cancel: { entryTask?.cancel() }) }
+        .fullScreenCover(item: $linkedVideo) { MovieDetailView(video: $0) }
+        .fullScreenCover(item: $linkedShow) { SeriesDetailView(show: $0) }
+        .task(id: links.pending) { await followLink() }
         .task(id: supabase.session?.userId) {
             if supabase.session != nil { _ = try? await supabase.fetchAccountProfile() }
         }
@@ -356,6 +364,29 @@ struct ContentView: View {
         // this lets the focus engine briefly choose its first item (Home).
         railFocus = navigation.selected
         navigation.returnToRail()
+    }
+
+    private func followLink() async {
+        guard let link = links.pending else { return }
+        links.pending = nil
+        Logger(subsystem: "tv.watchpeep.PeepTV", category: "DeepLink").notice("Following \(link.url.absoluteString, privacy: .public)")
+        switch link {
+        case .movie(let id):
+            linkedShow = nil
+            linkedVideo = (try? await supabase.fetchVideos())?.first { $0.id == id }
+        case .show(let id):
+            linkedVideo = nil
+            linkedShow = (try? await supabase.fetchShows())?.first { $0.id == id }
+        case .channel(let id):
+            guard let channels = try? await supabase.fetchChannels(), let channel = channels.first(where: { $0.id == id }) else { return }
+            let feeds = (try? await supabase.fetchFeeds()) ?? []
+            let host = supabase.configuration?.streamHost ?? ""
+            guard let url = channel.playbackURL(streamHost: host, feeds: feeds) else { return }
+            let guide = (try? await supabase.fetchGuide()) ?? []
+            linkedVideo = nil; linkedShow = nil
+            enterContent(destination: 3)
+            openLiveChannel(LiveGuideSession(channels: channels, initial: channel, url: url, feeds: feeds, streamHost: host, guide: guide))
+        }
     }
 
     private func openLiveChannel(_ session: LiveGuideSession) {

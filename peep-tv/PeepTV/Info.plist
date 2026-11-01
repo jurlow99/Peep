@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>peep</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>tv.watchpeep.PeepTV</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>peeptv</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>CLOUDFLARE_STREAM_HOST</key>
+	<string>$(PEEP_STREAM_HOST)</string>
+	<key>PEEP_ACCOUNT_MANAGEMENT_URL</key>
+	<string>$(PEEP_ACCOUNT_MANAGEMENT_URL)</string>
+	<key>PEEP_ENVIRONMENT</key>
+	<string>$(PEEP_ENVIRONMENT)</string>
+	<key>SUPABASE_ANON_KEY</key>
+	<string>$(PEEP_SUPABASE_ANON_KEY)</string>
+	<key>SUPABASE_URL</key>
+	<string>$(PEEP_SUPABASE_URL)</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
+</dict>
+</plist>

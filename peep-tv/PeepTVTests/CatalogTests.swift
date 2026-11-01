@@ -505,6 +505,17 @@ final class CatalogTests: XCTestCase {
         XCTAssertTrue(pacer.accept(.down, at: 10.80))
         XCTAssertTrue(pacer.accept(.down, at: 12))
     }
+    func testDeepLinksRoundTripAndRejectStrangers() {
+        XCTAssertEqual(DeepLink.parse(URL(string: "peeptv://movie/4e11d0a0-3e97-4c7b-a800-000000000001")!), .movie("4e11d0a0-3e97-4c7b-a800-000000000001"))
+        XCTAssertEqual(DeepLink.parse(URL(string: "PEEPTV://show/12")!), .show(12))
+        XCTAssertEqual(DeepLink.parse(URL(string: "peeptv://channel/-830031")!), .channel(-830031))
+        XCTAssertEqual(DeepLink.parse(URL(string: "peeptv://live/7")!), .channel(7))
+        XCTAssertNil(DeepLink.parse(URL(string: "peeptv://show/abc")!))
+        XCTAssertNil(DeepLink.parse(URL(string: "peeptv://settings")!))
+        XCTAssertNil(DeepLink.parse(URL(string: "https://watchpeep.tv/movie/1")!))
+        for link in [DeepLink.movie("a-b"), .show(3), .channel(-1)] { XCTAssertEqual(DeepLink.parse(link.url), link) }
+    }
+
     func testChannelNamesAndCategoriesReadCleanly() {
         XCTAssertEqual(BrowsePresentation.channelName("Dog the Bounty Hunter (1080p)"), "Dog the Bounty Hunter")
         XCTAssertEqual(BrowsePresentation.channelName("Formula 1 AntenaPlay (576p) [Not 24/7]"), "Formula 1 AntenaPlay")

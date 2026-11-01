@@ -79,7 +79,11 @@ by reading the code and should be reproduced before fixing.
 
 21. ~~Now Playing metadata is title-only~~ **Done 2026-10-31** (`PlaybackMetadata`: title, subtitle, description and artwork for movies, episodes and podcasts). Original note: (`PlayerView.swift:136-140`); add artwork,
     description, episode, live flag. **S**
-22. No dynamic Top Shelf and no deep links (`onOpenURL`). **L**
+22. ~~No dynamic Top Shelf and no deep links (`onOpenURL`)~~ **Done 2026-10-31**
+    (`PeepTopShelf` extension: "Featured on Peep" posters + "Live now" channels,
+    each opening `peeptv://movie|show|channel/<id>`; `DeepLink` + `DeepLinkRouter`
+    in the app). Note: it is a plain `app-extension` product type — the
+    `tv-app-extension` type links a different entry point and exits at launch. **L**
 23. Skip intro / credits markers — needs schema + web admin fields first, then
     `AVPlayerItem` boundary observers. **L**
 24. No post-roll ads, unlike web. Decide whether TV should match. **S**
