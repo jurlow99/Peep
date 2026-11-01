@@ -9,11 +9,11 @@ describe('series folder import', () => {
     expect(parseSeasonFolder('S03')).toBe(3);
     expect(parseSeasonFolder('series 1')).toBe(1);
     expect(parseSeasonFolder('Extras')).toBeNull();
-    expect(parseEpisodeFile("S02E01 They're Back.mp4")).toEqual({ season: 2, episode: 1, title: "They're Back" });
-    expect(parseEpisodeFile('The.Show.1x07.Birthday.Bash.mp4')).toEqual({ season: 1, episode: 7, title: 'The Show Birthday Bash' });
-    expect(parseEpisodeFile('Episode 3 - Busted.mp4')).toEqual({ season: null, episode: 3, title: 'Busted' });
-    expect(parseEpisodeFile('03 - Life In The Can.mp4')).toEqual({ season: null, episode: 3, title: 'Life In The Can' });
-    expect(parseEpisodeFile('S01E04.mp4')).toEqual({ season: 1, episode: 4, title: 'Episode 4' });
+    expect(parseEpisodeFile("S02E01 They're Back.mp4")).toMatchObject({ season: 2, episode: 1, title: "They're Back" });
+    expect(parseEpisodeFile('The.Show.1x07.Birthday.Bash.mp4')).toMatchObject({ season: 1, episode: 7, title: 'The Show Birthday Bash' });
+    expect(parseEpisodeFile('Episode 3 - Busted.mp4')).toMatchObject({ season: null, episode: 3, title: 'Busted' });
+    expect(parseEpisodeFile('03 - Life In The Can.mp4')).toMatchObject({ season: null, episode: 3, title: 'Life In The Can' });
+    expect(parseEpisodeFile('S01E04.mp4')).toMatchObject({ season: 1, episode: 4, title: 'Episode 4' });
     expect(parseEpisodeFile('Season 4  trailer #1.mp4')).toBeNull();
     expect(parseEpisodeFile('Choomah Island 2 TRAILER.mp4')).toBeNull();
   });
@@ -50,5 +50,19 @@ describe('series folder import', () => {
     const plan = planSeriesImport([f('Show/Season 1/S01E01 A.mp4'), f('Show/Season 1/S01E01 B.mp4')]);
     expect(plan.episodes).toHaveLength(1);
     expect(plan.skipped[0].reason).toContain('already S1E1');
+  });
+
+  it('never lets a trailer take an episode slot, and prefers the explicit code when names collide', () => {
+    const plan = planSeriesImport([
+      f('Show/Season 4/Season 4 ep2 trailer.mp4'),
+      f('Show/Season 4/Season 4 trailer #2.mp4'),
+      f('Show/Season 4/S04E02 Plac-Key.mp4'),
+      f('Show/Season 4/Episode 3 Vinally.mp4'),
+      f('Show/Season 4/S04E03 Vinally.mp4'),
+    ]);
+    expect(plan.episodes.map(e => `${e.season}x${e.number} ${e.name}`)).toEqual(['4x2 S04E02 Plac-Key.mp4', '4x3 S04E03 Vinally.mp4']);
+    expect(plan.skipped.map(s => s.name)).toEqual(['Episode 3 Vinally.mp4', 'Season 4 ep2 trailer.mp4', 'Season 4 trailer #2.mp4']);
+    expect(plan.skipped.find(s => s.name.startsWith('Episode 3'))?.reason).toContain('"S04E03 Vinally.mp4" is already S4E3');
+    expect(plan.skipped.find(s => s.name.includes('trailer'))?.reason).toContain('trailer or extra');
   });
 });

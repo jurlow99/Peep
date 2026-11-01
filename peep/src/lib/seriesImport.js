@@ -20,7 +20,11 @@ export function extensionOf(name) {
   return match ? match[1].toLowerCase() : '';
 }
 
+const EXTRA = /\b(trailer|teaser|promo|preview|sneak peek|behind the scenes|bloopers?|recap)\b/i;
+export function isExtra(name) { return EXTRA.test(String(name || '').replace(/\.[a-z0-9]+$/i, '')); }
+
 // Episode number (and season when the name carries one) plus a clean title.
+// `confidence` is the pattern index: S01E02 beats "Episode 2" beats "02 - Title".
 export function parseEpisodeFile(name) {
   const base = String(name || '').replace(/\.[a-z0-9]+$/i, '');
   for (let index = 0; index < CODES.length; index++) {
@@ -29,7 +33,7 @@ export function parseEpisodeFile(name) {
     const season = index < 2 ? Number(match[1]) : null;
     const episode = Number(index < 2 ? match[2] : match[1]);
     const title = tidyTitle(base.replace(match[0], ' '));
-    return { season, episode, title: title || `Episode ${episode}` };
+    return { season, episode, title: title || `Episode ${episode}`, confidence: index };
   }
   return null;
 }
@@ -62,22 +66,31 @@ export function planSeriesImport(files, existingShows = []) {
       items.push({ ...base, status: UNSUPPORTED, reason: extension ? `.${extension} can't be played by Peep. Convert it to an H.264 MP4 first.` : 'Not a video file.' });
       continue;
     }
+    if (isExtra(name)) {
+      items.push({ ...base, status: UNRECOGNIZED, reason: 'Looks like a trailer or extra, not an episode. Add it from the series page instead.' });
+      continue;
+    }
     if (!parsed) {
       items.push({ ...base, status: UNRECOGNIZED, reason: 'No episode number in the name (expects S01E02, 1x02, Episode 2 or "02 - Title").' });
       continue;
     }
-    items.push({ ...base, status: READY, season: parsed.season ?? folderSeason ?? 1, number: parsed.episode, title: parsed.title });
+    items.push({ ...base, status: READY, season: parsed.season ?? folderSeason ?? 1, number: parsed.episode, title: parsed.title, confidence: parsed.confidence });
   }
   showTitle = tidyTitle(showTitle) || tidyTitle(items[0]?.folder.split('/')[0] || '');
   const show = existingShows.find(candidate => normalTitle(candidate.title) === normalTitle(showTitle)) || null;
   const taken = new Set((show?.episodes || []).map(e => `${e.season}x${e.episode_number}`));
-  const seen = new Set();
+  // A slot goes to the file that names it most explicitly; the loser is reported, not guessed about.
+  const claims = {};
   for (const item of items) {
     if (item.status !== READY) continue;
     const slot = `${item.season}x${item.number}`;
-    if (taken.has(slot)) { item.status = EXISTS; item.reason = 'This season and episode number is already in Peep.'; }
-    else if (seen.has(slot)) { item.status = UNRECOGNIZED; item.reason = `Another file is already S${item.season}E${item.number}.`; }
-    seen.add(slot);
+    if (taken.has(slot)) { item.status = EXISTS; item.reason = 'This season and episode number is already in Peep.'; continue; }
+    const holder = claims[slot];
+    if (!holder) { claims[slot] = item; continue; }
+    const loser = item.confidence < holder.confidence ? holder : item;
+    const winner = loser === item ? holder : item;
+    claims[slot] = winner;
+    loser.status = UNRECOGNIZED; loser.reason = `"${winner.name}" is already S${item.season}E${item.number}.`;
   }
   const episodes = items.filter(i => i.status === READY || i.status === EXISTS).sort((a, b) => a.season - b.season || a.number - b.number);
   const skipped = items.filter(i => i.status === UNSUPPORTED || i.status === UNRECOGNIZED).sort((a, b) => a.key.localeCompare(b.key));
