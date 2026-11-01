@@ -583,7 +583,7 @@ private struct MultiviewGridTileStyle: ButtonStyle {
     @Environment(\.isFocused) private var focused
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.background(.black)
-            .overlay(Rectangle().strokeBorder(focused ? ContentAppearance.accent : .clear, lineWidth: ContentAppearance.focusWidth))
+            .focusRing(Rectangle(), focused: focused)
     }
 }
 

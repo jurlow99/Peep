@@ -505,7 +505,7 @@ struct ContentView: View {
                     .foregroundStyle(navigation.selected == index ? .black : .white.opacity(railFocus == index ? 1 : 0.7))
                     .background(navigation.selected == index ? Color.yellow : Color.white.opacity(railFocus == index ? 0.12 : 0.035))
                     .clipShape(RoundedRectangle(cornerRadius: 20))
-                    .overlay(RoundedRectangle(cornerRadius: 25).stroke(Color.yellow, lineWidth: ContentAppearance.focusWidth).padding(-7).opacity(railFocus == index ? 1 : 0))
+                    .focusRing(RoundedRectangle(cornerRadius: 25), focused: railFocus == index, outset: 7)
                 }
                 .buttonStyle(RailButtonStyle())
                 .focused($railFocus, equals: index)

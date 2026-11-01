@@ -516,7 +516,8 @@ private struct PredictionChoiceStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.foregroundStyle(selected ? .black : .white)
             .background(selected ? ContentAppearance.accent : Color(white: focused ? 0.16 : 0.095), in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(focused ? ContentAppearance.accent : .white.opacity(0.1), lineWidth: focused ? ContentAppearance.focusWidth : 1))
+            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.1), lineWidth: 1).opacity(focused ? 0 : 1))
+            .focusRing(RoundedRectangle(cornerRadius: 16), focused: focused)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
     }
 }

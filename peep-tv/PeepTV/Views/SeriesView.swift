@@ -195,7 +195,7 @@ struct EpisodeRowView: View {
                 EpisodeArtwork(url: episode.thumbURL, fallback: fallbackArtwork)
                     .aspectRatio(16 / 9, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(focused ? ContentAppearance.accent : .clear, lineWidth: ContentAppearance.focusWidth))
+                    .focusRing(RoundedRectangle(cornerRadius: 12), focused: focused)
                     .overlay(alignment: .bottomLeading) {
                         if let progress, (progress.progress_seconds ?? 0) > 0 {
                             GeometryReader { geometry in

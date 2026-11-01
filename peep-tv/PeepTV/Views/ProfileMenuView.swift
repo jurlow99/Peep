@@ -364,7 +364,8 @@ struct SettingsRowStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.foregroundStyle(.white)
             .background(Color(white: configuration.isPressed ? 0.16 : focused ? 0.12 : 0.065), in: RoundedRectangle(cornerRadius: 20))
-            .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(focused ? ContentAppearance.accent : .white.opacity(0.07), lineWidth: focused ? ContentAppearance.focusWidth : 1))
+            .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(.white.opacity(0.07), lineWidth: 1).opacity(focused ? 0 : 1))
+            .focusRing(RoundedRectangle(cornerRadius: 20), focused: focused)
     }
 }
 
@@ -373,7 +374,7 @@ struct ProfileAvatarChoiceStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.foregroundStyle(.white)
             .background(Color(white: configuration.isPressed ? 0.16 : focused ? 0.1 : 0.035), in: RoundedRectangle(cornerRadius: 20))
-            .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(focused ? ContentAppearance.accent : .clear, lineWidth: ContentAppearance.focusWidth))
+            .focusRing(RoundedRectangle(cornerRadius: 20), focused: focused)
     }
 }
 

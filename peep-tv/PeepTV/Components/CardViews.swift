@@ -60,7 +60,7 @@ struct PosterArtwork: View {
                 Image(uiImage: artwork).resizable().scaledToFit()
                     .frame(width: fittedWidth, height: fittedHeight)
                     .clipShape(RoundedRectangle(cornerRadius: 14))
-                    .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(focused ? ContentAppearance.accent : .clear, lineWidth: ContentAppearance.focusWidth))
+                    .focusRing(RoundedRectangle(cornerRadius: 14), focused: focused)
             } else {
                 VStack(spacing: 14) {
                     Image(systemName: symbol).font(.system(size: 34, weight: .light))
@@ -68,7 +68,7 @@ struct PosterArtwork: View {
                     else { ProgressView().tint(.white.opacity(0.5)) }
                 }.foregroundStyle(.secondary).frame(width: width, height: width * 1.5)
                     .background(Color(white: 0.065), in: RoundedRectangle(cornerRadius: 14))
-                    .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(focused ? ContentAppearance.accent : .clear, lineWidth: ContentAppearance.focusWidth))
+                    .focusRing(RoundedRectangle(cornerRadius: 14), focused: focused)
             }
         }.frame(width: width, height: width * 1.5, alignment: .bottom)
             .task(id: url) {
@@ -161,12 +161,29 @@ struct BoundedArtwork: View {
 
 /// Neutral surfaces with yellow outlines for focus and yellow fills for selection.
 enum ContentAppearance {
-    static let focusWidth: CGFloat = 6
+    static let focusWidth: CGFloat = 7
     static let accent = Color(hex: "#facc15")
     static let pillHeight: CGFloat = 56
     static let controlHeight: CGFloat = 58
     static let compactControlHeight: CGFloat = 46
     static let controlCornerRadius: CGFloat = 14
+}
+
+extension View {
+    /// The one focus treatment: a thick yellow ring with a dark halo on both sides so it
+    /// reads on bright artwork and on black alike, plus a soft glow. `outset` pushes the
+    /// ring outside the shape (pills and rail buttons).
+    func focusRing<S: InsettableShape>(_ shape: S, focused: Bool, outset: CGFloat = 0) -> some View {
+        overlay(
+            ZStack {
+                shape.strokeBorder(Color.black.opacity(0.7), lineWidth: ContentAppearance.focusWidth + 6).padding(-outset - 3)
+                shape.strokeBorder(ContentAppearance.accent, lineWidth: ContentAppearance.focusWidth).padding(-outset)
+            }
+            .opacity(focused ? 1 : 0)
+            .allowsHitTesting(false)
+        )
+        .shadow(color: focused ? ContentAppearance.accent.opacity(0.5) : .clear, radius: 20)
+    }
 }
 
 /// Shared segmented control for filters throughout Apple TV. A selected chip is
@@ -181,9 +198,8 @@ struct TVPillStyle: ButtonStyle {
             .padding(.horizontal, 25)
             .foregroundStyle(selected ? .black : .white)
             .background(selected ? ContentAppearance.accent : Color(white: 0.095), in: Capsule())
-            .overlay(Capsule().strokeBorder(ContentAppearance.accent, lineWidth: ContentAppearance.focusWidth).padding(-7).opacity(focused ? 1 : 0))
+            .focusRing(Capsule(), focused: focused, outset: 7)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .shadow(color: focused ? ContentAppearance.accent.opacity(0.28) : .clear, radius: 12)
     }
 }
 
@@ -199,7 +215,8 @@ struct TVActionControlStyle: ButtonStyle {
             .padding(.horizontal, compact ? 18 : 24)
             .foregroundStyle(.white)
             .background(Color(white: focused ? 0.17 : 0.09), in: RoundedRectangle(cornerRadius: ContentAppearance.controlCornerRadius))
-            .overlay(RoundedRectangle(cornerRadius: ContentAppearance.controlCornerRadius).strokeBorder(focused ? ContentAppearance.accent : .white.opacity(0.12), lineWidth: focused ? ContentAppearance.focusWidth : 1))
+            .overlay(RoundedRectangle(cornerRadius: ContentAppearance.controlCornerRadius).strokeBorder(.white.opacity(0.12), lineWidth: 1).opacity(focused ? 0 : 1))
+            .focusRing(RoundedRectangle(cornerRadius: ContentAppearance.controlCornerRadius), focused: focused)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
     }
 }
@@ -226,9 +243,9 @@ struct BrowseCardStyle: ButtonStyle {
         configuration.label.foregroundStyle(.white)
             .background(Color(white: focused ? 0.11 : 0.055))
             .clipShape(RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(focused ? ContentAppearance.accent : Color.white.opacity(0.1), lineWidth: focused ? ContentAppearance.focusWidth : 1))
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.1), lineWidth: 1).opacity(focused ? 0 : 1))
+            .focusRing(RoundedRectangle(cornerRadius: 16), focused: focused)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .shadow(color: focused ? ContentAppearance.accent.opacity(0.28) : .clear, radius: 14)
     }
 }
 

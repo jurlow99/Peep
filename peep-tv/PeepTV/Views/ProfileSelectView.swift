@@ -61,7 +61,7 @@ struct ProfileSelectView: View {
                                             .overlay(Circle().strokeBorder(.white.opacity(0.12), lineWidth: 2))
                                         Image(systemName: "plus").font(.system(size: 46, weight: .light))
                                     }.frame(width: 210, height: 210)
-                                        .overlay(Circle().strokeBorder(focus == "add" ? ContentAppearance.accent : .clear, lineWidth: ContentAppearance.focusWidth))
+                                        .focusRing(Circle(), focused: focus == "add")
                                     Text("Add viewer").font(.system(size: 25, weight: .medium, design: .rounded))
                                         .foregroundStyle(focus == "add" ? .white : Color(white: 0.5))
                                 }.frame(width: 250, height: 300, alignment: .top)
@@ -90,7 +90,7 @@ struct ProfileSelectView: View {
             VStack(spacing: 26) {
                 AccountAvatar(profile: avatar, size: 190)
                     .frame(width: 210, height: 210)
-                    .overlay(Circle().strokeBorder(focus == id ? ContentAppearance.accent : .clear, lineWidth: ContentAppearance.focusWidth))
+                    .focusRing(Circle(), focused: focus == id)
                 Text(name).font(.system(size: 29, weight: .semibold, design: .rounded))
                     .foregroundStyle(focus == id ? .white : Color(white: 0.65))
                     .lineLimit(1)
