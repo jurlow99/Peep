@@ -14,13 +14,17 @@ struct HeroView: View {
     let buttonLabel: String?
     var notice: String? = nil
     var backgroundVideo: URL? = nil
+    // Catalog heroes get "More info" and a My List toggle; promos keep their single call to action.
+    var onInfo: (() -> Void)? = nil
+    var listItem: (id: String, type: String)? = nil
     let onPlay: () -> Void
 
-    init(video: Video, onPlay: @escaping () -> Void) {
+    init(video: Video, onInfo: (() -> Void)? = nil, onPlay: @escaping () -> Void) {
         title = video.title; subtitle = video.description
         metadata = [BrowsePresentation.category(video.category), video.year.map(String.init), video.rating].compactMap { $0 }.joined(separator: " · ")
         badge = "FEATURED ON PEEP"; artwork = video.heroURL
         buttonLabel = video.videoURL == nil ? "View availability" : "Watch now"
+        self.onInfo = onInfo; listItem = (video.id, "movie")
         self.onPlay = onPlay
     }
 
@@ -28,11 +32,12 @@ struct HeroView: View {
         title = show.title; subtitle = show.description
         metadata = BrowsePresentation.category(show.category) ?? "Series"
         badge = "FEATURED ON PEEP"; artwork = MediaURL.parse(show.thumbnail) ?? show.thumbURL
-        buttonLabel = "View series"; self.onPlay = onPlay
+        buttonLabel = "View series"; listItem = (String(show.id), "show"); self.onPlay = onPlay
     }
 
-    init(promo: HomeHero, available: Bool, onPlay: @escaping () -> Void) {
+    init(promo: HomeHero, available: Bool, listItem: (id: String, type: String)? = nil, onPlay: @escaping () -> Void) {
         title = promo.title ?? ""; subtitle = promo.subtitle; metadata = ""
+        self.listItem = listItem
         badge = promo.badge ?? ""; artwork = MediaURL.parse(promo.image_url)
         backgroundVideo = MediaURL.playback(promo.video_url)
         let hasAction = promo.cta_type != nil && promo.cta_type != "none" && !(promo.cta_label ?? "").isEmpty
@@ -103,6 +108,15 @@ struct HeroView: View {
                                     .font(.system(size: 25, weight: .bold))
                                     .padding(.horizontal, 30).padding(.vertical, 19)
                             }.buttonStyle(BrowseCardStyle()).contentEntryTarget(true).sidebarBoundary()
+                        }
+                        if let onInfo {
+                            Button(action: onInfo) {
+                                Label("More info", systemImage: "info.circle")
+                                    .font(.system(size: 21, weight: .semibold)).padding(.horizontal, 23).padding(.vertical, 21)
+                            }.buttonStyle(BrowseCardStyle())
+                        }
+                        if let listItem {
+                            MyListAction(id: listItem.id, type: listItem.type)
                         }
                         if backgroundVideo != nil {
                             Button { heroMuted.toggle() } label: {

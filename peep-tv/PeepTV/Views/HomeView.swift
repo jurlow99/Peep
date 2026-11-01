@@ -65,11 +65,11 @@ struct HomeView: View {
 
                         // Hero
                         if let promo = homeHero, promo.enabled == true {
-                            HeroView(promo: promo, available: promoAvailable(promo)) { openPromo(promo) }
+                            HeroView(promo: promo, available: promoAvailable(promo), listItem: promoListItem(promo)) { openPromo(promo) }
                                 .disabled(playingVideo != nil || heroVideo != nil || playingShow != nil || playingResume != nil || channelPlayback != nil || selectedPodcast != nil)
                         } else if let hero {
                             switch hero {
-                            case .movie(let video): HeroView(video: video) { heroVideo = video }
+                            case .movie(let video): HeroView(video: video, onInfo: { playingVideo = video }) { heroVideo = video }
                             case .show(let show): HeroView(show: show) { playingShow = show }
                             }
                         }
@@ -252,6 +252,16 @@ struct HomeView: View {
         let items = channels.filter { !BrowsePresentation.isDemo($0.name) }
         guard let filter = row.filter_value, !filter.isEmpty, filter.lowercased() != "all" else { return items }
         return items.filter { ($0.category ?? "general").lowercased() == filter.lowercased() }
+    }
+
+    // A promo that points at a title gets the same My List toggle a catalog hero has.
+    private func promoListItem(_ promo: HomeHero) -> (id: String, type: String)? {
+        guard let value = promo.cta_value, !value.isEmpty, promoAvailable(promo) else { return nil }
+        switch promo.cta_type {
+        case "movie": return (value, "movie")
+        case "show": return (value, "show")
+        default: return nil
+        }
     }
 
     private func promoAvailable(_ promo: HomeHero) -> Bool {
