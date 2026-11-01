@@ -262,19 +262,25 @@ struct ContentView: View {
         }
         .overlay(alignment: .bottomTrailing) {
             if let player = livePlayer, let session = livePlayback, liveGuide == nil, multiview == nil, !adGate.blocking {
-                VStack(alignment: .leading, spacing: 12) {
+                // A slim pill, not a panel: it must not cover card captions while browsing.
+                HStack(spacing: 14) {
                     LivePreview(player: player)
-                        .aspectRatio(16 / 9, contentMode: .fit)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .frame(width: 136, height: 76)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                         .allowsHitTesting(false).accessibilityHidden(true)
-                    Text("Live · \(session.initial.name)").font(.system(size: 20, weight: .semibold)).lineLimit(1)
-                    Text("Hold Select on Live TV for playback options")
-                        .font(.system(size: 16)).foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            Circle().fill(Color.red).frame(width: 9, height: 9)
+                            Text("LIVE").font(.system(size: 13, weight: .bold)).tracking(1.2).foregroundStyle(.secondary)
+                        }
+                        Text(session.initial.displayName).font(.system(size: 19, weight: .semibold)).lineLimit(1)
+                        Text("Hold Select on Live TV for options").font(.system(size: 14)).foregroundStyle(.secondary).lineLimit(1)
+                    }
                 }
                 .allowsHitTesting(false)
-                .padding(18).frame(width: 380)
-                .background(Color(white: 0.07), in: RoundedRectangle(cornerRadius: 18))
-                .padding(.trailing, 50).padding(.bottom, 35)
+                .padding(.vertical, 10).padding(.leading, 10).padding(.trailing, 18).frame(width: 440, alignment: .leading)
+                .background(Color(white: 0.07).opacity(0.96), in: RoundedRectangle(cornerRadius: 14))
+                .padding(.trailing, 44).padding(.bottom, 26)
             }
         }
         .disabled(liveGuide != nil || multiview != nil || adGate.blocking)
@@ -378,7 +384,7 @@ struct ContentView: View {
     private func startLiveChannel(_ session: LiveGuideSession) {
         if livePlayback?.initial.id != session.initial.id || livePlayer == nil {
             livePlayer?.stop()
-            let player = PlayerModel(url: session.url, title: session.initial.name)
+            let player = PlayerModel(url: session.url, title: session.initial.displayName)
             livePlayer = player
             player.applyBlackout(session.initial.blackoutMessage())
             player.startIfEnabled()

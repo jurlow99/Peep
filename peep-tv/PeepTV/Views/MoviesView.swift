@@ -222,7 +222,7 @@ private struct SavedLibraryEntry: Identifiable {
     let channel: Channel?
     var id: String { saved.id }
     var category: String { saved.type == "movie" ? "Movies" : saved.type == "show" ? "Series" : "Live TV" }
-    var title: String { video?.title ?? show?.title ?? channel?.name ?? "Unavailable \(saved.type == "show" ? "series" : saved.type)" }
+    var title: String { video?.title ?? show?.title ?? channel?.displayName ?? "Unavailable \(saved.type == "show" ? "series" : saved.type)" }
     var artwork: URL? { video?.thumbURL ?? show?.thumbURL ?? channel?.thumbURL }
     var available: Bool { video != nil || show != nil || channel != nil }
 }
@@ -231,6 +231,38 @@ private struct SavedLibraryEntry: Identifiable {
 
 /// Mirrors SeriesDetailView: artwork, facts, Play/Resume, Start over, Trailer, My List
 /// and a "More like this" shelf, instead of a card starting playback on its own.
+/// Title artwork behind the detail header, dimmed so text stays readable and
+/// faded to black before the rows below. Logos and tiny thumbnails still work:
+/// the image fills the band and the gradient hides the edges.
+struct DetailBackdrop: View {
+    let url: URL?
+    var body: some View {
+        if url != nil {
+            VStack(spacing: 0) {
+                BoundedArtwork(url: url, symbol: "photo", fillsCard: true)
+                    .frame(height: 820)
+                    .overlay(LinearGradient(colors: [.black.opacity(0.55), .black.opacity(0.75), .black], startPoint: .top, endPoint: .bottom))
+                    .overlay(LinearGradient(colors: [.black.opacity(0.9), .clear], startPoint: .leading, endPoint: .trailing).frame(maxWidth: .infinity))
+                Color.black
+            }.ignoresSafeArea().allowsHitTesting(false)
+        }
+    }
+}
+
+/// Genre/tag chips under the synopsis. Static text: nothing to focus.
+struct DetailTagRow: View {
+    let tags: [String]
+    var body: some View {
+        HStack(spacing: 10) {
+            ForEach(tags, id: \.self) { tag in
+                Text(tag).font(.system(size: 17, weight: .semibold)).foregroundStyle(Color(white: 0.8))
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(Color.white.opacity(0.1), in: Capsule())
+            }
+        }
+    }
+}
+
 struct MovieDetailView: View {
     @EnvironmentObject var supabase: SupabaseService
     @Environment(\.dismiss) private var dismiss
@@ -262,16 +294,20 @@ struct MovieDetailView: View {
         return minutes > 0 ? "\(minutes) min left" : nil
     }
 
+    private enum Field: Hashable { case back, play }
+    @FocusState private var field: Field?
+    private var tagChips: [String] { BrowsePresentation.tagChips(video.tags, category: video.category) }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 32) {
                 Button { dismiss() } label: {
                     Label("Back", systemImage: "chevron.left")
                         .font(.system(size: 21, weight: .semibold)).padding(.horizontal, 20).padding(.vertical, 14)
-                }.buttonStyle(BrowseCardStyle())
+                }.buttonStyle(BrowseCardStyle()).focused($field, equals: .back)
 
                 HStack(alignment: .center, spacing: 44) {
-                    PosterArtwork(url: video.thumbURL, width: 260, symbol: "film")
+                    PosterArtwork(url: video.thumbURL, width: 300, symbol: "film")
                     VStack(alignment: .leading, spacing: 16) {
                         Text("MOVIE").font(.system(size: 16, weight: .bold)).tracking(3).foregroundStyle(.secondary)
                         Text(video.title.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -283,6 +319,7 @@ struct MovieDetailView: View {
                             Text(description).font(.system(size: 23)).foregroundStyle(Color(white: 0.72))
                                 .lineLimit(5).frame(maxWidth: 1040, alignment: .leading)
                         }
+                        if !tagChips.isEmpty { DetailTagRow(tags: tagChips) }
                         if let progress, canResume {
                             VStack(alignment: .leading, spacing: 8) {
                                 GeometryReader { geometry in
@@ -299,7 +336,7 @@ struct MovieDetailView: View {
                                 Button { playback = .movie(startOver: false) } label: {
                                     Label(canResume ? "Resume" : "Play", systemImage: "play.fill")
                                         .font(.system(size: 22, weight: .semibold)).padding(18)
-                                }.buttonStyle(BrowseCardStyle())
+                                }.buttonStyle(BrowseCardStyle()).focused($field, equals: .play)
                                 if canResume {
                                     Button { playback = .movie(startOver: true) } label: {
                                         Label("Start over", systemImage: "arrow.counterclockwise")
@@ -335,9 +372,17 @@ struct MovieDetailView: View {
                 }
             }.padding(.horizontal, 80).padding(.top, 36).padding(.bottom, 70)
         }
+        .background { DetailBackdrop(url: video.heroURL) }
         .background(Color.black).foregroundStyle(.white)
+        // The decision button, not Back, is where the cursor lands.
+        .defaultFocus($field, video.videoURL != nil ? .play : .back)
         .onExitCommand { dismiss() }
-        .task { await loadRelated() }
+        .task {
+            // Default focus can be evaluated before the buttons exist; settle it once the page is up.
+            try? await Task.sleep(for: .milliseconds(80))
+            if field == nil || field == .back, video.videoURL != nil { field = .play }
+            await loadRelated()
+        }
         .task(id: "\(supabase.watchProgressRevision):\(supabase.session?.userId ?? "guest")") { await loadProgress() }
         .fullScreenCover(item: $playback, onDismiss: {
             Task { await loadProgress() }

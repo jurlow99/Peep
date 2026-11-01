@@ -57,7 +57,7 @@ struct LiveSurfView: View {
         _selectedID = State(initialValue: initial.id)
         _guide = State(initialValue: guide)
         _guideRefreshedAt = State(initialValue: guide.isEmpty ? .distantPast : Date())
-        _player = StateObject(wrappedValue: sharedPlayer ?? PlayerModel(url: url, title: initial.name, live: true))
+        _player = StateObject(wrappedValue: sharedPlayer ?? PlayerModel(url: url, title: initial.displayName, live: true))
     }
     private var selected: Channel? { channels.first { $0.id == selectedID } }
     private var categories: [String] { Array(Set(channels.flatMap { BrowsePresentation.categories($0.category) })).sorted() }
@@ -86,7 +86,7 @@ struct LiveSurfView: View {
             if !drawerOpen && !controlsOpen && !adGate.blocking {
                 Button { if player.blackoutMessage == nil { controlsOpen = true } else { revealDrawer() } } label: { Color.clear.contentShape(Rectangle()) }
                     .buttonStyle(VideoSurfaceButtonStyle()).focused($focus, equals: "video")
-                    .accessibilityLabel("\(selected?.name ?? "Live TV"). Select for playback controls. Swipe right for channels.")
+                    .accessibilityLabel("\(selected?.displayName ?? "Live TV"). Select for playback controls. Swipe right for channels.")
                     .onRemoteMove { direction in
                         switch direction {
                         case .right: revealDrawer()
@@ -113,7 +113,7 @@ struct LiveSurfView: View {
                     Spacer()
                     HStack(alignment: .bottom) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text(selected?.name ?? "Live TV").font(.system(size: 26, weight: .semibold))
+                            Text(selected?.displayName ?? "Live TV").font(.system(size: 26, weight: .semibold))
                             let programs = ChannelPrograms(entries: guide, channelID: selectedID, now: Date())
                             if let current = programs.current {
                                 Text("Now · \(current.title ?? "Program information unavailable")").foregroundStyle(Color(white: 0.8)).lineLimit(1)
@@ -194,10 +194,10 @@ struct LiveSurfView: View {
                 MyListAction(id: String(selectedID), type: "channel")
                 Button("Close", systemImage: "xmark") { dismissDrawer() }.labelStyle(.iconOnly).buttonStyle(BrowseCardStyle())
             }
-            Text("Playing · \(selected?.name ?? "Live TV")").font(.system(size: 23)).foregroundStyle(.secondary).lineLimit(1)
+            Text("Playing · \(selected?.displayName ?? "Live TV")").font(.system(size: 23)).foregroundStyle(.secondary).lineLimit(1)
             if let previousID, let previous = channels.first(where: { $0.id == previousID }), previous.playbackURL(streamHost: streamHost, feeds: feeds) != nil {
                 Button { tune(previous) } label: {
-                    Label("Back to \(previous.name)", systemImage: "arrow.uturn.backward").font(.system(size: 21, weight: .semibold)).padding(14)
+                    Label("Back to \(previous.displayName)", systemImage: "arrow.uturn.backward").font(.system(size: 21, weight: .semibold)).padding(14)
                 }.buttonStyle(BrowseCardStyle()).focused($focus, equals: "previous")
             }
             HStack(spacing: 12) {
@@ -248,7 +248,7 @@ struct LiveSurfView: View {
                                     HStack(spacing: 16) {
                                         BoundedArtwork(url: channel.thumbURL, symbol: "tv").frame(width: 100, height: 60).clipShape(RoundedRectangle(cornerRadius: 8))
                                         VStack(alignment: .leading, spacing: 6) {
-                                            Text(channel.name).font(.system(size: 27, weight: .semibold, design: .rounded)).lineLimit(2)
+                                            Text(channel.displayName).font(.system(size: 27, weight: .semibold, design: .rounded)).lineLimit(2)
                                             Text(channel.id == selectedID ? "Watching now" : programs.current?.title.map { "Now · \($0)" } ?? BrowsePresentation.category(channel.category) ?? "Live channel")
                                                 .font(.system(size: 21)).foregroundStyle(channel.id == selectedID ? ContentAppearance.accent : .secondary).lineLimit(1)
                                             if let next = programs.next?.title {
@@ -305,7 +305,7 @@ struct LiveSurfView: View {
             showHint = true; hintVersion += 1
             onTune(channel, url)
             player.applyBlackout(channel.blackoutMessage())
-            player.tune(url: url, title: channel.name)
+            player.tune(url: url, title: channel.displayName)
             player.startIfEnabled()
         }
         dismissDrawer()
@@ -326,7 +326,7 @@ struct LiveSurfView: View {
     }
     private func retune() {
         guard let selected, let url = selected.playbackURL(streamHost: streamHost, feeds: feeds) else { return }
-        player.tune(url: url, title: selected.name)
+        player.tune(url: url, title: selected.displayName)
         player.startIfEnabled()
     }
     private func loadPackages() async {

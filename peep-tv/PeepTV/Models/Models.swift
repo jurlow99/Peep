@@ -97,6 +97,8 @@ struct Channel: Identifiable, Decodable {
         return message.isEmpty ? "This channel is temporarily unavailable. Please check back soon." : message
     }
     var thumbURL: URL? { MediaURL.parse(hero_url) ?? MediaURL.parse(logo_url) }
+    /// What viewers see; `name` stays the source-of-truth for search and demo filtering.
+    var displayName: String { BrowsePresentation.channelName(name) }
     func playbackURL(streamHost: String, feeds: [PublicFeed]) -> URL? {
         if let feed = feeds.first(where: { $0.id == live_feed_id }),
            let url = MediaURL.parse(feed.cloudflare_hls_url) { return url }

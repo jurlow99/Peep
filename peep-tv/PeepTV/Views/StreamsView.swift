@@ -199,7 +199,7 @@ struct StreamsView: View {
         let host = supabase.configuration?.streamHost ?? ""
         if let url = channel.playbackURL(streamHost: host, feeds: feeds) {
             openGuide(LiveGuideSession(channels: catalog, initial: channel, url: url, feeds: feeds, streamHost: host, guide: guide))
-        } else { selected = ChannelPlayback(id: channel.id, title: channel.name, url: nil) }
+        } else { selected = ChannelPlayback(id: channel.id, title: channel.displayName, url: nil) }
     }
 
     private func channelCard(_ channel: Channel, now: Date) -> some View {
@@ -212,7 +212,7 @@ struct StreamsView: View {
                 BoundedArtwork(url: channel.thumbURL, symbol: "tv")
                     .frame(width: 326, height: 130)
                     .background(Color(white: 0.12)).clipShape(RoundedRectangle(cornerRadius: 10))
-                Text(channel.name).font(.system(size: 29, weight: .semibold, design: .rounded)).lineLimit(1)
+                Text(channel.displayName).font(.system(size: 29, weight: .semibold, design: .rounded)).lineLimit(1)
                 Text(channel.description?.isEmpty == false ? channel.description! : (BrowsePresentation.category(channel.category) ?? "Live channel"))
                     .font(.system(size: 21)).foregroundStyle(.secondary).lineLimit(2)
                 if let current {

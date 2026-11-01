@@ -34,11 +34,12 @@ struct RootView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black)
-        .overlay(alignment: .bottomTrailing) {
+        .overlay(alignment: .topTrailing) {
+            // Top corner: the bottom-right belongs to the live preview pill.
             if supabase.configuration?.isDevelopment == true {
                 Text("FARRIS · DEV").font(.system(size: 13, weight: .semibold)).tracking(1.5)
                     .foregroundStyle(Color.yellow.opacity(0.85)).padding(.horizontal, 12).padding(.vertical, 7)
-                    .background(.black.opacity(0.85)).clipShape(Capsule()).padding(24)
+                    .background(.black.opacity(0.85)).clipShape(Capsule()).padding(.top, 18).padding(.trailing, 24)
                     .allowsHitTesting(false)
             }
         }

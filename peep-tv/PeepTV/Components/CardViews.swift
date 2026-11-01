@@ -33,8 +33,8 @@ struct VideoCardView: View {
                 PosterArtwork(url: video.thumbURL, width: width, symbol: "film", focused: posterFocused)
                 VStack(alignment: .leading, spacing: 6) {
                     Text(video.title).font(.system(size: largeType ? 29 : 25, weight: .semibold, design: .rounded)).lineLimit(2)
-                    Text("Movie")
-                        .font(.system(size: 17, weight: .medium)).foregroundStyle(Color(white: 0.6))
+                    Text(BrowsePresentation.movieCaption(video))
+                        .font(.system(size: 17, weight: .medium)).foregroundStyle(Color(white: 0.6)).lineLimit(1)
                 }.frame(width: width, height: 104, alignment: .topLeading)
             }.frame(width: width, alignment: .leading)
         }.buttonStyle(PosterCardStyle()).focused($posterFocused).saveToMyList(video.id, type: "movie")
@@ -233,15 +233,49 @@ struct BrowseCardStyle: ButtonStyle {
 }
 
 enum BrowsePresentation {
+    // Short initialisms read wrong when "capitalized" ("Usa", "Mma").
+    private static let initialisms: Set<String> = ["usa", "uk", "us", "eu", "hd", "uhd", "4k", "mma", "nfl", "nba", "mlb", "nhl", "ufc", "tv", "bbc", "cnn", "espn"]
     static func categories(_ raw: String?) -> [String] {
         (raw ?? "").components(separatedBy: CharacterSet(charactersIn: ";,|"))
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).capitalized }.filter { !$0.isEmpty }
+            .map { value in
+                value.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: " ")
+                    .map { word in initialisms.contains(word.lowercased()) ? word.uppercased() : word.capitalized }
+                    .joined(separator: " ")
+            }.filter { !$0.isEmpty }
+    }
+    // "Dog the Bounty Hunter (1080p) [Not 24/7]" → "Dog the Bounty Hunter". Resolution tags
+    // and uptime notes belong to the source list, not the viewer.
+    static func channelName(_ raw: String) -> String {
+        var name = raw
+        for pattern in [#"\s*\((?:\d{3,4}[pi]|\d+x\d+|HD|SD|FHD|UHD|4K)\)"#, #"\s*\[[^\]]*\]"#] {
+            name = name.replacingOccurrences(of: pattern, with: "", options: [.regularExpression, .caseInsensitive])
+        }
+        name = name.replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? raw.trimmingCharacters(in: .whitespacesAndNewlines) : name
     }
     static func category(_ raw: String?) -> String? {
         let values = categories(raw)
         return values.isEmpty ? nil : values.joined(separator: " · ")
     }
     static func isDemo(_ title: String) -> Bool { title.uppercased().hasPrefix("DEMO") }
+    // Card captions say something the poster doesn't: year and genre, or length.
+    static func movieCaption(_ video: Video) -> String {
+        let parts = [video.year.map(String.init), categories(video.category).first, video.duration?.trimmingCharacters(in: .whitespaces)]
+            .compactMap { $0 }.filter { !$0.isEmpty }
+        return parts.isEmpty ? "Movie" : parts.prefix(3).joined(separator: " · ")
+    }
+    // Tags worth a chip: not blank, not just the category again, at most five.
+    static func tagChips(_ tags: CatalogTags?, category: String?) -> [String] {
+        let known = Set(categories(category).map { $0.lowercased() })
+        var seen = Set<String>()
+        return (tags?.values ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && !known.contains($0.lowercased()) && seen.insert($0.lowercased()).inserted }
+            .prefix(5).map { $0 }
+    }
+    static func showCaption(_ show: Show) -> String {
+        let parts = ["Series", categories(show.category).first].compactMap { $0 }
+        return parts.joined(separator: " · ")
+    }
 }
 
 struct BrowseHeader: View {
@@ -280,8 +314,8 @@ struct ShowCardView: View {
                         .font(.system(size: largeType ? 29 : 25, weight: .semibold, design: .rounded))
                         .foregroundColor(.white)
                         .lineLimit(2)
-                    Text("Series")
-                        .font(.system(size: 17, weight: .medium)).foregroundStyle(Color(white: 0.6))
+                    Text(BrowsePresentation.showCaption(show))
+                        .font(.system(size: 17, weight: .medium)).foregroundStyle(Color(white: 0.6)).lineLimit(1)
                 }
                 .frame(width: width, height: 104, alignment: .topLeading)
             }

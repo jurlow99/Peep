@@ -132,7 +132,7 @@ struct HomeView: View {
             PlaybackView(url: v.videoURL, title: v.title, identity: PlaybackIdentity(id: v.id, type: "movie"))
         }
         .fullScreenCover(item: $channelPlayback) { channel in
-            PlaybackView(url: channel.playbackURL(streamHost: supabase.configuration?.streamHost ?? "", feeds: feeds), title: channel.name, liveChannelID: channel.id)
+            PlaybackView(url: channel.playbackURL(streamHost: supabase.configuration?.streamHost ?? "", feeds: feeds), title: channel.displayName, liveChannelID: channel.id)
         }
         .fullScreenCover(item: $playingShow) { s in
             SeriesDetailView(show: s)
@@ -159,7 +159,7 @@ struct HomeView: View {
                             VStack(alignment: .leading, spacing: 12) {
                                 BoundedArtwork(url: channel.thumbURL, symbol: "tv")
                                     .frame(width: 300, height: 169).background(Color(white: 0.1))
-                                Text(channel.name).font(.system(size: 22, weight: .semibold)).lineLimit(2).frame(height: 54, alignment: .topLeading).padding(.horizontal, 12).padding(.bottom, 10)
+                                Text(channel.displayName).font(.system(size: 22, weight: .semibold)).lineLimit(2).frame(height: 54, alignment: .topLeading).padding(.horizontal, 12).padding(.bottom, 10)
                             }.frame(width: 300)
                         }.buttonStyle(BrowseCardStyle()).saveToMyList(String(channel.id), type: "channel").sidebarBoundary(channel.id == items.first?.id)
                     }

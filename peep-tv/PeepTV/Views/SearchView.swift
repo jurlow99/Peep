@@ -161,7 +161,7 @@ struct SearchView: View {
                                             Button { selectedChannel = channel } label: {
                                                 VStack(alignment: .leading, spacing: 12) {
                                                     BoundedArtwork(url: channel.thumbURL, symbol: "tv").frame(width: 300, height: 169).background(Color(white: 0.1))
-                                                    Text(channel.name).font(.system(size: 22, weight: .semibold)).lineLimit(2).frame(height: 54, alignment: .topLeading).padding(.horizontal, 12).padding(.bottom, 10)
+                                                    Text(channel.displayName).font(.system(size: 22, weight: .semibold)).lineLimit(2).frame(height: 54, alignment: .topLeading).padding(.horizontal, 12).padding(.bottom, 10)
                                                 }.frame(width: 300)
                                             }.buttonStyle(BrowseCardStyle()).saveToMyList(String(channel.id), type: "channel").sidebarBoundary(channel.id == matches.channels.first?.id)
                                                 .disabled(channel.playbackURL(streamHost: supabase.configuration?.streamHost ?? "", feeds: feeds) == nil)
@@ -201,8 +201,8 @@ struct SearchView: View {
         }
         .sheet(item: $selectedPodcast) { PodcastDetailView(podcast: $0) }
         .fullScreenCover(item: $selectedChannel) { channel in
-            PlaybackView(url: channel.playbackURL(streamHost: supabase.configuration?.streamHost ?? "", feeds: feeds), title: channel.name, liveChannelID: channel.id,
-                         metadata: PlaybackMetadata(title: channel.name, subtitle: BrowsePresentation.category(channel.category), description: channel.description, artwork: channel.thumbURL, isLive: true))
+            PlaybackView(url: channel.playbackURL(streamHost: supabase.configuration?.streamHost ?? "", feeds: feeds), title: channel.displayName, liveChannelID: channel.id,
+                         metadata: PlaybackMetadata(title: channel.displayName, subtitle: BrowsePresentation.category(channel.category), description: channel.description, artwork: channel.thumbURL, isLive: true))
         }
     }
 

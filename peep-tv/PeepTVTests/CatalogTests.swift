@@ -505,6 +505,27 @@ final class CatalogTests: XCTestCase {
         XCTAssertTrue(pacer.accept(.down, at: 10.80))
         XCTAssertTrue(pacer.accept(.down, at: 12))
     }
+    func testChannelNamesAndCategoriesReadCleanly() {
+        XCTAssertEqual(BrowsePresentation.channelName("Dog the Bounty Hunter (1080p)"), "Dog the Bounty Hunter")
+        XCTAssertEqual(BrowsePresentation.channelName("Formula 1 AntenaPlay (576p) [Not 24/7]"), "Formula 1 AntenaPlay")
+        XCTAssertEqual(BrowsePresentation.channelName("ESPN (United States) HD (720p)"), "ESPN (United States) HD")
+        XCTAssertEqual(BrowsePresentation.channelName("FightBox HD"), "FightBox HD")
+        XCTAssertEqual(BrowsePresentation.channelName("  (1080p)  "), "(1080p)", "Never blank a name")
+        XCTAssertEqual(BrowsePresentation.categories("usa; sports,mma"), ["USA", "Sports", "MMA"])
+        XCTAssertEqual(BrowsePresentation.categories("united states"), ["United States"])
+        XCTAssertEqual(BrowsePresentation.category("Animation;Classic"), "Animation · Classic")
+    }
+
+    func testCardCaptionsSaySomethingThePosterDoesNot() throws {
+        let video = try JSONDecoder().decode(Video.self, from: Data(#"{"id":"a","title":"Full Force","category":"documentary","year":2019,"duration":"52 min"}"#.utf8))
+        XCTAssertEqual(BrowsePresentation.movieCaption(video), "2019 · Documentary · 52 min")
+        let bare = try JSONDecoder().decode(Video.self, from: Data(#"{"id":"b","title":"X"}"#.utf8))
+        XCTAssertEqual(BrowsePresentation.movieCaption(bare), "Movie")
+        let show = try JSONDecoder().decode(Show.self, from: Data(#"{"id":1,"title":"Lez","category":"comedy","tags":"comedy, Animation ,, animation,Adult"}"#.utf8))
+        XCTAssertEqual(BrowsePresentation.showCaption(show), "Series · Comedy")
+        XCTAssertEqual(BrowsePresentation.tagChips(show.tags, category: show.category), ["Animation", "Adult"])
+    }
+
     func testAdPolicyReadsAdminRulesAndFallsBackSafely() {
         let rules = AdPolicy.parse(#"{"enabled":true,"min_gap_minutes":5,"live_entry":false,"multiview_entry":true,"midroll_enabled":false}"#)
         XCTAssertEqual(rules.gap, 300)

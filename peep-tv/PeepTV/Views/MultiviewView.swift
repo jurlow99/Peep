@@ -422,7 +422,7 @@ struct MultiviewView: View {
                         channel.playbackURL(streamHost: session.streamHost, feeds: session.feeds) != nil &&
                         !model.channels.enumerated().contains { $0.offset != replacingSlot && $0.element.id == channel.id }
                     }) { channel in
-                        Button(channel.name) {
+                        Button(channel.displayName) {
                             guard let slot = replacingSlot else { return }
                             model.replace(slot, with: channel)
                             replacingSlot = nil
@@ -493,7 +493,7 @@ HStack {
                 }.frame(width: width, height: height)
                     .clipped()
             }.buttonStyle(MultiviewGridTileStyle()).focused($focusedSlot, equals: slot)
-                .accessibilityLabel("Screen \(slot + 1), \(model.channels[slot].name), open fullscreen")
+                .accessibilityLabel("Screen \(slot + 1), \(model.channels[slot].displayName), open fullscreen")
                 .onRemoteMove { direction in
                     if model.channels.count == 2 {
                         switch direction {
@@ -515,7 +515,7 @@ HStack {
                 }
                 .onPlayPauseCommand { showControls(slot) }
             HStack(spacing: 12) {
-                Text(model.channels[slot].name).font(.system(size: 22, weight: .semibold)).lineLimit(1)
+                Text(model.channels[slot].displayName).font(.system(size: 22, weight: .semibold)).lineLimit(1)
                 Spacer()
                 if model.audibleSlot == slot { Image(systemName: "speaker.wave.2.fill").accessibilityLabel("Audio on") }
                 if controlsSlot == slot {
@@ -620,7 +620,7 @@ struct MultiviewPackageShelf: View {
                             }.background(Color(white: 0.1))
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(package.title).font(.system(size: 23, weight: .semibold)).lineLimit(1)
-                                Text(pair.map(\.name).joined(separator: " + ")).font(.system(size: 17)).foregroundStyle(.secondary).lineLimit(1)
+                                Text(pair.map(\.displayName).joined(separator: " + ")).font(.system(size: 17)).foregroundStyle(.secondary).lineLimit(1)
                                 Text("MULTIVIEW · \(pair.count) CHANNELS").font(.system(size: 13, weight: .semibold)).foregroundStyle(.secondary)
                             }.padding(.horizontal, 12).padding(.bottom, 14)
                         }.frame(width: 391)

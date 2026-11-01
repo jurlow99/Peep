@@ -61,6 +61,17 @@ struct SeriesDetailView: View {
     private var seasons: [Int] { Array(Set(episodes.map { $0.season ?? 1 })).sorted() }
     private var visibleEpisodes: [Episode] { episodes.filter { ($0.season ?? 1) == selectedSeason } }
     private var nextUp: Episode? { SeriesPlayback.nextUp(in: episodes, progress: progress) }
+    private enum Field: Hashable { case back, play }
+    @FocusState private var field: Field?
+    private var facts: String {
+        var parts: [String] = []
+        if let category = BrowsePresentation.categories(show.category).first { parts.append(category) }
+        if !episodes.isEmpty {
+            parts.append(seasons.count > 1 ? "\(seasons.count) seasons" : "\(episodes.count) episode\(episodes.count == 1 ? "" : "s")")
+        }
+        return parts.joined(separator: "  ·  ")
+    }
+    private var tagChips: [String] { BrowsePresentation.tagChips(show.tags, category: show.category) }
 
     var body: some View {
         ScrollView {
@@ -68,24 +79,28 @@ struct SeriesDetailView: View {
                 Button { dismiss() } label: {
                     Label("Back", systemImage: "chevron.left")
                         .font(.system(size: 21, weight: .semibold)).padding(.horizontal, 20).padding(.vertical, 14)
-                }.buttonStyle(BrowseCardStyle())
+                }.buttonStyle(BrowseCardStyle()).focused($field, equals: .back)
 
                 HStack(alignment: .center, spacing: 44) {
-                    PosterArtwork(url: show.thumbURL, width: 188, symbol: "tv")
+                    PosterArtwork(url: show.thumbURL, width: 300, symbol: "tv")
                     VStack(alignment: .leading, spacing: 16) {
                         Text("SERIES").font(.system(size: 16, weight: .bold)).tracking(3).foregroundStyle(.secondary)
                         Text(show.title.trimmingCharacters(in: .whitespacesAndNewlines))
                             .font(.system(size: 52, weight: .bold, design: .rounded)).lineLimit(2)
+                        if !facts.isEmpty {
+                            Text(facts).font(.system(size: 21, weight: .medium)).foregroundStyle(Color(white: 0.72))
+                        }
                         if let description = show.description, !description.isEmpty {
                             Text(description).font(.system(size: 23)).foregroundStyle(Color(white: 0.72))
-                                .lineLimit(3).frame(maxWidth: 1040, alignment: .leading)
+                                .lineLimit(4).frame(maxWidth: 1040, alignment: .leading)
                         }
+                        if !tagChips.isEmpty { DetailTagRow(tags: tagChips) }
                         HStack(spacing: 20) {
                             if let episode = nextUp {
                                 Button { selectedEpisode = episode } label: {
                                     Label("\(progress[String(episode.id)]?.canResume == true ? "Resume" : "Play") S\(episode.season ?? 1) E\(episode.episode_number ?? 1)", systemImage: "play.fill")
                                         .font(.system(size: 22, weight: .semibold)).padding(18)
-                                }.buttonStyle(BrowseCardStyle())
+                                }.buttonStyle(BrowseCardStyle()).focused($field, equals: .play)
                             }
                             MyListAction(id: String(show.id), type: "show")
                         }.padding(.top, 8)
@@ -124,9 +139,16 @@ struct SeriesDetailView: View {
                 }
             }.padding(.horizontal, 80).padding(.top, 36).padding(.bottom, 70)
         }
+        .background { DetailBackdrop(url: MediaURL.parse(show.thumbnail) ?? show.thumbURL) }
         .background(Color.black).foregroundStyle(.white)
+        .defaultFocus($field, nextUp != nil ? .play : .back)
         .onExitCommand { dismiss() }
-        .task { await load() }
+        .task {
+            await load()
+            // The Play button only exists once episodes are known; move the cursor to it then.
+            try? await Task.sleep(for: .milliseconds(80))
+            if field == nil || field == .back, nextUp != nil { field = .play }
+        }
         .task(id: "\(supabase.watchProgressRevision):\(supabase.session?.userId ?? "guest")") { await loadProgress() }
         .fullScreenCover(item: $selectedEpisode, onDismiss: { Task { await loadProgress() } }) {
             PlaybackView(url: $0.videoURL, title: $0.displayTitle, identity: PlaybackIdentity(id: String($0.id), type: "episode"),
