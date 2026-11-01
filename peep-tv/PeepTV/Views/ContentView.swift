@@ -204,7 +204,7 @@ struct ContentView: View {
                             FilterChip(label: "Movies", isSelected: !onDemandSeries) { onDemandSeries = false }.sidebarBoundary()
                             FilterChip(label: "Series", isSelected: onDemandSeries) { onDemandSeries = true }
                             Spacer()
-                        }.padding(.horizontal, 70).padding(.top, 28)
+                        }.padding(.horizontal, 70).padding(.top, 28).padding(.bottom, 14).zIndex(1) // room for the focus ring; it sits above the page below
                         if onDemandSeries { SeriesView() } else { MoviesView() }
                     }.environment(\.onDemandTypography, true)
                 }
