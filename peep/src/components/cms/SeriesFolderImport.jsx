@@ -8,6 +8,7 @@ import { captureVideoThumbnail, readVideoMetadata } from '../../lib/videoThumbna
 import { formatBytes, formatDuration } from '../../lib/uploadProgress';
 import { uploadImage } from '../../lib/storageUtils';
 import { planSeriesImport, STATUS, seasonLabel } from '../../lib/seriesImport';
+import { codecLabel, detectMP4VideoCodec, mp4CodecProblem } from '../../lib/mp4Codec';
 import { ImageUploader } from '../ImageUploader';
 
 const artworkFolder = name => (IS_DEV_DB ? `hero/${name}` : name);
@@ -28,6 +29,7 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState({});        // key → { state, progress, message }
   const [showID, setShowID] = useState('');
+  const [badCodec, setBadCodec] = useState({});     // key → codec name for MP4s Peep can't play (AV1, HEVC…)
   const stop = useRef(false), current = useRef(null), alive = useRef(true), fileInput = useRef(null);
 
   useEffect(() => { alive.current = true; return () => { alive.current = false; stop.current = true; current.current?.abort?.(); }; }, []);
@@ -48,14 +50,23 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
     const known = await loadExisting();
     if (!alive.current) return;
     const next = planSeriesImport(files, known);
-    setPlan(next); setTitles({}); setResults({}); setShowTitle(next.showTitle); setPoster(next.show?.poster || ''); setShowID(next.show ? String(next.show.id) : '');
+    setPlan(next); setTitles({}); setResults({}); setBadCodec({}); setShowTitle(next.showTitle); setPoster(next.show?.poster || ''); setShowID(next.show ? String(next.show.id) : '');
     if (!next.ready) showToast?.(next.episodes.length ? 'Everything in that folder is already in Peep.' : 'No importable episodes found in that folder.');
+    // An MP4 can hide AV1 or HEVC video, which plays as sound over black on Safari and Apple TV. Check before anything uploads.
+    const problems = {};
+    for (const item of next.episodes) {
+      if (item.status !== STATUS.READY) continue;
+      const codec = await detectMP4VideoCodec(item.file.file).catch(() => null);
+      if (mp4CodecProblem(codec)) problems[item.key] = codecLabel(codec);
+    }
+    if (alive.current && Object.keys(problems).length) setBadCodec(problems);
   }
 
   const limit = r2Ready ? R2_VOD_LIMIT : VOD_SOURCE_LIMIT;
   const tooBig = plan ? plan.episodes.filter(e => e.status === STATUS.READY && e.size > limit) : [];
   const needsPoster = plan && !plan.show && !poster;
-  const queue = plan ? plan.episodes.filter(e => e.status === STATUS.READY && e.size <= limit) : [];
+  const queue = plan ? plan.episodes.filter(e => e.status === STATUS.READY && e.size <= limit && !badCodec[e.key]) : [];
+  const badCount = Object.keys(badCodec).length;
   const failed = Object.values(results).filter(r => r.state === 'failed').length;
 
   function update(key, patch) { setResults(r => ({ ...r, [key]: { ...(r[key] || {}), ...patch } })); }
@@ -149,6 +160,7 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
     `${plan.ready} new episode${plan.ready === 1 ? '' : 's'}${plan.extras ? ` + ${plan.extras} extra${plan.extras === 1 ? '' : 's'}` : ''}${plan.ready || plan.extras ? ` · ${formatBytes(plan.bytes)}` : ''}`,
     alreadyIn.length ? `${alreadyIn.length} already in Peep` : '',
     tooBig.length ? `${tooBig.length} too large for ${r2Ready ? 'R2' : 'Supabase (configure R2 for files over 50 MiB)'}` : '',
+    badCount ? `${badCount} can't play on Safari/Apple TV (convert to H.264)` : '',
     plan.skipped.length ? `${plan.skipped.length} file${plan.skipped.length === 1 ? '' : 's'} skipped` : '',
   ].filter(Boolean).join(' · ');
 
@@ -174,7 +186,7 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
           <li>Each MP4 uploads to {r2Ready ? 'R2' : 'Supabase'} and lands in Episodes, approved, one file at a time. Keep this tab open.</li>
           <li>Files named trailer, teaser, promo or bloopers go to the series' <strong>Extras</strong> shelf; the first trailer becomes the series trailer.</li>
           <li>Pick the same folder again later and only new files show up.</li>
-          <li><code>.mkv</code> / <code>.webm</code> can't be played by Peep — convert to MP4 first.</li>
+          <li>Peep plays H.264 MP4 only. <code>.mkv</code> / <code>.webm</code> and AV1 / HEVC MP4s are flagged — convert them first.</li>
         </ul>
       </details>
 
@@ -221,14 +233,14 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
                 <tbody>
                   {plan.episodes.filter(e => e.season === season && e.status !== STATUS.EXISTS).map(episode => {
                     const result = results[episode.key];
-                    const blocked = episode.size > limit ? 'Too large for this storage.' : '';
+                    const blocked = badCodec[episode.key] ? `${badCodec[episode.key]} video — Safari and Apple TV play it as sound over black. Convert to H.264 first.` : episode.size > limit ? 'Too large for this storage.' : '';
                     return (
                       <tr key={episode.key} className={blocked ? 'blocked' : ''}>
                         <td className="num">{episode.extra ? '★' : `E${episode.number}`}</td>
                         <td><input value={titles[episode.key] ?? episode.title} onChange={e => setTitles(t => ({ ...t, [episode.key]: e.target.value }))} disabled={running || !!blocked} /></td>
                         <td className="meta">{formatBytes(episode.size)}</td>
                         <td className="state">
-                          {blocked ? <span className="vod-import-chip skip">Too large</span>
+                          {blocked ? <span className="vod-import-chip skip" title={blocked}>{badCodec[episode.key] ? `${badCodec[episode.key]} · convert first` : 'Too large'}</span>
                             : !result ? <span className="vod-import-chip">Ready</span>
                             : result.state === 'uploading' ? <span className="vod-import-chip busy">Uploading {result.progress || 0}%</span>
                             : result.state === 'thumbnail' || result.state === 'saving' ? <span className="vod-import-chip busy">{result.message}</span>

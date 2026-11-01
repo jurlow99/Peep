@@ -10,6 +10,7 @@ import {uploadImage} from '../../lib/storageUtils';
 import {ImageUploader} from '../ImageUploader';
 import Drawer from './Drawer';
 import ComboInput from './ComboInput';
+import {detectMP4VideoCodec,mp4CodecProblem} from '../../lib/mp4Codec';
 import './VODSourceLibrary.css';
 
 const DEFAULT_KEY='peep-vod-upload-draft-v1';
@@ -94,6 +95,7 @@ export default function VODUploadFlow({shows=[],categories=[],showToast,onSaved,
     if(!IS_DEV_DB){setError('Upload-first storage must be deployed in this environment before use.');return;}
     setError('');setNotice('');
     if(!/\.mp4$/i.test(file.name)){setError('Choose a finished MP4 video.');return;}
+    if(!retry){const problem=mp4CodecProblem(await detectMP4VideoCodec(file).catch(()=>null));if(problem){setError(problem);return;}}
     const selectedProvider=retry&&pendingAsset.current?pendingAsset.current.provider:provider;
     if(file.size>(selectedProvider==='r2'?R2_VOD_LIMIT:VOD_SOURCE_LIMIT)){setError(selectedProvider==='r2'?'Choose an MP4 up to 10 GiB.':'Supabase Free supports MP4s up to 50 MiB. Configure R2 for larger videos.');return;}
     pendingFile.current=file;
