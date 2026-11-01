@@ -38,7 +38,8 @@ export const ADMIN_NAV = [
     { key: 'analytics', label: 'Platform analytics', target: { tab: 'analytics', analyticsTab: 'reports' } },
   ] },
   { key: 'platform', label: 'Platform', description: 'Manage platform settings, access, security and technical operations.', sections: [
-    { key: 'settings', label: 'Settings & admin access', target: { tab: 'settings' } },
+    { key: 'staff', label: 'Staff', target: { tab: 'staff' } },
+    { key: 'settings', label: 'Settings', target: { tab: 'settings' } },
     { key: 'security', label: 'Security', target: { tab: 'security' } },
     { key: 'flags', label: 'Feature flags', target: { tab: 'flags' } },
     { key: 'audit', label: 'Audit log', target: { tab: 'audit' } },
@@ -50,10 +51,10 @@ export function targetMatches(target, state) {
   return Object.entries(target).every(([key, value]) => state[key] === value);
 }
 
-export function activeAdminLocation(state) {
-  for (const group of ADMIN_NAV) {
+export function activeAdminLocation(state, nav = ADMIN_NAV) {
+  for (const group of nav) {
     const page = group.sections.find(page => targetMatches(page.target, state));
     if (page) return { group, page };
   }
-  return { group: ADMIN_NAV[0], page: ADMIN_NAV[0].sections[0] };
+  return { group: nav[0], page: nav[0].sections[0] };
 }

@@ -2,12 +2,12 @@ import { ADMIN_NAV, activeAdminLocation } from './adminSections';
 
 const button = { border: '1px solid transparent', borderRadius: 8, padding: '10px 13px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, whiteSpace: 'nowrap' };
 
-export default function AdminNavigation({ state, onNavigate, pendingReports = 0, padding = '24px' }) {
-  const { group, page } = activeAdminLocation(state);
+export default function AdminNavigation({ state, onNavigate, pendingReports = 0, padding = '24px', nav = ADMIN_NAV }) {
+  const { group, page } = activeAdminLocation(state, nav);
   return (
     <div style={{ borderBottom: '1px solid #e2e8f0', background: '#fff', padding: `14px ${padding} 18px` }}>
       <nav aria-label="Admin sections" style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-        {ADMIN_NAV.map(item => (
+        {nav.map(item => (
           <button key={item.key} type="button" aria-current={group.key === item.key ? 'true' : undefined}
             onClick={() => onNavigate(item.sections[0].target)}
             style={{ ...button, fontWeight: 700, background: group.key === item.key ? '#4f46e5' : 'transparent', color: group.key === item.key ? '#fff' : '#475569' }}>

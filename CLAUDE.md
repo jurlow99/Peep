@@ -158,8 +158,13 @@ subscription, episodes must be approved and inherit show rules.
   `can_read_tier`, `can_read_content`) — keep it **out of the Data API exposed schemas**.
 - `public_live_feeds` is a SECURITY INVOKER view; admins read full feed metadata via
   `admin_live_feeds()`; ingest passphrases live in `live_feed_secrets` (no client policy).
-- `profiles.role` ∈ `viewer | creator | admin`, plus `is_admin`; a trigger blocks
-  self-promotion. No staff invitations / per-permission roles exist yet (scope wants them).
+- `profiles.role` ∈ `viewer | creator | admin`, plus `is_admin`, plus `staff_role`
+  ∈ `owner | admin | editor` (dev add-on `db/features/staff-roles.sql`). Every staff
+  member is `role='admin'` for RLS; `staff_role` only drives the admin UI (editors see
+  Content/Curation/Live TV) and who may manage staff. The trigger now blocks any
+  role/is_admin/staff_role change from the client — only the `manage-staff` edge
+  function (service role) writes them. Platform → Staff invites by email (Resend;
+  new accounts land on `/set-password?next=/admin`, existing ones get a magic link).
 - Add-ons applied **to dev only**, by hand, no ledger: `db/features/*.sql` (channel
   blackouts, CSAI preroll columns, live viewing sessions + dashboard RPCs, multiview
   packages incl. 4-channel, `merge_shows` for duplicate series), `db/storage/*.sql` (VOD buckets/policies, upload-first,
@@ -228,7 +233,7 @@ Groups in `supabase/functions/`:
 | Creator live | `check-live-status`, `stream-webhook` (verifies `Webhook-Signature`, needs `CLOUDFLARE_STREAM_WEBHOOK_SECRET`), `register-webhook`, `notify-go-live`, `rotate-stream-key`, `enable-streaming` |
 | Creators / partners | `approve-streamer`, `reject-streamer`, `invite-creator`, `my-streamer-application`, `get-creator-dashboard`, `notify-episode-status` |
 | Billing | `create-subscription`, `cancel-subscription`, `create-portal-session`, `create-donation-session`, `stripe-webhook` (verifies signature), `get-stripe-revenue`, `redeem-promo` |
-| Admin / auth | `manage-admin-role` (owner email hardcoded), `verify-admin-pin` (dead — nothing calls it), `verify-turnstile`, `grant-access`, `delete-user`, `delete-account`, `update-email`, `send-confirmation-email`, `send-reset-email`, `send-welcome-email` |
+| Admin / auth | `manage-staff` (list/invite/set_role/remove/resend; deployed on dev), `manage-admin-role` (superseded, still deployed), `verify-admin-pin` (dead — nothing calls it), `verify-turnstile`, `grant-access`, `delete-user`, `delete-account`, `update-email`, `send-confirmation-email`, `send-reset-email`, `send-welcome-email` |
 | Misc | `sports-scoreboard` (unauthenticated ESPN proxy, 5-league allowlist), `iab-vast-sample` |
 
 Admin gating is `requireAdmin` from `_shared/supabase.ts` (checks `profiles.role` /
@@ -339,7 +344,9 @@ a real-Supabase rollback script (dev only), and a read-only tvOS REST smoke test
 - Apply the dev-only SQL add-ons to prod with a ledger; create prod storage buckets /
   R2 bucket + CORS; deploy edge functions and secrets to prod.
 - Resolve the admin weak spots above and the `Number(...)` coercion in EPG/ad editors.
-- Staff invitations + role permissions (required by scope, not built).
+- Staff roles are UI-scoped only: an editor's JWT still passes every admin RLS policy.
+  Tighten server-side per-role policies before giving an editor login to someone you
+  don't trust with the whole admin.
 - Real end-to-end upload → publish → playback test with owned media on web and tvOS
   (nobody has done this yet).
 - Creator streaming, billing, predictions settlement remain unfinished (see above).

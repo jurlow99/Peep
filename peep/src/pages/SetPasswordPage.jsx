@@ -48,7 +48,7 @@ export function SetPasswordPage() {
     const refreshToken = params.get("refresh_token");
     const type         = params.get("type");
 
-    if (accessToken && refreshToken && type === "recovery") {
+    if (accessToken && refreshToken && (type === "recovery" || type === "invite")) {
       supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
         .then(({ error }) => {
           if (error) setError("This link is invalid or has expired. Use Forgot Password on the sign-in page.");
@@ -78,7 +78,9 @@ export function SetPasswordPage() {
       // Refresh session so new tokens are committed before navigating away
       await supabase.auth.refreshSession();
       setDone(true);
-      setTimeout(() => { window.location.href = "/streamer"; }, 1500);
+      // Staff invitations land in admin; everyone else goes to the creator dashboard.
+      const next = new URLSearchParams(window.location.search).get("next");
+      setTimeout(() => { window.location.href = next === "/admin" ? "/admin" : "/streamer"; }, 1500);
     }
   }
 

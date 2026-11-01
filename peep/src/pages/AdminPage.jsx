@@ -4,10 +4,12 @@ import { IS_DEV_DB } from "../components/EnvBadge";
 import { CMS } from "../components/CMS";
 import { supabase } from "../supabase";
 import { isAdminProfile } from "../lib/auth";
+import { effectiveStaffRole } from "../lib/staff";
 
 export function AdminPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [staffRole, setStaffRole] = useState("admin");
   const [checking, setChecking] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -24,12 +26,13 @@ export function AdminPage() {
         return;
       }
       try {
-        const { data: profile, error } = await supabase.from("profiles").select("role, is_admin").eq("id", session.user.id).maybeSingle();
+        const { data: profile, error } = await supabase.from("profiles").select("role, is_admin, staff_role").eq("id", session.user.id).maybeSingle();
         if (!active || request !== revision) return;
         if (error) throw error;
         const allowed = isAdminProfile(profile);
         verifiedID = allowed ? session.user.id : null;
         setIsAdmin(allowed);
+        setStaffRole(effectiveStaffRole(profile) || "admin");
         setCurrentUser(allowed ? session.user : null);
         setError(allowed ? null : "This account doesn't have admin access. Sign in with your admin account.");
       } catch (err) {
@@ -56,13 +59,14 @@ export function AdminPage() {
     setError(null);
     const { data, error: signInErr } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
     if (signInErr) { setError(signInErr.message); setLoading(false); return; }
-    const { data: profile } = await supabase.from("profiles").select("role, is_admin").eq("id", data.user.id).maybeSingle();
+    const { data: profile } = await supabase.from("profiles").select("role, is_admin, staff_role").eq("id", data.user.id).maybeSingle();
     if (!isAdminProfile(profile)) {
       await supabase.auth.signOut({ scope: 'local' });
       setError("This account doesn't have admin access.");
       setLoading(false);
       return;
     }
+    setStaffRole(effectiveStaffRole(profile) || "admin");
     setIsAdmin(true);
     setCurrentUser(data.user);
     setLoading(false);
@@ -131,5 +135,5 @@ export function AdminPage() {
     );
   }
 
-  return <CMS onExit={handleSignOut} currentUser={currentUser} />;
+  return <CMS onExit={handleSignOut} currentUser={currentUser} staffRole={staffRole} />;
 }
