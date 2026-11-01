@@ -117,7 +117,7 @@ struct SeriesDetailView: View {
                                 ForEach(seasons, id: \.self) { season in
                                     FilterChip(label: SeriesPlayback.seasonLabel(season), isSelected: selectedSeason == season) { seasonTouched = true; selectedSeason = season }
                                 }
-                            }.padding(6)
+                            }.padding(.vertical, 16).padding(.horizontal, 12) // room for the yellow focus ring, which sits outside the pill
                         }
                         Text("\(visibleEpisodes.count) episode\(visibleEpisodes.count == 1 ? "" : "s")")
                             .font(.system(size: 18)).foregroundStyle(.secondary).fixedSize()

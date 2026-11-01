@@ -83,7 +83,7 @@ struct StreamsView: View {
                                 .sidebarBoundary(index == 0)
 
                         }
-                    }.padding(.horizontal, 70).padding(.vertical, 12)
+                    }.padding(.horizontal, 70).padding(.vertical, 16) // room for the focus ring
                 }
                 .focusSection()
                 if searching {

@@ -97,7 +97,7 @@ struct SearchView: View {
                             ForEach(genres, id: \.self) { genre in
                                 FilterChip(label: genre, isSelected: false) { query = genre }.sidebarBoundary(genre == genres.first)
                             }
-                        }.padding(8)
+                        }.padding(.vertical, 16).padding(.horizontal, 12) // room for the focus ring
                     }
                     Spacer()
                 }.padding(.horizontal, 80).padding(.top, 30)

@@ -30,7 +30,7 @@ struct MoviesView: View {
                             showDemos.toggle(); selectedCategory = nil
                         }
                     }
-                }.padding(.horizontal, 70).padding(.vertical, 12)
+                }.padding(.horizontal, 70).padding(.vertical, 16) // room for the focus ring
             }.focusSection()
 
             if isLoading {
@@ -135,7 +135,7 @@ struct MyListView: View {
                         ForEach(filters, id: \.self) { value in
                             FilterChip(label: value, isSelected: filter == value) { filter = value }.sidebarBoundary(value == "All")
                         }
-                    }.padding(.horizontal, 70).padding(.vertical, 10)
+                    }.padding(.horizontal, 70).padding(.vertical, 16)
                 }.focusSection()
                 if loading {
                     ProgressView("Opening My List…").frame(maxWidth: .infinity, maxHeight: .infinity)
