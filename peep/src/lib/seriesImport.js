@@ -22,8 +22,8 @@ export function extensionOf(name) {
 
 const EXTRA = /\b(trailer|teaser|promo|preview|sneak peek|behind the scenes|bloopers?|recap)\b/i;
 export function isExtra(name) { return EXTRA.test(String(name || '').replace(/\.[a-z0-9]+$/i, '')); }
-// "Xep14 Title", "X14 Title", "Extra 14 - Title": a numbered extra.
-const EXTRA_CODE = /^(?:x(?:ep|tra)?|extras?)\.?\s*0*(\d{1,3})\b/i;
+// "Xep14 Title", "X14 Title", "Extra 14 - Title", "ep09X Title": a numbered extra.
+const EXTRA_CODE = /^(?:(?:x(?:ep|tra)?|extras?)\.?\s*0*(\d{1,3})\b|(?:ep|episode)\.?\s*0*(\d{1,3})x\b)/i;
 
 // Episode number (and season when the name carries one) plus a clean title.
 // `confidence` is the pattern index: S01E02 beats "Episode 2" beats "02 - Title".
@@ -31,8 +31,9 @@ export function parseEpisodeFile(name) {
   const base = String(name || '').replace(/\.[a-z0-9]+$/i, '');
   const extra = base.match(EXTRA_CODE);
   if (extra) {
+    const number = Number(extra[1] || extra[2]);
     const title = tidyTitle(base.replace(extra[0], ' '));
-    return { season: EXTRAS_SEASON, episode: Number(extra[1]), title: title || `Extra ${Number(extra[1])}`, confidence: 0, extra: true };
+    return { season: EXTRAS_SEASON, episode: number, title: title || `Extra ${number}`, confidence: 0, extra: true };
   }
   for (let index = 0; index < CODES.length; index++) {
     const match = base.match(CODES[index]);

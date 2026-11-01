@@ -94,6 +94,9 @@ describe('series folder import', () => {
   it('reads "Xep14" style names as numbered extras and keeps their numbers when free', () => {
     expect(parseEpisodeFile('Xep14 Jay Leno_s Appearance on South Park.mp4')).toMatchObject({ season: 0, episode: 14, title: 'Jay Leno s Appearance on South Park', extra: true });
     expect(parseEpisodeFile('X03 Bloopers.mp4')).toMatchObject({ episode: 3, extra: true });
+    expect(parseEpisodeFile('ep09X Chocolate Salty Balls - Music Video.mp4')).toMatchObject({ episode: 9, extra: true, title: 'Chocolate Salty Balls Music Video' });
+    expect(parseEpisodeFile('ep09 Chef_s Chocolate Salty Balls.mp4')).toMatchObject({ episode: 9 });
+    expect(parseEpisodeFile('ep09 Chef_s Chocolate Salty Balls.mp4')?.extra).toBeUndefined();
     const existing = [{ id: 4, title: 'South Park', episodes: [{ season: 0, episode_number: 14, title: 'Something else' }] }];
     const plan = planSeriesImport([f('South Park/Xep14 Jay Leno_s Appearance on South Park.mp4'), f('South Park/Xep15 O Holy Night - Cartman Music Video.mp4'), f('South Park/Season 4 trailer.mp4')], existing);
     // 14 is taken → next free; 15 keeps its number; the trailer goes after both.

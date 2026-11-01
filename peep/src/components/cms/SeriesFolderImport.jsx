@@ -160,7 +160,8 @@ export default function SeriesFolderImport({ shows = [], show: fixedShow = null,
   ].filter(Boolean).join(' · ');
 
   const twins = plan ? plan.skipped.filter(s => s.converted) : [];
-  const rest = plan ? plan.skipped.filter(s => !s.converted) : [];
+  const unsupported = plan ? plan.skipped.filter(s => !s.converted && s.status === STATUS.UNSUPPORTED) : [];
+  const rest = plan ? plan.skipped.filter(s => !s.converted && s.status !== STATUS.UNSUPPORTED) : [];
   const saved = Object.values(results).filter(r => r.state === 'saved').length;
   const remaining = queue.filter(e => results[e.key]?.state !== 'saved').length;
   const actionLabel = running ? `Importing ${saved + 1} of ${queue.length}…` : saved ? `Import remaining (${remaining})` : `Import ${queue.length} file${queue.length === 1 ? '' : 's'}`;
@@ -260,7 +261,10 @@ export default function SeriesFolderImport({ shows = [], show: fixedShow = null,
 
           {plan.skipped.length > 0 && (
             <details className="vod-import-skipped">
-              <summary>{[rest.length ? `${rest.length} can't be imported` : '', twins.length ? `${twins.length} original${twins.length === 1 ? '' : 's'} already converted` : ''].filter(Boolean).join(' · ')}</summary>
+              <summary>{[unsupported.length ? `${unsupported.length} need converting` : '', rest.length ? `${rest.length} need placing` : '', twins.length ? `${twins.length} original${twins.length === 1 ? '' : 's'} already converted` : ''].filter(Boolean).join(' · ')}</summary>
+              {unsupported.length > 0 && (
+                <p className="vod-import-hint"><strong>{unsupported.length} file{unsupported.length === 1 ? '' : 's'} can't be played by Peep</strong> ({[...new Set(unsupported.map(u => `.${u.name.split('.').pop().toLowerCase()}`))].join(', ')}). Convert them to H.264 MP4 first, then pick the folder again. <span className="vod-import-filenames">{unsupported.map(u => u.name).join(' · ')}</span></p>
+              )}
               {rest.length > 0 && (
                 <ul>
                   {rest.map(item => {
