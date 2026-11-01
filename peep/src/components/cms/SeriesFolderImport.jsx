@@ -33,23 +33,27 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
 
   useEffect(() => { alive.current = true; return () => { alive.current = false; stop.current = true; current.current?.abort?.(); }; }, []);
   useEffect(() => { let live = true; r2VODRequest('status').then(d => { if (live && d.configured) setR2Ready(true); }).catch(() => {}); return () => { live = false; }; }, []);
-  useEffect(() => {
-    let live = true;
-    supabase.from('episodes').select('show_id,season,episode_number').then(({ data }) => {
-      if (!live) return;
-      const bySlot = {};
-      (data || []).forEach(e => { (bySlot[e.show_id] ||= []).push({ season: e.season, episode_number: e.episode_number }); });
-      setExisting(shows.map(s => ({ ...s, episodes: bySlot[s.id] || [] })));
-    });
-    return () => { live = false; };
-  }, [shows]);
+  // What's already in Peep is read fresh every time a folder is picked, so
+  // re-picking the same folder after an import only surfaces what's new.
+  async function loadExisting() {
+    const { data } = await supabase.from('episodes').select('show_id,season,episode_number');
+    const bySlot = {};
+    (data || []).forEach(e => { (bySlot[e.show_id] ||= []).push({ season: e.season, episode_number: e.episode_number }); });
+    const next = shows.map(s => ({ ...s, episodes: bySlot[s.id] || [] }));
+    if (alive.current) setExisting(next);
+    return next;
+  }
+  useEffect(() => { loadExisting(); }, [shows]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function choose(event) {
+  async function choose(event) {
     const files = Array.from(event.target.files || []).map(file => ({ name: file.name, size: file.size, path: file.webkitRelativePath || file.name, file }));
     event.target.value = '';
     if (!files.length) return;
-    const next = planSeriesImport(files, existing);
+    const known = await loadExisting();
+    if (!alive.current) return;
+    const next = planSeriesImport(files, known);
     setPlan(next); setTitles({}); setResults({}); setShowTitle(next.showTitle); setPoster(next.show?.poster || ''); setShowID(next.show ? String(next.show.id) : '');
+    if (!next.ready) showToast?.(next.episodes.length ? 'Everything in that folder is already in Peep.' : 'No importable episodes found in that folder.');
   }
 
   const limit = r2Ready ? R2_VOD_LIMIT : VOD_SOURCE_LIMIT;
@@ -129,23 +133,30 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
       }
     }
     current.current = null;
-    if (alive.current) { setRunning(false); onSaved?.(); showToast?.(stop.current ? 'Import stopped. Saved episodes are kept.' : 'Series import finished.'); }
+    if (alive.current) { setRunning(false); onSaved?.(); loadExisting(); showToast?.(stop.current ? 'Import stopped. Saved episodes are kept.' : 'Series import finished.'); }
   }
 
   function cancel() { stop.current = true; current.current?.abort?.(); }
 
-  const summary = plan && `${plan.ready} episode${plan.ready === 1 ? '' : 's'} across ${plan.seasons.length} season${plan.seasons.length === 1 ? '' : 's'} · ${formatBytes(plan.bytes)}`;
+  const alreadyIn = plan ? plan.episodes.filter(e => e.status === STATUS.EXISTS) : [];
+  const newSeasons = plan ? plan.seasons.filter(season => plan.episodes.some(e => e.season === season && e.status !== STATUS.EXISTS)) : [];
+  const summary = plan && [
+    `${plan.ready} new episode${plan.ready === 1 ? '' : 's'}${plan.ready ? ` · ${formatBytes(plan.bytes)}` : ''}`,
+    alreadyIn.length ? `${alreadyIn.length} already in Peep` : '',
+    tooBig.length ? `${tooBig.length} too large for ${r2Ready ? 'R2' : 'Supabase (configure R2 for files over 50 MiB)'}` : '',
+    plan.skipped.length ? `${plan.skipped.length} file${plan.skipped.length === 1 ? '' : 's'} skipped` : '',
+  ].filter(Boolean).join(' · ');
 
   return (
     <div className="vod-import">
       <div className="vod-import-head">
         <div>
           <h3>Import a series folder</h3>
-          <p>Pick the show's top folder (e.g. <code>The Big Lez Show</code>) with <code>Season 1</code>, <code>Season 2</code>… inside and files named <code>S01E02 Title.mp4</code>. Everything uploads to {r2Ready ? 'R2' : 'Supabase'} and lands in Episodes, approved, one file at a time. Keep this tab open until it finishes.</p>
+          <p>Pick the show's top folder (e.g. <code>The Big Lez Show</code>) with <code>Season 1</code>, <code>Season 2</code>… inside and files named <code>S01E02 Title.mp4</code>. Everything uploads to {r2Ready ? 'R2' : 'Supabase'} and lands in Episodes, approved, one file at a time. Keep this tab open until it finishes. Pick the same folder again later and only new files show up — anything already in Peep is left alone.</p>
         </div>
         <label className="vod-import-pick">
           <input type="file" webkitdirectory="" directory="" multiple onChange={choose} disabled={running} />
-          <span>{plan ? 'Choose a different folder' : 'Choose folder…'}</span>
+          <span>{plan ? 'Pick a folder again' : 'Choose folder…'}</span>
         </label>
       </div>
 
@@ -173,22 +184,31 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
             </div>
           )}
 
-          <p className="vod-import-summary"><strong>{summary}</strong>{plan.episodes.some(e => e.status === STATUS.EXISTS) && ' · some are already in Peep and will be skipped'}{tooBig.length > 0 && ` · ${tooBig.length} too large for ${r2Ready ? 'R2' : 'Supabase (configure R2 for files over 50 MiB)'}`}</p>
+          <p className="vod-import-summary"><strong>{summary}</strong></p>
 
-          {plan.seasons.map(season => (
+          {alreadyIn.length > 0 && (
+            <details className="vod-import-skipped">
+              <summary>{alreadyIn.length} episode{alreadyIn.length === 1 ? ' is' : 's are'} already in Peep and will be left alone</summary>
+              <ul>{alreadyIn.map(e => <li key={e.key}>S{e.season}E{e.number} · {e.name}</li>)}</ul>
+            </details>
+          )}
+
+          {!plan.ready && !tooBig.length && <p className="vod-import-hint" style={{ marginTop: 14 }}>Nothing new to import from this folder.</p>}
+
+          {newSeasons.map(season => (
             <div key={season} className="vod-import-season">
               <h4>Season {season}</h4>
               <table>
                 <tbody>
-                  {plan.episodes.filter(e => e.season === season).map(episode => {
+                  {plan.episodes.filter(e => e.season === season && e.status !== STATUS.EXISTS).map(episode => {
                     const result = results[episode.key];
-                    const blocked = episode.status === STATUS.EXISTS ? episode.reason : episode.size > limit ? 'Too large for this storage.' : '';
+                    const blocked = episode.size > limit ? 'Too large for this storage.' : '';
                     return (
                       <tr key={episode.key} className={blocked ? 'blocked' : ''}>
                         <td className="num">E{episode.number}</td>
                         <td><input value={titles[episode.key] ?? episode.title} onChange={e => setTitles(t => ({ ...t, [episode.key]: e.target.value }))} disabled={running || !!blocked} /><small>{episode.name} · {formatBytes(episode.size)}</small></td>
                         <td className="state">
-                          {blocked ? <span className="vod-import-chip skip">{episode.status === STATUS.EXISTS ? 'Already in Peep' : 'Too large'}</span>
+                          {blocked ? <span className="vod-import-chip skip">Too large</span>
                             : !result ? <span className="vod-import-chip">Ready</span>
                             : result.state === 'uploading' ? <span className="vod-import-chip busy">Uploading {result.progress || 0}%</span>
                             : result.state === 'thumbnail' || result.state === 'saving' ? <span className="vod-import-chip busy">{result.message}</span>
