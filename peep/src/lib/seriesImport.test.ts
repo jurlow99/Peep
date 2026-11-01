@@ -41,6 +41,16 @@ describe('series folder import', () => {
     expect(plan.seasons).toEqual([1, 2, 0]);
   });
 
+  it('drops the show name from episode titles and calms shouting file names', () => {
+    const plan = planSeriesImport([
+      f('Sassy The Sasquatch/SASSY THE SASQUATCH EP01 SEEN A DINOSAUR.mp4'),
+      f('Sassy The Sasquatch/SASSY THE SASQUATCH ｜ EP06 ｜ AS ABOING SO BADOING.mp4'),
+      f('Sassy The Sasquatch/Behind the Scenes of SASSY THE SASQUATCH.mp4'),
+    ]);
+    expect(plan.episodes.map(e => e.title)).toEqual(['Seen A Dinosaur', 'As Aboing So Badoing', 'Behind the Scenes of SASSY THE SASQUATCH']);
+    expect(plan.episodes.map(e => `${e.season}x${e.number}`)).toEqual(['1x1', '1x6', '0x1']);
+  });
+
   it('falls back to season 1 and a new series when nothing matches', () => {
     const plan = planSeriesImport([f('Night Shift/01 - Arrival.mp4'), f('Night Shift/02 - Arrival again.mp4')], [{ id: 9, title: 'Other' }]);
     expect(plan.show).toBeNull();

@@ -28,7 +28,7 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState({});        // key → { state, progress, message }
   const [showID, setShowID] = useState('');
-  const stop = useRef(false), current = useRef(null), alive = useRef(true);
+  const stop = useRef(false), current = useRef(null), alive = useRef(true), fileInput = useRef(null);
 
   useEffect(() => { alive.current = true; return () => { alive.current = false; stop.current = true; current.current?.abort?.(); }; }, []);
   useEffect(() => { let live = true; r2VODRequest('status').then(d => { if (live && d.configured) setR2Ready(true); }).catch(() => {}); return () => { live = false; }; }, []);
@@ -56,7 +56,6 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
   const tooBig = plan ? plan.episodes.filter(e => e.status === STATUS.READY && e.size > limit) : [];
   const needsPoster = plan && !plan.show && !poster;
   const queue = plan ? plan.episodes.filter(e => e.status === STATUS.READY && e.size <= limit) : [];
-  const done = Object.values(results).filter(r => r.state === 'saved').length;
   const failed = Object.values(results).filter(r => r.state === 'failed').length;
 
   function update(key, patch) { setResults(r => ({ ...r, [key]: { ...(r[key] || {}), ...patch } })); }
@@ -153,25 +152,48 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
     plan.skipped.length ? `${plan.skipped.length} file${plan.skipped.length === 1 ? '' : 's'} skipped` : '',
   ].filter(Boolean).join(' · ');
 
+  const twins = plan ? plan.skipped.filter(s => s.converted) : [];
+  const rest = plan ? plan.skipped.filter(s => !s.converted) : [];
+  const saved = Object.values(results).filter(r => r.state === 'saved').length;
+  const remaining = queue.filter(e => results[e.key]?.state !== 'saved').length;
+  const actionLabel = running ? `Importing ${saved + 1} of ${queue.length}…` : saved ? `Import remaining (${remaining})` : `Import ${queue.length} file${queue.length === 1 ? '' : 's'}`;
+
   return (
     <div className="vod-import">
+      <input ref={fileInput} className="vod-import-file" type="file" webkitdirectory="" directory="" multiple onChange={choose} disabled={running} />
       <div className="vod-import-head">
         <div>
           <h3>Import a series folder</h3>
-          <p>Pick the show's top folder (e.g. <code>The Big Lez Show</code>) with <code>Season 1</code>, <code>Season 2</code>… inside and files named <code>S01E02 Title.mp4</code>. Everything uploads to {r2Ready ? 'R2' : 'Supabase'} and lands in Episodes, approved, one file at a time. Keep this tab open until it finishes. Files named trailer, teaser or bloopers go on the series' Extras shelf, and the first trailer becomes the series trailer. Pick the same folder again later and only new files show up — anything already in Peep is left alone.</p>
+          <p>Pick the show's folder: <code>Show / Season 1 / S01E02 Title.mp4</code>.</p>
         </div>
-        <label className="vod-import-pick">
-          <input type="file" webkitdirectory="" directory="" multiple onChange={choose} disabled={running} />
-          <span>{plan ? 'Pick a folder again' : 'Choose folder…'}</span>
-        </label>
+        <button type="button" className="vod-import-start" onClick={() => fileInput.current?.click()} disabled={running}>{plan ? 'Pick folder again' : 'Choose folder'}</button>
       </div>
+      <details className="vod-import-help">
+        <summary>How it works</summary>
+        <ul>
+          <li>Each MP4 uploads to {r2Ready ? 'R2' : 'Supabase'} and lands in Episodes, approved, one file at a time. Keep this tab open.</li>
+          <li>Files named trailer, teaser, promo or bloopers go to the series' <strong>Extras</strong> shelf; the first trailer becomes the series trailer.</li>
+          <li>Pick the same folder again later and only new files show up.</li>
+          <li><code>.mkv</code> / <code>.webm</code> can't be played by Peep — convert to MP4 first.</li>
+        </ul>
+      </details>
 
       {plan && (
         <>
+          <div className="vod-import-bar">
+            <strong>{summary}</strong>
+            <div className="vod-import-actions">
+              {(saved > 0 || failed > 0) && <span className="vod-import-hint">{saved} saved{failed ? `, ${failed} failed` : ''}</span>}
+              {needsPoster && <span className="vod-import-hint">Needs a poster first</span>}
+              {!running ? <button type="button" className="vod-import-start" onClick={run} disabled={!remaining || needsPoster}>{actionLabel}</button>
+                : <><span className="vod-import-hint">{actionLabel}</span><button type="button" onClick={cancel}>Stop after this file</button></>}
+            </div>
+          </div>
+
           <div className="vod-import-grid">
-            <label>Series title
+            <label>Series
               <input value={showTitle} onChange={e => setShowTitle(e.target.value)} disabled={!!plan.show || running} />
-              <small>{plan.show ? `Adds to the existing series "${plan.show.title}".` : 'A new series will be created with this title.'}</small>
+              <small>{plan.show ? 'Existing series — episodes are added to it.' : 'New series.'}</small>
             </label>
             <label>Visibility
               <select value={tier} onChange={e => setTier(e.target.value)} disabled={running}>
@@ -179,27 +201,18 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
                 <option value="test">Test — admin only</option>
               </select>
             </label>
-            <label className="vod-import-check"><input type="checkbox" checked={premium} onChange={e => setPremium(e.target.checked)} disabled={running} /> Premium episodes</label>
-            <label className="vod-import-check"><input type="checkbox" checked={grabThumbs} onChange={e => setGrabThumbs(e.target.checked)} disabled={running} /> Grab a thumbnail from each episode</label>
+            <label className="vod-import-check"><input type="checkbox" checked={premium} onChange={e => setPremium(e.target.checked)} disabled={running} /> Premium</label>
+            <label className="vod-import-check"><input type="checkbox" checked={grabThumbs} onChange={e => setGrabThumbs(e.target.checked)} disabled={running} /> Auto thumbnails</label>
           </div>
           {!plan.show && (
             <div className="vod-import-poster">
-              <span className="vod-import-label">SERIES POSTER (required for a new series)</span>
+              <span className="vod-import-label">POSTER — required for a new series</span>
               {poster ? <div className="vod-import-poster-row"><img src={poster} alt="" /><button type="button" onClick={() => setPoster('')} disabled={running}>Replace</button></div>
                 : <ImageUploader label="Upload poster" folder={artworkFolder('posters')} bucket={artworkBucket} appearance="light" onUploadSuccess={url => setPoster(url)} onError={m => showToast?.(m, 'error')} />}
             </div>
           )}
 
-          <p className="vod-import-summary"><strong>{summary}</strong></p>
-
-          {alreadyIn.length > 0 && (
-            <details className="vod-import-skipped">
-              <summary>{alreadyIn.length} episode{alreadyIn.length === 1 ? ' is' : 's are'} already in Peep and will be left alone</summary>
-              <ul>{alreadyIn.map(e => <li key={e.key}>S{e.season}E{e.number} · {e.name}</li>)}</ul>
-            </details>
-          )}
-
-          {!plan.ready && !plan.extras && !tooBig.length && <p className="vod-import-hint" style={{ marginTop: 14 }}>Nothing new to import from this folder.</p>}
+          {!plan.ready && !plan.extras && !tooBig.length && <p className="vod-import-hint" style={{ marginTop: 14 }}>Nothing new in this folder.</p>}
 
           {newSeasons.map(season => (
             <div key={season} className="vod-import-season">
@@ -212,7 +225,8 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
                     return (
                       <tr key={episode.key} className={blocked ? 'blocked' : ''}>
                         <td className="num">{episode.extra ? '★' : `E${episode.number}`}</td>
-                        <td><input value={titles[episode.key] ?? episode.title} onChange={e => setTitles(t => ({ ...t, [episode.key]: e.target.value }))} disabled={running || !!blocked} /><small>{episode.name} · {formatBytes(episode.size)}</small></td>
+                        <td><input value={titles[episode.key] ?? episode.title} onChange={e => setTitles(t => ({ ...t, [episode.key]: e.target.value }))} disabled={running || !!blocked} /></td>
+                        <td className="meta">{formatBytes(episode.size)}</td>
                         <td className="state">
                           {blocked ? <span className="vod-import-chip skip">Too large</span>
                             : !result ? <span className="vod-import-chip">Ready</span>
@@ -230,26 +244,20 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
             </div>
           ))}
 
-          {plan.skipped.length > 0 && (() => {
-            const converted = plan.skipped.filter(s => s.converted), rest = plan.skipped.filter(s => !s.converted);
-            return (
-              <details className="vod-import-skipped">
-                <summary>{rest.length ? `${rest.length} file${rest.length === 1 ? '' : 's'} won't be imported` : 'Nothing else to import'}{converted.length ? ` · ${converted.length} original${converted.length === 1 ? '' : 's'} already converted to MP4` : ''}</summary>
-                {rest.length > 0 && <ul>{rest.map(item => <li key={item.key}><strong>{item.key}</strong> — {item.reason}</li>)}</ul>}
-                {converted.length > 0 && <p className="vod-import-hint">Originals that already have an MP4 twin in the folder (safe to delete): {converted.map(c => c.name).join(', ')}.</p>}
-              </details>
-            );
-          })()}
+          {alreadyIn.length > 0 && (
+            <details className="vod-import-skipped">
+              <summary>{alreadyIn.length} already in Peep</summary>
+              <ul>{alreadyIn.map(e => <li key={e.key}>{e.extra ? '★' : `S${e.season}E${e.number}`} · {e.name}</li>)}</ul>
+            </details>
+          )}
 
-          <div className="vod-import-actions">
-            {!running ? (
-              <button type="button" className="vod-import-start" onClick={run} disabled={!queue.length || needsPoster}>
-                {done ? `Import remaining (${queue.length - done})` : `Import ${queue.length} episode${queue.length === 1 ? '' : 's'}`}
-              </button>
-            ) : <button type="button" onClick={cancel}>Stop after this file</button>}
-            {needsPoster && <span className="vod-import-hint">Add a poster for the new series first.</span>}
-            {(done > 0 || failed > 0) && <span className="vod-import-hint">{done} saved{failed ? `, ${failed} failed` : ''}</span>}
-          </div>
+          {plan.skipped.length > 0 && (
+            <details className="vod-import-skipped">
+              <summary>{[rest.length ? `${rest.length} can't be imported` : '', twins.length ? `${twins.length} original${twins.length === 1 ? '' : 's'} already converted` : ''].filter(Boolean).join(' · ')}</summary>
+              {rest.length > 0 && <ul>{rest.map(item => <li key={item.key}><strong>{item.name}</strong> — {item.reason}</li>)}</ul>}
+              {twins.length > 0 && <p className="vod-import-hint">Safe to delete: {twins.map(c => c.name).join(', ')}.</p>}
+            </details>
+          )}
         </>
       )}
     </div>

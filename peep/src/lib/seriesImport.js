@@ -39,8 +39,22 @@ export function parseEpisodeFile(name) {
 }
 
 function tidyTitle(text) {
-  return text.replace(/[._]+/g, ' ').replace(/\s*[-–:]+\s*/g, m => (m.trim() === '' ? ' ' : ' ')).replace(/\s{2,}/g, ' ').trim()
-    .replace(/^[-–:\s]+|[-–:\s]+$/g, '');
+  return text.replace(/[._]+/g, ' ').replace(/\s*[-–:|｜]+\s*/g, ' ').replace(/\s{2,}/g, ' ').trim()
+    .replace(/^[-–:|｜\s]+|[-–:|｜\s]+$/g, '');
+}
+
+// "SASSY THE SASQUATCH SEEN A DINOSAUR" → "Seen A Dinosaur": drop the show's own
+// name from an episode title and calm SHOUTING file names into Title Case.
+export function episodeTitle(raw, showTitle = '') {
+  let title = tidyTitle(String(raw || ''));
+  const show = tidyTitle(String(showTitle || ''));
+  if (show && title.toLowerCase().startsWith(show.toLowerCase()) && title.length > show.length + 1) {
+    title = tidyTitle(title.slice(show.length));
+  }
+  if (title.length > 3 && title === title.toUpperCase() && /[A-Z]/.test(title)) {
+    title = title.toLowerCase().replace(/(^|[\s(])([a-z])/g, (m, lead, letter) => lead + letter.toUpperCase());
+  }
+  return title;
 }
 
 const EXISTS = 'exists', READY = 'ready', UNSUPPORTED = 'unsupported', UNRECOGNIZED = 'unrecognized';
@@ -78,14 +92,15 @@ export function planSeriesImport(files, existingShows = []) {
     items.push({ ...base, status: READY, season: parsed.season ?? folderSeason ?? 1, number: parsed.episode, title: parsed.title, confidence: parsed.confidence });
   }
   // An original next to its converted MP4 twin is explained, not nagged about.
-  const playable = new Set(items.filter(i => i.status !== UNSUPPORTED).map(i => i.key.replace(/\.[a-z0-9]+$/i, '').toLowerCase()));
+  const stem = key => key.replace(/\.[a-z0-9]+$/i, '').toLowerCase();
+  const playable = new Set(items.filter(i => i.status !== UNSUPPORTED).map(i => stem(i.key)));
   for (const item of items) {
-    if (item.status === UNSUPPORTED && playable.has(item.key.replace(/\.[a-z0-9]+$/i, '').toLowerCase())) {
-      item.reason = `Original file — the MP4 version next to it is used instead. Safe to delete.`;
-      item.converted = true;
-    }
+    if (item.status !== UNSUPPORTED || !playable.has(stem(item.key))) continue;
+    item.converted = true;
+    item.reason = 'Original file — the MP4 version next to it is used instead. Safe to delete.';
   }
   showTitle = tidyTitle(showTitle) || tidyTitle(items[0]?.folder.split('/')[0] || '');
+  for (const item of items) if (item.title) item.title = episodeTitle(item.title, showTitle) || item.title;
   const show = existingShows.find(candidate => normalTitle(candidate.title) === normalTitle(showTitle)) || null;
   const taken = new Set((show?.episodes || []).map(e => `${e.season}x${e.episode_number}`));
   // Extras are numbered after whatever the series already has, in name order, and an
