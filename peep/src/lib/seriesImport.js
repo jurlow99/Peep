@@ -76,6 +76,14 @@ export function planSeriesImport(files, existingShows = []) {
     }
     items.push({ ...base, status: READY, season: parsed.season ?? folderSeason ?? 1, number: parsed.episode, title: parsed.title, confidence: parsed.confidence });
   }
+  // An original next to its converted MP4 twin is explained, not nagged about.
+  const playable = new Set(items.filter(i => i.status !== UNSUPPORTED).map(i => i.key.replace(/\.[a-z0-9]+$/i, '').toLowerCase()));
+  for (const item of items) {
+    if (item.status === UNSUPPORTED && playable.has(item.key.replace(/\.[a-z0-9]+$/i, '').toLowerCase())) {
+      item.reason = `Original file — the MP4 version next to it is used instead. Safe to delete.`;
+      item.converted = true;
+    }
+  }
   showTitle = tidyTitle(showTitle) || tidyTitle(items[0]?.folder.split('/')[0] || '');
   const show = existingShows.find(candidate => normalTitle(candidate.title) === normalTitle(showTitle)) || null;
   const taken = new Set((show?.episodes || []).map(e => `${e.season}x${e.episode_number}`));

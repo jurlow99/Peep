@@ -220,12 +220,16 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
             </div>
           ))}
 
-          {plan.skipped.length > 0 && (
-            <details className="vod-import-skipped">
-              <summary>{plan.skipped.length} file{plan.skipped.length === 1 ? '' : 's'} won't be imported</summary>
-              <ul>{plan.skipped.map(item => <li key={item.key}><strong>{item.key}</strong> — {item.reason}</li>)}</ul>
-            </details>
-          )}
+          {plan.skipped.length > 0 && (() => {
+            const converted = plan.skipped.filter(s => s.converted), rest = plan.skipped.filter(s => !s.converted);
+            return (
+              <details className="vod-import-skipped">
+                <summary>{rest.length ? `${rest.length} file${rest.length === 1 ? '' : 's'} won't be imported` : 'Nothing else to import'}{converted.length ? ` · ${converted.length} original${converted.length === 1 ? '' : 's'} already converted to MP4` : ''}</summary>
+                {rest.length > 0 && <ul>{rest.map(item => <li key={item.key}><strong>{item.key}</strong> — {item.reason}</li>)}</ul>}
+                {converted.length > 0 && <p className="vod-import-hint">Originals that already have an MP4 twin in the folder (safe to delete): {converted.map(c => c.name).join(', ')}.</p>}
+              </details>
+            );
+          })()}
 
           <div className="vod-import-actions">
             {!running ? (

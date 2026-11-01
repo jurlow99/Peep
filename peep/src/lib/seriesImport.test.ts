@@ -52,6 +52,15 @@ describe('series folder import', () => {
     expect(plan.skipped[0].reason).toContain('already S1E1');
   });
 
+  it('explains an original that already has a converted MP4 twin instead of asking for a conversion', () => {
+    const plan = planSeriesImport([f('Show/Season 4/S04E03 Vinally.webm'), f('Show/Season 4/S04E03 Vinally.mp4'), f('Show/Season 4/S04E06 Lost.mkv')]);
+    expect(plan.episodes.map(e => e.name)).toEqual(['S04E03 Vinally.mp4']);
+    const twin = plan.skipped.find(s => s.name.endsWith('.webm'));
+    expect(twin?.converted).toBe(true);
+    expect(twin?.reason).toContain('MP4 version next to it is used instead');
+    expect(plan.skipped.find(s => s.name.endsWith('.mkv'))?.reason).toContain('Convert it');
+  });
+
   it('never lets a trailer take an episode slot, and prefers the explicit code when names collide', () => {
     const plan = planSeriesImport([
       f('Show/Season 4/Season 4 ep2 trailer.mp4'),
