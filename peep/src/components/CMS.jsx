@@ -37,6 +37,8 @@ import {
 import FeedsPanel from "./cms/FeedsPanel";
 import FlagsPanel from "./cms/FlagsPanel";
 import StoragePanel from "./cms/StoragePanel";
+import DuplicateSeries from "./cms/DuplicateSeries";
+import { duplicateShowGroups } from "../lib/duplicateShows";
 import AuditPanel from "./cms/AuditPanel";
 import SecurityPanel from "./cms/SecurityPanel";
 import AdsPanel from "./cms/AdsPanel";
@@ -1718,6 +1720,19 @@ export function CMS({ onExit, currentUser }) {
     setShowsLoading(false);
   }
 
+  // Fold duplicate series into the one the admin keeps; the RPC moves episodes and references.
+  async function mergeShows(keepID, removeIDs) {
+    let moved = 0;
+    for (const removeID of removeIDs) {
+      const { data, error } = await supabase.rpc("merge_shows", { p_keep: keepID, p_remove: removeID });
+      if (error) { showToast("Merge failed: " + error.message, "error"); break; }
+      moved += (data?.moved || 0) + (data?.renumbered || 0);
+      logAudit?.("merge", "show", keepID, `merged series ${removeID} into ${keepID}`);
+    }
+    showToast(`Merged · ${moved} episode${moved === 1 ? "" : "s"} moved across`);
+    loadShows();
+  }
+
   function startShowEdit(show) {
     setEditingShowId(show.id);
     setDrawerOpen(true);
@@ -3224,6 +3239,7 @@ export function CMS({ onExit, currentUser }) {
                   + Add Series
                 </button>
               </div>
+              {!showsLoading && <DuplicateSeries groups={duplicateShowGroups(showsList, seriesInventory || [])} onMerge={mergeShows} />}
               {showsLoading ? <div style={{ color: "#6b7280", padding: 20 }}>Loading...</div> : showsList.length === 0 ? (
                 <div style={{ color: "#6b7280", padding: 40, textAlign: "center" }}>No shows yet.</div>
               ) : showsList.map(show => (
@@ -3231,7 +3247,7 @@ export function CMS({ onExit, currentUser }) {
                   {(show.poster || show.thumbnail) && <img src={show.poster || show.thumbnail} alt={show.title} style={{ width: 44, height: 64, objectFit: "cover", borderRadius: 5, flexShrink: 0 }} />}
                   <div style={{ flex: 1 }}>
                     <p style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 600 }}>{show.title}</p>
-                    <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>{show.category} · {show.year} · {show.rating}</p>
+                    {[show.category, show.year, show.rating].some(Boolean) && <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>{[show.category, show.year, show.rating].filter(Boolean).join(" · ")}</p>}
                     <PublicationStatus item={show} type="show" rows={carousels} episodes={seriesInventory?.filter(e=>e.show_id===show.id)} />
                   </div>
                   <div style={{ display: "flex", gap: 8 }}>

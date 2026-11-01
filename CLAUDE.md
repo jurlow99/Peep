@@ -162,7 +162,7 @@ subscription, episodes must be approved and inherit show rules.
   self-promotion. No staff invitations / per-permission roles exist yet (scope wants them).
 - Add-ons applied **to dev only**, by hand, no ledger: `db/features/*.sql` (channel
   blackouts, CSAI preroll columns, live viewing sessions + dashboard RPCs, multiview
-  packages incl. 4-channel), `db/storage/*.sql` (VOD buckets/policies, upload-first,
+  packages incl. 4-channel, `merge_shows` for duplicate series), `db/storage/*.sql` (VOD buckets/policies, upload-first,
   R2 registry, hero video, provider deliveries + types + trash, series playback,
   multiview layout, partner referral default), `db/epg_channel_setup.sql`
   (`save_channel_guide`), `db/epg_scheduler.sql` (pg_cron every 6h, dev URL).

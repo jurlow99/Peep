@@ -53,6 +53,12 @@ begin
     return jsonb_build_object('type','movie','id',movie_id);
   elsif kind='episode' then
     series_id := nullif(p_details->>'show_id','')::bigint;
+    if series_id is null and nullif(trim(p_details->>'series_title'),'') is not null then
+      -- A "new" series whose title already exists joins that series instead of creating a twin.
+      select id into series_id from public.shows
+      where lower(regexp_replace(trim(title),'\s+',' ','g'))=lower(regexp_replace(trim(p_details->>'series_title'),'\s+',' ','g'))
+      order by id limit 1;
+    end if;
     if series_id is null then
       if nullif(trim(p_details->>'series_title'),'') is null or poster_url is null then
         raise exception 'Series title and poster are required';
