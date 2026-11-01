@@ -1089,7 +1089,10 @@ final class LiveMidrollMetadata: NSObject, @preconcurrency AVPlayerItemMetadataC
                         let next = try await reader.poll(source)
                         guard !Task.isCancelled else { return }
                         self?.inbandCues = next
-                    } catch { if Task.isCancelled { return } }
+                    } catch {
+                        if Task.isCancelled { return }
+                        Logger(subsystem: "tv.watchpeep.PeepTV", category: "CSAI").notice("Live mid-roll playlist read failed: \(String(describing: error), privacy: .public)"); print("CSAI playlist read failed: \(error)")
+                    }
                     do { try await Task.sleep(for: .seconds(2)) } catch { return }
                 }
             }
@@ -1135,8 +1138,16 @@ private struct LiveMidrollModifier: ViewModifier {
     func body(content: Content) -> some View {
         content.task(id: "\(channelID ?? -1):\(scenePhase == .active):\(ready)") {
             guard ready, scenePhase == .active, service.configuration?.isDevelopment == true, let channelID else { return }
+            let log = Logger(subsystem: "tv.watchpeep.PeepTV", category: "CSAI")
+            // Diagnostics reach both the unified log and stdout (devicectl --console).
+            let trace: (String) -> Void = { line in log.notice("\(line, privacy: .public)"); print("CSAI " + line) }
             let tags: [CSAITag] = (try? await service.get("vast_tags", query: ["select":"id,tag_url,scope,content_id,active,is_test,platforms", "active":"eq.true", "ad_type":"eq.mid_roll", "scope":"eq.live", "content_id":"eq.\(channelID)", "is_test":"eq.true", "order":"id.asc"], timeout: 4)) ?? []
-            guard !Task.isCancelled, let tag = CSAITag.select(tags, scope: "live", contentID: String(channelID)) else { return }
+            guard !Task.isCancelled, let tag = CSAITag.select(tags, scope: "live", contentID: String(channelID)) else {
+                trace("Live mid-roll not armed for channel \(channelID): \(tags.count) candidate tags")
+                return
+            }
+            trace("Live mid-roll armed for channel \(channelID) with tag \(tag.id)")
+            var lastReport = Date.distantPast
             let metadata = LiveMidrollMetadata()
             var attached: AVPlayerItem?
             var seen = Set<String>()
@@ -1154,10 +1165,21 @@ private struct LiveMidrollModifier: ViewModifier {
                 if player.currentItem !== attached {
                     attached = player.currentItem; metadata.attach(attached); seen = []
                 }
+                if Date().timeIntervalSince(lastReport) >= 5 {
+                    lastReport = Date()
+                    let known = metadata.cues.merging(metadata.inbandCues, uniquingKeysWith: { _, new in new }).values.sorted { $0.start < $1.start }
+                    let playhead = player.currentItem?.currentDate()
+                    let summary = known.map { cue in
+                        let elapsed = playhead.map { $0.timeIntervalSince(cue.start) }
+                        return "\(cue.id.prefix(12)) start=\(cue.start) elapsed=\(elapsed.map { String(format: "%.1f", $0) } ?? "no-date") remaining=\(playhead.flatMap { cue.remaining(at: $0) }.map { String(format: "%.0f", $0) } ?? "nil")"
+                    }.joined(separator: " | ")
+                    trace("Live mid-roll watch: rate=\(player.rate) playhead=\(playhead.map { "\($0)" } ?? "none") cues=\(known.count) \(summary)")
+                }
                 if !gate.blocking, player.rate > 0, let date = player.currentItem?.currentDate(), service.session?.userId == account,
                    let cue = metadata.cues.merging(metadata.inbandCues, uniquingKeysWith: { _,new in new }).values.sorted(by: { $0.start < $1.start }).first(where: { !seen.contains($0.id) && $0.remaining(at: date) != nil }),
                    let remaining = cue.remaining(at: date) {
                     seen.insert(cue.id)
+                    trace("Live mid-roll cue matched: \(cue.id.prefix(12)), \(Int(remaining))s left; starting ad")
                     let wasMuted = player.isMuted
                     mutedBeforeMidroll = wasMuted
                     player.isMuted = true; midrollActive = true
