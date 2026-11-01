@@ -22,11 +22,18 @@ export function extensionOf(name) {
 
 const EXTRA = /\b(trailer|teaser|promo|preview|sneak peek|behind the scenes|bloopers?|recap)\b/i;
 export function isExtra(name) { return EXTRA.test(String(name || '').replace(/\.[a-z0-9]+$/i, '')); }
+// "Xep14 Title", "X14 Title", "Extra 14 - Title": a numbered extra.
+const EXTRA_CODE = /^(?:x(?:ep|tra)?|extras?)\.?\s*0*(\d{1,3})\b/i;
 
 // Episode number (and season when the name carries one) plus a clean title.
 // `confidence` is the pattern index: S01E02 beats "Episode 2" beats "02 - Title".
 export function parseEpisodeFile(name) {
   const base = String(name || '').replace(/\.[a-z0-9]+$/i, '');
+  const extra = base.match(EXTRA_CODE);
+  if (extra) {
+    const title = tidyTitle(base.replace(extra[0], ' '));
+    return { season: EXTRAS_SEASON, episode: Number(extra[1]), title: title || `Extra ${Number(extra[1])}`, confidence: 0, extra: true };
+  }
   for (let index = 0; index < CODES.length; index++) {
     const match = base.match(CODES[index]);
     if (!match) continue;
@@ -64,7 +71,9 @@ function normalTitle(title) { return String(title || '').trim().toLowerCase().re
 
 // files: [{ name, size, path }] where path is the browser's webkitRelativePath.
 // existingShows: [{ id, title, poster, episodes?: [{ season, episode_number }] }]
-export function planSeriesImport(files, existingShows = []) {
+// overrides: { [key]: { extra: true } | { season, number } } — the admin's answer for
+// files the name parser couldn't place.
+export function planSeriesImport(files, existingShows = [], overrides = {}) {
   const items = [];
   let showTitle = '';
   for (const file of files || []) {
@@ -76,17 +85,24 @@ export function planSeriesImport(files, existingShows = []) {
     const parsed = parseEpisodeFile(name);
     const extension = extensionOf(name);
     const base = { key: segments.join('/'), file, name, size: file.size || 0, folder: segments.slice(0, -1).join('/') };
+    const plainTitle = tidyTitle(name.replace(/\.[a-z0-9]+$/i, ''));
     if (!SUPPORTED_EXTENSIONS.includes(extension)) {
       items.push({ ...base, status: UNSUPPORTED, reason: extension ? `.${extension} can't be played by Peep. Convert it to an H.264 MP4 first.` : 'Not a video file.' });
       continue;
     }
-    if (isExtra(name)) {
-      // Trailers, teasers and bloopers go on the Extras shelf (season 0), numbered later.
-      items.push({ ...base, status: READY, season: EXTRAS_SEASON, number: 0, extra: true, title: tidyTitle(name.replace(/\.[a-z0-9]+$/i, '')), confidence: 9 });
+    const override = overrides[base.key];
+    if (override?.extra || isExtra(name) || parsed?.extra) {
+      // Trailers, teasers, bloopers and "Xep14" files go on the Extras shelf (season 0).
+      // A numbered extra keeps its number when the shelf has room; the rest are numbered later.
+      items.push({ ...base, status: READY, season: EXTRAS_SEASON, number: parsed?.extra ? parsed.episode : 0, extra: true, title: parsed?.extra ? parsed.title : plainTitle, confidence: parsed?.extra ? 0 : 9, placed: !!override });
+      continue;
+    }
+    if (override && Number.isInteger(override.season) && Number.isInteger(override.number)) {
+      items.push({ ...base, status: READY, season: override.season, number: override.number, title: parsed?.title || plainTitle, confidence: 0, placed: true });
       continue;
     }
     if (!parsed) {
-      items.push({ ...base, status: UNRECOGNIZED, reason: 'No episode number in the name (expects S01E02, 1x02, Episode 2 or "02 - Title").' });
+      items.push({ ...base, status: UNRECOGNIZED, reason: 'No episode number in the name.' });
       continue;
     }
     items.push({ ...base, status: READY, season: parsed.season ?? folderSeason ?? 1, number: parsed.episode, title: parsed.title, confidence: parsed.confidence });
@@ -106,10 +122,21 @@ export function planSeriesImport(files, existingShows = []) {
   // Extras are numbered after whatever the series already has, in name order, and an
   // extra whose title is already on the shelf is left alone.
   const shelved = new Set((show?.episodes || []).filter(e => e.season === EXTRAS_SEASON).map(e => normalTitle(e.title)));
-  let extraNumber = Math.max(0, ...(show?.episodes || []).filter(e => e.season === EXTRAS_SEASON).map(e => e.episode_number || 0));
-  for (const item of items.filter(i => i.extra).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))) {
-    if (shelved.has(normalTitle(item.title))) { item.status = EXISTS; item.reason = 'This extra is already on the series\' Extras shelf.'; continue; }
-    item.number = ++extraNumber;
+  const usedExtras = new Set((show?.episodes || []).filter(e => e.season === EXTRAS_SEASON).map(e => e.episode_number || 0));
+  let extraNumber = Math.max(0, ...usedExtras);
+  const extras = items.filter(i => i.extra).sort((a, b) => a.number - b.number || a.name.localeCompare(b.name, undefined, { numeric: true }));
+  for (const item of extras) if (shelved.has(normalTitle(item.title))) { item.status = EXISTS; item.reason = 'This extra is already on the series\' Extras shelf.'; }
+  // Explicit numbers are reserved first, so "Xep15" keeps 15 even when "Xep14" has to move.
+  for (const item of extras) {
+    if (item.status !== READY || !(item.number > 0)) continue;
+    if (usedExtras.has(item.number)) { item.wanted = item.number; item.number = 0; }
+    else { usedExtras.add(item.number); extraNumber = Math.max(extraNumber, item.number); }
+  }
+  // Displaced numbered extras go next, in their own order, then the unnumbered ones.
+  const unplaced = extras.filter(i => i.status === READY && !(i.number > 0)).sort((a, b) => (b.wanted > 0) - (a.wanted > 0) || (a.wanted || 0) - (b.wanted || 0));
+  for (const item of unplaced) {
+    do { item.number = ++extraNumber; } while (usedExtras.has(item.number));
+    usedExtras.add(item.number);
   }
   // A slot goes to the file that names it most explicitly; the loser is reported, not guessed about.
   const claims = {};

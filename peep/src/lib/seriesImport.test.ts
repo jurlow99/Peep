@@ -91,6 +91,23 @@ describe('series folder import', () => {
     expect(plan.skipped[0].reason).toContain('"S04E03 Vinally.mp4" is already S4E3');
   });
 
+  it('reads "Xep14" style names as numbered extras and keeps their numbers when free', () => {
+    expect(parseEpisodeFile('Xep14 Jay Leno_s Appearance on South Park.mp4')).toMatchObject({ season: 0, episode: 14, title: 'Jay Leno s Appearance on South Park', extra: true });
+    expect(parseEpisodeFile('X03 Bloopers.mp4')).toMatchObject({ episode: 3, extra: true });
+    const existing = [{ id: 4, title: 'South Park', episodes: [{ season: 0, episode_number: 14, title: 'Something else' }] }];
+    const plan = planSeriesImport([f('South Park/Xep14 Jay Leno_s Appearance on South Park.mp4'), f('South Park/Xep15 O Holy Night - Cartman Music Video.mp4'), f('South Park/Season 4 trailer.mp4')], existing);
+    // 14 is taken → next free; 15 keeps its number; the trailer goes after both.
+    expect(plan.episodes.map(e => [e.number, e.title])).toEqual([[15, 'O Holy Night Cartman Music Video'], [16, 'Jay Leno s Appearance on South Park'], [17, 'Season 4 trailer']]);
+  });
+
+  it('places files the parser cannot read where the admin says', () => {
+    const files = [f('Show/Season 2/Some Christmas Special.mp4'), f('Show/Season 2/Making of.mp4'), f('Show/Season 2/S02E01 Pilot.mp4')];
+    expect(planSeriesImport(files).skipped.map(s => s.name)).toEqual(['Making of.mp4', 'Some Christmas Special.mp4']);
+    const plan = planSeriesImport(files, [], { 'Show/Season 2/Some Christmas Special.mp4': { season: 2, number: 9 }, 'Show/Season 2/Making of.mp4': { extra: true } });
+    expect(plan.skipped).toEqual([]);
+    expect(plan.episodes.map(e => `${e.season}x${e.number} ${e.title}${e.placed ? ' *' : ''}`)).toEqual(['2x1 Pilot', '2x9 Some Christmas Special *', '0x1 Making of *']);
+  });
+
   it('numbers new extras after the ones a series already has and leaves repeats alone', () => {
     const existing = [{ id: 4, title: 'Show', episodes: [{ season: 0, episode_number: 1, title: 'Choomah Island 2 Trailer' }, { season: 0, episode_number: 2, title: 'Blooper reel' }] }];
     const plan = planSeriesImport([f('Show/Season 3/Choomah Island 2 TRAILER.mp4'), f('Show/Season 4/Teaser Trailer #1.mp4')], existing);

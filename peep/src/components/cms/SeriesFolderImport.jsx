@@ -30,7 +30,10 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
   const [results, setResults] = useState({});        // key → { state, progress, message }
   const [showID, setShowID] = useState('');
   const [badCodec, setBadCodec] = useState({});     // key → codec name for MP4s Peep can't play (AV1, HEVC…)
+  const [overrides, setOverrides] = useState({});   // key → { extra: true } | { season, number } for files the name parser couldn't place
+  const [placing, setPlacing] = useState({});       // key → { season, number } being typed
   const stop = useRef(false), current = useRef(null), alive = useRef(true), fileInput = useRef(null);
+  const picked = useRef([]), known = useRef([]);
 
   useEffect(() => { alive.current = true; return () => { alive.current = false; stop.current = true; current.current?.abort?.(); }; }, []);
   useEffect(() => { let live = true; r2VODRequest('status').then(d => { if (live && d.configured) setR2Ready(true); }).catch(() => {}); return () => { live = false; }; }, []);
@@ -47,10 +50,11 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
     const files = Array.from(event.target.files || []).map(file => ({ name: file.name, size: file.size, path: file.webkitRelativePath || file.name, file }));
     event.target.value = '';
     if (!files.length) return;
-    const known = await loadExisting();
+    known.current = await loadExisting();
     if (!alive.current) return;
-    const next = planSeriesImport(files, known);
-    setPlan(next); setTitles({}); setResults({}); setBadCodec({}); setShowTitle(next.showTitle); setPoster(next.show?.poster || ''); setShowID(next.show ? String(next.show.id) : '');
+    picked.current = files;
+    const next = planSeriesImport(files, known.current);
+    setPlan(next); setTitles({}); setResults({}); setBadCodec({}); setOverrides({}); setPlacing({}); setShowTitle(next.showTitle); setPoster(next.show?.poster || ''); setShowID(next.show ? String(next.show.id) : '');
     if (!next.ready) showToast?.(next.episodes.length ? 'Everything in that folder is already in Peep.' : 'No importable episodes found in that folder.');
     // An MP4 can hide AV1 or HEVC video, which plays as sound over black on Safari and Apple TV. Check before anything uploads.
     const problems = {};
@@ -60,6 +64,13 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
       if (mp4CodecProblem(codec)) problems[item.key] = codecLabel(codec);
     }
     if (alive.current && Object.keys(problems).length) setBadCodec(problems);
+  }
+
+  // The admin's answer for a file the parser couldn't place: Extras, or a season/episode.
+  function place(key, where) {
+    const next = { ...overrides, [key]: where };
+    setOverrides(next);
+    setPlan(planSeriesImport(picked.current, known.current, next));
   }
 
   const limit = r2Ready ? R2_VOD_LIMIT : VOD_SOURCE_LIMIT;
@@ -216,7 +227,7 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
                     const blocked = badCodec[episode.key] ? `${badCodec[episode.key]} video — Safari and Apple TV play it as sound over black. Convert to H.264 first.` : episode.size > limit ? 'Too large for this storage.' : '';
                     return (
                       <tr key={episode.key} className={blocked ? 'blocked' : ''}>
-                        <td className="num">{episode.extra ? '★' : `E${episode.number}`}</td>
+                        <td className="num" title={episode.placed ? 'Placed by you' : undefined}>{episode.extra ? '★' : `E${episode.number}`}{episode.placed && <small className="vod-import-placed">placed</small>}</td>
                         <td><input value={titles[episode.key] ?? episode.title} onChange={e => setTitles(t => ({ ...t, [episode.key]: e.target.value }))} disabled={running || !!blocked} /></td>
                         <td className="meta">{formatBytes(episode.size)}</td>
                         <td className="state">
@@ -246,7 +257,27 @@ export default function SeriesFolderImport({ shows = [], showToast, logAudit, on
           {plan.skipped.length > 0 && (
             <details className="vod-import-skipped">
               <summary>{[rest.length ? `${rest.length} can't be imported` : '', twins.length ? `${twins.length} original${twins.length === 1 ? '' : 's'} already converted` : ''].filter(Boolean).join(' · ')}</summary>
-              {rest.length > 0 && <ul>{rest.map(item => <li key={item.key}><strong>{item.name}</strong> — {item.reason}</li>)}</ul>}
+              {rest.length > 0 && (
+                <ul>
+                  {rest.map(item => {
+                    const draft = placing[item.key] || { season: '', number: '' };
+                    const ok = /^\d+$/.test(draft.season) && /^\d+$/.test(draft.number);
+                    return (
+                      <li key={item.key} className="vod-import-skip-row">
+                        <span><strong>{item.name}</strong> — {item.reason}</span>
+                        {item.status === STATUS.UNRECOGNIZED && !running && (
+                          <span className="vod-import-place">
+                            <button type="button" className="vod-import-mini" onClick={() => place(item.key, { extra: true })}>Add to Extras</button>
+                            <label>S<input inputMode="numeric" value={draft.season} onChange={e => setPlacing(p => ({ ...p, [item.key]: { ...draft, season: e.target.value } }))} /></label>
+                            <label>E<input inputMode="numeric" value={draft.number} onChange={e => setPlacing(p => ({ ...p, [item.key]: { ...draft, number: e.target.value } }))} /></label>
+                            <button type="button" className="vod-import-mini" disabled={!ok} onClick={() => place(item.key, { season: Number(draft.season), number: Number(draft.number) })}>Add as episode</button>
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
               {twins.length > 0 && <p className="vod-import-hint">Safe to delete: {twins.map(c => c.name).join(', ')}.</p>}
             </details>
           )}
