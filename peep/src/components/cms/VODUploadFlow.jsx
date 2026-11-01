@@ -9,6 +9,7 @@ import {formatBytes,formatDuration,formatTimeLeft,recordSample,uploadEstimate} f
 import {uploadImage} from '../../lib/storageUtils';
 import {ImageUploader} from '../ImageUploader';
 import Drawer from './Drawer';
+import ComboInput from './ComboInput';
 import './VODSourceLibrary.css';
 
 const DEFAULT_KEY='peep-vod-upload-draft-v1';
@@ -227,22 +228,20 @@ export default function VODUploadFlow({shows=[],categories=[],showToast,onSaved,
         {isEpisode&&known&&<p className={`vod-series-hint${duplicate?' warning':''}`} role={duplicate?'alert':undefined}>{duplicate?`Season ${seasonNo}, episode ${episodeNo} is already “${duplicate.title}”. Pick another number.`:seasonEpisodes.length?`${selected?.title} · Season ${seasonNo} has ${seasonEpisodes.length} episode${seasonEpisodes.length===1?'':'s'} · this will be episode ${episodeNo}`:`${selected?.title} · Season ${seasonNo} has no episodes yet · this will be the first`}</p>}
         {isEpisode&&!details.show_id&&!lockSeries&&<details className="vod-subsection"><summary>New series details · optional</summary><div className="vod-fields">
           <label>Series description<textarea rows="2" value={details.series_description} onChange={e=>field('series_description',e.target.value)}/></label>
-          <label>Series category<input list="vod-categories" value={details.series_category} onChange={e=>field('series_category',e.target.value)}/></label>
+          <label>Series category<ComboInput options={categories} value={details.series_category} onChange={v=>field('series_category',v)}/></label>
           <label>Series year<input type="number" value={details.series_year} onChange={e=>field('series_year',e.target.value)}/></label>
-          <label>Series rating<input list="vod-ratings" value={details.series_rating||''} onChange={e=>field('series_rating',e.target.value)}/></label>
+          <label>Series rating<ComboInput options={RATINGS} value={details.series_rating||''} onChange={v=>field('series_rating',v)}/></label>
           <label>Series tags · comma separated<input value={details.series_tags||''} onChange={e=>field('series_tags',e.target.value)} placeholder="Comedy, Family"/></label>
         </div></details>}
         <div className="vod-fields" style={{marginTop:16}}>
           <label>Title · required<input value={details.title} onChange={e=>field('title',e.target.value)}/></label>
           <label>Runtime{meta&&details.duration?<small className="vod-muted">Read from the file</small>:null}<input value={details.duration} onChange={e=>field('duration',e.target.value)} placeholder="24 min"/></label>
           {isMovie&&<><label>Year<input type="number" value={details.year} onChange={e=>field('year',e.target.value)}/></label>
-          <label>Category<input list="vod-categories" value={details.category} onChange={e=>field('category',e.target.value)} placeholder="Comedy"/></label>
-          <label>Rating<input list="vod-ratings" value={details.rating} onChange={e=>field('rating',e.target.value)} placeholder="PG-13"/></label>
+          <label>Category<ComboInput options={categories} value={details.category} onChange={v=>field('category',v)} placeholder="Comedy"/></label>
+          <label>Rating<ComboInput options={RATINGS} value={details.rating} onChange={v=>field('rating',v)} placeholder="PG-13"/></label>
           <label>Trailer URL<input value={details.trailer_url} onChange={e=>field('trailer_url',e.target.value)} placeholder="https://…"/></label></>}
         </div>
         {isMovie&&<label style={{marginTop:16}}>Tags · comma separated<input value={details.tags} onChange={e=>field('tags',e.target.value)} placeholder="Comedy, Family"/></label>}
-        <datalist id="vod-categories">{categories.map(c=><option key={c} value={c}/>)}</datalist>
-        <datalist id="vod-ratings">{RATINGS.map(r=><option key={r} value={r}/>)}</datalist>
         <label style={{marginTop:16}}>Description<textarea rows="3" value={details.description} onChange={e=>field('description',e.target.value)}/></label>
         {needsPoster?<div style={{marginTop:20}}><label>{isEpisode?'Series poster':'Poster'} · required</label><p className="vod-muted" style={{margin:'4px 0 10px'}}>Portrait 2:3, 1200 × 1800 preferred</p><ImageUploader appearance="light" label="Upload poster" allowUrlImport folder={artworkFolder('posters')} bucket={artworkBucket} onUploadSuccess={url=>field('poster',url)} onError={setError}/>{details.poster&&<img src={details.poster} alt="Poster preview" style={{width:100,aspectRatio:'2/3',objectFit:'contain',marginTop:8}}/>}</div>:<p className="vod-inherit">✓ Uses {selected?.title}’s poster and access settings.</p>}
         <div className="vod-media-access">

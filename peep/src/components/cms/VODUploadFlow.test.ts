@@ -97,7 +97,9 @@ it('sends the movie extras and normalises tags',async()=>{
   expect(host.querySelector('.vod-hint')?.textContent).toContain('add a category or tags');
   await type(tags,' comedy ,family,, ');await type(rating,'PG');
   expect(host.querySelector('.vod-hint')?.textContent).toBe('Ready · Save to add it to the catalog');
-  expect(host.querySelector('datalist#vod-categories option')?.getAttribute('value')).toBe('Comedy');
+  const category=inputs.find(i=>i.placeholder==='Comedy')!;
+  await act(async()=>{category.focus();category.dispatchEvent(new Event('focus',{bubbles:true}));});
+  expect(host.querySelector('.combo-list li')?.textContent).toBe('Comedy');
   mocks.rpc.mockResolvedValue({data:{id:'m',type:'movie'},error:null});
   await click(host,'3. Save movie');
   expect(mocks.rpc.mock.calls[0][1].p_details).toMatchObject({type:'movie',tags:'comedy, family',rating:'PG',storage_provider:'supabase'});

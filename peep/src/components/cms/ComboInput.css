@@ -1,0 +1,5 @@
+.combo{position:relative;color-scheme:light}
+.combo>input{box-sizing:border-box;width:100%}
+.combo-list{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:30;margin:0;padding:6px;list-style:none;max-height:240px;overflow:auto;background:#fff;color:#0f172a;border:1px solid #dbe2ec;border-radius:9px;box-shadow:0 12px 32px rgba(15,23,42,.14)}
+.combo-list li{padding:8px 10px;border-radius:6px;font-size:13px;cursor:pointer}
+.combo-list li.active{background:#eef2ff;color:#3730a3}

@@ -38,6 +38,7 @@ import FeedsPanel from "./cms/FeedsPanel";
 import FlagsPanel from "./cms/FlagsPanel";
 import StoragePanel from "./cms/StoragePanel";
 import DuplicateSeries from "./cms/DuplicateSeries";
+import ComboInput from "./cms/ComboInput";
 import { duplicateShowGroups } from "../lib/duplicateShows";
 import AuditPanel from "./cms/AuditPanel";
 import SecurityPanel from "./cms/SecurityPanel";
@@ -7253,21 +7254,17 @@ function FieldCombo({ label, value, onChange, options, placeholder }) {
   const id = `combo-${label.replace(/\s+/g, "-").toLowerCase()}`;
   return (
     <div>
-      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>
+      <label htmlFor={id} style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.7 }}>
         {label}
       </label>
-      <input
-        list={id}
+      <ComboInput
+        id={id}
         value={value}
-        onChange={e => onChange(e.target.value)}
+        onChange={onChange}
+        options={options}
         placeholder={placeholder || "Type or pick..."}
-        style={{ width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none", boxSizing: "border-box" }}
-        onFocus={e => e.target.style.borderColor = "#4f46e5"}
-        onBlur={e => e.target.style.borderColor = "#e2e8f0"}
+        style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 7, padding: "10px 12px", color: "#0f172a", fontSize: 13, outline: "none" }}
       />
-      <datalist id={id}>
-        {options.map(o => <option key={o} value={o} />)}
-      </datalist>
     </div>
   );
 }

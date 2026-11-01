@@ -3,6 +3,7 @@ import { supabase } from "../../supabase";
 import { SUPABASE_URL } from "../../lib/config";
 import { PUSH_SOURCE_TYPE, isPushFeed, formatPushDetails, SUGGESTED_PUSH_LATENCY_MS } from "../../lib/feedIngest";
 import { ARRIVALS, EMPTY_FEED_FORM, feedSteps, sourceProblem, slugify, arrivalLabel } from "../../lib/feedWorkflow";
+import ComboInput from "./ComboInput";
 import "./FeedsPanel.css";
 
 const STATUS = {
@@ -273,8 +274,7 @@ export default function FeedsPanel({ showToast }) {
         </div>
         <div>
           <label>Or create a new channel<input value={newChannel.name} onChange={e => setNewChannel(c => ({ ...c, name: e.target.value }))} placeholder="Channel name as viewers see it" /></label>
-          <label style={{ marginTop: 10 }}>Category<input list="feeds-categories" value={newChannel.category} onChange={e => setNewChannel(c => ({ ...c, category: e.target.value }))} placeholder="sports" /></label>
-          <datalist id="feeds-categories">{[...new Set(channels.map(c => c.category).filter(Boolean))].map(c => <option key={c} value={c} />)}</datalist>
+          <label style={{ marginTop: 10 }}>Category<ComboInput options={[...new Set(channels.map(c => c.category).filter(Boolean))]} value={newChannel.category} onChange={v => setNewChannel(c => ({ ...c, category: v }))} placeholder="sports" /></label>
           <div className="feeds-actions"><button className="feeds-primary" disabled={busy || !newChannel.name.trim()} onClick={createChannel}>Create channel &amp; attach</button></div>
         </div>
       </div>}
