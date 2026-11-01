@@ -1,0 +1,15 @@
+.cleanup{background:#fff;border:1px solid #e2e8f0;border-radius:10px;margin-top:12px;padding:14px 20px;color:#334155;font-size:13px}
+.cleanup-head{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
+.cleanup-head strong{display:block;font-size:13px}
+.cleanup-head small{display:block;color:#94a3b8;font-size:11px;margin-top:3px}
+.cleanup-actions{display:flex;gap:8px}
+.cleanup button{font:inherit;font-size:12px;font-weight:600;cursor:pointer;padding:8px 14px;border:1px solid #dbe2ec;border-radius:7px;background:#fff;color:#334155;white-space:nowrap}
+.cleanup button:disabled{opacity:.5;cursor:default}
+.cleanup-danger{background:#fff1f2!important;border-color:#fecdd3!important;color:#b91c1c!important}
+.cleanup-error{margin:10px 0 0;padding:10px 12px;background:#fef2f2;color:#b91c1c;border-radius:8px}
+.cleanup-list{margin-top:12px;color:#64748b}
+.cleanup-list summary{cursor:pointer;font-weight:600;color:#475569;font-size:12px}
+.cleanup-list ul{list-style:none;margin:8px 0 0;padding:0;max-height:260px;overflow:auto}
+.cleanup-list li{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid #f1f5f9;font-size:12px;color:#0f172a}
+.cleanup-list li span{overflow-wrap:anywhere}
+.cleanup-list li small{flex:none;color:#94a3b8}

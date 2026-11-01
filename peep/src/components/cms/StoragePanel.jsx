@@ -2,6 +2,7 @@ import { useState } from "react";
 import VODUploadFlow from "./VODUploadFlow";
 import SeriesFolderImport from "./SeriesFolderImport";
 import VODSourceLibrary from "./VODSourceLibrary";
+import StorageCleanup from "./StorageCleanup";
 
 const MODE_KEY = "peep-addvod-mode";
 const MODES = [
@@ -30,6 +31,7 @@ export default function StoragePanel({ showToast, logAudit, videosList, showsLis
       {mode === "single"
         ? <VODUploadFlow shows={showsList} categories={categories} showToast={showToast} onSaved={onVODSaved} onOpenSaved={onOpenSaved} />
         : <SeriesFolderImport shows={showsList} showToast={showToast} logAudit={logAudit} onSaved={onVODSaved} />}
+      <StorageCleanup showToast={showToast} logAudit={logAudit} />
       <details className="vod-tools"><summary><span>File library</span><small>Replace a playback file or keep originals · advanced</small></summary><VODSourceLibrary movies={videosList} shows={showsList} showToast={showToast} logAudit={logAudit} /></details>
     </div>
   );

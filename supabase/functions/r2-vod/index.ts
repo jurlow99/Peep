@@ -7,6 +7,29 @@ const MAX_SIZE=10*1024**3,PART_SIZE=16*1024**2;
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const xml=(value:string)=>value.replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&apos;'}[c]!));
 const tag=(source:string,name:string)=>source.match(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`))?.[1]?.replace(/&quot;/g,'"').replace(/&amp;/g,'&');
+// Every place the catalog can point at a media file, as one lowercase haystack:
+// an upload id or object path that appears nowhere in it is unused.
+async function referencedMedia(service:any){
+  const parts:string[]=[];
+  const pull=async(table:string,columns:string)=>{const {data}=await service.from(table).select(columns);for(const row of data||[])for(const v of Object.values(row))if(v)parts.push(String(v));};
+  await pull('videos','url,trailer_url');await pull('episodes','url');await pull('shows','trailer_url');await pull('podcast_episodes','audio_url');
+  await pull('app_settings','value');await pull('carousels','filter_value');
+  const {data:deliveries}=await service.from('provider_deliveries').select('details,published_content');
+  for(const d of deliveries||[])parts.push(JSON.stringify(d));
+  return parts.join('\n').toLowerCase();
+}
+// Supabase Storage lists one folder at a time; walk the inbox/series/movies trees.
+async function listAll(service:any,bucket:string,prefix='',depth=0):Promise<{path:string,bytes:number,created_at:string}[]>{
+  const out:{path:string,bytes:number,created_at:string}[]=[];
+  const {data}=await service.storage.from(bucket).list(prefix||undefined,{limit:1000});
+  for(const entry of data||[]){
+    const path=prefix?`${prefix}/${entry.name}`:entry.name;
+    if(entry.id===null||entry.id===undefined){if(depth<5)out.push(...await listAll(service,bucket,path,depth+1));continue;}
+    if(entry.name==='.emptyFolderPlaceholder')continue;
+    out.push({path,bytes:Number(entry.metadata?.size||0),created_at:entry.created_at});
+  }
+  return out;
+}
 Deno.serve(async req=>{
   const cors=handleCors(req);if(cors)return cors;
   if(req.method!=='POST')return errorResponse('POST required',405);
@@ -66,6 +89,44 @@ Deno.serve(async req=>{
       const {data:content,error:publishError}=await caller.rpc('publish_provider_delivery',{p_id:d.id,p_poster:posterURL,p_target_ref:body.targetRef||null});
       if(publishError)return errorResponse(publishError.message,400);
       return jsonResponse({published:content});
+    }
+    if(action==='cleanup'){
+      // Storage clean-up: find (and on request delete) files nothing in the catalog points at.
+      if(!admin)return errorResponse('Admin access required.',403);
+      const haystack=await referencedMedia(service);
+      const inUse=(...needles:string[])=>needles.some(n=>n&&haystack.includes(n.toLowerCase()));
+      const staleBefore=Date.now()-24*3600*1000;
+      const {data:rows,error:rowsError}=await service.from('r2_vod_uploads').select('id,object_key,byte_size,state,created_at,delivery_id,multipart_id');
+      if(rowsError)throw new Error('Upload registry unavailable.');
+      const r2Unused=(rows||[]).filter((r:any)=>!r.delivery_id&&(r.state==='ready'?!inUse(r.id,r.object_key):new Date(r.created_at).getTime()<staleBefore));
+      const storageUnused:any[]=[];
+      for(const b of ['vod-playback','vod-sources']){
+        for(const o of await listAll(service,b)){if(!inUse(`${b}/${o.path}`))storageUnused.push({bucket:b,path:o.path,bytes:o.bytes,created_at:o.created_at});}
+      }
+      if(body.mode!=='delete'){
+        return jsonResponse({
+          r2:r2Unused.map((r:any)=>({id:r.id,path:r.object_key,bytes:Number(r.byte_size),state:r.state,created_at:r.created_at})),
+          storage:storageUnused,
+          bytes:r2Unused.reduce((n:number,r:any)=>n+Number(r.byte_size),0)+storageUnused.reduce((n,o)=>n+o.bytes,0),
+        });
+      }
+      const wantR2=new Set((body.r2||[]).map(String)),wantStorage=new Set((body.storage||[]).map((s:any)=>`${s.bucket}/${s.path}`));
+      let deleted=0,freed=0;const failed:string[]=[];
+      for(const r of r2Unused){
+        if(!wantR2.has(r.id))continue;
+        const res=r.state==='ready'?await fetchS3(objectURL(r.object_key),{method:'DELETE'}):await fetchS3(queryURL(r.object_key,{uploadId:r.multipart_id}),{method:'DELETE'});
+        if(!res.ok&&res.status!==404){failed.push(r.object_key);continue;}
+        const {error}=await service.from('r2_vod_uploads').delete().eq('id',r.id);
+        if(error){failed.push(r.object_key);continue;}
+        deleted++;freed+=Number(r.byte_size);
+      }
+      for(const o of storageUnused){
+        if(!wantStorage.has(`${o.bucket}/${o.path}`))continue;
+        const {error}=await service.storage.from(o.bucket).remove([o.path]);
+        if(error){failed.push(`${o.bucket}/${o.path}`);continue;}
+        deleted++;freed+=o.bytes;
+      }
+      return jsonResponse({deleted,freed,failed});
     }
     if(!UUID.test(body.id||''))return errorResponse('Invalid upload ID.',400);
     if(action==='create'){
