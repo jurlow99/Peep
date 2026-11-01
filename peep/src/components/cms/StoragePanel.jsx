@@ -1,4 +1,5 @@
 import VODUploadFlow from "./VODUploadFlow";
+import SeriesFolderImport from "./SeriesFolderImport";
 import VODSourceLibrary from "./VODSourceLibrary";
 import { useState, useEffect } from "react";
 import { supabase } from "../../supabase";
@@ -113,6 +114,7 @@ export default function StoragePanel({ showToast, logAudit, videosList, showsLis
   return (
     <div className="vod-workspace">
       <VODUploadFlow shows={showsList} categories={categories} showToast={showToast} onSaved={onVODSaved} onOpenSaved={onOpenSaved} />
+      <SeriesFolderImport shows={showsList} showToast={showToast} logAudit={logAudit} onSaved={onVODSaved} />
       <details className="vod-tools"><summary><span>Media library</span><small>Original files & manual linking</small></summary><VODSourceLibrary movies={videosList} shows={showsList} showToast={showToast} logAudit={logAudit} /></details>
       <details className="vod-tools"><summary><span>Legacy importer</span><small>Older uploads & URL imports</small></summary>
       <div style={{ maxWidth: 1600, margin: "0 auto", padding: `40px ${PAD} 80px` }}>
