@@ -74,7 +74,7 @@ begin
     season_no := coalesce(nullif(p_details->>'season','')::integer,1);
     episode_no := coalesce(nullif(p_details->>'episode_number','')::integer,1);
     -- Season 0 is the Extras shelf (trailers, teasers, bloopers); real seasons start at 1.
-    if season_no<0 or episode_no<1 then raise exception 'Season must be 0 (extras) or higher and episode a positive number'; end if;
+    if season_no<0 or episode_no<0 then raise exception 'Season and episode numbers must be 0 or higher (season 0 = extras, episode 0 = pilot)'; end if;
     if exists(select 1 from public.episodes where show_id=series_id and season=season_no and episode_number=episode_no) then
       raise exception 'That season and episode number already exists. Edit it in Episodes instead.';
     end if;
