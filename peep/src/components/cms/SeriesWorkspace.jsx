@@ -46,6 +46,8 @@ export default function SeriesWorkspace({show,onBack,onUpdated,showToast,curatio
     const payload=Object.fromEntries(fields.map(key=>[key,['year','score'].includes(key)?(form[key]!==''&&form[key]!=null?Number(form[key]):null):form[key]??null]));
     payload.autoplay_next=form.autoplay_next !== false;
     payload.category=payload.category?.trim() || '';
+    for(const key of ['intro_start_seconds','intro_end_seconds'])payload[key]=form[key]!==''&&form[key]!=null?Math.max(0,Math.round(Number(form[key])))||null:null;
+    if(payload.intro_end_seconds&&payload.intro_start_seconds&&payload.intro_end_seconds<=payload.intro_start_seconds){setSaving(false);setError('The intro must end after it starts.');return;}
     const {data,error}=await supabase.from('shows').update(payload).eq('id',show.id).select('id');
     setSaving(false);
     if(error||!data?.length){setError(error?.message||'Series was not updated.');return;}
@@ -59,6 +61,8 @@ export default function SeriesWorkspace({show,onBack,onUpdated,showToast,curatio
     setSaving(true);setError('');
     const fields=['title','description','url','thumbnail','duration','status','is_premium'];
     const payload={...Object.fromEntries(fields.map(key=>[key,editing[key]??(key==='is_premium'?false:'')])),season:Number(editing.season),episode_number:Number(editing.episode_number)};
+    for(const key of ['intro_start_seconds','intro_end_seconds'])payload[key]=editing[key]!==''&&editing[key]!=null?Math.max(0,Math.round(Number(editing[key])))||null:null;
+    if(payload.intro_end_seconds&&payload.intro_start_seconds&&payload.intro_end_seconds<=payload.intro_start_seconds){setSaving(false);setError('The intro must end after it starts.');return;}
     const {data,error}=await supabase.from('episodes').update(payload).eq('id',editing.id).eq('show_id',show.id).select('id');
     setSaving(false);
     if(error||!data?.length){setError(error?.message||'Episode was not updated.');return;}
@@ -97,6 +101,8 @@ export default function SeriesWorkspace({show,onBack,onUpdated,showToast,curatio
       <details><summary>More details & access</summary><label>Search & genre tags<input value={Array.isArray(form.tags)?form.tags.join(", "):form.tags||""} onChange={e=>editForm(f=>({...f,tags:e.target.value}))}/></label><label>Score %<input type="number" min="0" max="100" value={form.score??""} onChange={e=>editForm(f=>({...f,score:e.target.value}))}/></label><label>Trailer URL<input value={form.trailer_url||''} onChange={e=>editForm(f=>({...f,trailer_url:e.target.value}))}/></label><label>Visibility<select value={form.visibility_tier||'production'} onChange={e=>editForm(f=>({...f,visibility_tier:e.target.value}))}><option value="production">All eligible users</option><option value="test">Test accounts only</option></select></label><label className="series-check"><input type="checkbox" checked={!!form.is_premium} onChange={e=>editForm(f=>({...f,is_premium:e.target.checked}))}/>Requires subscription</label></details>
       <label className="series-check"><input type="checkbox" checked={form.autoplay_next !== false} onChange={e=>editForm(f=>({...f,autoplay_next:e.target.checked}))}/>Allow next-episode autoplay</label>
       <p style={{color:'#64748b',fontSize:13}}>A 10-second countdown after each episode. Viewers can turn it off in playback settings.</p>
+      <div className="series-fields series-intro"><label>Skip intro · starts at (s)<input type="number" min="0" placeholder="0" value={form.intro_start_seconds??''} onChange={e=>editForm(f=>({...f,intro_start_seconds:e.target.value}))}/></label><label>Skip intro · ends at (s)<input type="number" min="1" placeholder="e.g. 45" value={form.intro_end_seconds??''} onChange={e=>editForm(f=>({...f,intro_end_seconds:e.target.value}))}/></label></div>
+      <p style={{color:'#64748b',fontSize:13}}>Default for every episode; an episode can set its own. Leave the end blank for no button.</p>
       <button className="series-primary" disabled={saving} onClick={saveDetails}>{saving?'Saving…':'Save series changes'}</button>
     </section><aside>{imageField('poster','Poster · required','posters')}{imageField('thumbnail','Hero image · optional','series')}</aside></div>}
     {editing&&<Drawer title={`Edit episode · ${show.title}`} onClose={()=>{if(!saving){setEditing(null);setError('');}}}><div className="series-workspace series-episode-form">
@@ -104,6 +110,7 @@ export default function SeriesWorkspace({show,onBack,onUpdated,showToast,curatio
       {['title','season','episode_number','duration','url'].map(key=><label key={key}>{({title:'Title',season:'Season',episode_number:'Episode number',duration:'Duration',url:'Video URL'})[key]}<input type={['season','episode_number'].includes(key)?'number':'text'} value={editing[key]??''} onChange={e=>setEditing(f=>({...f,[key]:e.target.value}))}/></label>)}
       <ReplaceVideo type="episode" id={editing.id} title={editing.title} showToast={showToast} disabled={saving} onReplaced={({url,duration})=>{setEditing(f=>f?{...f,url,duration:f.duration||duration}:f);load();onUpdated?.();}}/>
       <label>Description<textarea rows="4" value={editing.description||''} onChange={e=>setEditing(f=>({...f,description:e.target.value}))}/></label>
+      <div className="series-fields series-intro"><label>Intro starts at (s)<input type="number" min="0" placeholder={show.intro_start_seconds??'series default'} value={editing.intro_start_seconds??''} onChange={e=>setEditing(f=>({...f,intro_start_seconds:e.target.value}))}/></label><label>Intro ends at (s)<input type="number" min="1" placeholder={show.intro_end_seconds??'series default'} value={editing.intro_end_seconds??''} onChange={e=>setEditing(f=>({...f,intro_end_seconds:e.target.value}))}/></label></div>
       {editing.thumbnail&&<img src={editing.thumbnail} alt="Episode snapshot preview" style={{width:'100%',borderRadius:8}}/>}
       <EpisodeAutoThumbnail url={editing.url} thumbnail={editing.thumbnail} onGenerated={(thumbnail,source,replace)=>setEditing(f=>f&&f.url===source&&(replace||!f.thumbnail)?{...f,thumbnail}:f)}/>
       <ImageUploader appearance="light" label="Upload snapshot" bucket={IS_DEV_DB?'promo-images':undefined} folder={IS_DEV_DB?'hero/episodes':'episodes'} onUploadSuccess={thumbnail=>setEditing(f=>({...f,thumbnail}))} onError={setError}/>

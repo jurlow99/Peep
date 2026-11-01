@@ -1,4 +1,4 @@
-import {nextSeriesEpisode, allowsEpisodeAutoplay} from "../../lib/seriesPlayback";
+import {nextSeriesEpisode, allowsEpisodeAutoplay, introWindow, shouldOfferSkip} from "../../lib/seriesPlayback";
 import { resolveVODPlayback } from "../../lib/vodStorage";
 import { SUPABASE_URL } from "../../lib/config";
 import { useChannelBlackout } from "../../hooks/useChannelBlackout";
@@ -70,6 +70,8 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
   const [allShows, setAllShows] = useState([]);
   const [nextEpisode, setNextEpisode] = useState(null);
   const [seriesAllowsAutoplay, setSeriesAllowsAutoplay] = useState(false);
+  const [offerSkip, setOfferSkip] = useState(false);   // "Skip intro" is showing
+  const introRef = useRef(null);                        // { start, end } seconds, or null
   const [countdownActive, setCountdownActive] = useState(false);
   const [countdown, setCountdown] = useState(10);
   const videoRef = useRef(null);
@@ -194,14 +196,26 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
     if (!isEpisode) return;
     Promise.all([
       supabase.from("episodes").select("*").eq("show_id", video.show_id),
-      supabase.from("shows").select("autoplay_next").eq("id", video.show_id).maybeSingle(),
+      supabase.from("shows").select("autoplay_next, intro_start_seconds, intro_end_seconds").eq("id", video.show_id).maybeSingle(),
     ]).then(([episodes, show]) => {
       if (cancelled || episodes.error) return;
       setNextEpisode(nextSeriesEpisode(video, episodes.data || []));
       setSeriesAllowsAutoplay(!show.error && !!show.data && show.data.autoplay_next !== false);
+      // Skip intro: the episode's own markers, else the series default.
+      const current = (episodes.data || []).find(e => String(e.id) === String(video.id)) || video;
+      introRef.current = introWindow(current, show.error ? null : show.data);
     });
     return () => { cancelled = true; };
   }, [video.id, video.show_id, isEpisode]);
+  useEffect(() => { introRef.current = null; setOfferSkip(false); }, [video.id]);
+
+  function skipIntro() {
+    const win = introRef.current;
+    if (!win || !videoRef.current) return;
+    videoRef.current.currentTime = win.end;
+    setOfferSkip(false);
+    if (videoRef.current.paused) videoRef.current.play().catch(() => {});
+  }
 
   useEffect(() => {
     setCountdownActive(false);
@@ -477,6 +491,8 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
   function handleTimeUpdate(e) {
     if (!adsClearedRef.current || adBusyRef.current) return;
     const { currentTime, duration } = e.currentTarget;
+    const offer = shouldOfferSkip(introRef.current, currentTime);
+    setOfferSkip(prev => (prev === offer ? prev : offer));
     if (!duration || isNaN(duration)) return;
 
     // Mid-roll: the next cue point we've reached. Seeking past several cues
@@ -651,6 +667,12 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
                 ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/></svg>
                 : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
               }
+            </button>
+          )}
+          {offerSkip && !countdownActive && (
+            <button onClick={skipIntro} className="skip-intro" aria-label="Skip intro"
+              style={{ position: "absolute", bottom: isFullscreen ? 90 : 64, right: 20, zIndex: 1000, background: "rgba(15,15,15,0.85)", backdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,0.35)", borderRadius: 8, padding: "10px 18px", color: "#fff", fontSize: 14, fontWeight: 700, letterSpacing: 0.3, cursor: "pointer", boxShadow: "0 6px 24px rgba(0,0,0,0.5)" }}>
+              Skip intro ⏭
             </button>
           )}
           {countdownActive && nextEpisode && (

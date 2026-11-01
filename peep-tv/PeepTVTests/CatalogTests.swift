@@ -1555,3 +1555,32 @@ final class CatalogTests: XCTestCase {
     }
 
 }
+
+final class SkipIntroTests: XCTestCase {
+    private func episode(start: Int?, end: Int?) throws -> Episode {
+        let json = """
+        {"id":1,"show_id":2,"season":1,"episode_number":1,"title":"Pilot","description":null,"url":null,"thumbnail":null,"duration":null,"status":"approved","is_premium":false,"intro_start_seconds":\(start.map(String.init) ?? "null"),"intro_end_seconds":\(end.map(String.init) ?? "null")}
+        """
+        return try JSONDecoder().decode(Episode.self, from: Data(json.utf8))
+    }
+    private func show(start: Int?, end: Int?) throws -> Show {
+        let json = """
+        {"id":2,"title":"Show","description":null,"category":null,"tags":null,"thumbnail":null,"poster":null,"autoplay_next":true,"featured":false,"visibility_tier":"production","is_premium":false,"intro_start_seconds":\(start.map(String.init) ?? "null"),"intro_end_seconds":\(end.map(String.init) ?? "null")}
+        """
+        return try JSONDecoder().decode(Show.self, from: Data(json.utf8))
+    }
+    func testEpisodeMarkersWinOverSeriesDefault() throws {
+        XCTAssertEqual(SeriesPlayback.introWindow(episode: try episode(start: 10, end: 40), show: try show(start: 5, end: 50)), 10...40)
+        XCTAssertEqual(SeriesPlayback.introWindow(episode: try episode(start: nil, end: nil), show: try show(start: 5, end: 50)), 5...50)
+        XCTAssertEqual(SeriesPlayback.introWindow(episode: try episode(start: nil, end: 30), show: nil), 0...30)
+        XCTAssertNil(SeriesPlayback.introWindow(episode: try episode(start: 60, end: 40), show: nil))
+        XCTAssertNil(SeriesPlayback.introWindow(episode: nil, show: try show(start: nil, end: nil)))
+    }
+    func testOfferWindow() {
+        XCTAssertFalse(SeriesPlayback.shouldOfferSkip(5...50, at: 4))
+        XCTAssertTrue(SeriesPlayback.shouldOfferSkip(5...50, at: 5))
+        XCTAssertTrue(SeriesPlayback.shouldOfferSkip(5...50, at: 48.9))
+        XCTAssertFalse(SeriesPlayback.shouldOfferSkip(5...50, at: 49))
+        XCTAssertFalse(SeriesPlayback.shouldOfferSkip(nil, at: 10))
+    }
+}

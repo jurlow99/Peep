@@ -342,6 +342,7 @@ struct PlaybackView: View {
     @State private var currentEpisode: Episode?
     @State private var nextEpisode: Episode?
     @State private var seriesAllowsAutoplay = false
+    @State private var introWindow: ClosedRange<Double>?
     private var playbackIdentity: PlaybackIdentity? { currentEpisode.map { PlaybackIdentity(id: String($0.id), type: "episode") } ?? identity }
     @State private var attempt = UUID()
     @EnvironmentObject private var service: SupabaseService
@@ -352,7 +353,7 @@ struct PlaybackView: View {
         Group {
             if let resolvedURL {
                 PlayerView(url: resolvedURL, title: currentEpisode?.displayTitle ?? title, identity: playbackIdentity, liveChannelID: liveChannelID, startFromBeginning: startFromBeginning, metadata: metadata,
-                           nextEpisode: nextEpisode, seriesAllowsAutoplay: seriesAllowsAutoplay, related: related, openRelated: openRelated, playNext: {
+                           nextEpisode: nextEpisode, seriesAllowsAutoplay: seriesAllowsAutoplay, introWindow: introWindow, related: related, openRelated: openRelated, playNext: {
                     guard let nextEpisode else { return }
                     currentEpisode = nextEpisode
                     self.resolvedURL = nil
@@ -374,7 +375,7 @@ struct PlaybackView: View {
             }
         }
         .task(id: attempt) {
-            resolutionError = nil; resolvedURL = nil; nextEpisode = nil; seriesAllowsAutoplay = false
+            resolutionError = nil; resolvedURL = nil; nextEpisode = nil; seriesAllowsAutoplay = false; introWindow = nil
             guard let url = currentEpisode?.videoURL ?? url else {
                 resolutionError = "A direct video stream is not available for this title. Please choose another title."
                 return
@@ -392,6 +393,7 @@ struct PlaybackView: View {
                         guard !Task.isCancelled else { return }
                         nextEpisode = SeriesPlayback.next(after: episode, in: episodes)
                         seriesAllowsAutoplay = shows.first?.autoplay_next == true // explicit, like the web
+                        introWindow = SeriesPlayback.introWindow(episode: episode, show: shows.first)
                     }
                 }
             } catch {
@@ -413,6 +415,8 @@ struct PlayerView: View {
     let metadata: PlaybackMetadata?
     var nextEpisode: Episode?
     let seriesAllowsAutoplay: Bool
+    let introWindow: ClosedRange<Double>?
+    @State private var offerSkip = false
     let related: [Video]
     let openRelated: (Video) -> Void
     let playNext: () -> Void
@@ -432,8 +436,9 @@ struct PlayerView: View {
     @Environment(\.dismiss) private var dismiss
     let retry: () -> Void
 
-    init(url: URL, title: String, identity: PlaybackIdentity? = nil, liveChannelID: Int? = nil, startFromBeginning: Bool = false, metadata: PlaybackMetadata? = nil, nextEpisode: Episode? = nil, seriesAllowsAutoplay: Bool = false, related: [Video] = [], openRelated: @escaping (Video) -> Void = { _ in }, playNext: @escaping () -> Void = {}, retry: @escaping () -> Void) {
+    init(url: URL, title: String, identity: PlaybackIdentity? = nil, liveChannelID: Int? = nil, startFromBeginning: Bool = false, metadata: PlaybackMetadata? = nil, nextEpisode: Episode? = nil, seriesAllowsAutoplay: Bool = false, introWindow: ClosedRange<Double>? = nil, related: [Video] = [], openRelated: @escaping (Video) -> Void = { _ in }, playNext: @escaping () -> Void = {}, retry: @escaping () -> Void) {
         self.title = title
+        self.introWindow = introWindow
         self.metadata = metadata
         self.related = related
         self.openRelated = openRelated
@@ -462,7 +467,8 @@ struct PlayerView: View {
                 }.background(Color.black)
             } else {
                 if (!adGate.blocking || adGate.isMidroll) && !showNext && !showEnd {
-                    NativePlayer(player: model.player, proposal: proposal, onAcceptProposal: nextEpisode == nil ? nil : playNext).ignoresSafeArea()
+                    NativePlayer(player: model.player, proposal: proposal, onAcceptProposal: nextEpisode == nil ? nil : playNext,
+                                 skipIntro: offerSkip && introWindow != nil ? { skipIntro() } : nil).ignoresSafeArea()
                     if let metadata, metadata.audioOnly { AudioArtworkOverlay(metadata: metadata) }
                 }
             }
@@ -522,6 +528,17 @@ struct PlayerView: View {
         }
         .animation(.easeInOut(duration: 0.6), value: showNext)
         .animation(.easeInOut(duration: 0.6), value: showEnd)
+        // Skip intro: poll the clock while inside the window; the native player shows the action.
+        .task(id: "\(contentStarted):\(introWindow?.lowerBound ?? -1):\(introWindow?.upperBound ?? -1)") {
+            guard contentStarted, let introWindow else { offerSkip = false; return }
+            while !Task.isCancelled {
+                let time = model.player.currentTime().seconds
+                let offer = SeriesPlayback.shouldOfferSkip(introWindow, at: time)
+                if offer != offerSkip { offerSkip = offer }
+                if time > introWindow.upperBound + 2 { return } // past the intro; nothing more to do
+                do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
+            }
+        }
         // Build the native Up Next proposal once the item's length is known.
         .task(id: "\(contentStarted):\(nextEpisode?.id ?? 0):\(preferences.autoplayNext)") {
             guard contentStarted, let episode = nextEpisode else { proposal = nil; return }
@@ -607,6 +624,12 @@ struct PlayerView: View {
         }
         .onExitCommand { dismiss() }
     }
+    private func skipIntro() {
+        guard let introWindow else { return }
+        offerSkip = false
+        model.player.seek(to: CMTime(seconds: introWindow.upperBound, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .positiveInfinity)
+        model.player.play()
+    }
     private func watchAgain() {
         showEnd = false; endHandled = false
         model.player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
@@ -643,6 +666,13 @@ struct NativePlayer: UIViewControllerRepresentable {
     var onVideoReady: ((AVPlayerItem) -> Void)? = nil
     var proposal: AVContentProposal? = nil
     var onAcceptProposal: (() -> Void)? = nil
+    var skipIntro: (() -> Void)? = nil   // when set, the native "Skip Intro" action is offered
+
+    private func applyContextualActions(_ controller: AVPlayerViewController) {
+        let wanted = skipIntro != nil
+        if wanted == !controller.contextualActions.isEmpty { return }
+        controller.contextualActions = wanted ? [UIAction(title: "Skip Intro", image: UIImage(systemName: "forward.end.fill")) { [skipIntro] _ in skipIntro?() }] : []
+    }
 
     final class Coordinator: NSObject, AVPlayerViewControllerDelegate {
         var pauseOnDismantle = true
@@ -673,6 +703,7 @@ struct NativePlayer: UIViewControllerRepresentable {
         context.coordinator.onVideoReady = onVideoReady
         context.coordinator.onAcceptProposal = onAcceptProposal
         controller.player?.currentItem?.nextContentProposal = proposal
+        applyContextualActions(controller)
         context.coordinator.displayObservation = controller.observe(\.isReadyForDisplay, options: [.initial, .new]) { [weak coordinator = context.coordinator, weak controller] _, _ in
             Task { @MainActor in
                 guard let controller, controller.isReadyForDisplay, let item = controller.player?.currentItem else { return }
@@ -685,6 +716,7 @@ struct NativePlayer: UIViewControllerRepresentable {
         context.coordinator.onExit = onExit
         context.coordinator.onAcceptProposal = onAcceptProposal
         if let item = controller.player?.currentItem, item.nextContentProposal !== proposal { item.nextContentProposal = proposal }
+        applyContextualActions(controller)
         context.coordinator.onVideoReady = onVideoReady
         context.coordinator.pauseOnDismantle = pauseOnDismantle
         let becameInteractive = !controller.view.isUserInteractionEnabled && interactive

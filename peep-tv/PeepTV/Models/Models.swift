@@ -50,6 +50,8 @@ struct Show: Identifiable, Codable, Hashable {
     let featured: Bool?
     let visibility_tier: String?
     let is_premium: Bool?
+    let intro_start_seconds: Int?
+    let intro_end_seconds: Int?
     var thumbURL: URL? { MediaURL.parse(poster) ?? MediaURL.parse(thumbnail) }
 }
 
@@ -65,6 +67,8 @@ struct Episode: Identifiable, Codable {
     let duration: String?
     let status: String?
     let is_premium: Bool?
+    let intro_start_seconds: Int?
+    let intro_end_seconds: Int?
     var videoURL: URL? { MediaURL.playback(url) }
     var thumbURL: URL? { MediaURL.parse(thumbnail) }
     var displayTitle: String { title ?? "Episode \(episode_number ?? 0)" }
@@ -459,6 +463,21 @@ enum SeriesPlayback {
     /// never "next up", never autoplayed after an episode.
     static let extrasSeason = 0
     static func isExtra(_ episode: Episode) -> Bool { (episode.season ?? 1) == extrasSeason }
+    /// Skip-intro window in seconds: the episode's own markers, else the series default.
+    static func introWindow(episode: Episode?, show: Show?) -> ClosedRange<Double>? {
+        func pick(_ start: Int?, _ end: Int?) -> ClosedRange<Double>? {
+            guard let end, end > 0 else { return nil }
+            let from = max(0, start ?? 0)
+            return end > from ? Double(from)...Double(end) : nil
+        }
+        if let episode, episode.intro_end_seconds != nil { return pick(episode.intro_start_seconds, episode.intro_end_seconds) }
+        return pick(show?.intro_start_seconds, show?.intro_end_seconds)
+    }
+    /// The button shows from the window's start until a second before its end.
+    static func shouldOfferSkip(_ window: ClosedRange<Double>?, at time: Double) -> Bool {
+        guard let window, time.isFinite else { return false }
+        return time >= window.lowerBound && time < window.upperBound - 1
+    }
     static func seasonLabel(_ season: Int) -> String { season == extrasSeason ? "Extras" : "Season \(season)" }
     static func before(_ a: Episode, _ b: Episode) -> Bool {
         if isExtra(a) != isExtra(b) { return isExtra(b) }

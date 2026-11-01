@@ -168,7 +168,9 @@ subscription, episodes must be approved and inherit show rules.
 - Add-ons applied **to dev only**, by hand, no ledger: `db/features/*.sql` (channel
   blackouts, CSAI preroll columns, live viewing sessions + dashboard RPCs, multiview
   packages incl. 4-channel, `merge_shows` for duplicate series, `conversion_queue` for
-  the Add VOD "To convert" list), `db/storage/*.sql` (VOD buckets/policies, upload-first,
+  the Add VOD "To convert" list, `skip-intro` columns `intro_start_seconds` /
+  `intro_end_seconds` on shows (default) and episodes (override) — web shows a
+  "Skip intro" button, tvOS uses the native contextual action), `db/storage/*.sql` (VOD buckets/policies, upload-first,
   R2 registry, hero video, provider deliveries + types + trash, series playback,
   multiview layout, partner referral default, `replace_vod_file` for Replace video), `db/epg_channel_setup.sql`
   (`save_channel_guide`), `db/epg_scheduler.sql` (pg_cron every 6h, dev URL).
