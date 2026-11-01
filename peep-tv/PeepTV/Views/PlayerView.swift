@@ -364,8 +364,8 @@ struct PlaybackView: View {
                 VStack {
                     StatusView(title: "Video unavailable", message: resolutionError, symbol: "play.slash")
                     HStack(spacing: 20) {
-                        Button("Try again") { attempt = UUID() }.buttonStyle(BrowseCardStyle())
-                        Button("Back") { dismiss() }.buttonStyle(BrowseCardStyle())
+                        Button { attempt = UUID() } label: { PlayerActionLabel("Try again", symbol: "arrow.clockwise") }.buttonStyle(BrowseCardStyle())
+                        Button { dismiss() } label: { PlayerActionLabel("Back", symbol: "chevron.left") }.buttonStyle(BrowseCardStyle())
                     }.padding(.bottom, 80)
                 }.background(Color.black).onExitCommand { dismiss() }
             } else {
@@ -453,12 +453,12 @@ struct PlayerView: View {
             if let message = model.blackoutMessage {
                 VStack(spacing: 24) {
                     StatusView(title: "Channel temporarily unavailable", message: message, symbol: "tv.slash")
-                    Button("Back") { dismiss() }.buttonStyle(BrowseCardStyle()).padding(.bottom, 80)
+                    Button { dismiss() } label: { PlayerActionLabel("Back", symbol: "chevron.left") }.buttonStyle(BrowseCardStyle()).padding(.bottom, 80)
                 }
             } else if let error = model.errorMessage {
                 VStack {
                     StatusView(title: "Playback interrupted", message: error, retry: retry)
-                    Button("Back") { dismiss() }.buttonStyle(BrowseCardStyle()).padding(.bottom, 80)
+                    Button { dismiss() } label: { PlayerActionLabel("Back", symbol: "chevron.left") }.buttonStyle(BrowseCardStyle()).padding(.bottom, 80)
                 }.background(Color.black)
             } else {
                 if (!adGate.blocking || adGate.isMidroll) && !showNext && !showEnd {
@@ -485,10 +485,11 @@ struct PlayerView: View {
                                     .contentTransition(.numericText(countsDown: true)).animation(.easeInOut(duration: 0.3), value: countdown)
                             }
                             HStack(spacing: 20) {
-                                Button(action: playNext) { Label("Play next", systemImage: "play.fill").padding(16) }
+                                let countingDown = !countdownCancelled && preferences.autoplayNext && seriesAllowsAutoplay
+                                Button(action: playNext) { PlayerActionLabel("Play next", symbol: "play.fill") }
                                     .buttonStyle(BrowseCardStyle()).focused($nextFocused)
-                                Button(countdownCancelled || !preferences.autoplayNext || !seriesAllowsAutoplay ? "Back" : "Cancel autoplay") {
-                                    if countdownCancelled || !preferences.autoplayNext || !seriesAllowsAutoplay { dismiss() } else { countdownCancelled = true }
+                                Button { if countingDown { countdownCancelled = true } else { dismiss() } } label: {
+                                    PlayerActionLabel(countingDown ? "Cancel autoplay" : "Back", symbol: countingDown ? "xmark" : "chevron.left")
                                 }.buttonStyle(BrowseCardStyle())
                             }
                         }.frame(width: 650, alignment: .leading)
@@ -501,9 +502,9 @@ struct PlayerView: View {
                         Text("THAT'S THE END").font(.system(size: 18, weight: .bold)).tracking(4).foregroundStyle(.secondary)
                         Text(title).font(.system(size: 42, weight: .bold, design: .rounded)).lineLimit(2)
                         HStack(spacing: 20) {
-                            Button(action: watchAgain) { Label("Watch again", systemImage: "arrow.counterclockwise").padding(16) }
+                            Button(action: watchAgain) { PlayerActionLabel("Watch again", symbol: "arrow.counterclockwise") }
                                 .buttonStyle(BrowseCardStyle()).focused($endFocused)
-                            Button("Back") { dismiss() }.buttonStyle(BrowseCardStyle())
+                            Button { dismiss() } label: { PlayerActionLabel("Back", symbol: "chevron.left") }.buttonStyle(BrowseCardStyle())
                         }
                         if !related.isEmpty {
                             Text("More like this").font(.system(size: 28, weight: .bold, design: .rounded)).padding(.top, 12)
@@ -1456,6 +1457,18 @@ actor LiveInbandReader {
               (response as? HTTPURLResponse)?.statusCode == 200, let image = UIImage(data: data) else { return nil }
         ArtworkMemory.images.setObject(image, forKey: url as NSURL, cost: Int(image.size.width * image.size.height * 4))
         return image
+    }
+}
+
+/// One look for every button on the player's full-screen states: icon, label, generous padding.
+struct PlayerActionLabel: View {
+    let text: String
+    let symbol: String
+    init(_ text: String, symbol: String) { self.text = text; self.symbol = symbol }
+    var body: some View {
+        Label(text, systemImage: symbol)
+            .font(.system(size: 22, weight: .semibold))
+            .padding(.horizontal, 24).padding(.vertical, 16)
     }
 }
 
