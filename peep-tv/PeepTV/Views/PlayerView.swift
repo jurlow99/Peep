@@ -1184,16 +1184,16 @@ private struct LiveMidrollModifier: ViewModifier {
     @State private var status = ""
     @State private var checked = Date.distantPast
     func body(content: Content) -> some View {
-        content.overlay(alignment: .topTrailing) {
+        content.overlay(alignment: .topLeading) { // top-left: the FARRIS · DEV badge owns the top-right
             if service.configuration?.isDevelopment == true, !status.isEmpty {
-                VStack(alignment: .trailing, spacing: 4) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text("AD WATCH").font(.system(size: 13, weight: .heavy)).tracking(2).foregroundStyle(ContentAppearance.accent)
                     Text(status).font(.system(size: 17, weight: .semibold))
                     Text("checked \(checked.formatted(date: .omitted, time: .standard))").font(.system(size: 13)).foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 16).padding(.vertical, 10)
                 .background(.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 12))
-                .padding(.top, 40).padding(.trailing, 60).allowsHitTesting(false)
+                .padding(.top, 40).padding(.leading, 60).allowsHitTesting(false)
             }
         }
         .task(id: "\(channelID ?? -1):\(scenePhase == .active):\(ready)") {
