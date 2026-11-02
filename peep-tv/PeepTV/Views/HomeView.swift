@@ -211,13 +211,18 @@ struct HomeView: View {
             let ids = progress.filter { $0.content_type == "episode" }.compactMap { Int($0.content_id) }
             let episodes = try await supabase.fetchContinueEpisodes(ids: ids)
             guard supabase.session?.userId == userID else { return }
-            continueItems = progress.compactMap { row in
+            // One card per series: rows are newest first, so the first episode seen for a
+            // show is the one to resume. Later episodes of the same show are skipped.
+            var seenShows = Set<Int>()
+            continueItems = progress.compactMap { row -> ContinueWatchingItem? in
                 if row.content_type == "movie", let video = videos.first(where: { $0.id == row.content_id }), let url = video.videoURL {
                     return ContinueWatchingItem(progress: row, title: video.title, artwork: video.heroURL, url: url)
                 }
                 if row.content_type == "episode", let episode = episodes.first(where: { String($0.id) == row.content_id }),
                    let show = shows.first(where: { $0.id == episode.show_id }), let url = episode.videoURL {
-                    return ContinueWatchingItem(progress: row, title: "\(show.title) · \(episode.displayTitle)", artwork: episode.thumbURL ?? show.thumbURL, url: url)
+                    guard seenShows.insert(show.id).inserted else { return nil }
+                    let where_ = SeriesPlayback.isExtra(episode) ? "Extras" : "S\(episode.season ?? 1) E\(episode.episode_number ?? 1)"
+                    return ContinueWatchingItem(progress: row, title: "\(show.title) · \(where_)", artwork: episode.thumbURL ?? show.thumbURL, url: url)
                 }
                 return nil
             }

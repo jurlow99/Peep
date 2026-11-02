@@ -625,6 +625,7 @@ export function VideoCard({ video, onClick, rank, size, locked, myList, onToggle
           {/* Info panel — fades in after expansion */}
           <div style={{ padding: "14px 18px 18px", opacity: trailerExpanded ? 1 : 0, transition: "opacity 0.15s ease 0.15s" }}>
             <p style={{ margin: "0 0 8px", fontSize: 17, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{video.title}</p>
+            {video._subtitle && <p style={{ margin: "-4px 0 8px", fontSize: 13, color: "#facc15", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Continue · {video._subtitle}</p>}
 
             {/* Metadata row */}
             <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
