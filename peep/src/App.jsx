@@ -29,7 +29,7 @@ import { Wordmark, LogoHorizontal } from "./components/Wordmark";
 import { filterByTier } from "./lib/tiers";
 import { loadFlags, getFlags } from "./lib/flags";
 import { loadAdPolicy } from "./lib/adPolicy";
-import { seasonLabel, seasonOrder } from "./lib/seriesPlayback";
+import { seasonLabel, seasonOrder, seriesNextUp, canResume as canResumeProgress, PROGRESS_EVENT } from "./lib/seriesPlayback";
 import { contentSelect } from "./lib/contentQueries";
 import { contentKey } from "./lib/contentIds";
 import { SUPABASE_URL } from "./lib/config";
@@ -433,7 +433,7 @@ function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList
       .then(({ data }) => {
         if (data && data.length > 0) {
           setEpisodes(data);
-          setSelectedSeason(data[0].season);
+          setSelectedSeason((data.find(e => e.season !== 0) || data[0]).season);
         }
         setLoading(false);
       });
@@ -450,35 +450,44 @@ function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList
     });
   }, [show.id]);
 
+  // Progress is re-read whenever the player saves (it fires PROGRESS_EVENT), so the
+  // page is current the moment the viewer comes back from an episode.
+  const [progressRevision, setProgressRevision] = useState(0);
+  useEffect(() => {
+    const bump = () => setProgressRevision(n => n + 1);
+    window.addEventListener(PROGRESS_EVENT, bump);
+    return () => window.removeEventListener(PROGRESS_EVENT, bump);
+  }, []);
   useEffect(() => {
     if (!user || !episodes.length) { setWatchProgress({}); return; }
+    let live = true;
     supabase.from("watch_progress").select("*")
       .eq("user_id", user.id).eq("content_type", "episode")
       .in("content_id", episodes.map(e => e.id))
       .then(({ data }) => {
-        if (data) {
+        if (live && data) {
           const map = {};
           data.forEach(p => { map[p.content_id] = p; });
           setWatchProgress(map);
         }
       });
-  }, [episodes, user?.id]);
+    return () => { live = false; };
+  }, [episodes, user?.id, progressRevision]);
 
   const seasons = [...new Set(episodes.map(e => e.season))].sort(seasonOrder); // Extras (season 0) last
   const seasonEpisodes = episodes.filter(e => e.season === selectedSeason);
-  const completedCount = episodes.filter(e => watchProgress[e.id]?.completed).length;
+  const completedCount = episodes.filter(e => e.season !== 0 && watchProgress[e.id]?.completed).length;
+  const mainEpisodeCount = episodes.filter(e => e.season !== 0).length;
 
-  const resumeEpisode = (() => {
-    if (!episodes.length) return null;
-    if (user) {
-      const incomplete = episodes
-        .filter(e => watchProgress[e.id] && !watchProgress[e.id].completed && watchProgress[e.id].progress_seconds > 10)
-        .sort((a, b) => new Date(watchProgress[b.id].last_watched_at) - new Date(watchProgress[a.id].last_watched_at));
-      if (incomplete[0]) return incomplete[0];
-    }
-    return episodes[0];
-  })();
-  const isResuming = resumeEpisode && watchProgress[resumeEpisode.id]?.progress_seconds > 10 && !watchProgress[resumeEpisode.id]?.completed;
+  // Play button: resume the latest unfinished episode, else the one after the latest
+  // finished, else S1E1. Never an extra.
+  const { episode: resumeEpisode, resuming: isResuming } = seriesNextUp(episodes, user ? watchProgress : {});
+  // Open on the season the viewer is up to, until they pick one themselves.
+  const seasonPicked = useRef(false);
+  useEffect(() => { seasonPicked.current = false; }, [show.id]);
+  useEffect(() => {
+    if (!seasonPicked.current && resumeEpisode && resumeEpisode.season !== selectedSeason) setSelectedSeason(resumeEpisode.season);
+  }, [resumeEpisode?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div style={{ background: "#0a0a0a", minHeight: "100vh", fontFamily: "'Space Grotesk', sans-serif", color: "#fff" }}>
@@ -521,7 +530,7 @@ function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList
             <span style={{ color: "#333", fontSize: 13 }}>·</span>
             <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 13 }}>{episodes.length} Episode{episodes.length !== 1 ? "s" : ""}</span>
             {completedCount > 0 && episodes.length > 0 && (
-              <span style={{ color: "#4ade80", fontSize: 12, fontWeight: 600 }}>{completedCount}/{episodes.length} watched</span>
+              <span style={{ color: "#4ade80", fontSize: 12, fontWeight: 600 }}>{completedCount}/{mainEpisodeCount} watched</span>
             )}
           </div>
           {show.description && (
@@ -598,7 +607,7 @@ function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList
                       const sWatched = sEps.filter(e => watchProgress[e.id]?.completed).length;
                       const active = selectedSeason === s;
                       return (
-                        <button key={s} onClick={() => setSelectedSeason(s)}
+                        <button key={s} onClick={() => { seasonPicked.current = true; setSelectedSeason(s); }}
                           style={{ background: active ? "#facc15" : "#111", border: `1px solid ${active ? "#facc15" : "#242424"}`, borderRadius: 8, padding: "10px 20px", color: active ? "#0a0a0a" : "#888", fontSize: 13, fontWeight: active ? 700 : 400, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, transition: "all 0.15s" }}>
                           <span>{seasonLabel(s)}</span>
                           {sWatched > 0 && <span style={{ fontSize: 10, color: active ? "rgba(10,10,10,0.55)" : "#4ade80", fontWeight: 600 }}>{sWatched}/{sEps.length}</span>}
@@ -607,7 +616,7 @@ function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList
                     })}
                   </div>
                 ) : (
-                  <select value={selectedSeason ?? ""} onChange={e => setSelectedSeason(Number(e.target.value))}
+                  <select value={selectedSeason ?? ""} onChange={e => { seasonPicked.current = true; setSelectedSeason(Number(e.target.value)); }}
                     style={{ background: "#111", border: "1px solid #2a2a2a", borderRadius: 8, padding: "10px 16px", color: "#fff", fontSize: 14, cursor: "pointer", outline: "none" }}>
                     {seasons.map(s => <option key={s} value={s}>{seasonLabel(s)}</option>)}
                   </select>
@@ -650,8 +659,9 @@ function ShowDetail({ show, onBack, onGoHome, onPlay, onShowSelect, user, myList
 function EpisodeCard({ episode, show, onPlay, progress }) {
   const [hovered, setHovered] = useState(false);
   const isMobile = useIsMobile();
-  const pct = progress?.duration_seconds > 0 ? Math.min(100, (progress.progress_seconds / progress.duration_seconds) * 100) : 0;
   const isCompleted = !!progress?.completed;
+  const resumable = canResumeProgress(progress);
+  const pct = resumable ? Math.min(100, (progress.progress_seconds / progress.duration_seconds) * 100) : 0;
 
   return (
     <div onClick={() => onPlay(episode)} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
@@ -693,8 +703,8 @@ function EpisodeCard({ episode, show, onPlay, progress }) {
         {!isMobile && episode.description && (
           <p style={{ margin: 0, fontSize: 13, color: "#555", lineHeight: 1.6, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{episode.description}</p>
         )}
-        {pct > 0 && !isCompleted && (
-          <p style={{ margin: "6px 0 0", fontSize: 11, color: "#facc15", fontWeight: 600 }}>{Math.round(pct)}% watched</p>
+        {resumable && (
+          <p style={{ margin: "6px 0 0", fontSize: 11, color: "#facc15", fontWeight: 600 }}>Resume · {Math.max(1, Math.round((progress.duration_seconds - progress.progress_seconds) / 60))} min left</p>
         )}
       </div>
     </div>

@@ -429,7 +429,13 @@ struct WatchProgress: Decodable, Identifiable {
     let progress_seconds: Double?
     let duration_seconds: Double?
     let completed: Bool?
+    var last_watched_at: String? = nil
     var id: String { content_type + ":" + content_id }
+    /// Same rule as the web: 90% in, or the last minute of anything over five minutes.
+    static func isFinished(position: Double, duration: Double) -> Bool {
+        guard duration > 0, position.isFinite else { return false }
+        return position / duration >= 0.9 || (duration > 300 && duration - position < 60)
+    }
     var identity: PlaybackIdentity { PlaybackIdentity(id: content_id, type: content_type) }
     var fraction: Double {
         guard let position = progress_seconds, let duration = duration_seconds,
@@ -438,7 +444,7 @@ struct WatchProgress: Decodable, Identifiable {
     }
     var canResume: Bool {
         let position = progress_seconds ?? 0, duration = duration_seconds ?? 0
-        return completed != true && position.isFinite && duration.isFinite && position > 10 && duration > 0 && position / duration < 0.9
+        return completed != true && position.isFinite && duration.isFinite && position > 10 && duration > 0 && !Self.isFinished(position: position, duration: duration)
     }
 }
 struct ContinueWatchingItem: Identifiable {
@@ -497,12 +503,18 @@ enum SeriesPlayback {
     /// episode, else the one after the last finished episode, else the first playable
     /// one (so a finished series starts again).
     static func nextUp(in episodes: [Episode], progress: [String: WatchProgress]) -> Episode? {
+        // The most recently touched episode decides: unfinished → resume it; finished →
+        // the next one not yet watched. Nothing watched → the first episode. Same as the web.
         let ordered = episodes.filter { $0.videoURL != nil && !isExtra($0) }.sorted(by: before)
-        if let resumable = ordered.last(where: { progress[String($0.id)]?.canResume == true }) { return resumable }
-        if let finished = ordered.last(where: { progress[String($0.id)]?.completed == true }) {
-            return next(after: finished, in: ordered) ?? ordered.first
-        }
-        return ordered.first
+        let touched = ordered.filter { e in progress[String(e.id)].map { $0.completed == true || $0.canResume } ?? false }
+            .enumerated().max { a, b in
+                let ta = progress[String(a.element.id)]?.last_watched_at ?? "", tb = progress[String(b.element.id)]?.last_watched_at ?? ""
+                return ta == tb ? a.offset < b.offset : ta < tb // same time → the later episode wins
+            }?.element
+        guard let latest = touched else { return ordered.first }
+        if progress[String(latest.id)]?.canResume == true { return latest }
+        let start = (ordered.firstIndex { $0.id == latest.id } ?? -1) + 1
+        return ordered.dropFirst(start).first { progress[String($0.id)]?.completed != true } ?? ordered.first
     }
 }
 

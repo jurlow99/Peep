@@ -408,7 +408,7 @@ final class SupabaseService: ObservableObject {
         guard session?.userId == userID, position.isFinite, duration.isFinite, position >= 5, duration > 0 else { return }
         try await post("watch_progress", body: ["user_id": userID, "content_id": identity.id, "content_type": identity.type,
             "progress_seconds": min(position, duration), "duration_seconds": duration,
-            "completed": position / duration >= 0.9, "last_watched_at": ISO8601DateFormatter().string(from: Date())],
+            "completed": WatchProgress.isFinished(position: position, duration: duration), "last_watched_at": ISO8601DateFormatter().string(from: Date())],
             query: ["on_conflict": "user_id,content_id,content_type"], prefer: "resolution=merge-duplicates,return=minimal", expectedUserID: userID)
         watchProgressRevision += 1
     }

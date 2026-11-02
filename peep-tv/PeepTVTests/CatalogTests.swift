@@ -1584,3 +1584,22 @@ final class SkipIntroTests: XCTestCase {
         XCTAssertFalse(SeriesPlayback.shouldOfferSkip(nil, at: 10))
     }
 }
+
+final class SeriesNextUpTests: XCTestCase {
+    private func episode(_ id: Int, _ season: Int, _ n: Int) throws -> Episode {
+        try JSONDecoder().decode(Episode.self, from: Data(#"{"id":\#(id),"show_id":1,"season":\#(season),"episode_number":\#(n),"title":"E","description":null,"url":"https://x.test/v.mp4","thumbnail":null,"duration":null,"status":"approved","is_premium":false,"intro_start_seconds":null,"intro_end_seconds":null}"#.utf8))
+    }
+    private func progress(_ id: Int, _ pos: Double, _ dur: Double, _ at: String, done: Bool = false) throws -> WatchProgress {
+        try JSONDecoder().decode(WatchProgress.self, from: Data(#"{"content_id":"\#(id)","content_type":"episode","progress_seconds":\#(pos),"duration_seconds":\#(dur),"completed":\#(done),"last_watched_at":"\#(at)"}"#.utf8))
+    }
+    func testLatestTouchedEpisodeDecides() throws {
+        let eps = [try episode(10, 0, 1), try episode(1, 1, 1), try episode(2, 1, 2), try episode(3, 2, 1)]
+        XCTAssertEqual(SeriesPlayback.nextUp(in: eps, progress: [:])?.id, 1)
+        let resume = ["1": try progress(1, 300, 1300, "2026-11-01T10:00:00Z"), "3": try progress(3, 500, 1300, "2026-11-01T12:00:00Z")]
+        XCTAssertEqual(SeriesPlayback.nextUp(in: eps, progress: resume)?.id, 3)
+        let finished = ["1": try progress(1, 1300, 1300, "2026-11-01T10:00:00Z", done: true), "2": try progress(2, 1290, 1300, "2026-11-01T11:00:00Z", done: true)]
+        XCTAssertEqual(SeriesPlayback.nextUp(in: eps, progress: finished)?.id, 3)
+        XCTAssertTrue(WatchProgress.isFinished(position: 1270, duration: 1320))
+        XCTAssertFalse(WatchProgress.isFinished(position: 30, duration: 90))
+    }
+}

@@ -1,4 +1,4 @@
-import {nextSeriesEpisode, allowsEpisodeAutoplay, introWindow, shouldOfferSkip} from "../../lib/seriesPlayback";
+import {nextSeriesEpisode, allowsEpisodeAutoplay, introWindow, shouldOfferSkip, isFinishedAt, canResume, PROGRESS_EVENT} from "../../lib/seriesPlayback";
 import { resolveVODPlayback } from "../../lib/vodStorage";
 import { SUPABASE_URL } from "../../lib/config";
 import { useChannelBlackout } from "../../hooks/useChannelBlackout";
@@ -317,9 +317,10 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
       await supabase.from("watch_progress").upsert({
         user_id: user.id, content_id: video.id, content_type: ct,
         progress_seconds: currentTime, duration_seconds: duration,
-        completed: currentTime / duration > 0.9 || duration - currentTime < 60,
+        completed: isFinishedAt(currentTime, duration),
         last_watched_at: new Date().toISOString(),
       }, { onConflict: "user_id,content_id,content_type" });
+      window.dispatchEvent(new Event(PROGRESS_EVENT));
     };
     progressTimerRef.current = setInterval(() => { saveProgressRef.current?.(); }, 15000);
     return () => clearInterval(progressTimerRef.current);
@@ -534,6 +535,7 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
       if (duration > 0) {
         const ct = isEpisode ? "episode" : "movie";
         await supabase.from("watch_progress").upsert({ user_id: user.id, content_id: video.id, content_type: ct, progress_seconds: currentTime, duration_seconds: duration, completed: true, last_watched_at: new Date().toISOString() }, { onConflict: "user_id,content_id,content_type" });
+        window.dispatchEvent(new Event(PROGRESS_EVENT));
       }
     }
     const afterAd = () => {
@@ -584,9 +586,10 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
     supabase.from("watch_progress").select("progress_seconds, duration_seconds, completed")
       .eq("user_id", user.id).eq("content_id", video.id).eq("content_type", ct).maybeSingle()
       .then(({ data }) => {
-        if (!data || data.completed || !videoRef.current) return;
-        const pct = data.duration_seconds > 0 ? data.progress_seconds / data.duration_seconds : 0;
-        if (data.progress_seconds > 10 && pct < 0.9) videoRef.current.currentTime = data.progress_seconds;
+        if (!canResume(data) || !videoRef.current) return;
+        const seek = () => { if (videoRef.current) videoRef.current.currentTime = data.progress_seconds; };
+        // Seeking before metadata loads is ignored by some browsers; wait for it.
+        if (videoRef.current.readyState >= 1) seek(); else videoRef.current.addEventListener("loadedmetadata", seek, { once: true });
       });
   }
 
