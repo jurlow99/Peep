@@ -958,7 +958,7 @@ struct AdFrequencyPolicy {
     }
     func beginMidroll(service: SupabaseService, tag: CSAITag, channelID: Int) {
         guard !blocking, service.configuration?.isDevelopment == true, tag.is_test,
-              tag.scope == "live", tag.content_id == String(channelID), tag.active, tag.platforms.contains("tvos"),
+              tag.scope == "live", (tag.content_id ?? "").isEmpty || tag.content_id == String(channelID), tag.active, tag.platforms.contains("tvos"),
               URL(string: tag.tag_url)?.scheme?.lowercased() == "https" else { return }
         self.service = service; reportingUserID = service.session?.userId
         scope = "live"; contentID = String(channelID); session = UUID().uuidString

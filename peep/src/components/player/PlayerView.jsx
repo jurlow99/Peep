@@ -1,4 +1,5 @@
 import {nextSeriesEpisode, allowsEpisodeAutoplay, introWindow, shouldOfferSkip, isFinishedAt, canResume, PROGRESS_EVENT} from "../../lib/seriesPlayback";
+import { breakStart } from "../../lib/liveBreaks";
 import { resolveVODPlayback } from "../../lib/vodStorage";
 import { SUPABASE_URL } from "../../lib/config";
 import { useChannelBlackout } from "../../hooks/useChannelBlackout";
@@ -75,6 +76,7 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
   const [countdownActive, setCountdownActive] = useState(false);
   const [countdown, setCountdown] = useState(10);
   const videoRef = useRef(null);
+  const liveBreakSeenRef = useRef(""); // last live break we played an ad over
   const adsClearedRef = useRef(false);
   const hlsRef = useRef(null);
   const countdownTimerRef = useRef(null);
@@ -275,6 +277,20 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
       hls.attachMedia(videoEl);
       hls.on(Hls.Events.MANIFEST_PARSED, () => { if (adsClearedRef.current) videoEl.play().catch(() => {}); });
       hls.on(Hls.Events.FRAG_BUFFERED, () => { netRetryRef.current = 0; }); // healthy again → reset
+      // Live mid-roll: when playback reaches a fragment that opens a marked break
+      // (#EXT-X-CUE-OUT), play our mid-roll over it, then rejoin the live edge.
+      if (isLive) hls.on(Hls.Events.FRAG_CHANGED, (_, data) => {
+        const cue = breakStart(data.frag?.tagList);
+        if (!cue || !adsClearedRef.current || adBusyRef.current) return;
+        const key = `${data.frag.sn}:${data.frag.programDateTime || ""}`;
+        if (liveBreakSeenRef.current === key) return;
+        liveBreakSeenRef.current = key;
+        runAdBreak("mid_roll", () => {
+          const edge = hls.liveSyncPosition;
+          if (Number.isFinite(edge) && videoRef.current) videoRef.current.currentTime = edge;
+          videoRef.current?.play().catch(() => {});
+        }, { scope: "live", contentId: String(video.id).replace(/^ch-/, "") });
+      });
       hls.on(Hls.Events.ERROR, (_, d) => {
         if (!d.fatal) {
           // Non-fatal media hiccup — nudge recovery, keep playing.
@@ -507,12 +523,12 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
 
   // Mid- and post-rolls go through the same break player as the pre-roll, so
   // they share its timeouts, cleanup and reporting.
-  function runAdBreak(placement, onDone) {
+  function runAdBreak(placement, onDone, target = {}) {
     const element = videoRef.current;
     if (!element || !adContainerRef.current) { onDone(); return; }
     adBreakStopRef.current?.();
     adBreakStopRef.current = playAdBreak({ client: supabase, video: element, container: adContainerRef.current, placement,
-      scope: isEpisode ? "episode" : "movie", contentId: video.id,
+      scope: target.scope || (isEpisode ? "episode" : "movie"), contentId: target.contentId ?? video.id,
       onBusy: setAdPlaying, onManager: manager => { adsManagerRef.current = manager; },
       onReady: () => { adBreakStopRef.current = null; onDone(); },
     });
