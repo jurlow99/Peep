@@ -943,6 +943,7 @@ struct AdFrequencyPolicy {
 
     func record(_ event: String, adID: String = "") {
         Logger(subsystem: "tv.watchpeep.PeepTV", category: "CSAI").notice("Ad delivery event: \(event, privacy: .public)")
+        if isMidroll { print("CSAI Live mid-roll ad event: \(event)\(adID.isEmpty ? "" : " " + adID)") }
         guard let tag, seen.insert(event + ":" + adID).inserted else { return }
         if event == "impression", !isMidroll { frequency.recordStart() }
         guard let service, let userID = reportingUserID, service.session?.userId == userID else { return }
@@ -956,14 +957,20 @@ struct AdFrequencyPolicy {
             catch { Logger(subsystem: "tv.watchpeep.PeepTV", category: "CSAI").error("Internal ad reporting failed; provider SDK tracking is separate.") }
         }
     }
-    func beginMidroll(service: SupabaseService, tag: CSAITag, channelID: Int) {
-        guard !blocking, service.configuration?.isDevelopment == true, tag.is_test,
-              tag.scope == "live", (tag.content_id ?? "").isEmpty || tag.content_id == String(channelID), tag.active, tag.platforms.contains("tvos"),
-              URL(string: tag.tag_url)?.scheme?.lowercased() == "https" else { return }
+    /// Starts a live mid-roll over a marked break. Returns why it did not start, or nil.
+    @discardableResult
+    func beginMidroll(service: SupabaseService, tag: CSAITag, channelID: Int) -> String? {
+        if blocking { return "another ad is already showing" }
+        if service.configuration?.isDevelopment != true { return "not the dev environment" }
+        if !tag.is_test { return "tag \(tag.id) is not marked test" }
+        guard tag.scope == "live", (tag.content_id ?? "").isEmpty || tag.content_id == String(channelID) else { return "tag \(tag.id) is not for this channel" }
+        guard tag.active, tag.platforms.contains("tvos") else { return "tag \(tag.id) is off or not for Apple TV" }
+        guard URL(string: tag.tag_url)?.scheme?.lowercased() == "https" else { return "tag \(tag.id) URL is not https" }
         self.service = service; reportingUserID = service.session?.userId
         scope = "live"; contentID = String(channelID); session = UUID().uuidString
         seen = []; generation = UUID(); isMidroll = true; blocking = true; self.tag = tag
         record("request")
+        return nil
     }
 
     func finish() { resolve(true) }
@@ -1221,7 +1228,8 @@ private struct LiveMidrollModifier: ViewModifier {
                     let wasMuted = player.isMuted
                     mutedBeforeMidroll = wasMuted
                     player.isMuted = true; midrollActive = true
-                    gate.beginMidroll(service: service, tag: tag, channelID: channelID)
+                    if let reason = gate.beginMidroll(service: service, tag: tag, channelID: channelID) { trace("Live mid-roll did not start: \(reason)") }
+                    let started = ProcessInfo.processInfo.systemUptime
                     let deadline = ProcessInfo.processInfo.systemUptime + remaining
                     while !Task.isCancelled, gate.blocking, player.currentItem === attached,
                           service.session?.userId == account, ProcessInfo.processInfo.systemUptime < deadline {
@@ -1229,6 +1237,7 @@ private struct LiveMidrollModifier: ViewModifier {
                         do { try await Task.sleep(for: .milliseconds(100)) } catch { break }
                     }
                     if gate.blocking { gate.record(Task.isCancelled ? "cancel" : "timeout"); gate.finish() }
+                    trace("Live mid-roll ended after \(Int(ProcessInfo.processInfo.systemUptime - started))s of the \(Int(remaining))s break")
                     player.isMuted = wasMuted; mutedBeforeMidroll = nil; midrollActive = false
                 }
                 do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
