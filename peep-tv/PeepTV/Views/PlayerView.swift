@@ -1233,6 +1233,17 @@ struct IMAAdView: UIViewControllerRepresentable {
         focus.updateFocusIfNeeded()
     }
     override var preferredFocusEnvironments: [UIFocusEnvironment] { (allowSkip ? skipButton() : nil).map { [$0] } ?? super.preferredFocusEnvironments }
+    // The SDK's buttons keep our solid dark backing (readable over any creative), which
+    // also hides tvOS's own focus glow. Show focus the Peep way: a yellow outline.
+    override func didUpdateFocus(in context: UIFocusUpdateContext, with coordinator: UIFocusAnimationCoordinator) {
+        super.didUpdateFocus(in: context, with: coordinator)
+        for (view, focused) in [(context.previouslyFocusedView, false), (context.nextFocusedView, true)] {
+            guard let button = view as? UIButton, button.isDescendant(of: self.view) else { continue }
+            button.layer.borderColor = UIColor(red: 1, green: 0.84, blue: 0, alpha: 1).cgColor // #FFD600
+            button.layer.borderWidth = focused ? 5 : 0
+            button.layer.cornerRadius = 12
+        }
+    }
     // Live channel breaks can't be skipped: the remote's focus may never land on Skip.
     override func shouldUpdateFocus(in context: UIFocusUpdateContext) -> Bool {
         if !allowSkip, let next = context.nextFocusedView, let skip = skipButton(), next === skip || next.isDescendant(of: skip) { return false }
