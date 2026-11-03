@@ -5,6 +5,9 @@ import { SUPABASE_URL } from "../../lib/config";
 import { useChannelBlackout } from "../../hooks/useChannelBlackout";
 import { playAdBreak, resizeAdBreak, isSkippableBreak } from "../../lib/adBreak";
 import { titleCuePoints, formatBreakTime } from "../../lib/adBreaks";
+import { PAUSE_DELAY_MS, loadPauseAd, ping } from "../../lib/pauseAd";
+import { selectAdTag, recordAdEvent } from "../../lib/ads";
+import { hasAdPolicy, loadAdPolicy, placementAllowed } from "../../lib/adPolicy";
 import { trackLiveVideo } from "../../lib/liveViewing";
 import { useState, useEffect, useRef, useMemo } from "react";
 import Hls from "hls.js";
@@ -83,6 +86,29 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
   const adContainerRef = useRef(null);
   const [adLocked, setAdLocked] = useState(false); // live channel break: no skipping
   const [resumedAt, setResumedAt] = useState(null); // seconds we resumed from, while the Start over offer shows
+  // Pause ad: after PAUSE_DELAY_MS paused (never during an ad), ask the pause tag once
+  // for this pause; hide the picture the moment playback resumes.
+  const [pauseAd, setPauseAd] = useState(null); // { ad, tag, session }
+  const pauseTimerRef = useRef(null), pauseShownRef = useRef(false);
+  function handlePause() {
+    clearTimeout(pauseTimerRef.current);
+    const element = videoRef.current;
+    if (!element || element.ended || adBusyRef.current || !adsClearedRef.current || getEmbedUrl(video.url)) return;
+    const scope = isLive ? "live" : isEpisode ? "episode" : "movie";
+    const contentId = isLive ? String(video.id).replace(/^ch[-_]/, "") : video.id;
+    pauseTimerRef.current = setTimeout(async () => {
+      if (!videoRef.current?.paused || adBusyRef.current) return;
+      if (!hasAdPolicy()) await loadAdPolicy(supabase);
+      if (!placementAllowed("pause", scope)) return;
+      const { data } = await supabase.from("vast_tags").select("id,tag_url,scope,content_id,active,is_test,platforms").eq("active", true).eq("ad_type", "pause").order("id");
+      const tag = selectAdTag(data, scope, contentId);
+      if (!tag || !videoRef.current?.paused) return;
+      const ad = await loadPauseAd(tag.tag_url, adContext);
+      if (ad && videoRef.current?.paused && !adBusyRef.current) { pauseShownRef.current = false; setPauseAd({ ad, tag, scope, contentId, session: crypto.randomUUID() }); }
+    }, PAUSE_DELAY_MS);
+  }
+  function handlePlay() { clearTimeout(pauseTimerRef.current); setPauseAd(null); }
+  useEffect(() => () => clearTimeout(pauseTimerRef.current), []);
   useEffect(() => { if (resumedAt == null) return; const t = setTimeout(() => setResumedAt(null), 10000); return () => clearTimeout(t); }, [resumedAt]);
   const adsManagerRef = useRef(null);
   const midrollCuesRef = useRef([]);      // seconds into the title where a mid-roll plays
@@ -662,13 +688,25 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
               <video ref={videoRef} controls={!adPlaying} controlsList="nofullscreen" style={{ width: "100%", height: "100%", display: "block", cursor: isFullscreen ? "pointer" : "default" }} poster={video.thumbnail}
                 onClick={isFullscreen ? togglePlayPause : undefined}
                 onError={() => { if (adsClearedRef.current && !adBusyRef.current && (!Hls.isSupported() || !isHlsUrl(video.url))) setPlaybackError(true); }}
-                onTimeUpdate={handleTimeUpdate} onEnded={handleEnded} onLoadedMetadata={handleLoadedMetadata}>
+                onTimeUpdate={handleTimeUpdate} onEnded={handleEnded} onLoadedMetadata={handleLoadedMetadata} onPause={handlePause} onPlay={handlePlay}>
                 {!isHlsUrl(video.url) && <source src={video.url} type="video/mp4" />}
               </video>
             )}
             <div ref={adContainerRef} style={{ position: "absolute", inset: 0, zIndex: 10, display: adPlaying ? "block" : "none", pointerEvents: adPlaying ? "auto" : "none" }} />
             {/* Live channel breaks can't be skipped: a clear layer over the ad catches clicks on its Skip button. */}
             {adPlaying && adLocked && <div aria-hidden="true" style={{ position: "absolute", inset: 0, zIndex: 11 }} />}
+            {pauseAd && !adPlaying && (
+              <div style={{ position: "absolute", right: "4%", top: "50%", transform: "translateY(-50%)", zIndex: 12, width: "min(36%, 520px)", pointerEvents: "auto" }}>
+                <button type="button" title={pauseAd.ad.clickThrough ? "Learn more" : pauseAd.ad.title} disabled={!pauseAd.ad.clickThrough}
+                  onClick={() => { ping(pauseAd.ad.clickTracking); recordAdEvent(pauseAd.tag, pauseAd.session, "click", pauseAd.scope, pauseAd.contentId); window.open(pauseAd.ad.clickThrough, "_blank", "noopener"); }}
+                  style={{ display: "block", width: "100%", padding: 0, border: 0, borderRadius: 12, overflow: "hidden", background: "#000", cursor: pauseAd.ad.clickThrough ? "pointer" : "default", boxShadow: "0 12px 40px rgba(0,0,0,0.55)", aspectRatio: `${pauseAd.ad.width} / ${pauseAd.ad.height}` }}>
+                  <img src={pauseAd.ad.image} alt={pauseAd.ad.title} style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+                    onLoad={() => { if (pauseShownRef.current) return; pauseShownRef.current = true; ping(pauseAd.ad.impressions); recordAdEvent(pauseAd.tag, pauseAd.session, "impression", pauseAd.scope, pauseAd.contentId); }}
+                    onError={() => setPauseAd(null)} />
+                </button>
+                <span style={{ position: "absolute", top: 10, left: 10, background: "rgba(0,0,0,0.7)", color: "#fff", fontSize: 12, fontWeight: 700, letterSpacing: 0.5, borderRadius: 6, padding: "3px 8px", pointerEvents: "none" }}>Ad</span>
+              </div>
+            )}
             {resumedAt != null && !adPlaying && !isLive && (
               <div role="status" style={{ position: "absolute", left: 24, bottom: 76, zIndex: 12, display: "flex", alignItems: "center", gap: 12, background: "rgba(0,0,0,0.78)", color: "#fff", borderRadius: 999, padding: "8px 8px 8px 16px", fontSize: 14, fontWeight: 600 }}>
                 <span>Resumed at {formatBreakTime(resumedAt)}</span>

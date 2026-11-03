@@ -2,7 +2,7 @@
 // so the panel stays thin and the math is testable. Delivery telemetry only:
 // nothing here is a billing figure.
 export const AD_EVENTS = ['request', 'impression', 'complete', 'skip', 'error', 'timeout', 'cancel'];
-export const PLACEMENT_LABELS = { pre_roll: 'Pre-roll', mid_roll: 'Mid-roll', post_roll: 'Post-roll' };
+export const PLACEMENT_LABELS = { pre_roll: 'Pre-roll', mid_roll: 'Mid-roll', post_roll: 'Post-roll', pause: 'Pause' };
 export const PLATFORM_LABELS = { web: 'Browser', tvos: 'Apple TV' };
 
 function pct(part, whole) { return whole > 0 ? Math.round(part / whole * 100) : null; }

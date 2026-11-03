@@ -8,13 +8,14 @@ export const POSITIONS = [
   { value: 'pre_roll', title: 'Pre-roll', hint: 'Before a movie, episode, live channel or multiview starts. Browser and Apple TV.' },
   { value: 'mid_roll', title: 'Mid-roll', hint: 'Inside a movie or episode at the times set in Ad rules, or over a live channel\'s own marked break. Browser and Apple TV.' },
   { value: 'post_roll', title: 'Post-roll', hint: 'After a movie or episode ends, before Up next. Browser only.' },
+  { value: 'pause', title: 'Pause', hint: 'A picture shown while a viewer has paused a movie, episode or channel. Browser and Apple TV.' },
 ];
 
 export const SCOPES = [
-  { value: 'global', label: 'All content', positions: ['pre_roll', 'mid_roll', 'post_roll'] },
-  { value: 'movie', label: 'Movies', positions: ['pre_roll', 'mid_roll', 'post_roll'], picker: 'movie' },
-  { value: 'episode', label: 'Episodes', positions: ['pre_roll', 'mid_roll', 'post_roll'], picker: 'episode' },
-  { value: 'live', label: 'Live channels', positions: ['pre_roll', 'mid_roll'], picker: 'live' },
+  { value: 'global', label: 'All content', positions: ['pre_roll', 'mid_roll', 'post_roll', 'pause'] },
+  { value: 'movie', label: 'Movies', positions: ['pre_roll', 'mid_roll', 'post_roll', 'pause'], picker: 'movie' },
+  { value: 'episode', label: 'Episodes', positions: ['pre_roll', 'mid_roll', 'post_roll', 'pause'], picker: 'episode' },
+  { value: 'live', label: 'Live channels', positions: ['pre_roll', 'mid_roll', 'pause'], picker: 'live' },
   { value: 'multiview', label: 'Multiview entry', positions: ['pre_roll'] },
 ];
 

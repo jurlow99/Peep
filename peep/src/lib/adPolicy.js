@@ -15,6 +15,7 @@ export const DEFAULT_AD_POLICY = Object.freeze({
   midroll_every_minutes: 15,
   midroll_max_breaks: 4,
   postroll_enabled: true,   // browser VOD only
+  pause_enabled: true,      // picture while the viewer has paused (web and Apple TV)
 });
 
 const LIMITS = { min_gap_minutes: [0, 1440], midroll_min_minutes: [1, 600], midroll_every_minutes: [1, 240], midroll_max_breaks: [0, 20] };
@@ -72,6 +73,7 @@ export function placementAllowed(placement, scope, policy = getAdPolicy()) {
   if (!policy.enabled) return false;
   if (placement === 'mid_roll') return policy.midroll_enabled;
   if (placement === 'post_roll') return policy.postroll_enabled;
+  if (placement === 'pause') return policy.pause_enabled;
   if (scope === 'live') return policy.live_entry;
   if (scope === 'multiview') return policy.multiview_entry;
   return true;

@@ -614,6 +614,80 @@ final class CatalogTests: XCTestCase {
         XCTAssertEqual(manual.liveChannels(from: channels).map(\.id), [3,1])
     }
 
+    func testPauseAdReadsTheNonLinearPicture() {
+        let vast = """
+        <VAST version="4.2" xmlns="http://www.iab.com/VAST"><Ad id="1"><InLine><AdTitle>Farris Cola</AdTitle>
+        <Impression><![CDATA[https://t.example/imp]]></Impression><Impression><![CDATA[http://insecure.example/imp]]></Impression>
+        <Creatives><Creative><NonLinearAds><NonLinear width="800" height="450">
+        <StaticResource creativeType="image/png"><![CDATA[ https://cdn.example/pause.png ]]></StaticResource>
+        </NonLinear></NonLinearAds></Creative></Creatives></InLine></Ad></VAST>
+        """
+        let ad = PauseAd.parse(Data(vast.utf8))
+        XCTAssertEqual(ad?.image, URL(string: "https://cdn.example/pause.png"))
+        XCTAssertEqual(ad?.width, 800); XCTAssertEqual(ad?.height, 450); XCTAssertEqual(ad?.title, "Farris Cola")
+        XCTAssertEqual(ad?.impressions, [URL(string: "https://t.example/imp")!]) // http trackers dropped
+        XCTAssertNil(PauseAd.parse(Data(#"<VAST version="4.2" xmlns="http://www.iab.com/VAST"></VAST>"#.utf8)))
+        XCTAssertNil(PauseAd.parse(Data("not xml".utf8)))
+        XCTAssertEqual(AdPolicy.parse(#"{"pause_enabled":false}"#).pause_enabled, false)
+        XCTAssertEqual(AdPolicy.parse(nil).pause_enabled, true)
+    }
+
+    func testPauseAdReadsTheNonLinearPicture() {
+        let vast = """
+        <VAST version="4.2" xmlns="http://www.iab.com/VAST"><Ad id="1"><InLine><AdTitle>Farris Cola</AdTitle>
+        <Impression><![CDATA[https://t.example/imp]]></Impression><Impression><![CDATA[http://insecure.example/imp]]></Impression>
+        <Creatives><Creative><NonLinearAds><NonLinear width="800" height="450">
+        <StaticResource creativeType="image/png"><![CDATA[ https://cdn.example/pause.png ]]></StaticResource>
+        </NonLinear></NonLinearAds></Creative></Creatives></InLine></Ad></VAST>
+        """
+        let ad = PauseAd.parse(Data(vast.utf8))
+        XCTAssertEqual(ad?.image, URL(string: "https://cdn.example/pause.png"))
+        XCTAssertEqual(ad?.width, 800); XCTAssertEqual(ad?.height, 450); XCTAssertEqual(ad?.title, "Farris Cola")
+        XCTAssertEqual(ad?.impressions, [URL(string: "https://t.example/imp")!]) // http trackers dropped
+        XCTAssertNil(PauseAd.parse(Data(#"<VAST version="4.2" xmlns="http://www.iab.com/VAST"></VAST>"#.utf8)))
+        XCTAssertNil(PauseAd.parse(Data("not xml".utf8)))
+        XCTAssertEqual(AdPolicy.parse(#"{"pause_enabled":false}"#).pause_enabled, false)
+        XCTAssertEqual(AdPolicy.parse(nil).pause_enabled, true)
+    }
+
+    // TEMP-PAUSE-PROBE: real PlaybackView for Full Force; skip the pre-roll, pause, snapshot.
+    @MainActor func testTempPauseProbe() async throws {
+        let shots = "/private/tmp/claude-501/-Users-jacob-Documents-Codex-2026-10-20-task-Peep/76bfc796-eeef-4bbb-9079-d5a60fcd047e/scratchpad/shots"
+        let creds = try JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: shots + "/../sb/review-admin.json"))) as! [String: String]
+        UserDefaults.standard.removeObject(forKey: "peep.preroll.lastStartedAt")
+        let service = SupabaseService(configuration: try AppConfiguration.load(), session: nil, persistSession: { _ in }) { try await URLSession.shared.data(for: $0) }
+        try await service.signIn(email: creds["email"]!, password: creds["password"]!)
+        let rows: [Video] = try await service.get("videos", query: ["id": "eq.e9682ac9-8aac-444c-a6bd-8b9447d15af0", "limit": "1"])
+        let video = try XCTUnwrap(rows.first)
+        let root = PlaybackView(url: video.videoURL, title: video.title, identity: PlaybackIdentity(id: video.id, type: "movie"), startFromBeginning: true).environmentObject(service)
+        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first!
+        let window = UIWindow(windowScene: scene); window.rootViewController = UIHostingController(rootView: root); window.makeKeyAndVisible()
+        func find(_ v: UIView) -> AdSkipButton? { if let b = v as? AdSkipButton { return b }; for c in v.subviews { if let f = find(c) { return f } }; return nil }
+        func player(_ vc: UIViewController?) -> AVPlayer? {
+            guard let vc else { return nil }
+            if let p = (vc as? AVPlayerViewController)?.player { return p }
+            for child in vc.children { if let p = player(child) { return p } }
+            return player(vc.presentedViewController)
+        }
+        var paused = false
+        for second in 1...70 {
+            try await Task.sleep(for: .seconds(1))
+            if let skip = find(window), !skip.isHidden, skip.isFocused { skip.sendActions(for: .primaryActionTriggered) }
+            if !paused, let p = player(window.rootViewController), p.rate > 0, find(window)?.isHidden ?? true, second > 5 {
+                try await Task.sleep(for: .seconds(3)); p.pause(); paused = true; print("PROBE paused at t=\(second)s, content \(Int(p.currentTime().seconds))s")
+                try await Task.sleep(for: .seconds(5))
+                let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in window.drawHierarchy(in: window.bounds, afterScreenUpdates: true) }
+                try image.pngData()?.write(to: URL(fileURLWithPath: shots + "/tv-pause.png"))
+                print("PROBE snapshot taken while paused")
+                p.play(); try await Task.sleep(for: .seconds(2))
+                let after = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in window.drawHierarchy(in: window.bounds, afterScreenUpdates: true) }
+                try after.pngData()?.write(to: URL(fileURLWithPath: shots + "/tv-pause-after-play.png"))
+                print("PROBE snapshot after play"); break
+            }
+        }
+        window.isHidden = true
+    }
+
     func testMidrollCuePointsMatchTheWebRule() {
         let policy = AdPolicy.parse(#"{"enabled":true,"midroll_enabled":true,"midroll_min_minutes":20,"midroll_every_minutes":15,"midroll_max_breaks":4}"#)
         XCTAssertEqual(policy.midrollCuePoints(duration: 95 * 60), [900, 1800, 2700, 3600])

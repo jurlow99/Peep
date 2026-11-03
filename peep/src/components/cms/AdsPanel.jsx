@@ -4,6 +4,7 @@ import { SUPABASE_URL, IS_DEV_DB } from "../../lib/config";
 import { TEST_VAST_URL } from "../../lib/ads";
 import { DEFAULT_AD_POLICY, loadAdPolicy, saveAdPolicy, parseAdPolicy, midrollCuePoints } from "../../lib/adPolicy";
 import { previewAdTag } from "../../lib/adBreak";
+import { loadPauseAd } from "../../lib/pauseAd";
 import { summarizeAdEvents, PLACEMENT_LABELS, PLATFORM_LABELS } from "../../lib/adsReport";
 import { EMPTY_AD, POSITIONS, SCOPES, POSITION_LABELS, scopesForPosition, tagProblem, tagPayload, describeTarget, isUuid } from "../../lib/adsAdmin";
 import "./AdsPanel.css";
@@ -154,6 +155,14 @@ export default function AdsPanel({ showToast, logAudit = () => {} }) {
     previewStop.current?.();
     const problem = tagProblem({ ...form, platforms: form.platforms?.length ? form.platforms : ["web"] }, IS_DEV_DB);
     if (problem && !/Apple TV|Browser|at least one/.test(problem)) { showToast(problem, "error"); return; }
+    if (form.ad_type === "pause") {
+      // A pause ad is one picture, not a video: fetch it and show it here.
+      setPreview({ ok: null, text: "Asking the ad server…" });
+      loadPauseAd(form.tag_url.trim(), { show: "Preview" }).then(ad => setPreview(ad
+        ? { ok: true, text: `Pause ad found: ${ad.title}. This is what viewers see while paused.`, image: ad.image }
+        : { ok: false, text: "The ad server sent no pause ad. That's normal when no pause campaign is running." }));
+      return;
+    }
     if (!previewVideo.current || !previewSurface.current) return;
     setPreview({ ok: null, text: "Loading the ad SDK…" });
     previewStop.current = previewAdTag({ tagUrl: form.tag_url.trim(), video: previewVideo.current, container: previewSurface.current, onStatus: setPreview });
@@ -250,7 +259,8 @@ export default function AdsPanel({ showToast, logAudit = () => {} }) {
             <button type="button" onClick={runPreview} disabled={!form.tag_url.trim()}>Play this tag</button>
             {preview && <button type="button" onClick={() => previewStop.current?.()}>Stop</button>}
           </div>
-          <div className="ads-preview" style={{ display: preview ? "block" : "none" }}>
+          {preview?.image && <img className="ads-preview-image" src={preview.image} alt="Pause ad preview" />}
+          <div className="ads-preview" style={{ display: preview && form.ad_type !== "pause" ? "block" : "none" }}>
             <video ref={previewVideo} muted playsInline />
             <div ref={previewSurface} className="ads-preview-surface" />
           </div>
@@ -315,6 +325,11 @@ export default function AdsPanel({ showToast, logAudit = () => {} }) {
             <strong>Post-roll</strong>
             <small>One break after a movie or episode ends, before the Up next countdown. Browser only.</small>
             <label className="ads-check"><input type="checkbox" checked={!!draft.postroll_enabled} onChange={e => setRule("postroll_enabled", e.target.checked)} />Post-roll on</label>
+          </div>
+          <div className="ads-rule">
+            <strong>Pause ads</strong>
+            <small>A picture from the pause tag while a viewer has paused for 2 seconds, gone the moment they press play. Browser and Apple TV.</small>
+            <label className="ads-check"><input type="checkbox" checked={!!draft.pause_enabled} onChange={e => setRule("pause_enabled", e.target.checked)} />Pause ads on</label>
           </div>
         </div>
         <div className="ads-actions">

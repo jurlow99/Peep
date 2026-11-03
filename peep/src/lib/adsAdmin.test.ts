@@ -29,5 +29,7 @@ it('describes targets with titles when known and narrows scopes by position', ()
   expect(describeTarget({ scope: 'movie', content_id: 'abc' })).toBe('Movies · #abc');
   expect(describeTarget({ scope: 'global' })).toBe('All content');
   expect(scopesForPosition('post_roll').map(s => s.value)).toEqual(['global', 'movie', 'episode']);
+  expect(scopesForPosition('pause').map(s => s.value)).toEqual(['global', 'movie', 'episode', 'live']);
+  expect(tagProblem({ ...ok, ad_type: 'pause', platforms: ['web', 'tvos'] }, true)).toBeNull();
   expect(scopesForPosition('pre_roll').map(s => s.value)).toContain('multiview');
 });

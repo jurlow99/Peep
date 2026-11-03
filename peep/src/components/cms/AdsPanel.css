@@ -76,3 +76,5 @@
 .ads td.num,.ads th.num{text-align:right;font-variant-numeric:tabular-nums}
 .ads :is(button,input,select,textarea):focus-visible{outline:2px solid #818cf8;outline-offset:2px}
 @media(max-width:900px){.ads-row{grid-template-columns:44px 1fr;row-gap:8px}}
+
+.ads-preview-image { display: block; max-width: 420px; width: 100%; border-radius: 10px; margin-top: 12px; }

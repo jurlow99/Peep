@@ -26,6 +26,9 @@ Deno.serve(async (request: Request) => {
     const body = peepPod(Number(params.get("seconds") || 30), skip);
     return new Response(request.method === "HEAD" ? null : body, { headers: { ...headers, "Cache-Control": "no-store" } });
   }
+  if (variant === "pause") {
+    return new Response(request.method === "HEAD" ? null : PAUSE_AD, { headers: { ...headers, "Cache-Control": "no-store" } });
+  }
   if (variant !== null && variant !== "wrapper") return new Response("Unknown test variant", { status: 400, headers });
   return new Response(request.method === "HEAD" ? null : variant === "wrapper" ? wrapper : xml, { headers });
 });
@@ -90,3 +93,26 @@ function peepPod(seconds: number, skip = 0): string {
   }).join("\n");
   return `<VAST version="4.2" xmlns="http://www.iab.com/VAST">\n${ads}\n</VAST>`;
 }
+
+// variant=pause: a Peep test pause ad (VAST 4.2 NonLinear picture), the same shape
+// Steep's peep-pause replies with, for checking the players' pause-ad overlay.
+const PAUSE_AD = `<VAST version="4.2" xmlns="http://www.iab.com/VAST">
+  <Ad id="peep-test-pause" sequence="1">
+    <InLine>
+      <AdSystem version="1">Peep test ad server</AdSystem>
+      <AdTitle>Peep test pause ad - Farris Cola</AdTitle>
+      <Impression><![CDATA[https://example.com/peep-test-pause-impression]]></Impression>
+      <Creatives>
+        <Creative id="peep-test-pause">
+          <NonLinearAds>
+            <NonLinear id="peep-test-pause" width="800" height="450" minSuggestedDuration="00:00:30">
+              <StaticResource creativeType="image/png"><![CDATA[https://cuwdyedmmnpklufduaho.supabase.co/storage/v1/object/public/ad-creatives/test/peep-pause-test.png]]></StaticResource>
+              <NonLinearClickThrough><![CDATA[https://watchpeep.tv]]></NonLinearClickThrough>
+              <NonLinearClickTracking><![CDATA[https://example.com/peep-test-pause-click]]></NonLinearClickTracking>
+            </NonLinear>
+          </NonLinearAds>
+        </Creative>
+      </Creatives>
+    </InLine>
+  </Ad>
+</VAST>`;

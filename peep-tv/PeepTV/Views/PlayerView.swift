@@ -425,6 +425,9 @@ struct PlayerView: View {
     let introWindow: ClosedRange<Double>?
     let adBreaks: [Int]?
     @State private var offerSkip = false
+    @State private var pauseAd: PauseAd?
+    @State private var pauseAdCounted = false
+    @State private var pauseKey = 0 // bumps on every pause, so each pause asks at most once
     let related: [Video]
     let openRelated: (Video) -> Void
     let playNext: () -> Void
@@ -617,6 +620,40 @@ struct PlayerView: View {
             guard !Task.isCancelled else { return }
             playNext()
         }
+        // Pause ad: on the right, clear of the native controls; never takes focus.
+        .overlay(alignment: .trailing) {
+            if let pauseAd, !adGate.blocking, !showNext, !showEnd {
+                AsyncImage(url: pauseAd.image) { phase in
+                    if let image = phase.image {
+                        image.resizable().aspectRatio(pauseAd.width / max(1, pauseAd.height), contentMode: .fit)
+                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            .overlay(alignment: .topLeading) {
+                                Text("Ad").font(.system(size: 18, weight: .bold)).padding(.horizontal, 10).padding(.vertical, 4)
+                                    .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 8)).padding(12)
+                            }
+                            .shadow(color: .black.opacity(0.55), radius: 30, y: 12)
+                            .onAppear { countPauseAd() }
+                    }
+                }
+                .frame(width: 620).padding(.trailing, 90).allowsHitTesting(false).transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: pauseAd)
+        // Ask for a pause ad ~2 s into a pause (once per pause); drop it the moment play resumes.
+        .task(id: "\(contentStarted):\(pauseKey)") {
+            guard contentStarted, model.player.timeControlStatus == .paused, pauseAd == nil else { if model.player.timeControlStatus != .paused { pauseAd = nil }; return }
+            do { try await Task.sleep(for: .seconds(2)) } catch { return }
+            guard model.player.timeControlStatus == .paused, !adGate.blocking, !showNext, !showEnd, model.errorMessage == nil else { return }
+            let scope = liveChannelID != nil ? "live" : (identity?.type == "short" ? "movie" : identity?.type ?? "movie")
+            let context = liveChannelID != nil ? AdContext(channel: title) : AdContext(show: title)
+            guard let (ad, _) = await PauseAd.load(service: supabase, scope: scope, contentID: liveChannelID.map(String.init) ?? identity?.id ?? "", context: context),
+                  !Task.isCancelled, model.player.timeControlStatus == .paused, !adGate.blocking else { return }
+            pauseAdCounted = false; pauseAd = ad
+        }
+        .onReceive(model.player.publisher(for: \.timeControlStatus)) { status in
+            if status != .paused { pauseAd = nil }
+            pauseKey = status == .paused ? pauseKey + 1 : pauseKey
+        }
         .overlay { CSAIOverlay(gate: adGate, cancel: { dismiss() }) }
         .liveMidroll(player: model.player, channelID: liveChannelID, gate: adGate, ready: contentStarted)
         .liveViewing(player: model.player, channelID: adGate.blocking ? nil : liveChannelID)
@@ -669,6 +706,11 @@ struct PlayerView: View {
             model.stop()
         }
         .onExitCommand { dismiss() }
+    }
+    private func countPauseAd() {
+        guard !pauseAdCounted, let ad = pauseAd else { return }
+        pauseAdCounted = true
+        for url in ad.impressions { Task { _ = try? await URLSession.shared.data(from: url) } }
     }
     private func skipIntro() {
         guard let introWindow else { return }
@@ -932,9 +974,10 @@ struct AdPolicy: Decodable {
     var midroll_min_minutes = 20
     var midroll_every_minutes = 15
     var midroll_max_breaks = 4
+    var pause_enabled = true
     static let fallback = AdPolicy()
     init() {}
-    private enum CodingKeys: String, CodingKey { case enabled, min_gap_minutes, live_entry, multiview_entry, midroll_enabled, midroll_min_minutes, midroll_every_minutes, midroll_max_breaks }
+    private enum CodingKeys: String, CodingKey { case enabled, min_gap_minutes, live_entry, multiview_entry, midroll_enabled, midroll_min_minutes, midroll_every_minutes, midroll_max_breaks, pause_enabled }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         let number = { (key: CodingKeys, fallback: Int, range: ClosedRange<Int>) in max(range.lowerBound, min(range.upperBound, (try? values.decode(Int.self, forKey: key)) ?? fallback)) }
@@ -946,6 +989,7 @@ struct AdPolicy: Decodable {
         midroll_min_minutes = number(.midroll_min_minutes, 20, 1...600)
         midroll_every_minutes = number(.midroll_every_minutes, 15, 1...240)
         midroll_max_breaks = number(.midroll_max_breaks, 4, 0...20)
+        pause_enabled = (try? values.decode(Bool.self, forKey: .pause_enabled)) ?? true
     }
     /// Seconds into a title where a mid-roll plays: every N minutes, only in titles of
     /// at least M minutes, never inside the last two minutes, at most K. Same as the web.
@@ -1326,6 +1370,61 @@ struct IMAAdView: UIViewControllerRepresentable {
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         if presses.contains(where: { $0.type == .menu }) { clean(); cancelled(); return }
         super.pressesBegan(presses, with: event)
+    }
+}
+
+/// Pause ad: a picture (VAST NonLinear) shown while the viewer has paused. Same rules
+/// as the web (peep/src/lib/pauseAd.js): asked ~2 s into a pause, once per pause,
+/// counted when the picture is on screen, hidden the moment play resumes.
+struct PauseAd: Equatable {
+    let image: URL
+    let width: Double
+    let height: Double
+    let impressions: [URL]
+    let title: String
+
+    static func parse(_ data: Data) -> PauseAd? {
+        let reader = PauseAdXML()
+        let parser = XMLParser(data: data); parser.delegate = reader
+        guard parser.parse(), let image = reader.image else { return nil }
+        return PauseAd(image: image, width: reader.width ?? 16, height: reader.height ?? 9, impressions: reader.impressions, title: reader.title ?? "Ad")
+    }
+
+    /// Asks the most specific active Apple TV pause tag; nil on no tag, no ad or any failure.
+    static func load(service: SupabaseService, scope: String, contentID: String, context: AdContext) async -> (PauseAd, CSAITag)? {
+        let policy = await CSAIGate.loadPolicy(service)
+        guard policy.enabled, policy.pause_enabled else { return nil }
+        let tags: [CSAITag] = (try? await service.get("vast_tags", query: ["select": "id,tag_url,scope,content_id,active,is_test,platforms", "active": "eq.true", "ad_type": "eq.pause", "order": "id.asc"], timeout: 4)) ?? []
+        guard let tag = CSAITag.select(tags, scope: scope, contentID: contentID)?.filled(breakSeconds: nil, context: context),
+              let url = URL(string: tag.tag_url) else { return nil }
+        var request = URLRequest(url: url); request.timeoutInterval = 4
+        guard let (data, response) = try? await URLSession.shared.data(for: request), (response as? HTTPURLResponse)?.statusCode == 200,
+              let ad = parse(data) else { return nil }
+        return (ad, tag)
+    }
+}
+
+private final class PauseAdXML: NSObject, XMLParserDelegate {
+    var image: URL?, width: Double?, height: Double?, impressions: [URL] = [], title: String?
+    private var element = "", text = "", inAd = false, done = false
+    func parser(_ parser: XMLParser, didStartElement name: String, namespaceURI: String?, qualifiedName: String?, attributes: [String: String] = [:]) {
+        if name == "Ad" { inAd = true }
+        if name == "NonLinear", width == nil { width = attributes["width"].flatMap(Double.init); height = attributes["height"].flatMap(Double.init) }
+        element = name; text = ""
+    }
+    func parser(_ parser: XMLParser, foundCharacters string: String) { text += string }
+    func parser(_ parser: XMLParser, foundCDATA CDATABlock: Data) { text += String(data: CDATABlock, encoding: .utf8) ?? "" }
+    func parser(_ parser: XMLParser, didEndElement name: String, namespaceURI: String?, qualifiedName: String?) {
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines); text = ""
+        guard inAd, !done else { return }
+        let secure = URL(string: value).flatMap { $0.scheme?.lowercased() == "https" ? $0 : nil }
+        switch name {
+        case "StaticResource": if image == nil { image = secure }
+        case "Impression": if let secure { impressions.append(secure) }
+        case "AdTitle": if title == nil, !value.isEmpty { title = value }
+        case "Ad": done = true // only the first ad
+        default: break
+        }
     }
 }
 
