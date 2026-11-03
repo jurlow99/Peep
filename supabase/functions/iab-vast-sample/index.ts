@@ -31,7 +31,14 @@ Deno.serve((request: Request) => {
 // variant=peep: Peep-branded test spots (15 s and 30 s, public dev bucket), returned
 // as a VAST ad pod sized to the break: as many 30 s spots as fit, then a 15 s one.
 // Under 15 s returns an empty VAST, like a real ad server with nothing to sell.
-const CREATIVE = (s: number) => `https://cuwdyedmmnpklufduaho.supabase.co/storage/v1/object/public/ad-creatives/test/peep-test-ad-${s}s.mp4`;
+// Each slot gets a random look/tune from STYLES, never the same one twice in a pod.
+const STYLES = ["fractal", "life", "bars", "cells", "noise", "gradient"];
+const CREATIVE = (style: string, s: number) => `https://cuwdyedmmnpklufduaho.supabase.co/storage/v1/object/public/ad-creatives/test/peep-test-${style}-${s}s.mp4`;
+function shuffled(items: string[]): string[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [copy[i], copy[j]] = [copy[j], copy[i]]; }
+  return copy;
+}
 function podFor(seconds: number): number[] {
   const budget = Number.isFinite(seconds) ? Math.min(600, Math.max(0, Math.floor(seconds))) : 30;
   const spots: number[] = [];
@@ -42,22 +49,27 @@ function podFor(seconds: number): number[] {
 }
 function peepPod(seconds: number): string {
   const spots = podFor(seconds);
-  const ads = spots.map((length, i) => `  <Ad id="peep-test-${length}s-${i + 1}" sequence="${i + 1}">
+  let deck: string[] = [];
+  const ads = spots.map((length, i) => {
+    if (!deck.length) deck = shuffled(STYLES);
+    const style = deck.pop()!;
+    return `  <Ad id="peep-test-${style}-${length}s-${i + 1}" sequence="${i + 1}">
     <InLine>
       <AdSystem version="1">Peep test ad server</AdSystem>
-      <AdTitle>Peep test ad ${i + 1} of ${spots.length} - ${length}s</AdTitle>
+      <AdTitle>Peep test ad ${i + 1} of ${spots.length} - ${style} ${length}s</AdTitle>
       <Impression><![CDATA[https://example.com/peep-test-impression]]></Impression>
       <Creatives>
-        <Creative id="peep-test-${length}s" sequence="1">
+        <Creative id="peep-test-${style}-${length}s" sequence="1">
           <Linear>
             <Duration>00:00:${String(length).padStart(2, "0")}</Duration>
             <MediaFiles>
-              <MediaFile delivery="progressive" type="video/mp4" width="1920" height="1080" codec="H.264" bitrate="200"><![CDATA[${CREATIVE(length)}]]></MediaFile>
+              <MediaFile delivery="progressive" type="video/mp4" width="1920" height="1080" codec="H.264" bitrate="200"><![CDATA[${CREATIVE(style, length)}]]></MediaFile>
             </MediaFiles>
           </Linear>
         </Creative>
       </Creatives>
     </InLine>
-  </Ad>`).join("\n");
+  </Ad>`;
+  }).join("\n");
   return `<VAST version="4.2" xmlns="http://www.iab.com/VAST">\n${ads}\n</VAST>`;
 }
