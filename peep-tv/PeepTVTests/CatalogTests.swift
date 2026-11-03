@@ -642,6 +642,11 @@ final class CatalogTests: XCTestCase {
                        "https://ads.invalid/v?dur=90&ms=90000&channel=OAN%20Plus&show=News%20%26%20Views&genre=News&device=tvos&ifa=&lmt=1")
         XCTAssertEqual(tag.filled(breakSeconds: nil).tag_url,
                        "https://ads.invalid/v?dur=30&ms=30000&channel=&show=&genre=&device=tvos&ifa=&lmt=1")
+        let channel = CSAITag(id: 4, tag_url: "https://ads.invalid/v?c=[CHANNEL]", scope: "live", content_id: nil, active: true, is_test: true, platforms: ["tvos"])
+        for (raw, sent) in [("Dog the Bounty Hunter (1080p)", "Dog%20the%20Bounty%20Hunter"), ("Dog the Bounty Hunter", "Dog%20the%20Bounty%20Hunter"),
+                            ("ESPN (United States) HD (720p)", "ESPN%20%28United%20States%29%20HD"), ("Formula 1 AntenaPlay (576p) [Not 24/7]", "Formula%201%20AntenaPlay")] {
+            XCTAssertEqual(channel.filled(breakSeconds: nil, context: AdContext(channel: raw)).tag_url, "https://ads.invalid/v?c=\(sent)")
+        }
         let skip = CSAITag(id: 3, tag_url: "https://ads.invalid/v?skip=[SKIPPABLE]", scope: "live", content_id: nil, active: true, is_test: true, platforms: ["tvos"])
         XCTAssertEqual(skip.filled(breakSeconds: nil).tag_url, "https://ads.invalid/v?skip=1")
         XCTAssertEqual(skip.filled(breakSeconds: 60, skippable: false).tag_url, "https://ads.invalid/v?skip=0")

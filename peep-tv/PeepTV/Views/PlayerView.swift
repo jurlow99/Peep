@@ -898,7 +898,7 @@ struct CSAITag: Decodable, Identifiable {
         let safe = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))
         let text = { (value: String) in value.trimmingCharacters(in: .whitespaces).addingPercentEncoding(withAllowedCharacters: safe) ?? "" }
         let values = ["BREAK_SECONDS": String(seconds), "BREAK_MS": String(seconds * 1000),
-                      "CHANNEL": text(context.channel), "SHOW": text(context.show), "GENRE": text(context.genre),
+                      "CHANNEL": text(BrowsePresentation.channelName(context.channel)), // one clean spelling per channel, like the web "SHOW": text(context.show), "GENRE": text(context.genre),
                       "DEVICE": "tvos", "DEVICE_ID": text(deviceID), "IFA": "", "LMT": "1", "SKIPPABLE": skippable ? "1" : "0"]
         var copy = self
         for (key, value) in values { copy.tag_url = copy.tag_url.replacingOccurrences(of: "[\(key)]", with: value) }
