@@ -479,7 +479,8 @@ struct PlayerView: View {
                     // Under a live mid-roll the player keeps running but must not hold the remote,
                     // or the ad's Skip button can never take focus.
                     NativePlayer(player: model.player, interactive: !adGate.blocking, proposal: proposal, onAcceptProposal: nextEpisode == nil ? nil : playNext,
-                                 skipIntro: offerSkip && introWindow != nil ? { skipIntro() } : nil).ignoresSafeArea()
+                                 skipIntro: offerSkip && introWindow != nil ? { skipIntro() } : nil,
+                                 startOver: liveChannelID == nil && identity != nil ? { watchAgain() } : nil).ignoresSafeArea()
                     if let metadata, metadata.audioOnly { AudioArtworkOverlay(metadata: metadata) }
                 }
             }
@@ -711,11 +712,16 @@ struct NativePlayer: UIViewControllerRepresentable {
     var proposal: AVContentProposal? = nil
     var onAcceptProposal: (() -> Void)? = nil
     var skipIntro: (() -> Void)? = nil   // when set, the native "Skip Intro" action is offered
+    var startOver: (() -> Void)? = nil   // when set, the info bar offers "Start over"
 
     private func applyContextualActions(_ controller: AVPlayerViewController) {
         let wanted = skipIntro != nil
         if wanted == !controller.contextualActions.isEmpty { return }
         controller.contextualActions = wanted ? [UIAction(title: "Skip Intro", image: UIImage(systemName: "forward.end.fill")) { [skipIntro] _ in skipIntro?() }] : []
+    }
+    private func applyStartOver(_ controller: AVPlayerViewController) {
+        if (startOver != nil) == !controller.transportBarCustomMenuItems.isEmpty { return }
+        controller.transportBarCustomMenuItems = startOver == nil ? [] : [UIAction(title: "Start over", image: UIImage(systemName: "arrow.counterclockwise")) { [startOver] _ in startOver?() }]
     }
 
     final class Coordinator: NSObject, AVPlayerViewControllerDelegate {
@@ -748,6 +754,7 @@ struct NativePlayer: UIViewControllerRepresentable {
         context.coordinator.onAcceptProposal = onAcceptProposal
         controller.player?.currentItem?.nextContentProposal = proposal
         applyContextualActions(controller)
+        applyStartOver(controller)
         context.coordinator.displayObservation = controller.observe(\.isReadyForDisplay, options: [.initial, .new]) { [weak coordinator = context.coordinator, weak controller] _, _ in
             Task { @MainActor in
                 guard let controller, controller.isReadyForDisplay, let item = controller.player?.currentItem else { return }
@@ -761,6 +768,7 @@ struct NativePlayer: UIViewControllerRepresentable {
         context.coordinator.onAcceptProposal = onAcceptProposal
         if let item = controller.player?.currentItem, item.nextContentProposal !== proposal { item.nextContentProposal = proposal }
         applyContextualActions(controller)
+        applyStartOver(controller)
         context.coordinator.onVideoReady = onVideoReady
         context.coordinator.pauseOnDismantle = pauseOnDismantle
         let becameInteractive = !controller.view.isUserInteractionEnabled && interactive

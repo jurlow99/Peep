@@ -4,7 +4,7 @@ import { resolveVODPlayback } from "../../lib/vodStorage";
 import { SUPABASE_URL } from "../../lib/config";
 import { useChannelBlackout } from "../../hooks/useChannelBlackout";
 import { playAdBreak, resizeAdBreak, isSkippableBreak } from "../../lib/adBreak";
-import { titleCuePoints } from "../../lib/adBreaks";
+import { titleCuePoints, formatBreakTime } from "../../lib/adBreaks";
 import { trackLiveVideo } from "../../lib/liveViewing";
 import { useState, useEffect, useRef, useMemo } from "react";
 import Hls from "hls.js";
@@ -82,6 +82,8 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
   const countdownTimerRef = useRef(null);
   const adContainerRef = useRef(null);
   const [adLocked, setAdLocked] = useState(false); // live channel break: no skipping
+  const [resumedAt, setResumedAt] = useState(null); // seconds we resumed from, while the Start over offer shows
+  useEffect(() => { if (resumedAt == null) return; const t = setTimeout(() => setResumedAt(null), 10000); return () => clearTimeout(t); }, [resumedAt]);
   const adsManagerRef = useRef(null);
   const midrollCuesRef = useRef([]);      // seconds into the title where a mid-roll plays
   const midrollNextRef = useRef(0);       // index of the next cue not yet passed
@@ -609,7 +611,7 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
       .eq("user_id", user.id).eq("content_id", video.id).eq("content_type", ct).maybeSingle()
       .then(({ data }) => {
         if (!canResume(data) || !videoRef.current) return;
-        const seek = () => { if (videoRef.current) videoRef.current.currentTime = data.progress_seconds; };
+        const seek = () => { if (videoRef.current) { videoRef.current.currentTime = data.progress_seconds; setResumedAt(data.progress_seconds); } };
         // Seeking before metadata loads is ignored by some browsers; wait for it.
         if (videoRef.current.readyState >= 1) seek(); else videoRef.current.addEventListener("loadedmetadata", seek, { once: true });
       });
@@ -667,6 +669,13 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
             <div ref={adContainerRef} style={{ position: "absolute", inset: 0, zIndex: 10, display: adPlaying ? "block" : "none", pointerEvents: adPlaying ? "auto" : "none" }} />
             {/* Live channel breaks can't be skipped: a clear layer over the ad catches clicks on its Skip button. */}
             {adPlaying && adLocked && <div aria-hidden="true" style={{ position: "absolute", inset: 0, zIndex: 11 }} />}
+            {resumedAt != null && !adPlaying && !isLive && (
+              <div role="status" style={{ position: "absolute", left: 24, bottom: 76, zIndex: 12, display: "flex", alignItems: "center", gap: 12, background: "rgba(0,0,0,0.78)", color: "#fff", borderRadius: 999, padding: "8px 8px 8px 16px", fontSize: 14, fontWeight: 600 }}>
+                <span>Resumed at {formatBreakTime(resumedAt)}</span>
+                <button type="button" onClick={() => { if (videoRef.current) { videoRef.current.currentTime = 0; videoRef.current.play().catch(() => {}); } setResumedAt(null); }}
+                  style={{ border: "1px solid rgba(255,255,255,0.35)", background: "transparent", color: "#fff", borderRadius: 999, padding: "6px 14px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>↺ Start over</button>
+              </div>
+            )}
             {playbackError && !adPlaying && !streamEnded && (
               <div style={{ position: "absolute", inset: 0, zIndex: 20, background: "rgba(0,0,0,0.94)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, padding: 24, textAlign: "center" }}>
                 <div style={{ fontSize: 46, lineHeight: 1 }}>📡</div>
