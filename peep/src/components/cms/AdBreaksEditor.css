@@ -7,5 +7,13 @@
 .ad-breaks-chip button { border: 0; background: transparent; color: inherit; font-size: 15px; line-height: 1; padding: 0 4px; cursor: pointer; opacity: 0.7; }
 .ad-breaks-chip button:hover { opacity: 1; }
 .ad-breaks-row input { width: 84px; padding: 6px 8px; font-size: 13px; }
-.ad-breaks-row > button { padding: 6px 12px; font-size: 13px; }
+.ad-breaks-row > button { padding: 6px 14px; font-size: 13px; font-weight: 600; border-radius: 8px; border: 1px solid #c7d2fe; background: #eef2ff; color: #4f46e5; cursor: pointer; }
+.ad-breaks-row > button:hover:not(:disabled) { background: #e0e7ff; }
+.ad-breaks-row > button:disabled { opacity: 0.45; cursor: default; }
+.ad-breaks-row input { border: 1px solid #e5e7eb; border-radius: 8px; }
 .ad-breaks-suggested { font-size: 13px; opacity: 0.9; }
+.ad-breaks-time { border: 0; background: transparent; color: inherit; font: inherit; font-variant-numeric: tabular-nums; padding: 0; cursor: pointer; }
+.ad-breaks-time:hover { text-decoration: underline; }
+.ad-breaks-hint { padding: 4px 10px; border-radius: 999px; border: 1px dashed rgba(79, 70, 229, 0.45); font-size: 13px; }
+.ad-breaks-preview { display: grid; gap: 8px; padding: 10px; border-radius: 10px; background: rgba(0, 0, 0, 0.04); }
+.ad-breaks-preview video { width: 100%; max-width: 560px; border-radius: 8px; background: #000; }

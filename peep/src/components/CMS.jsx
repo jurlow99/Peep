@@ -5239,7 +5239,7 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
                       <FieldInput label="Duration" value={form.duration} onChange={v => setForm(f => ({ ...f, duration: v }))} placeholder="2h 33m" />
                       <FieldInput label="Score %" value={form.score} onChange={v => setForm(f => ({ ...f, score: v }))} placeholder="99" type="number" />
                     </div>
-                    <AdBreaksEditor value={form.ad_breaks} suggested={form.suggested_ad_breaks} onChange={v => setForm(f => ({ ...f, ad_breaks: v }))} />
+                    <AdBreaksEditor value={form.ad_breaks} suggested={form.suggested_ad_breaks} videoUrl={form.url} onChange={v => setForm(f => ({ ...f, ad_breaks: v }))} />
                     <div>
                       <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Hero image — recommended</label>
                       <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>Landscape · 1920×1080px · full-screen banner · Safe zone: center 1400×800 (stay 260px from sides, 140px from top/bottom)</p>
@@ -5368,7 +5368,7 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
                       <FieldInput label="Skip intro · starts at (seconds)" value={episodeForm.intro_start_seconds ?? ""} onChange={v => setEpisodeForm(f => ({ ...f, intro_start_seconds: v }))} placeholder="series default" type="number" />
                       <FieldInput label="Skip intro · ends at (seconds)" value={episodeForm.intro_end_seconds ?? ""} onChange={v => setEpisodeForm(f => ({ ...f, intro_end_seconds: v }))} placeholder="series default" type="number" />
                     </div>
-                    <AdBreaksEditor value={episodeForm.ad_breaks} suggested={episodeForm.suggested_ad_breaks} onChange={v => setEpisodeForm(f => ({ ...f, ad_breaks: v }))} />
+                    <AdBreaksEditor value={episodeForm.ad_breaks} suggested={episodeForm.suggested_ad_breaks} videoUrl={episodeForm.url} onChange={v => setEpisodeForm(f => ({ ...f, ad_breaks: v }))} />
                     <div>
                       <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Episode thumbnail — recommended</label>
                       <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>16:9 still from the episode (optional)</p>
