@@ -44,7 +44,7 @@ export default function AdBreaksEditor({ value, suggested, onChange, videoUrl })
             <button type="button" aria-label={`Remove break at ${formatBreakTime(at)}`} onClick={() => onChange(breaks.filter(b => b !== at))}>×</button>
           </span>
         ))}
-        <input value={draft} placeholder="12:40" aria-label="Add a break at (minutes:seconds)" onChange={e => setDraft(e.target.value)}
+        <input value={draft} placeholder="mm:ss" aria-label="Add a break at (minutes:seconds)" onChange={e => setDraft(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); add(); } }} />
         <button type="button" onClick={add} disabled={parseBreakTime(draft) == null}>Add</button>
       </div>
