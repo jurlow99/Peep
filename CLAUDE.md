@@ -24,7 +24,8 @@ prose in `docs/` disagree, trust this file and the code.
 - Owner's standing direction (`PLATFORM_SCOPE.md`): **every new feature ships with
   its web-admin support in the same change**; Apple TV is a viewer app, never an
   admin client; local testing uses FARRIS dev with browser/admin and Apple TV on the
-  same backend; Apple TV focus = yellow outline, selected = yellow fill.
+  same backend; Apple TV focus = yellow outline; selected = light grey + checkmark (yellow fill
+  only while focused), so yellow always means "the remote is here".
 - The owner is not deep in the technical weeds. Keep replies short and plain; do the
   hard parts rather than handing over command lists. Production deploys and git
   pushes are blocked by Claude Code's auto-mode classifier — ask the owner to switch

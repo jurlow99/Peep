@@ -45,6 +45,9 @@ scope; do not assume that every existing experimental feature is a priority.
   Apple TV connected to the same development backend. Verify actual configuration;
   a development badge alone does not prove that the connections match.
 - Preserve existing uncommitted work and Xcode signing settings during changes.
-- Apple TV uses black and grey surfaces, yellow outlines for the currently
-  focused item, and yellow fills for selected controls. Unfocused items stay
-  black and grey. The owner requested yellow focus borders on October 21, 2026.
+- Apple TV uses black and grey surfaces and yellow outlines for the currently
+  focused item. Yellow only ever marks where the remote is: a selected control
+  (e.g. the chosen season) is light grey with a checkmark, and fills yellow only
+  while it has focus. Unfocused items stay black and grey. The owner requested
+  yellow focus borders on October 21, 2026, and on November 3, 2026 asked that a
+  selected chip no longer look focused while the remote is elsewhere.

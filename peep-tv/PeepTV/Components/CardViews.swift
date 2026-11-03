@@ -186,8 +186,10 @@ extension View {
     }
 }
 
-/// Shared segmented control for filters throughout Apple TV. A selected chip is
-/// filled yellow; remote focus draws a yellow outline just outside the chip.
+/// Shared segmented control for filters throughout Apple TV. Yellow only ever means
+/// "the remote is here": focus draws a yellow outline just outside the chip, and the
+/// selected chip turns yellow only while focused. Otherwise the selected chip is a
+/// light grey with its checkmark, so it never competes with focus elsewhere.
 struct TVPillStyle: ButtonStyle {
     let selected: Bool
     @Environment(\.isFocused) private var focused
@@ -196,8 +198,8 @@ struct TVPillStyle: ButtonStyle {
             .font(.system(size: 21, weight: selected ? .bold : .semibold, design: .rounded))
             .frame(minHeight: ContentAppearance.pillHeight)
             .padding(.horizontal, 25)
-            .foregroundStyle(selected ? .black : .white)
-            .background(selected ? ContentAppearance.accent : Color(white: 0.095), in: Capsule())
+            .foregroundStyle(selected && focused ? .black : .white)
+            .background(selected ? (focused ? ContentAppearance.accent : Color(white: 0.3)) : Color(white: 0.095), in: Capsule())
             .focusRing(Capsule(), focused: focused, outset: 7)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
     }
