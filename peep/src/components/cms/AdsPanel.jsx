@@ -196,7 +196,7 @@ export default function AdsPanel({ showToast, logAudit = () => {} }) {
           <div className="ads-fields">
             <label>VAST tag URL<input value={form.tag_url} onChange={e => setForm(f => ({ ...f, tag_url: e.target.value }))} placeholder="https://…" spellCheck={false} /></label>
           </div>
-          <small className="ads-muted">Peep fills in [BREAK_SECONDS] [BREAK_MS] [CHANNEL] [SHOW] [GENRE] [DEVICE] [IFA] [LMT].</small>
+          <small className="ads-muted">Peep fills in [BREAK_SECONDS] [BREAK_MS] [CHANNEL] [SHOW] [GENRE] [DEVICE] [DEVICE_ID] [IFA] [LMT].</small>
           <div className="ads-actions">
             <button type="button" onClick={() => setForm(f => ({ ...f, tag_url: TEST_VAST_URL, is_test: true }))}>Use Google's sample ad</button>
             <button type="button" onClick={() => setForm(f => ({ ...f, tag_url: IAB_SAMPLE_URL, is_test: true }))}>Use Peep's IAB sample ad</button>

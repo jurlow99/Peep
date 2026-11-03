@@ -3,6 +3,21 @@
 // missing lengths fall back to 30 s so a tag never goes out with a raw macro in it.
 // [CHANNEL] / [SHOW] / [GENRE] describe what is playing, [DEVICE] the player.
 // The web has no advertising ID, so [IFA] is blank and [LMT] (limit tracking) is 1.
+// [DEVICE_ID] is a random 32-hex label made once per browser, for frequency caps
+// on Peep's own ad server. It is derived from nothing; clearing site data resets it.
+const DEVICE_ID_KEY = 'peep_ad_device_id';
+
+export function adDeviceId(storage = globalThis.localStorage) {
+  try {
+    const stored = storage?.getItem(DEVICE_ID_KEY);
+    if (/^[0-9a-f]{32}$/.test(stored || '')) return stored;
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    const id = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+    storage?.setItem(DEVICE_ID_KEY, id);
+    return id;
+  } catch { return ''; }
+}
+
 export function fillAdMacros(url, breakSeconds, context = {}) {
   const seconds = Number.isFinite(breakSeconds) && breakSeconds > 0 ? Math.round(breakSeconds) : 30;
   const text = value => encodeURIComponent(String(value ?? '').trim());
@@ -11,5 +26,6 @@ export function fillAdMacros(url, breakSeconds, context = {}) {
     CHANNEL: text(context.channel), SHOW: text(context.show), GENRE: text(context.genre),
     DEVICE: 'web', IFA: '', LMT: '1',
   };
-  return String(url || '').replace(/\[(BREAK_SECONDS|BREAK_MS|CHANNEL|SHOW|GENRE|DEVICE|IFA|LMT)\]/g, (_, key) => values[key]);
+  return String(url || '').replace(/\[(BREAK_SECONDS|BREAK_MS|CHANNEL|SHOW|GENRE|DEVICE_ID|DEVICE|IFA|LMT)\]/g,
+    (_, key) => key === 'DEVICE_ID' ? text(context.deviceId ?? adDeviceId()) : values[key]);
 }

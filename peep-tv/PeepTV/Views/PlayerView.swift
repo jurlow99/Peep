@@ -840,13 +840,14 @@ struct CSAITag: Decodable, Identifiable {
     /// size its pod. Same rule as the web: unknown lengths go out as 30 s.
     /// [CHANNEL] / [SHOW] / [GENRE] describe what is playing, [DEVICE] is "tvos".
     /// No App Tracking Transparency prompt, so [IFA] is blank and [LMT] is 1.
-    func filled(breakSeconds: Double?, context: AdContext = AdContext()) -> CSAITag {
+    /// [DEVICE_ID] is a random 32-hex label made once per Apple TV (see AdDeviceID).
+    func filled(breakSeconds: Double?, context: AdContext = AdContext(), deviceID: String = AdDeviceID.current()) -> CSAITag {
         let seconds = breakSeconds.map { max(1, Int($0.rounded())) } ?? 30
         let safe = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))
         let text = { (value: String) in value.trimmingCharacters(in: .whitespaces).addingPercentEncoding(withAllowedCharacters: safe) ?? "" }
         let values = ["BREAK_SECONDS": String(seconds), "BREAK_MS": String(seconds * 1000),
                       "CHANNEL": text(context.channel), "SHOW": text(context.show), "GENRE": text(context.genre),
-                      "DEVICE": "tvos", "IFA": "", "LMT": "1"]
+                      "DEVICE": "tvos", "DEVICE_ID": text(deviceID), "IFA": "", "LMT": "1"]
         var copy = self
         for (key, value) in values { copy.tag_url = copy.tag_url.replacingOccurrences(of: "[\(key)]", with: value) }
         return copy
@@ -904,6 +905,18 @@ struct AdFrequencyPolicy {
     }
     func recordStart(at now: Date = Date()) {
         defaults.set(now.timeIntervalSince1970, forKey: key)
+    }
+}
+
+/// A random label for frequency caps on Peep's own ad server, made once and kept.
+/// It is derived from nothing on the device or account; deleting the app resets it.
+enum AdDeviceID {
+    static func current(defaults: UserDefaults = .standard) -> String {
+        let key = "peep_ad_device_id"
+        if let stored = defaults.string(forKey: key), stored.count == 32, stored.allSatisfy(\.isHexDigit) { return stored }
+        let id = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+        defaults.set(id, forKey: key)
+        return id
     }
 }
 

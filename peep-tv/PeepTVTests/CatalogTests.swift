@@ -621,6 +621,13 @@ final class CatalogTests: XCTestCase {
                        "https://ads.invalid/v?dur=90&ms=90000&channel=OAN%20Plus&show=News%20%26%20Views&genre=News&device=tvos&ifa=&lmt=1")
         XCTAssertEqual(tag.filled(breakSeconds: nil).tag_url,
                        "https://ads.invalid/v?dur=30&ms=30000&channel=&show=&genre=&device=tvos&ifa=&lmt=1")
+        let defaults = UserDefaults(suiteName: "AdDeviceIDTest")!
+        defaults.removePersistentDomain(forName: "AdDeviceIDTest")
+        let id = AdDeviceID.current(defaults: defaults)
+        XCTAssertEqual(id.count, 32); XCTAssertTrue(id.allSatisfy(\.isHexDigit))
+        XCTAssertEqual(AdDeviceID.current(defaults: defaults), id)
+        let did = CSAITag(id: 2, tag_url: "https://ads.invalid/v?did=[DEVICE_ID]&device=[DEVICE]", scope: "live", content_id: nil, active: true, is_test: true, platforms: ["tvos"])
+        XCTAssertEqual(did.filled(breakSeconds: nil, deviceID: id).tag_url, "https://ads.invalid/v?did=\(id)&device=tvos")
     }
 
     func testCSAITagSelectionHonorsExactScopePlatformAndStablePriority() {
