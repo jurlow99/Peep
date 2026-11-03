@@ -903,6 +903,7 @@ struct AdFrequencyPolicy {
     private var pending: Task<Void, Never>?
     private var seen = Set<String>()
     private(set) var isMidroll = false
+    @Published private(set) var lastEvent = ""
     private let frequency: AdFrequencyPolicy
     // Rules last read this launch. A stored cooldown under these skips the network.
     private(set) static var policy: AdPolicy?
@@ -943,6 +944,7 @@ struct AdFrequencyPolicy {
 
     func record(_ event: String, adID: String = "") {
         Logger(subsystem: "tv.watchpeep.PeepTV", category: "CSAI").notice("Ad delivery event: \(event, privacy: .public)")
+        lastEvent = event
         guard let tag, seen.insert(event + ":" + adID).inserted else { return }
         if event == "impression", !isMidroll { frequency.recordStart() }
         guard let service, let userID = reportingUserID, service.session?.userId == userID else { return }
@@ -1214,6 +1216,7 @@ private struct LiveMidrollModifier: ViewModifier {
             let metadata = LiveMidrollMetadata()
             var attached: AVPlayerItem?
             var seen = Set<String>()
+            var breakStarts: [Date] = [] // a break signalled twice (playlist + in-band) is still one break
             var midrollActive = false
             var mutedBeforeMidroll: Bool?
             let account = service.session?.userId
@@ -1239,9 +1242,9 @@ private struct LiveMidrollModifier: ViewModifier {
                     trace("Live mid-roll watch: rate=\(player.rate) playhead=\(playhead.map { "\($0)" } ?? "none") cues=\(known.count) \(summary)")
                 }
                 if !gate.blocking, player.rate > 0, let date = player.currentItem?.currentDate(), service.session?.userId == account,
-                   let cue = metadata.cues.merging(metadata.inbandCues, uniquingKeysWith: { _,new in new }).values.sorted(by: { $0.start < $1.start }).first(where: { !seen.contains($0.id) && $0.remaining(at: date) != nil }),
+                   let cue = metadata.cues.merging(metadata.inbandCues, uniquingKeysWith: { _,new in new }).values.sorted(by: { $0.start < $1.start }).first(where: { cue in !seen.contains(cue.id) && !breakStarts.contains { abs($0.timeIntervalSince(cue.start)) < 5 } && cue.remaining(at: date) != nil }),
                    let remaining = cue.remaining(at: date) {
-                    seen.insert(cue.id)
+                    seen.insert(cue.id); breakStarts.append(cue.start); breakStarts = breakStarts.suffix(20)
                     trace("Live mid-roll cue matched: \(cue.id.prefix(12)), \(Int(remaining))s left; starting ad")
                     status = "Break found · \(Int(remaining))s · playing ad"
                     let wasMuted = player.isMuted
@@ -1258,7 +1261,11 @@ private struct LiveMidrollModifier: ViewModifier {
                     if gate.blocking { gate.record(Task.isCancelled ? "cancel" : "timeout"); gate.finish() }
                     let ran = Int(ProcessInfo.processInfo.systemUptime - started)
                     trace("Live mid-roll ended after \(ran)s of the \(Int(remaining))s break")
-                    if !status.contains("blocked") { status = "Last ad ran \(ran)s · waiting for next break" }
+                    if !status.contains("blocked") {
+                        status = ran == 0 || gate.lastEvent == "error" || gate.lastEvent == "timeout"
+                            ? "Last break: ad server sent no ad (\(gate.lastEvent)) · waiting"
+                            : "Last ad ran \(ran)s · waiting for next break"
+                    }
                     player.isMuted = wasMuted; mutedBeforeMidroll = nil; midrollActive = false
                 }
                 do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
