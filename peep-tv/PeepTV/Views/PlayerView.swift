@@ -1034,6 +1034,7 @@ struct IMAAdView: UIViewControllerRepresentable {
     private var timeout: Task<Void, Never>?
     private var requested = false
     private var ended = false
+    private var skipAt: TimeInterval?
     init(tag: CSAITag, event: @escaping (String,String) -> Void, finished: @escaping () -> Void, cancelled: @escaping () -> Void) {
         self.tag = tag; self.event = event; self.finished = finished; self.cancelled = cancelled
         super.init(nibName: nil, bundle: nil)
@@ -1084,7 +1085,9 @@ struct IMAAdView: UIViewControllerRepresentable {
         let id = (event.ad?.adId ?? "ad") + ":" + String(event.ad?.adPodInfo.podIndex ?? 0) + ":" + String(event.ad?.adPodInfo.adPosition ?? 1)
         switch event.type {
         case .LOADED: adsManager.start()
-        case .STARTED: timeout?.cancel(); self.event("impression", id)
+        case .STARTED:
+            timeout?.cancel(); self.event("impression", id)
+            skipAt = (event.ad?.isSkippable ?? false) ? event.ad?.skipTimeOffset : nil
         case .COMPLETE: self.event("complete", id)
         case .SKIPPED: self.event("skip", id)
         case .ALL_ADS_COMPLETED: complete()
@@ -1094,6 +1097,13 @@ struct IMAAdView: UIViewControllerRepresentable {
     }
     func adsManager(_ adsManager: IMAAdsManager, didReceive error: IMAAdError) { guard !ended else { return }; event("error", ""); complete() }
     func adsManagerDidRequestContentPause(_ adsManager: IMAAdsManager) { setNeedsFocusUpdate(); updateFocusIfNeeded() }
+    // The SDK draws its own Skip button when the offset is reached; pull the
+    // remote's focus onto it once, so one press of Select skips.
+    func adsManager(_ adsManager: IMAAdsManager, adDidProgressToTime mediaTime: TimeInterval, totalTime: TimeInterval) {
+        guard !ended, let offset = skipAt, offset >= 0, mediaTime >= offset + 0.3 else { return }
+        skipAt = nil
+        setNeedsFocusUpdate(); updateFocusIfNeeded()
+    }
     func adsManagerDidRequestContentResume(_ adsManager: IMAAdsManager) { complete() }
     private func complete() { guard !ended else { return }; clean(); finished() }
     func clean() {

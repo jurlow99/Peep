@@ -299,6 +299,8 @@ export default function AdsPanel({ showToast, logAudit = () => {} }) {
             <small>Entry ad before joining a channel or opening a multiview package. During a channel's own marked break (CUE-OUT in its stream), a live mid-roll tag plays over it on the browser and Apple TV.</small>
             <label className="ads-check"><input type="checkbox" checked={!!draft.live_entry} onChange={e => setRule("live_entry", e.target.checked)} />Ad before a live channel</label>
             <label className="ads-check"><input type="checkbox" checked={!!draft.multiview_entry} onChange={e => setRule("multiview_entry", e.target.checked)} />Ad before multiview</label>
+            <span className="ads-inline">Skip button after <input type="number" min="0" max="60" value={draft.live_skip_seconds} onChange={e => setRule("live_skip_seconds", e.target.value)} /> seconds</span>
+            <small>Peep's own live ads only, 0 means no skipping. A paid ad server decides skipping itself.</small>
           </div>
           <div className="ads-rule">
             <strong>Mid-rolls in movies and episodes</strong>
