@@ -614,6 +614,17 @@ final class CatalogTests: XCTestCase {
         XCTAssertEqual(manual.liveChannels(from: channels).map(\.id), [3,1])
     }
 
+    func testMidrollCuePointsMatchTheWebRule() {
+        let policy = AdPolicy.parse(#"{"enabled":true,"midroll_enabled":true,"midroll_min_minutes":20,"midroll_every_minutes":15,"midroll_max_breaks":4}"#)
+        XCTAssertEqual(policy.midrollCuePoints(duration: 95 * 60), [900, 1800, 2700, 3600])
+        XCTAssertEqual(policy.midrollCuePoints(duration: 33 * 60), [900, 1800])
+        XCTAssertEqual(policy.midrollCuePoints(duration: 32 * 60), [900])          // never in the last two minutes
+        XCTAssertEqual(policy.midrollCuePoints(duration: 19 * 60), [])             // too short
+        XCTAssertEqual(AdPolicy.parse(#"{"midroll_enabled":false}"#).midrollCuePoints(duration: 95 * 60), [])
+        XCTAssertEqual(AdPolicy.parse(#"{"enabled":false}"#).midrollCuePoints(duration: 95 * 60), [])
+        XCTAssertEqual(AdPolicy.parse(nil).midrollCuePoints(duration: 95 * 60), [900, 1800, 2700, 3600])
+    }
+
     func testCSAITagFillsBreakAndContextMacros() {
         let tag = CSAITag(id: 1, tag_url: "https://ads.invalid/v?dur=[BREAK_SECONDS]&ms=[BREAK_MS]&channel=[CHANNEL]&show=[SHOW]&genre=[GENRE]&device=[DEVICE]&ifa=[IFA]&lmt=[LMT]",
                           scope: "live", content_id: nil, active: true, is_test: true, platforms: ["tvos"])

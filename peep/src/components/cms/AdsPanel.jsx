@@ -286,7 +286,7 @@ export default function AdsPanel({ showToast, logAudit = () => {} }) {
 
       <section className="ads-section">
         <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
-          <div><h3>Ad rules</h3><p style={{ margin: 0 }}>Apply to the browser and Apple TV. Mid- and post-rolls are browser only for now.</p></div>
+          <div><h3>Ad rules</h3><p style={{ margin: 0 }}>Apply to the browser and Apple TV. Post-rolls are browser only for now.</p></div>
           <Switch on={!!draft.enabled} onChange={on => setRule("enabled", on)} label={draft.enabled ? "Ads are on" : "Ads are off everywhere"} />
         </div>
         <div className="ads-rules">
@@ -305,7 +305,7 @@ export default function AdsPanel({ showToast, logAudit = () => {} }) {
           </div>
           <div className="ads-rule">
             <strong>Mid-rolls in movies and episodes</strong>
-            <small>Breaks inside a title, browser only. Skipping ahead past several break points plays one break, not several.</small>
+            <small>Breaks inside a title, on the browser and Apple TV. Skipping ahead past several break points plays one break, not several.</small>
             <label className="ads-check"><input type="checkbox" checked={!!draft.midroll_enabled} onChange={e => setRule("midroll_enabled", e.target.checked)} />Mid-rolls on</label>
             <span className="ads-inline">Every <input type="number" min="1" max="240" value={draft.midroll_every_minutes} onChange={e => setRule("midroll_every_minutes", e.target.value)} /> minutes</span>
             <span className="ads-inline">Only in titles over <input type="number" min="1" max="600" value={draft.midroll_min_minutes} onChange={e => setRule("midroll_min_minutes", e.target.value)} /> minutes</span>

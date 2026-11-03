@@ -9,7 +9,8 @@ it('stops bad tags before they reach the database', () => {
   expect(tagProblem({ ...ok, ad_type: 'post_roll', scope: 'live' })).toContain("can't run");
   expect(tagProblem({ ...ok, ad_type: 'mid_roll', scope: 'multiview' })).toContain("can't run");
   expect(tagProblem({ ...ok, platforms: [] })).toContain('at least one');
-  expect(tagProblem({ ...ok, ad_type: 'mid_roll', platforms: ['tvos'] }, true)).toBeTruthy();
+  expect(tagProblem({ ...ok, ad_type: 'mid_roll', platforms: ['tvos'] }, true)).toBeNull();
+  expect(tagProblem({ ...ok, ad_type: 'post_roll', platforms: ['tvos'] }, true)).toContain('post-rolls');
   expect(tagProblem({ ...ok, ad_type: 'mid_roll', scope: 'live', content_id: '7', platforms: ['web', 'tvos'], is_test: true }, true)).toBeNull();
   expect(tagProblem({ ...ok, ad_type: 'mid_roll', scope: 'live', content_id: '7', platforms: ['tvos'] }, true)).toBeNull();
   expect(tagProblem(ok)).toBeNull();

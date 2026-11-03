@@ -6,7 +6,7 @@ export const EMPTY_AD = { name: '', tag_url: '', ad_type: 'pre_roll', scope: 'gl
 
 export const POSITIONS = [
   { value: 'pre_roll', title: 'Pre-roll', hint: 'Before a movie, episode, live channel or multiview starts. Browser and Apple TV.' },
-  { value: 'mid_roll', title: 'Mid-roll', hint: 'Inside a movie or episode at the times set in Ad rules (browser), or over a live channel\'s own marked break (browser and Apple TV).' },
+  { value: 'mid_roll', title: 'Mid-roll', hint: 'Inside a movie or episode at the times set in Ad rules, or over a live channel\'s own marked break. Browser and Apple TV.' },
   { value: 'post_roll', title: 'Post-roll', hint: 'After a movie or episode ends, before Up next. Browser only.' },
 ];
 

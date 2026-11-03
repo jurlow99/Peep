@@ -556,6 +556,34 @@ struct PlayerView: View {
             next.automaticAcceptanceInterval = preferences.autoplayNext && seriesAllowsAutoplay ? 10 : -1
             proposal = next
         }
+        // Mid-rolls in movies and episodes, on the Ad rules cue points. Seeking past
+        // several cue points plays one break; cue points before where playback
+        // started (a resume) are skipped so a mid-roll never follows the pre-roll.
+        .task(id: contentStarted) {
+            guard contentStarted, liveChannelID == nil, let identity else { return }
+            let scope = identity.type == "short" ? "movie" : identity.type
+            var duration = model.player.currentItem?.duration.seconds ?? .nan
+            while !(duration.isFinite && duration > 0) {
+                do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
+                duration = model.player.currentItem?.duration.seconds ?? .nan
+            }
+            let policy = await CSAIGate.loadPolicy(supabase)
+            let cues = policy.midrollCuePoints(duration: duration)
+            let start = model.player.currentTime().seconds
+            var next = cues.firstIndex { $0 > start + 1 } ?? cues.count
+            while !Task.isCancelled, next < cues.count {
+                do { try await Task.sleep(for: .seconds(1)) } catch { return }
+                guard !adGate.blocking, !showNext, !showEnd, model.player.rate > 0 else { continue }
+                let time = model.player.currentTime().seconds
+                guard time >= cues[next] else { continue }
+                while next < cues.count && time >= cues[next] { next += 1 }
+                model.player.pause()
+                adGate.context = AdContext(show: title)
+                let stayed = await adGate.runMidroll(service: supabase, scope: scope, contentID: identity.id)
+                guard stayed, !Task.isCancelled else { return }
+                model.player.play()
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .AVPlayerItemDidPlayToEndTime)) { notification in
             guard contentStarted, !adGate.blocking, !endHandled,
                   let item = notification.object as? AVPlayerItem, item === model.player.currentItem else { return }
@@ -868,22 +896,42 @@ struct CSAITag: Decodable, Identifiable {
 }
 
 // Admin "Ad rules" (app_settings.ads_policy). Apple TV honours the master switch,
-// the gap between entry ads and the Live TV toggles; mid/post-roll rules are
-// browser only. Anything unreadable falls back to the defaults the browser uses.
+// the gap between entry ads, the Live TV toggles and the movie/episode mid-roll
+// rules; post-roll is browser only. Anything unreadable falls back to the
+// defaults the browser uses.
 struct AdPolicy: Decodable {
     var enabled = true
     var min_gap_minutes = 30
     var live_entry = true
     var multiview_entry = true
+    var midroll_enabled = true
+    var midroll_min_minutes = 20
+    var midroll_every_minutes = 15
+    var midroll_max_breaks = 4
     static let fallback = AdPolicy()
     init() {}
-    private enum CodingKeys: String, CodingKey { case enabled, min_gap_minutes, live_entry, multiview_entry }
+    private enum CodingKeys: String, CodingKey { case enabled, min_gap_minutes, live_entry, multiview_entry, midroll_enabled, midroll_min_minutes, midroll_every_minutes, midroll_max_breaks }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
+        let number = { (key: CodingKeys, fallback: Int, range: ClosedRange<Int>) in max(range.lowerBound, min(range.upperBound, (try? values.decode(Int.self, forKey: key)) ?? fallback)) }
         enabled = (try? values.decode(Bool.self, forKey: .enabled)) ?? true
-        min_gap_minutes = max(0, min(1440, (try? values.decode(Int.self, forKey: .min_gap_minutes)) ?? 30))
+        min_gap_minutes = number(.min_gap_minutes, 30, 0...1440)
         live_entry = (try? values.decode(Bool.self, forKey: .live_entry)) ?? true
         multiview_entry = (try? values.decode(Bool.self, forKey: .multiview_entry)) ?? true
+        midroll_enabled = (try? values.decode(Bool.self, forKey: .midroll_enabled)) ?? true
+        midroll_min_minutes = number(.midroll_min_minutes, 20, 1...600)
+        midroll_every_minutes = number(.midroll_every_minutes, 15, 1...240)
+        midroll_max_breaks = number(.midroll_max_breaks, 4, 0...20)
+    }
+    /// Seconds into a title where a mid-roll plays: every N minutes, only in titles of
+    /// at least M minutes, never inside the last two minutes, at most K. Same as the web.
+    func midrollCuePoints(duration: Double) -> [Double] {
+        guard enabled, midroll_enabled, duration.isFinite, duration >= Double(midroll_min_minutes * 60) else { return [] }
+        let every = Double(midroll_every_minutes * 60)
+        var points: [Double] = []
+        var at = every
+        while at < duration - 120 && points.count < midroll_max_breaks { points.append(at); at += every }
+        return points
     }
     static func parse(_ value: String?) -> AdPolicy {
         guard let data = value?.data(using: .utf8), let policy = try? JSONDecoder().decode(AdPolicy.self, from: data) else { return fallback }
@@ -999,6 +1047,27 @@ struct AdContext: Equatable {
             catch { Logger(subsystem: "tv.watchpeep.PeepTV", category: "CSAI").error("Internal ad reporting failed; provider SDK tracking is separate.") }
         }
     }
+    /// A mid-roll inside a movie or episode, at an Ad rules cue point. Picks the most
+    /// specific active Apple TV mid_roll tag and resolves when the break is over
+    /// (true) or the viewer left (false). No tag means no break.
+    func runMidroll(service: SupabaseService, scope: String, contentID: String) async -> Bool {
+        if blocking { return true }
+        let current = UUID(); generation = current
+        self.service = service; reportingUserID = service.session?.userId; self.scope = scope; self.contentID = contentID
+        session = UUID().uuidString; seen = []
+        let tags: [CSAITag] = (try? await service.get("vast_tags", query: ["select":"id,tag_url,scope,content_id,active,is_test,platforms", "active":"eq.true", "ad_type":"eq.mid_roll", "order":"id.asc"], timeout: 4)) ?? []
+        guard !Task.isCancelled, generation == current, !blocking,
+              let selected = CSAITag.select(tags, scope: scope, contentID: contentID) else { return true }
+        isMidroll = true; blocking = true
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                self.continuation = continuation
+                self.tag = selected.filled(breakSeconds: nil, context: self.context)
+                self.record("request")
+            }
+        } onCancel: { Task { @MainActor in if self.generation == current { self.cancel() } } }
+    }
+
     /// Starts a live mid-roll over a marked break. Returns why it did not start, or nil.
     @discardableResult
     func beginMidroll(service: SupabaseService, tag: CSAITag, channelID: Int) -> String? {
