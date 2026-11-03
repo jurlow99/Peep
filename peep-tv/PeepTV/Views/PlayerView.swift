@@ -578,6 +578,10 @@ struct PlayerView: View {
             }
             let policy = await CSAIGate.loadPolicy(supabase)
             let cues = policy.cuePoints(duration: duration, titleBreaks: adBreaks)
+            // Tubi-style marks on the native scrub bar, one per break.
+            model.player.currentItem?.interstitialTimeRanges = cues.map {
+                AVInterstitialTimeRange(timeRange: CMTimeRange(start: CMTime(seconds: $0, preferredTimescale: 600), duration: CMTime(seconds: 1, preferredTimescale: 600)))
+            }
             let start = model.player.currentTime().seconds
             var next = cues.firstIndex { $0 > start + 1 } ?? cues.count
             while !Task.isCancelled, next < cues.count {
