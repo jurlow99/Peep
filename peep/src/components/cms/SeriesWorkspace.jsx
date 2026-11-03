@@ -56,6 +56,17 @@ export default function SeriesWorkspace({show,onBack,onUpdated,showToast,curatio
     setDirty(false);try{sessionStorage.removeItem(`peep-series-${show.id}-details`);}catch{}
     showToast('Series details saved.');onUpdated?.();
   }
+  // Episodes the break scanner found breaks in that have no approved list of their own.
+  const unapprovedBreaks=episodes.filter(e=>!parseAdBreaks(e.ad_breaks).length&&parseAdBreaks(e.suggested_ad_breaks).length);
+  async function useFoundBreaks(){
+    setSaving(true);setError('');
+    const results=await Promise.all(unapprovedBreaks.map(e=>supabase.from('episodes').update({ad_breaks:parseAdBreaks(e.suggested_ad_breaks)}).eq('id',e.id).eq('show_id',show.id).select('id')));
+    setSaving(false);
+    const failed=results.filter(r=>r.error||!r.data?.length).length;
+    if(failed)setError(`${failed} episode${failed===1?'':'s'} could not be updated.`);
+    else showToast(`Ad breaks approved on ${results.length} episode${results.length===1?'':'s'}.`);
+    load();
+  }
   async function saveEpisode(){
     if(!editing.title?.trim()){setError('Episode title is required.');return;}
     if(!Number.isInteger(Number(editing.season))||Number(editing.season)<1||!Number.isInteger(Number(editing.episode_number))||Number(editing.episode_number)<1){setError('Use positive whole season and episode numbers.');return;}
@@ -92,7 +103,7 @@ export default function SeriesWorkspace({show,onBack,onUpdated,showToast,curatio
     {error&&<p role="alert" className="series-error">{error}</p>}
     {tab==='episodes'&&importing&&<div className="series-upload"><button className="series-back" onClick={()=>setImporting(false)}>← Episode list</button><SeriesFolderImport show={show} shows={[show]} showToast={showToast} onSaved={()=>{load();onUpdated?.();}}/></div>}
     {tab==='episodes'&&!importing&&(uploading?<div className="series-upload"><button className="series-back" onClick={()=>setUploading(false)}>← Episode list</button><VODUploadFlow key={show.id} shows={[show]} showToast={showToast} initialShowID={show.id} initialSeason={currentSeason} initialEpisodeNumber={nextNumber} lockSeries draftKey={`peep-series-${show.id}-upload`} onSaved={()=>{load();onUpdated?.();}}/></div>:<>
-      <div className="series-episode-toolbar"><h3>Episodes</h3><label>Season<select value={season} onChange={e=>setSeason(e.target.value)}><option value="all">All seasons</option>{seasons.map(n=><option key={n} value={n}>{Number(n)===0?'Extras':`Season ${n}`}</option>)}</select></label><button onClick={load} disabled={loading}>Refresh</button></div>
+      <div className="series-episode-toolbar"><h3>Episodes</h3><label>Season<select value={season} onChange={e=>setSeason(e.target.value)}><option value="all">All seasons</option>{seasons.map(n=><option key={n} value={n}>{Number(n)===0?'Extras':`Season ${n}`}</option>)}</select></label>{unapprovedBreaks.length>0&&<button onClick={useFoundBreaks} disabled={saving} title="Approve the scanner's ad breaks on every episode that has none of its own">Use found ad breaks ({unapprovedBreaks.length})</button>}<button onClick={load} disabled={loading}>Refresh</button></div>
       {loading?<p role="status">Loading episodes…</p>:visible.length===0?<div className="series-empty"><h3>No episodes yet</h3><p>Upload your first MP4 to get started.</p><button className="series-primary" onClick={()=>setUploading(true)}>Upload episode</button></div>:<div className="series-episode-list">{visible.map(episode=>{const status=episodeReadiness(episode);return <article key={episode.id}>
         <div className="series-episode-art">{episode.thumbnail?<img src={episode.thumbnail} alt="Episode snapshot"/>:<span>No snapshot</span>}</div>
         <div className="series-episode-copy"><span className="series-eyebrow">SEASON {episode.season||1} · EPISODE {episode.episode_number||1}</span><h4>{episode.title}</h4><p>{episode.duration||'Runtime not entered'}{!episode.thumbnail?' · Needs snapshot':''}</p></div>
