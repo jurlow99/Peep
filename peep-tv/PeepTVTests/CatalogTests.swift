@@ -614,6 +614,15 @@ final class CatalogTests: XCTestCase {
         XCTAssertEqual(manual.liveChannels(from: channels).map(\.id), [3,1])
     }
 
+    func testCSAITagFillsBreakAndContextMacros() {
+        let tag = CSAITag(id: 1, tag_url: "https://ads.invalid/v?dur=[BREAK_SECONDS]&ms=[BREAK_MS]&channel=[CHANNEL]&show=[SHOW]&genre=[GENRE]&device=[DEVICE]&ifa=[IFA]&lmt=[LMT]",
+                          scope: "live", content_id: nil, active: true, is_test: true, platforms: ["tvos"])
+        XCTAssertEqual(tag.filled(breakSeconds: 89.6, context: AdContext(channel: "OAN Plus", show: "News & Views", genre: "News")).tag_url,
+                       "https://ads.invalid/v?dur=90&ms=90000&channel=OAN%20Plus&show=News%20%26%20Views&genre=News&device=tvos&ifa=&lmt=1")
+        XCTAssertEqual(tag.filled(breakSeconds: nil).tag_url,
+                       "https://ads.invalid/v?dur=30&ms=30000&channel=&show=&genre=&device=tvos&ifa=&lmt=1")
+    }
+
     func testCSAITagSelectionHonorsExactScopePlatformAndStablePriority() {
         func tag(_ id: Int, _ scope: String, _ content: String? = nil, platforms: [String] = ["tvos"], active: Bool = true, url: String = "https://example.com/vast") -> CSAITag {
             CSAITag(id: id, tag_url: url, scope: scope, content_id: content, active: active, is_test: true, platforms: platforms)

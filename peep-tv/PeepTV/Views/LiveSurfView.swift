@@ -149,6 +149,7 @@ struct LiveSurfView: View {
                 preparePlayback()
                 player.applyBlackout(selected?.blackoutMessage())
                 if player.blackoutMessage == nil {
+                    adGate.context = adContext(for: selectedID)
                     guard await adGate.run(service: supabase, scope: "live", contentID: String(selectedID)), !Task.isCancelled else { return }
                 }
                 player.startIfEnabled()
@@ -156,6 +157,7 @@ struct LiveSurfView: View {
             }
         }
         .task(id: selectedID) {
+            adGate.context = adContext(for: selectedID)
             if !keepsPlaying { await player.monitorBlackout(channelID: selectedID, initial: selected, service: supabase) }
         }
         .onChange(of: player.blackoutMessage) { _, message in
@@ -175,6 +177,7 @@ struct LiveSurfView: View {
                 if let value = try? await nextRows { rows = value }
                 // Now/Next drifts without this; the guide window is only six hours deep.
                 if Date().timeIntervalSince(guideRefreshedAt) > 300, let value = try? await supabase.fetchGuide() { guide = value; guideRefreshedAt = Date() }
+                if !adGate.blocking { adGate.context = adContext(for: selectedID) }
             }
         }
         .task(id: hintVersion) {
@@ -297,6 +300,14 @@ struct LiveSurfView: View {
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) { drawerOpen = false }
         Task { @MainActor in await Task.yield(); guard !drawerOpen else { return }; focus = "video" }
     }
+    /// Channel, what's on now and its genre, for the ad server's [CHANNEL] / [SHOW] / [GENRE].
+    private func adContext(for id: Int) -> AdContext {
+        let channel = channels.first { $0.id == id }
+        return AdContext(channel: channel?.name ?? "",
+                         show: ChannelPrograms(entries: guide, channelID: id, now: Date()).current?.title ?? "",
+                         genre: BrowsePresentation.category(channel?.category) ?? "")
+    }
+
     private func tune(_ channel: Channel) {
         guard let url = channel.playbackURL(streamHost: streamHost, feeds: feeds) else { return }
         if selectedID != channel.id {

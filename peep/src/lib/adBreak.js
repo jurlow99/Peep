@@ -8,7 +8,7 @@ import { hasAdPolicy, loadAdPolicy, allowsEntryAd, recordAdStart, placementAllow
 export const PLACEMENTS = ['pre_roll', 'mid_roll', 'post_roll'];
 const DISCOVERY_MS = 5000, STARTUP_MS = 10000, MEDIA_LOAD_MS = 8000;
 
-export function playAdBreak({ client, video, container, placement = 'pre_roll', scope, contentId, onBusy, onReady, onManager = () => {}, breakSeconds = null }) {
+export function playAdBreak({ client, video, container, placement = 'pre_roll', scope, contentId, onBusy, onReady, onManager = () => {}, breakSeconds = null, context = {} }) {
   let disposed = false, finished = false, cleaned = false, loader, display, manager, tag, timer;
   const entry = placement === 'pre_roll';
   const session = crypto.randomUUID();
@@ -69,7 +69,7 @@ export function playAdBreak({ client, video, container, placement = 'pre_roll', 
       });
       loader.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, () => { log('error'); finish(); });
       const request = new ima.AdsRequest();
-      request.adTagUrl = fillAdMacros(tag.tag_url, breakSeconds);
+      request.adTagUrl = fillAdMacros(tag.tag_url, breakSeconds, context);
       request.linearAdSlotWidth = video.clientWidth || 1280;
       request.linearAdSlotHeight = video.clientHeight || 720;
       request.setAdWillAutoPlay(true);

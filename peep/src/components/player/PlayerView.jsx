@@ -94,6 +94,10 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
 
   const isLive = video._type === "live" || video._type === "live_epg";
   const isEpisode = !!video.show_id;
+  // What the ad server is told about this title: [CHANNEL] / [SHOW] / [GENRE] in tag URLs.
+  const adContext = isLive
+    ? { channel: video.title, show: video.now_airing || "", genre: video.category || "" }
+    : { channel: "", show: video.show_title || video.title || "", genre: video.category || "" };
   const [myRating, setMyRating] = useState(null);
   const [ratingCounts, setRatingCounts] = useState({ up: 0, down: 0 });
   const progressTimerRef = useRef(null);
@@ -351,7 +355,7 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
     adsClearedRef.current = false;
     const stop = playAdBreak({ client: supabase, video: videoRef.current, container: adContainerRef.current, placement: "pre_roll",
       scope: isLive ? "live" : isEpisode ? "episode" : "movie",
-      contentId: isLive ? String(video.id).replace(/^ch[-_]/, "") : video.id,
+      contentId: isLive ? String(video.id).replace(/^ch[-_]/, "") : video.id, context: adContext,
       onBusy: setAdPlaying, onManager: manager => { adsManagerRef.current = manager; },
       onReady: () => {
         adsClearedRef.current = true; setPlaybackError(false);
@@ -530,7 +534,7 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
     adBreakStopRef.current = playAdBreak({ client: supabase, video: element, container: adContainerRef.current, placement,
       scope: target.scope || (isEpisode ? "episode" : "movie"), contentId: target.contentId ?? video.id,
       onBusy: setAdPlaying, onManager: manager => { adsManagerRef.current = manager; },
-      onReady: () => { adBreakStopRef.current = null; onDone(); }, breakSeconds: target.breakSeconds ?? null,
+      onReady: () => { adBreakStopRef.current = null; onDone(); }, breakSeconds: target.breakSeconds ?? null, context: adContext,
     });
   }
 

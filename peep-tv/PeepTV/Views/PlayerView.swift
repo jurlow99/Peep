@@ -600,6 +600,7 @@ struct PlayerView: View {
             }
             guard !Task.isCancelled else { return }
             if model.blackoutMessage == nil, let scope = liveChannelID != nil ? "live" : identity?.type {
+                adGate.context = liveChannelID != nil ? AdContext(channel: title) : AdContext(show: title)
                 guard await adGate.run(service: supabase, scope: scope == "short" ? "movie" : scope, contentID: liveChannelID.map(String.init) ?? identity?.id ?? ""), !Task.isCancelled else { return }
             }
             contentStarted = true
@@ -837,11 +838,17 @@ struct CSAITag: Decodable, Identifiable {
 
     /// [BREAK_SECONDS] / [BREAK_MS] carry the live break length so the ad server can
     /// size its pod. Same rule as the web: unknown lengths go out as 30 s.
-    func filled(breakSeconds: Double?) -> CSAITag {
+    /// [CHANNEL] / [SHOW] / [GENRE] describe what is playing, [DEVICE] is "tvos".
+    /// No App Tracking Transparency prompt, so [IFA] is blank and [LMT] is 1.
+    func filled(breakSeconds: Double?, context: AdContext = AdContext()) -> CSAITag {
         let seconds = breakSeconds.map { max(1, Int($0.rounded())) } ?? 30
+        let safe = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))
+        let text = { (value: String) in value.trimmingCharacters(in: .whitespaces).addingPercentEncoding(withAllowedCharacters: safe) ?? "" }
+        let values = ["BREAK_SECONDS": String(seconds), "BREAK_MS": String(seconds * 1000),
+                      "CHANNEL": text(context.channel), "SHOW": text(context.show), "GENRE": text(context.genre),
+                      "DEVICE": "tvos", "IFA": "", "LMT": "1"]
         var copy = self
-        copy.tag_url = tag_url.replacingOccurrences(of: "[BREAK_SECONDS]", with: String(seconds))
-            .replacingOccurrences(of: "[BREAK_MS]", with: String(seconds * 1000))
+        for (key, value) in values { copy.tag_url = copy.tag_url.replacingOccurrences(of: "[\(key)]", with: value) }
         return copy
     }
 
@@ -900,7 +907,16 @@ struct AdFrequencyPolicy {
     }
 }
 
+/// What the ad server is told about the title: [CHANNEL] / [SHOW] / [GENRE] in tag URLs.
+struct AdContext: Equatable {
+    var channel = ""
+    var show = ""
+    var genre = ""
+}
+
 @MainActor final class CSAIGate: ObservableObject {
+    /// Set by whoever shows the title, before an entry ad and whenever the channel changes.
+    var context = AdContext()
     @Published private(set) var blocking = false
     @Published private(set) var tag: CSAITag?
     private var continuation: CheckedContinuation<Bool, Never>?
@@ -946,7 +962,7 @@ struct AdFrequencyPolicy {
         return await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 self.continuation = continuation
-                self.tag = selected
+                self.tag = selected.filled(breakSeconds: nil, context: self.context)
                 self.record("request")
             }
         } onCancel: { Task { @MainActor in if self.generation == current { self.cancel() } } }
@@ -1270,7 +1286,7 @@ private struct LiveMidrollModifier: ViewModifier {
                     let wasMuted = player.isMuted
                     mutedBeforeMidroll = wasMuted
                     player.isMuted = true; midrollActive = true
-                    if let reason = gate.beginMidroll(service: service, tag: tag.filled(breakSeconds: remaining), channelID: channelID) { trace("Live mid-roll did not start: \(reason)"); status = "Break found · ad blocked: \(reason)" }
+                    if let reason = gate.beginMidroll(service: service, tag: tag.filled(breakSeconds: remaining, context: gate.context), channelID: channelID) { trace("Live mid-roll did not start: \(reason)"); status = "Break found · ad blocked: \(reason)" }
                     let started = ProcessInfo.processInfo.systemUptime
                     let deadline = ProcessInfo.processInfo.systemUptime + remaining
                     while !Task.isCancelled, gate.blocking, player.currentItem === attached,

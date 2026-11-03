@@ -396,6 +396,7 @@ struct ContentView: View {
         entryTask = Task { @MainActor in
             defer { entryCover = false }
             if session.initial.blackoutMessage() == nil {
+                adGate.context = AdContext(channel: session.initial.name, genre: BrowsePresentation.category(session.initial.category) ?? "")
                 guard await adGate.run(service: supabase, scope: "live", contentID: String(session.initial.id)), !Task.isCancelled else { return }
             }
             startLiveChannel(session)
@@ -407,6 +408,7 @@ struct ContentView: View {
         entryCover = true
         entryTask = Task { @MainActor in
             defer { entryCover = false }
+            adGate.context = AdContext()
             guard await adGate.run(service: supabase, scope: "multiview", contentID: ""), !Task.isCancelled else { return }
             multiview = session
         }
