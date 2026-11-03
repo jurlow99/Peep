@@ -828,12 +828,22 @@ extension View {
 // so watch progress and live viewing measurement cannot count an ad as content.
 struct CSAITag: Decodable, Identifiable {
     let id: Int
-    let tag_url: String
+    var tag_url: String
     let scope: String?
     let content_id: String?
     let active: Bool
     let is_test: Bool
     let platforms: [String]
+
+    /// [BREAK_SECONDS] / [BREAK_MS] carry the live break length so the ad server can
+    /// size its pod. Same rule as the web: unknown lengths go out as 30 s.
+    func filled(breakSeconds: Double?) -> CSAITag {
+        let seconds = breakSeconds.map { max(1, Int($0.rounded())) } ?? 30
+        var copy = self
+        copy.tag_url = tag_url.replacingOccurrences(of: "[BREAK_SECONDS]", with: String(seconds))
+            .replacingOccurrences(of: "[BREAK_MS]", with: String(seconds * 1000))
+        return copy
+    }
 
     static func select(_ tags: [CSAITag], scope: String, contentID: String) -> CSAITag? {
         tags.filter { tag in
@@ -1250,7 +1260,7 @@ private struct LiveMidrollModifier: ViewModifier {
                     let wasMuted = player.isMuted
                     mutedBeforeMidroll = wasMuted
                     player.isMuted = true; midrollActive = true
-                    if let reason = gate.beginMidroll(service: service, tag: tag, channelID: channelID) { trace("Live mid-roll did not start: \(reason)"); status = "Break found · ad blocked: \(reason)" }
+                    if let reason = gate.beginMidroll(service: service, tag: tag.filled(breakSeconds: remaining), channelID: channelID) { trace("Live mid-roll did not start: \(reason)"); status = "Break found · ad blocked: \(reason)" }
                     let started = ProcessInfo.processInfo.systemUptime
                     let deadline = ProcessInfo.processInfo.systemUptime + remaining
                     while !Task.isCancelled, gate.blocking, player.currentItem === attached,

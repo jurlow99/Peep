@@ -289,7 +289,7 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
           const edge = hls.liveSyncPosition;
           if (Number.isFinite(edge) && videoRef.current) videoRef.current.currentTime = edge;
           videoRef.current?.play().catch(() => {});
-        }, { scope: "live", contentId: String(video.id).replace(/^ch-/, "") });
+        }, { scope: "live", contentId: String(video.id).replace(/^ch-/, ""), breakSeconds: cue.duration });
       });
       hls.on(Hls.Events.ERROR, (_, d) => {
         if (!d.fatal) {
@@ -530,7 +530,7 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
     adBreakStopRef.current = playAdBreak({ client: supabase, video: element, container: adContainerRef.current, placement,
       scope: target.scope || (isEpisode ? "episode" : "movie"), contentId: target.contentId ?? video.id,
       onBusy: setAdPlaying, onManager: manager => { adsManagerRef.current = manager; },
-      onReady: () => { adBreakStopRef.current = null; onDone(); },
+      onReady: () => { adBreakStopRef.current = null; onDone(); }, breakSeconds: target.breakSeconds ?? null,
     });
   }
 
