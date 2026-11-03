@@ -475,9 +475,10 @@ struct PlayerView: View {
                     Button { dismiss() } label: { PlayerActionLabel("Back", symbol: "chevron.left") }.buttonStyle(BrowseCardStyle()).padding(.bottom, 80)
                 }.background(Color.black)
             } else {
-                if (!adGate.blocking || adGate.isMidroll) && !showNext && !showEnd {
-                    // Under a live mid-roll the player keeps running but must not hold the remote,
-                    // or the ad's Skip button can never take focus.
+                // A live mid-roll keeps the channel's player running (muted) underneath. Any other
+                // break takes the paused player off screen: left in place, it keeps the remote's
+                // focus and the ad's Skip button can never be reached.
+                if (!adGate.blocking || (adGate.isMidroll && liveChannelID != nil)) && !showNext && !showEnd {
                     NativePlayer(player: model.player, interactive: !adGate.blocking, proposal: proposal, onAcceptProposal: nextEpisode == nil ? nil : playNext,
                                  skipIntro: offerSkip && introWindow != nil ? { skipIntro() } : nil,
                                  startOver: liveChannelID == nil && identity != nil ? { watchAgain() } : nil).ignoresSafeArea()
@@ -890,6 +891,7 @@ struct CSAITag: Decodable, Identifiable {
     /// [BREAK_SECONDS] / [BREAK_MS] carry the live break length so the ad server can
     /// size its pod. Same rule as the web: unknown lengths go out as 30 s.
     /// [CHANNEL] / [SHOW] / [GENRE] describe what is playing, [DEVICE] is "tvos".
+    /// [CHANNEL] is always the clean channel name (one spelling per channel, like the web).
     /// No App Tracking Transparency prompt, so [IFA] is blank and [LMT] is 1.
     /// [DEVICE_ID] is a random 32-hex label made once per Apple TV (see AdDeviceID).
     /// [SKIPPABLE] is 0 for live channel breaks, 1 otherwise, so the ad server can leave out skipoffset.
@@ -898,7 +900,7 @@ struct CSAITag: Decodable, Identifiable {
         let safe = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))
         let text = { (value: String) in value.trimmingCharacters(in: .whitespaces).addingPercentEncoding(withAllowedCharacters: safe) ?? "" }
         let values = ["BREAK_SECONDS": String(seconds), "BREAK_MS": String(seconds * 1000),
-                      "CHANNEL": text(BrowsePresentation.channelName(context.channel)), // one clean spelling per channel, like the web "SHOW": text(context.show), "GENRE": text(context.genre),
+                      "CHANNEL": text(BrowsePresentation.channelName(context.channel)), "SHOW": text(context.show), "GENRE": text(context.genre),
                       "DEVICE": "tvos", "DEVICE_ID": text(deviceID), "IFA": "", "LMT": "1", "SKIPPABLE": skippable ? "1" : "0"]
         var copy = self
         for (key, value) in values { copy.tag_url = copy.tag_url.replacingOccurrences(of: "[\(key)]", with: value) }

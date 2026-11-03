@@ -87,7 +87,7 @@ final class SupabaseService: ObservableObject {
 
     func signIn(email: String, password: String) async throws {
         let result = try await auth(grant: "password", body: ["email": email.trimmingCharacters(in: .whitespacesAndNewlines), "password": password])
-        try SessionStore.write(result)
+        try persistSession(result)
         session = result
         accountProfile = nil
         needsReauthentication = false
