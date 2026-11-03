@@ -467,7 +467,9 @@ struct PlayerView: View {
                 }.background(Color.black)
             } else {
                 if (!adGate.blocking || adGate.isMidroll) && !showNext && !showEnd {
-                    NativePlayer(player: model.player, proposal: proposal, onAcceptProposal: nextEpisode == nil ? nil : playNext,
+                    // Under a live mid-roll the player keeps running but must not hold the remote,
+                    // or the ad's Skip button can never take focus.
+                    NativePlayer(player: model.player, interactive: !adGate.blocking, proposal: proposal, onAcceptProposal: nextEpisode == nil ? nil : playNext,
                                  skipIntro: offerSkip && introWindow != nil ? { skipIntro() } : nil).ignoresSafeArea()
                     if let metadata, metadata.audioOnly { AudioArtworkOverlay(metadata: metadata) }
                 }
@@ -1126,12 +1128,26 @@ struct IMAAdView: UIViewControllerRepresentable {
     }
     func adsManager(_ adsManager: IMAAdsManager, didReceive error: IMAAdError) { guard !ended else { return }; event("error", ""); complete() }
     func adsManagerDidRequestContentPause(_ adsManager: IMAAdsManager) { setNeedsFocusUpdate(); updateFocusIfNeeded() }
-    // The SDK draws its own Skip button when the offset is reached; pull the
-    // remote's focus onto it once, so one press of Select skips.
+    // The SDK draws its own Skip button when the offset is reached. Keep asking the
+    // focus system for it (from the window, since focus may sit outside this
+    // controller) until it is focused once, so one press of Select skips.
     func adsManager(_ adsManager: IMAAdsManager, adDidProgressToTime mediaTime: TimeInterval, totalTime: TimeInterval) {
-        guard !ended, let offset = skipAt, offset >= 0, mediaTime >= offset + 0.3 else { return }
-        skipAt = nil
-        setNeedsFocusUpdate(); updateFocusIfNeeded()
+        guard !ended, let offset = skipAt, offset >= 0, mediaTime >= offset + 0.3, let button = skipButton() else { return }
+        if button.isFocused { skipAt = nil; return }
+        guard let window = view.window, let focus = UIFocusSystem.focusSystem(for: window) else { return }
+        focus.requestFocusUpdate(to: self)
+        focus.updateFocusIfNeeded()
+    }
+    override var preferredFocusEnvironments: [UIFocusEnvironment] { skipButton().map { [$0] } ?? super.preferredFocusEnvironments }
+    /// The SDK's enabled, visible Skip control, found by its title or accessibility label.
+    private func skipButton() -> UIView? {
+        func search(_ view: UIView) -> UIView? {
+            if view.canBecomeFocused, !view.isHidden, view.alpha > 0.01, (view as? UIControl)?.isEnabled ?? true,
+               (((view as? UIButton)?.currentTitle ?? "") + " " + (view.accessibilityLabel ?? "")).localizedCaseInsensitiveContains("skip") { return view }
+            for child in view.subviews { if let found = search(child) { return found } }
+            return nil
+        }
+        return isViewLoaded ? search(view) : nil
     }
     func adsManagerDidRequestContentResume(_ adsManager: IMAAdsManager) { complete() }
     private func complete() { guard !ended else { return }; clean(); finished() }

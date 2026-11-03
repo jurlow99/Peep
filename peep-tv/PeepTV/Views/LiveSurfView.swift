@@ -81,7 +81,7 @@ struct LiveSurfView: View {
         ZStack(alignment: .leading) {
             Color.black
             if !adGate.blocking || adGate.isMidroll {
-                NativePlayer(player: player.player, onExit: exitPlayback, interactive: controlsOpen && !drawerOpen && player.blackoutMessage == nil, pauseOnDismantle: !keepsPlaying)
+                NativePlayer(player: player.player, onExit: exitPlayback, interactive: controlsOpen && !drawerOpen && player.blackoutMessage == nil && !adGate.blocking, pauseOnDismantle: !keepsPlaying)
             }
             if !drawerOpen && !controlsOpen && !adGate.blocking {
                 Button { if player.blackoutMessage == nil { controlsOpen = true } else { revealDrawer() } } label: { Color.clear.contentShape(Rectangle()) }
