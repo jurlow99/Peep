@@ -1160,6 +1160,14 @@ struct IMAAdView: UIViewControllerRepresentable {
     private var ended = false
     private var skipAt: TimeInterval?
     private let allowSkip: Bool
+    // Peep's own ad chrome: "Ad 1 of 3 · 0:24" bottom left; bottom right a "Skip in 5"
+    // pill that turns into a focusable "Skip ›" button. The SDK's countdown is turned off
+    // (uiElements) and its skip controls stay but are hidden; pressing ours presses
+    // theirs, so the SDK still reports the skip to the ad server.
+    private let countdown = AdPill()
+    private let skipSoon = AdPill()
+    private let skip = AdSkipButton()
+    private var podPosition = 1, podCount = 1
     init(tag: CSAITag, allowSkip: Bool = true, event: @escaping (String,String) -> Void, finished: @escaping () -> Void, cancelled: @escaping () -> Void) {
         self.tag = tag; self.allowSkip = allowSkip; self.event = event; self.finished = finished; self.cancelled = cancelled
         super.init(nibName: nil, bundle: nil)
@@ -1174,6 +1182,16 @@ struct IMAAdView: UIViewControllerRepresentable {
         let adButtons = UIButton.appearance(whenContainedInInstancesOf: [IMAAdController.self])
         adButtons.backgroundColor = UIColor(white: 0.08, alpha: 1)
         adButtons.tintColor = .white
+        skip.addAction(UIAction { [weak self] _ in self?.pressSkip() }, for: .primaryActionTriggered)
+        for chrome in [countdown, skipSoon, skip] as [UIView] { chrome.isHidden = true; view.addSubview(chrome) }
+        NSLayoutConstraint.activate([
+            countdown.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 90),
+            countdown.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -70),
+            skipSoon.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -90),
+            skipSoon.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -70),
+            skip.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -90),
+            skip.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -66),
+        ])
     }
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
@@ -1199,6 +1217,7 @@ struct IMAAdView: UIViewControllerRepresentable {
         manager = data.adsManager; manager?.delegate = self
         let settings = IMAAdsRenderingSettings()
         settings.loadVideoTimeout = 8
+        settings.uiElements = [] // Peep draws its own countdown
         manager?.initialize(with: settings)
     }
     func adsLoader(_ loader: IMAAdsLoader, failedWith data: IMAAdLoadingErrorData) {
@@ -1213,8 +1232,11 @@ struct IMAAdView: UIViewControllerRepresentable {
         case .STARTED:
             timeout?.cancel(); self.event("impression", id)
             skipAt = allowSkip && (event.ad?.isSkippable ?? false) ? event.ad?.skipTimeOffset : nil
-        case .COMPLETE: self.event("complete", id)
-        case .SKIPPED: self.event("skip", id)
+            podPosition = max(1, event.ad?.adPodInfo.adPosition ?? 1); podCount = max(podPosition, event.ad?.adPodInfo.totalAds ?? 1)
+            skip.isHidden = true; skipSoon.isHidden = skipAt == nil; countdown.isHidden = false
+            bringChromeForward()
+        case .COMPLETE: self.event("complete", id); skip.isHidden = true; skipSoon.isHidden = true
+        case .SKIPPED: self.event("skip", id); skip.isHidden = true; skipSoon.isHidden = true
         case .ALL_ADS_COMPLETED: complete()
         case .ICON_FALLBACK_IMAGE_CLOSED: adsManager.resume()
         default: break
@@ -1222,42 +1244,66 @@ struct IMAAdView: UIViewControllerRepresentable {
     }
     func adsManager(_ adsManager: IMAAdsManager, didReceive error: IMAAdError) { guard !ended else { return }; event("error", ""); complete() }
     func adsManagerDidRequestContentPause(_ adsManager: IMAAdsManager) { setNeedsFocusUpdate(); updateFocusIfNeeded() }
-    // The SDK draws its own Skip button when the offset is reached. Keep asking the
-    // focus system for it (from the window, since focus may sit outside this
-    // controller) until it is focused once, so one press of Select skips.
     func adsManager(_ adsManager: IMAAdsManager, adDidProgressToTime mediaTime: TimeInterval, totalTime: TimeInterval) {
-        guard !ended, let offset = skipAt, offset >= 0, mediaTime >= offset + 0.3, let button = skipButton() else { return }
-        if button.isFocused { skipAt = nil; return }
-        guard let window = view.window, let focus = UIFocusSystem.focusSystem(for: window) else { return }
+        guard !ended else { return }
+        hideSDKSkip()
+        let left = max(0, Int((totalTime - mediaTime).rounded(.up)))
+        let clock = "\(left / 60):" + String(format: "%02d", left % 60)
+        countdown.text = podCount > 1 ? "Ad \(podPosition) of \(podCount)  ·  \(clock)" : "Ad  ·  \(clock)"
+        guard let offset = skipAt, offset >= 0 else { skipSoon.isHidden = true; skip.isHidden = true; return }
+        if mediaTime < offset {
+            skipSoon.text = "Skip in \(max(1, Int((offset - mediaTime).rounded(.up))))"
+            skipSoon.isHidden = false; skip.isHidden = true
+            return
+        }
+        skipSoon.isHidden = true
+        if skip.isHidden { skip.isHidden = false; bringChromeForward() }
+        // Pull the remote's focus onto Skip (from the window: focus may sit outside
+        // this controller) until it lands once.
+        guard !skip.isFocused, let window = view.window, let focus = UIFocusSystem.focusSystem(for: window) else { return }
         focus.requestFocusUpdate(to: self)
         focus.updateFocusIfNeeded()
     }
-    override var preferredFocusEnvironments: [UIFocusEnvironment] { (allowSkip ? skipButton() : nil).map { [$0] } ?? super.preferredFocusEnvironments }
-    // The SDK's buttons keep our solid dark backing (readable over any creative), which
-    // also hides tvOS's own focus glow. Show focus the Peep way: a yellow outline.
-    override func didUpdateFocus(in context: UIFocusUpdateContext, with coordinator: UIFocusAnimationCoordinator) {
-        super.didUpdateFocus(in: context, with: coordinator)
-        for (view, focused) in [(context.previouslyFocusedView, false), (context.nextFocusedView, true)] {
-            guard let button = view as? UIButton, button.isDescendant(of: self.view) else { continue }
-            button.layer.borderColor = UIColor(red: 1, green: 0.84, blue: 0, alpha: 1).cgColor // #FFD600
-            button.layer.borderWidth = focused ? 5 : 0
-            button.layer.cornerRadius = 12
-        }
-    }
-    // Live channel breaks can't be skipped: the remote's focus may never land on Skip.
+    override var preferredFocusEnvironments: [UIFocusEnvironment] { skip.isHidden ? super.preferredFocusEnvironments : [skip] }
+    // Only Peep's Skip may take focus: never the SDK's hidden ones (and on live breaks,
+    // where skipping isn't allowed, ours never appears).
     override func shouldUpdateFocus(in context: UIFocusUpdateContext) -> Bool {
-        if !allowSkip, let next = context.nextFocusedView, let skip = skipButton(), next === skip || next.isDescendant(of: skip) { return false }
+        if let next = context.nextFocusedView, next !== skip, sdkSkipControls().contains(where: { next === $0 || next.isDescendant(of: $0) }) { return false }
         return super.shouldUpdateFocus(in: context)
     }
-    /// The SDK's enabled, visible Skip control, found by its title or accessibility label.
-    private func skipButton() -> UIView? {
-        func search(_ view: UIView) -> UIView? {
-            if view.canBecomeFocused, !view.isHidden, view.alpha > 0.01, (view as? UIControl)?.isEnabled ?? true,
-               (((view as? UIButton)?.currentTitle ?? "") + " " + (view.accessibilityLabel ?? "")).localizedCaseInsensitiveContains("skip") { return view }
-            for child in view.subviews { if let found = search(child) { return found } }
-            return nil
+    private func bringChromeForward() { [countdown, skipSoon, skip].forEach { view.bringSubviewToFront($0) } }
+    /// The SDK's own skip controls ("You can skip this ad in 3", "Skip Ad"), found by label.
+    private func sdkSkipControls() -> [UIView] {
+        var found: [UIView] = []
+        func search(_ view: UIView) {
+            if view !== skip, view is UIControl,
+               (((view as? UIButton)?.currentTitle ?? "") + " " + (view.accessibilityLabel ?? "")).localizedCaseInsensitiveContains("skip") { found.append(view); return }
+            view.subviews.forEach(search)
         }
-        return isViewLoaded ? search(view) : nil
+        if isViewLoaded { search(view) }
+        return found
+    }
+    // The SDK's skip controls stay invisible. On live breaks they are also disabled, so
+    // the remote can never reach them; the SDK re-enables them as its skip state changes,
+    // so this runs on every layout pass, progress tick and focus move. (Elsewhere they
+    // stay enabled: the SDK ignores a press on a disabled button, and ours presses it.)
+    private func hideSDKSkip() {
+        for control in sdkSkipControls() {
+            control.layer.opacity = 0; control.isUserInteractionEnabled = false
+            if !allowSkip { (control as? UIControl)?.isEnabled = false }
+        }
+    }
+    override func viewDidLayoutSubviews() { super.viewDidLayoutSubviews(); hideSDKSkip() }
+    override func didUpdateFocus(in context: UIFocusUpdateContext, with coordinator: UIFocusAnimationCoordinator) {
+        super.didUpdateFocus(in: context, with: coordinator)
+        guard let next = context.nextFocusedView, next !== skip, sdkSkipControls().contains(where: { next === $0 || next.isDescendant(of: $0) }) else { return }
+        hideSDKSkip(); setNeedsFocusUpdate(); updateFocusIfNeeded()
+    }
+    private func pressSkip() {
+        guard allowSkip else { return }
+        let ready = sdkSkipControls().first { (($0 as? UIButton)?.currentTitle ?? $0.accessibilityLabel ?? "").lowercased().hasPrefix("skip") }
+        if let button = ready as? UIControl { button.sendActions(for: .primaryActionTriggered); button.sendActions(for: .touchUpInside) }
+        else { manager?.skip() }
     }
     func adsManagerDidRequestContentResume(_ adsManager: IMAAdsManager) { complete() }
     private func complete() { guard !ended else { return }; clean(); finished() }
@@ -1270,6 +1316,43 @@ struct IMAAdView: UIViewControllerRepresentable {
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         if presses.contains(where: { $0.type == .menu }) { clean(); cancelled(); return }
         super.pressesBegan(presses, with: event)
+    }
+}
+
+/// A small dark rounded label for the ad countdown and "Skip in 5".
+final class AdPill: UILabel {
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        font = AdPill.rounded(26, .semibold); textColor = .white; textAlignment = .center
+        backgroundColor = UIColor(white: 0, alpha: 0.62)
+        layer.cornerRadius = 24; layer.masksToBounds = true
+        translatesAutoresizingMaskIntoConstraints = false
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override var intrinsicContentSize: CGSize { let size = super.intrinsicContentSize; return CGSize(width: size.width + 48, height: max(48, size.height + 20)) }
+    static func rounded(_ size: CGFloat, _ weight: UIFont.Weight) -> UIFont {
+        let base = UIFont.systemFont(ofSize: size, weight: weight)
+        return base.fontDescriptor.withDesign(.rounded).map { UIFont(descriptor: $0, size: size) } ?? base
+    }
+}
+
+/// Peep's Skip button: dark pill, yellow outline and a little lift when focused.
+final class AdSkipButton: UIButton {
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        setTitle("Skip  ›", for: .normal); setTitleColor(.white, for: .normal)
+        titleLabel?.font = AdPill.rounded(28, .bold)
+        contentEdgeInsets = UIEdgeInsets(top: 14, left: 34, bottom: 14, right: 34)
+        backgroundColor = UIColor(white: 0.08, alpha: 0.9)
+        layer.cornerRadius = 28; layer.borderColor = UIColor(red: 1, green: 0.84, blue: 0, alpha: 1).cgColor // #FFD600
+        translatesAutoresizingMaskIntoConstraints = false
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override func didUpdateFocus(in context: UIFocusUpdateContext, with coordinator: UIFocusAnimationCoordinator) {
+        coordinator.addCoordinatedAnimations {
+            self.layer.borderWidth = self.isFocused ? 5 : 0
+            self.transform = self.isFocused ? CGAffineTransform(scaleX: 1.06, y: 1.06) : .identity
+        }
     }
 }
 
