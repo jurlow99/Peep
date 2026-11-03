@@ -1,6 +1,7 @@
 import SwiftUI
 import GoogleInteractiveMediaAds
 import AVKit
+import CoreImage.CIFilterBuiltins
 import Combine
 import OSLog
 
@@ -630,6 +631,15 @@ struct PlayerView: View {
                             .overlay(alignment: .topLeading) {
                                 Text("Ad").font(.system(size: 18, weight: .bold)).padding(.horizontal, 10).padding(.vertical, 4)
                                     .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 8)).padding(12)
+                            }
+                            .overlay(alignment: .bottomTrailing) {
+                                if let link = pauseAd.clickThrough, let qr = PauseAdQR.image(for: link) {
+                                    VStack(spacing: 6) {
+                                        Image(uiImage: qr).interpolation(.none).resizable().frame(width: 160, height: 160)
+                                        Text("Scan to learn more").font(.system(size: 15, weight: .semibold)).foregroundStyle(.black)
+                                    }
+                                    .padding(10).background(.white, in: RoundedRectangle(cornerRadius: 14)).padding(14)
+                                }
                             }
                             .shadow(color: .black.opacity(0.55), radius: 30, y: 12)
                             .onAppear { countPauseAd() }
@@ -1382,12 +1392,14 @@ struct PauseAd: Equatable {
     let height: Double
     let impressions: [URL]
     let title: String
+    /// Advertiser link (NonLinearClickThrough), drawn as a QR code; it counts the scan itself.
+    var clickThrough: URL? = nil
 
     static func parse(_ data: Data) -> PauseAd? {
         let reader = PauseAdXML()
         let parser = XMLParser(data: data); parser.delegate = reader
         guard parser.parse(), let image = reader.image else { return nil }
-        return PauseAd(image: image, width: reader.width ?? 16, height: reader.height ?? 9, impressions: reader.impressions, title: reader.title ?? "Ad")
+        return PauseAd(image: image, width: reader.width ?? 16, height: reader.height ?? 9, impressions: reader.impressions, title: reader.title ?? "Ad", clickThrough: reader.clickThrough)
     }
 
     /// Asks the most specific active Apple TV pause tag; nil on no tag, no ad or any failure.
@@ -1405,7 +1417,7 @@ struct PauseAd: Equatable {
 }
 
 private final class PauseAdXML: NSObject, XMLParserDelegate {
-    var image: URL?, width: Double?, height: Double?, impressions: [URL] = [], title: String?
+    var image: URL?, width: Double?, height: Double?, impressions: [URL] = [], title: String?, clickThrough: URL?
     private var element = "", text = "", inAd = false, done = false
     func parser(_ parser: XMLParser, didStartElement name: String, namespaceURI: String?, qualifiedName: String?, attributes: [String: String] = [:]) {
         if name == "Ad" { inAd = true }
@@ -1422,9 +1434,21 @@ private final class PauseAdXML: NSObject, XMLParserDelegate {
         case "StaticResource": if image == nil { image = secure }
         case "Impression": if let secure { impressions.append(secure) }
         case "AdTitle": if title == nil, !value.isEmpty { title = value }
+        case "NonLinearClickThrough": if clickThrough == nil { clickThrough = secure }
         case "Ad": done = true // only the first ad
         default: break
         }
+    }
+}
+
+/// QR code for a pause ad's link (Core Image), crisp at any size: draw with .interpolation(.none).
+enum PauseAdQR {
+    static func image(for url: URL) -> UIImage? {
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(url.absoluteString.utf8); filter.correctionLevel = "M"
+        guard let output = filter.outputImage?.transformed(by: CGAffineTransform(scaleX: 8, y: 8)),
+              let cg = CIContext().createCGImage(output, from: output.extent) else { return nil }
+        return UIImage(cgImage: cg)
     }
 }
 

@@ -698,7 +698,8 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
             {pauseAd && !adPlaying && (
               <div style={{ position: "absolute", right: "4%", top: "50%", transform: "translateY(-50%)", zIndex: 12, width: "min(36%, 520px)", pointerEvents: "auto" }}>
                 <button type="button" title={pauseAd.ad.clickThrough ? "Learn more" : pauseAd.ad.title} disabled={!pauseAd.ad.clickThrough}
-                  onClick={() => { ping(pauseAd.ad.clickTracking); recordAdEvent(pauseAd.tag, pauseAd.session, "click", pauseAd.scope, pauseAd.contentId); window.open(pauseAd.ad.clickThrough, "_blank", "noopener"); }}
+                  // The click-through link counts the click itself: no separate NonLinearClickTracking ping.
+                  onClick={() => { recordAdEvent(pauseAd.tag, pauseAd.session, "click", pauseAd.scope, pauseAd.contentId); window.open(pauseAd.ad.clickThrough, "_blank", "noopener"); }}
                   style={{ display: "block", width: "100%", padding: 0, border: 0, borderRadius: 12, overflow: "hidden", background: "#000", cursor: pauseAd.ad.clickThrough ? "pointer" : "default", boxShadow: "0 12px 40px rgba(0,0,0,0.55)", aspectRatio: `${pauseAd.ad.width} / ${pauseAd.ad.height}` }}>
                   <img src={pauseAd.ad.image} alt={pauseAd.ad.title} style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
                     onLoad={() => { if (pauseShownRef.current) return; pauseShownRef.current = true; ping(pauseAd.ad.impressions); recordAdEvent(pauseAd.tag, pauseAd.session, "impression", pauseAd.scope, pauseAd.contentId); }}

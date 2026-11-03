@@ -620,12 +620,15 @@ final class CatalogTests: XCTestCase {
         <Impression><![CDATA[https://t.example/imp]]></Impression><Impression><![CDATA[http://insecure.example/imp]]></Impression>
         <Creatives><Creative><NonLinearAds><NonLinear width="800" height="450">
         <StaticResource creativeType="image/png"><![CDATA[ https://cdn.example/pause.png ]]></StaticResource>
+        <NonLinearClickThrough><![CDATA[https://steep.example/q/9JTeI2BJcH]]></NonLinearClickThrough>
         </NonLinear></NonLinearAds></Creative></Creatives></InLine></Ad></VAST>
         """
         let ad = PauseAd.parse(Data(vast.utf8))
         XCTAssertEqual(ad?.image, URL(string: "https://cdn.example/pause.png"))
         XCTAssertEqual(ad?.width, 800); XCTAssertEqual(ad?.height, 450); XCTAssertEqual(ad?.title, "Farris Cola")
         XCTAssertEqual(ad?.impressions, [URL(string: "https://t.example/imp")!]) // http trackers dropped
+        XCTAssertEqual(ad?.clickThrough, URL(string: "https://steep.example/q/9JTeI2BJcH"))
+        XCTAssertNotNil(PauseAdQR.image(for: URL(string: "https://steep.jurlow99.workers.dev/q/9JTeI2BJcH")!))
         XCTAssertNil(PauseAd.parse(Data(#"<VAST version="4.2" xmlns="http://www.iab.com/VAST"></VAST>"#.utf8)))
         XCTAssertNil(PauseAd.parse(Data("not xml".utf8)))
         XCTAssertEqual(AdPolicy.parse(#"{"pause_enabled":false}"#).pause_enabled, false)
