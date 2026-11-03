@@ -21,6 +21,6 @@ export async function recordAdEvent(tag, sessionId, event, scope, contentId, adI
 
 export function appleTVPlacementError(form,isDevelopment){
   if(!form.platforms?.includes('tvos')||form.ad_type==='pre_roll')return null;
-  if(isDevelopment&&form.ad_type==='mid_roll'&&form.scope==='live'&&form.is_test&&/^-?[1-9]\d*$/.test(String(form.content_id)))return null;
-  return 'Apple TV mid-roll testing requires FARRIS dev, a test tag, Live Channels scope and one channel ID. Post-roll is not supported.';
+  if(isDevelopment&&form.ad_type==='mid_roll'&&form.scope==='live'&&form.is_test&&(form.content_id==null||form.content_id===''||/^-?[1-9]\d*$/.test(String(form.content_id))))return null;
+  return 'Apple TV plays mid-rolls only over live channel breaks, on FARRIS dev, from a test tag. Untick Apple TV for movie mid-rolls and post-rolls.';
 }

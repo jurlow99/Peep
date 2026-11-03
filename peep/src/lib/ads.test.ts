@@ -87,13 +87,13 @@ describe('CSAI placement and lifecycle', () => {
 });
 
 import {appleTVPlacementError} from './ads';
-it('limits Apple TV mid-roll to dev test tags on a single live channel',()=>{
+it('limits Apple TV mid-roll to dev test tags on live channels',()=>{
  const form={platforms:['tvos'],ad_type:'mid_roll',scope:'live',is_test:true,content_id:'12'};
  expect(appleTVPlacementError(form,true)).toBeNull();
  expect(appleTVPlacementError({...form,content_id:'-830031'},true)).toBeNull();
  expect(appleTVPlacementError(form,false)).toBeTruthy();
  expect(appleTVPlacementError({...form,is_test:false},true)).toBeTruthy();
- expect(appleTVPlacementError({...form,content_id:''},true)).toBeTruthy();
+ expect(appleTVPlacementError({...form,content_id:''},true)).toBeNull();
  expect(appleTVPlacementError({...form,scope:'global'},true)).toBeTruthy();
  expect(appleTVPlacementError({...form,ad_type:'post_roll'},true)).toBeTruthy();
 });
