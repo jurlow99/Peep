@@ -343,6 +343,7 @@ struct PlaybackView: View {
     @State private var nextEpisode: Episode?
     @State private var seriesAllowsAutoplay = false
     @State private var introWindow: ClosedRange<Double>?
+    @State private var adBreaks: [Int]?
     private var playbackIdentity: PlaybackIdentity? { currentEpisode.map { PlaybackIdentity(id: String($0.id), type: "episode") } ?? identity }
     @State private var attempt = UUID()
     @EnvironmentObject private var service: SupabaseService
@@ -353,7 +354,7 @@ struct PlaybackView: View {
         Group {
             if let resolvedURL {
                 PlayerView(url: resolvedURL, title: currentEpisode?.displayTitle ?? title, identity: playbackIdentity, liveChannelID: liveChannelID, startFromBeginning: startFromBeginning, metadata: metadata,
-                           nextEpisode: nextEpisode, seriesAllowsAutoplay: seriesAllowsAutoplay, introWindow: introWindow, related: related, openRelated: openRelated, playNext: {
+                           nextEpisode: nextEpisode, seriesAllowsAutoplay: seriesAllowsAutoplay, introWindow: introWindow, adBreaks: adBreaks, related: related, openRelated: openRelated, playNext: {
                     guard let nextEpisode else { return }
                     currentEpisode = nextEpisode
                     self.resolvedURL = nil
@@ -375,7 +376,7 @@ struct PlaybackView: View {
             }
         }
         .task(id: attempt) {
-            resolutionError = nil; resolvedURL = nil; nextEpisode = nil; seriesAllowsAutoplay = false; introWindow = nil
+            resolutionError = nil; resolvedURL = nil; nextEpisode = nil; seriesAllowsAutoplay = false; introWindow = nil; adBreaks = nil
             guard let url = currentEpisode?.videoURL ?? url else {
                 resolutionError = "A direct video stream is not available for this title. Please choose another title."
                 return
@@ -394,7 +395,13 @@ struct PlaybackView: View {
                         nextEpisode = SeriesPlayback.next(after: episode, in: episodes)
                         seriesAllowsAutoplay = shows.first?.autoplay_next == true // explicit, like the web
                         introWindow = SeriesPlayback.introWindow(episode: episode, show: shows.first)
+                        adBreaks = episode.ad_breaks
                     }
+                } else if let identity = playbackIdentity, ["movie", "short"].contains(identity.type) {
+                    // The title's own ad breaks; without any, the Ad rules timing applies.
+                    let rows: [Video] = try await service.get("videos", query: ["id": "eq.\(identity.id)", "limit": "1"])
+                    guard !Task.isCancelled else { return }
+                    adBreaks = rows.first?.ad_breaks
                 }
             } catch {
                 guard !Task.isCancelled else { return }
@@ -416,6 +423,7 @@ struct PlayerView: View {
     var nextEpisode: Episode?
     let seriesAllowsAutoplay: Bool
     let introWindow: ClosedRange<Double>?
+    let adBreaks: [Int]?
     @State private var offerSkip = false
     let related: [Video]
     let openRelated: (Video) -> Void
@@ -436,9 +444,10 @@ struct PlayerView: View {
     @Environment(\.dismiss) private var dismiss
     let retry: () -> Void
 
-    init(url: URL, title: String, identity: PlaybackIdentity? = nil, liveChannelID: Int? = nil, startFromBeginning: Bool = false, metadata: PlaybackMetadata? = nil, nextEpisode: Episode? = nil, seriesAllowsAutoplay: Bool = false, introWindow: ClosedRange<Double>? = nil, related: [Video] = [], openRelated: @escaping (Video) -> Void = { _ in }, playNext: @escaping () -> Void = {}, retry: @escaping () -> Void) {
+    init(url: URL, title: String, identity: PlaybackIdentity? = nil, liveChannelID: Int? = nil, startFromBeginning: Bool = false, metadata: PlaybackMetadata? = nil, nextEpisode: Episode? = nil, seriesAllowsAutoplay: Bool = false, introWindow: ClosedRange<Double>? = nil, adBreaks: [Int]? = nil, related: [Video] = [], openRelated: @escaping (Video) -> Void = { _ in }, playNext: @escaping () -> Void = {}, retry: @escaping () -> Void) {
         self.title = title
         self.introWindow = introWindow
+        self.adBreaks = adBreaks
         self.metadata = metadata
         self.related = related
         self.openRelated = openRelated
@@ -568,7 +577,7 @@ struct PlayerView: View {
                 duration = model.player.currentItem?.duration.seconds ?? .nan
             }
             let policy = await CSAIGate.loadPolicy(supabase)
-            let cues = policy.midrollCuePoints(duration: duration)
+            let cues = policy.cuePoints(duration: duration, titleBreaks: adBreaks)
             let start = model.player.currentTime().seconds
             var next = cues.firstIndex { $0 > start + 1 } ?? cues.count
             while !Task.isCancelled, next < cues.count {
@@ -932,6 +941,13 @@ struct AdPolicy: Decodable {
         var at = every
         while at < duration - 120 && points.count < midroll_max_breaks { points.append(at); at += every }
         return points
+    }
+    /// A title's own approved breaks win over the rules timing; both obey the switches
+    /// and stay out of the last two minutes. Same as the web's titleCuePoints.
+    func cuePoints(duration: Double, titleBreaks: [Int]?) -> [Double] {
+        guard enabled, midroll_enabled, duration.isFinite else { return [] }
+        let own = Set(titleBreaks ?? []).filter { $0 > 0 && Double($0) < duration - 120 }.sorted().map(Double.init)
+        return own.isEmpty ? midrollCuePoints(duration: duration) : own
     }
     static func parse(_ value: String?) -> AdPolicy {
         guard let data = value?.data(using: .utf8), let policy = try? JSONDecoder().decode(AdPolicy.self, from: data) else { return fallback }

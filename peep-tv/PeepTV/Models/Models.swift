@@ -32,6 +32,7 @@ struct Video: Identifiable, Codable, Hashable {
     let featured: Bool?
     let visibility_tier: String?
     let is_premium: Bool?
+    var ad_breaks: [Int]? = nil   // approved mid-roll times, seconds from the start
     var is_featured: Bool? { featured }
     var heroURL: URL? { MediaURL.parse(thumbnail) ?? MediaURL.parse(poster) }
     var thumbURL: URL? { MediaURL.parse(poster) ?? MediaURL.parse(thumbnail) }
@@ -69,6 +70,7 @@ struct Episode: Identifiable, Codable {
     let is_premium: Bool?
     let intro_start_seconds: Int?
     let intro_end_seconds: Int?
+    var ad_breaks: [Int]? = nil   // approved mid-roll times, seconds from the start
     var videoURL: URL? { MediaURL.playback(url) }
     var thumbURL: URL? { MediaURL.parse(thumbnail) }
     var displayTitle: String { title ?? "Episode \(episode_number ?? 0)" }

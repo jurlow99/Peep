@@ -4,7 +4,7 @@ import { resolveVODPlayback } from "../../lib/vodStorage";
 import { SUPABASE_URL } from "../../lib/config";
 import { useChannelBlackout } from "../../hooks/useChannelBlackout";
 import { playAdBreak, resizeAdBreak } from "../../lib/adBreak";
-import { midrollCuePoints } from "../../lib/adPolicy";
+import { titleCuePoints } from "../../lib/adBreaks";
 import { trackLiveVideo } from "../../lib/liveViewing";
 import { useState, useEffect, useRef, useMemo } from "react";
 import Hls from "hls.js";
@@ -593,7 +593,7 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
   function handleLoadedMetadata() {
     if (!videoRef.current || adBusyRef.current) return;
     if (!isLive && !getEmbedUrl(video.url)) {
-      midrollCuesRef.current = midrollCuePoints(videoRef.current.duration);
+      midrollCuesRef.current = titleCuePoints(video.ad_breaks, videoRef.current.duration);
       midrollNextRef.current = 0;
     }
     if ((video._type === "live_epg") && video._elapsed > 0 && !getEmbedUrl(video.url)) {

@@ -7,6 +7,8 @@ import PublicationStatus, {useSeriesInventory} from "./cms/PublicationStatus";
 import './cms/AdminForms.css';
 import ProviderDeliveries from './cms/ProviderDeliveries';
 import SeriesWorkspace from "./cms/SeriesWorkspace";
+import AdBreaksEditor from "./cms/AdBreaksEditor";
+import { parseAdBreaks } from "../lib/adBreaks";
 import TitleMetadataImporter from "./cms/TitleMetadataImporter";
 import EpisodeAutoThumbnail from "./cms/EpisodeAutoThumbnail";
 import HomeHeroEditor from "./cms/HomeHeroEditor";
@@ -1398,6 +1400,8 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
       poster: row.poster ?? "",
       url: row.url ?? "",
       trailer_url: row.trailer_url ?? "",
+      ad_breaks: row.ad_breaks ?? [],
+      suggested_ad_breaks: row.suggested_ad_breaks ?? [],
       description: row.description ?? "",
       tags: (() => {
         if (!row.tags) return "";
@@ -1427,6 +1431,8 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
       score: form.score !== "" ? Number(form.score) : null,
       year: form.year !== "" ? Number(form.year) : null,
       trailer_url: form.trailer_url.trim() || null,
+      ad_breaks: parseAdBreaks(form.ad_breaks).length ? parseAdBreaks(form.ad_breaks) : null,
+      suggested_ad_breaks: undefined, // the scanner's, not the admin's: never written back
       tags: (() => {
         const raw = form.tags.trim();
         if (!raw) return [];
@@ -1790,7 +1796,7 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
   function startEpisodeEdit(ep) {
     setEditingEpisodeId(ep.id);
     setDrawerOpen(true);
-    setEpisodeForm({ show_id: ep.show_id, season: ep.season, episode_number: ep.episode_number, title: ep.title ?? "", description: ep.description ?? "", url: ep.url ?? "", thumbnail: ep.thumbnail ?? "", duration: ep.duration ?? "", intro_start_seconds: ep.intro_start_seconds ?? "", intro_end_seconds: ep.intro_end_seconds ?? "" });
+    setEpisodeForm({ show_id: ep.show_id, season: ep.season, episode_number: ep.episode_number, title: ep.title ?? "", description: ep.description ?? "", url: ep.url ?? "", thumbnail: ep.thumbnail ?? "", duration: ep.duration ?? "", intro_start_seconds: ep.intro_start_seconds ?? "", intro_end_seconds: ep.intro_end_seconds ?? "", ad_breaks: ep.ad_breaks ?? [], suggested_ad_breaks: ep.suggested_ad_breaks ?? [] });
   }
 
   function cancelEpisodeEdit() { setEditingEpisodeId(null); setEpisodeForm({ ...EMPTY_EPISODE, show_id: selectedShowForEpisodes }); setDrawerOpen(false); }
@@ -1801,6 +1807,8 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
     const payload = { ...episodeForm, show_id: selectedShowForEpisodes, season: Number(episodeForm.season), episode_number: Number(episodeForm.episode_number) };
     // Skip-intro override: whole seconds or null (null = use the series default).
     for (const key of ["intro_start_seconds", "intro_end_seconds"]) payload[key] = episodeForm[key] !== "" && episodeForm[key] != null ? Math.max(0, Math.round(Number(episodeForm[key]))) || null : null;
+    payload.ad_breaks = parseAdBreaks(episodeForm.ad_breaks); if (!payload.ad_breaks.length) payload.ad_breaks = null;
+    delete payload.suggested_ad_breaks; // the scanner's, not the admin's
     if (payload.intro_end_seconds && payload.intro_start_seconds && payload.intro_end_seconds <= payload.intro_start_seconds) { showToast("The intro must end after it starts.", "error"); setEpisodeSaving(false); return; }
     try {
       if (editingEpisodeId) {
@@ -5231,6 +5239,7 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
                       <FieldInput label="Duration" value={form.duration} onChange={v => setForm(f => ({ ...f, duration: v }))} placeholder="2h 33m" />
                       <FieldInput label="Score %" value={form.score} onChange={v => setForm(f => ({ ...f, score: v }))} placeholder="99" type="number" />
                     </div>
+                    <AdBreaksEditor value={form.ad_breaks} suggested={form.suggested_ad_breaks} onChange={v => setForm(f => ({ ...f, ad_breaks: v }))} />
                     <div>
                       <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Hero image — recommended</label>
                       <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>Landscape · 1920×1080px · full-screen banner · Safe zone: center 1400×800 (stay 260px from sides, 140px from top/bottom)</p>
@@ -5359,6 +5368,7 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
                       <FieldInput label="Skip intro · starts at (seconds)" value={episodeForm.intro_start_seconds ?? ""} onChange={v => setEpisodeForm(f => ({ ...f, intro_start_seconds: v }))} placeholder="series default" type="number" />
                       <FieldInput label="Skip intro · ends at (seconds)" value={episodeForm.intro_end_seconds ?? ""} onChange={v => setEpisodeForm(f => ({ ...f, intro_end_seconds: v }))} placeholder="series default" type="number" />
                     </div>
+                    <AdBreaksEditor value={episodeForm.ad_breaks} suggested={episodeForm.suggested_ad_breaks} onChange={v => setEpisodeForm(f => ({ ...f, ad_breaks: v }))} />
                     <div>
                       <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.7 }}>Episode thumbnail — recommended</label>
                       <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>16:9 still from the episode (optional)</p>

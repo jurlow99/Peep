@@ -6,6 +6,8 @@ import {resolveVODPlayback} from '../../lib/vodStorage';
 import {ImageUploader} from '../ImageUploader';
 import EpisodeAutoThumbnail from './EpisodeAutoThumbnail';
 import VODUploadFlow from './VODUploadFlow';
+import AdBreaksEditor from './AdBreaksEditor';
+import {parseAdBreaks} from '../../lib/adBreaks';
 import ReplaceVideo from './ReplaceVideo';
 import SeriesFolderImport from './SeriesFolderImport';
 import Drawer from './Drawer';
@@ -62,6 +64,7 @@ export default function SeriesWorkspace({show,onBack,onUpdated,showToast,curatio
     const fields=['title','description','url','thumbnail','duration','status','is_premium'];
     const payload={...Object.fromEntries(fields.map(key=>[key,editing[key]??(key==='is_premium'?false:'')])),season:Number(editing.season),episode_number:Number(editing.episode_number)};
     for(const key of ['intro_start_seconds','intro_end_seconds'])payload[key]=editing[key]!==''&&editing[key]!=null?Math.max(0,Math.round(Number(editing[key])))||null:null;
+    payload.ad_breaks=parseAdBreaks(editing.ad_breaks);if(!payload.ad_breaks.length)payload.ad_breaks=null;
     if(payload.intro_end_seconds&&payload.intro_start_seconds&&payload.intro_end_seconds<=payload.intro_start_seconds){setSaving(false);setError('The intro must end after it starts.');return;}
     const {data,error}=await supabase.from('episodes').update(payload).eq('id',editing.id).eq('show_id',show.id).select('id');
     setSaving(false);
@@ -111,6 +114,7 @@ export default function SeriesWorkspace({show,onBack,onUpdated,showToast,curatio
       <ReplaceVideo type="episode" id={editing.id} title={editing.title} showToast={showToast} disabled={saving} onReplaced={({url,duration})=>{setEditing(f=>f?{...f,url,duration:f.duration||duration}:f);load();onUpdated?.();}}/>
       <label>Description<textarea rows="4" value={editing.description||''} onChange={e=>setEditing(f=>({...f,description:e.target.value}))}/></label>
       <div className="series-fields series-intro"><label>Intro starts at (s)<input type="number" min="0" placeholder={show.intro_start_seconds??'series default'} value={editing.intro_start_seconds??''} onChange={e=>setEditing(f=>({...f,intro_start_seconds:e.target.value}))}/></label><label>Intro ends at (s)<input type="number" min="1" placeholder={show.intro_end_seconds??'series default'} value={editing.intro_end_seconds??''} onChange={e=>setEditing(f=>({...f,intro_end_seconds:e.target.value}))}/></label></div>
+      <AdBreaksEditor value={editing.ad_breaks} suggested={editing.suggested_ad_breaks} onChange={v=>setEditing(f=>({...f,ad_breaks:v}))}/>
       {editing.thumbnail&&<img src={editing.thumbnail} alt="Episode snapshot preview" style={{width:'100%',borderRadius:8}}/>}
       <EpisodeAutoThumbnail url={editing.url} thumbnail={editing.thumbnail} onGenerated={(thumbnail,source,replace)=>setEditing(f=>f&&f.url===source&&(replace||!f.thumbnail)?{...f,thumbnail}:f)}/>
       <ImageUploader appearance="light" label="Upload snapshot" bucket={IS_DEV_DB?'promo-images':undefined} folder={IS_DEV_DB?'hero/episodes':'episodes'} onUploadSuccess={thumbnail=>setEditing(f=>({...f,thumbnail}))} onError={setError}/>

@@ -625,6 +625,16 @@ final class CatalogTests: XCTestCase {
         XCTAssertEqual(AdPolicy.parse(nil).midrollCuePoints(duration: 95 * 60), [900, 1800, 2700, 3600])
     }
 
+    func testTitleAdBreaksWinOverTheRulesTiming() {
+        let policy = AdPolicy.parse(nil)
+        let duration = 95.0 * 60
+        XCTAssertEqual(policy.cuePoints(duration: duration, titleBreaks: [1635, 760, 760, 5600, 0]), [760, 1635]) // sorted, unique, none in the last two minutes
+        XCTAssertEqual(policy.cuePoints(duration: duration, titleBreaks: nil), [900, 1800, 2700, 3600])
+        XCTAssertEqual(policy.cuePoints(duration: duration, titleBreaks: []), [900, 1800, 2700, 3600])
+        XCTAssertEqual(policy.cuePoints(duration: 10 * 60, titleBreaks: [300]), [300]) // own list ignores the minimum length rule
+        XCTAssertEqual(AdPolicy.parse(#"{"midroll_enabled":false}"#).cuePoints(duration: duration, titleBreaks: [760]), [])
+    }
+
     func testCSAITagFillsBreakAndContextMacros() {
         let tag = CSAITag(id: 1, tag_url: "https://ads.invalid/v?dur=[BREAK_SECONDS]&ms=[BREAK_MS]&channel=[CHANNEL]&show=[SHOW]&genre=[GENRE]&device=[DEVICE]&ifa=[IFA]&lmt=[LMT]",
                           scope: "live", content_id: nil, active: true, is_test: true, platforms: ["tvos"])
