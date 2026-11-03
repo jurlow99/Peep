@@ -10,7 +10,6 @@ export const DEFAULT_AD_POLICY = Object.freeze({
   min_gap_minutes: 30,      // between entry ads: start of a title, a channel, a multiview package
   live_entry: true,         // ad before joining a live channel
   multiview_entry: true,    // ad before a multiview package
-  live_skip_seconds: 0,     // Peep's own live ads become skippable after this; 0 = not skippable
   midroll_enabled: true,    // browser VOD only
   midroll_min_minutes: 20,  // shorter titles get no mid-rolls
   midroll_every_minutes: 15,
@@ -18,7 +17,7 @@ export const DEFAULT_AD_POLICY = Object.freeze({
   postroll_enabled: true,   // browser VOD only
 });
 
-const LIMITS = { min_gap_minutes: [0, 1440], live_skip_seconds: [0, 60], midroll_min_minutes: [1, 600], midroll_every_minutes: [1, 240], midroll_max_breaks: [0, 20] };
+const LIMITS = { min_gap_minutes: [0, 1440], midroll_min_minutes: [1, 600], midroll_every_minutes: [1, 240], midroll_max_breaks: [0, 20] };
 
 // Accepts the stored string/object, fills gaps with defaults, clamps numbers.
 export function parseAdPolicy(value) {

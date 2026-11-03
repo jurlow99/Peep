@@ -3,6 +3,8 @@
 // missing lengths fall back to 30 s so a tag never goes out with a raw macro in it.
 // [CHANNEL] / [SHOW] / [GENRE] describe what is playing, [DEVICE] the player.
 // The web has no advertising ID, so [IFA] is blank and [LMT] (limit tracking) is 1.
+// [SKIPPABLE] is 1 when the viewer may skip this break (pre-rolls, movie and episode
+// ads) and 0 for live channel breaks, so the ad server leaves out skipoffset.
 // [DEVICE_ID] is a random 32-hex label made once per browser, for frequency caps
 // on Peep's own ad server. It is derived from nothing; clearing site data resets it.
 const DEVICE_ID_KEY = 'peep_ad_device_id';
@@ -24,8 +26,8 @@ export function fillAdMacros(url, breakSeconds, context = {}) {
   const values = {
     BREAK_SECONDS: String(seconds), BREAK_MS: String(seconds * 1000),
     CHANNEL: text(context.channel), SHOW: text(context.show), GENRE: text(context.genre),
-    DEVICE: 'web', IFA: '', LMT: '1',
+    DEVICE: 'web', IFA: '', LMT: '1', SKIPPABLE: context.skippable === false ? '0' : '1',
   };
-  return String(url || '').replace(/\[(BREAK_SECONDS|BREAK_MS|CHANNEL|SHOW|GENRE|DEVICE_ID|DEVICE|IFA|LMT)\]/g,
+  return String(url || '').replace(/\[(BREAK_SECONDS|BREAK_MS|CHANNEL|SHOW|GENRE|DEVICE_ID|DEVICE|IFA|LMT|SKIPPABLE)\]/g,
     (_, key) => key === 'DEVICE_ID' ? text(context.deviceId ?? adDeviceId()) : values[key]);
 }

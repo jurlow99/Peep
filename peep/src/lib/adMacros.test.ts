@@ -11,6 +11,10 @@ it('fills what is playing and the device, encoded, with no ad ID on the web', ()
     .toBe('https://x/ads?channel=OAN%20Plus%20(1080p)&show=Tipping%20Point%20%26%20More&genre=News&device=web&ifa=&lmt=1');
   expect(fillAdMacros(url, 30)).toBe('https://x/ads?channel=&show=&genre=&device=web&ifa=&lmt=1');
 });
+it('says whether the break may be skipped', () => {
+  expect(fillAdMacros('https://x/ads?skip=[SKIPPABLE]', 30)).toBe('https://x/ads?skip=1');
+  expect(fillAdMacros('https://x/ads?skip=[SKIPPABLE]', 30, { skippable: false })).toBe('https://x/ads?skip=0');
+});
 it('makes one random device ID per browser and keeps it', () => {
   const data = new Map<string, string>();
   const storage = { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => { data.set(k, v); } };

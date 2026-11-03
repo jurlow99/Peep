@@ -3,7 +3,7 @@ import { breakStart } from "../../lib/liveBreaks";
 import { resolveVODPlayback } from "../../lib/vodStorage";
 import { SUPABASE_URL } from "../../lib/config";
 import { useChannelBlackout } from "../../hooks/useChannelBlackout";
-import { playAdBreak, resizeAdBreak } from "../../lib/adBreak";
+import { playAdBreak, resizeAdBreak, isSkippableBreak } from "../../lib/adBreak";
 import { titleCuePoints } from "../../lib/adBreaks";
 import { trackLiveVideo } from "../../lib/liveViewing";
 import { useState, useEffect, useRef, useMemo } from "react";
@@ -81,6 +81,7 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
   const hlsRef = useRef(null);
   const countdownTimerRef = useRef(null);
   const adContainerRef = useRef(null);
+  const [adLocked, setAdLocked] = useState(false); // live channel break: no skipping
   const adsManagerRef = useRef(null);
   const midrollCuesRef = useRef([]);      // seconds into the title where a mid-roll plays
   const midrollNextRef = useRef(0);       // index of the next cue not yet passed
@@ -531,6 +532,7 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
     const element = videoRef.current;
     if (!element || !adContainerRef.current) { onDone(); return; }
     adBreakStopRef.current?.();
+    setAdLocked(!isSkippableBreak(placement, target.scope));
     adBreakStopRef.current = playAdBreak({ client: supabase, video: element, container: adContainerRef.current, placement,
       scope: target.scope || (isEpisode ? "episode" : "movie"), contentId: target.contentId ?? video.id,
       onBusy: setAdPlaying, onManager: manager => { adsManagerRef.current = manager; },
@@ -663,6 +665,8 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
               </video>
             )}
             <div ref={adContainerRef} style={{ position: "absolute", inset: 0, zIndex: 10, display: adPlaying ? "block" : "none", pointerEvents: adPlaying ? "auto" : "none" }} />
+            {/* Live channel breaks can't be skipped: a clear layer over the ad catches clicks on its Skip button. */}
+            {adPlaying && adLocked && <div aria-hidden="true" style={{ position: "absolute", inset: 0, zIndex: 11 }} />}
             {playbackError && !adPlaying && !streamEnded && (
               <div style={{ position: "absolute", inset: 0, zIndex: 20, background: "rgba(0,0,0,0.94)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, padding: 24, textAlign: "center" }}>
                 <div style={{ fontSize: 46, lineHeight: 1 }}>📡</div>

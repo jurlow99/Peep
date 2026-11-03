@@ -6,6 +6,8 @@ import { fillAdMacros } from './adMacros';
 import { hasAdPolicy, loadAdPolicy, allowsEntryAd, recordAdStart, placementAllowed } from './adPolicy';
 
 export const PLACEMENTS = ['pre_roll', 'mid_roll', 'post_roll'];
+// Viewers may skip pre-rolls and movie/episode ads; never a live channel's break.
+export const isSkippableBreak = (placement, scope) => !(placement === 'mid_roll' && scope === 'live');
 const DISCOVERY_MS = 5000, STARTUP_MS = 10000, MEDIA_LOAD_MS = 8000;
 
 export function playAdBreak({ client, video, container, placement = 'pre_roll', scope, contentId, onBusy, onReady, onManager = () => {}, breakSeconds = null, context = {} }) {
@@ -69,7 +71,7 @@ export function playAdBreak({ client, video, container, placement = 'pre_roll', 
       });
       loader.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, () => { log('error'); finish(); });
       const request = new ima.AdsRequest();
-      request.adTagUrl = fillAdMacros(tag.tag_url, breakSeconds, context);
+      request.adTagUrl = fillAdMacros(tag.tag_url, breakSeconds, { ...context, skippable: isSkippableBreak(placement, scope) });
       request.linearAdSlotWidth = video.clientWidth || 1280;
       request.linearAdSlotHeight = video.clientHeight || 720;
       request.setAdWillAutoPlay(true);

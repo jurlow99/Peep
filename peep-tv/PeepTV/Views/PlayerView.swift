@@ -884,13 +884,14 @@ struct CSAITag: Decodable, Identifiable {
     /// [CHANNEL] / [SHOW] / [GENRE] describe what is playing, [DEVICE] is "tvos".
     /// No App Tracking Transparency prompt, so [IFA] is blank and [LMT] is 1.
     /// [DEVICE_ID] is a random 32-hex label made once per Apple TV (see AdDeviceID).
-    func filled(breakSeconds: Double?, context: AdContext = AdContext(), deviceID: String = AdDeviceID.current()) -> CSAITag {
+    /// [SKIPPABLE] is 0 for live channel breaks, 1 otherwise, so the ad server can leave out skipoffset.
+    func filled(breakSeconds: Double?, context: AdContext = AdContext(), skippable: Bool = true, deviceID: String = AdDeviceID.current()) -> CSAITag {
         let seconds = breakSeconds.map { max(1, Int($0.rounded())) } ?? 30
         let safe = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))
         let text = { (value: String) in value.trimmingCharacters(in: .whitespaces).addingPercentEncoding(withAllowedCharacters: safe) ?? "" }
         let values = ["BREAK_SECONDS": String(seconds), "BREAK_MS": String(seconds * 1000),
                       "CHANNEL": text(context.channel), "SHOW": text(context.show), "GENRE": text(context.genre),
-                      "DEVICE": "tvos", "DEVICE_ID": text(deviceID), "IFA": "", "LMT": "1"]
+                      "DEVICE": "tvos", "DEVICE_ID": text(deviceID), "IFA": "", "LMT": "1", "SKIPPABLE": skippable ? "1" : "0"]
         var copy = self
         for (key, value) in values { copy.tag_url = copy.tag_url.replacingOccurrences(of: "[\(key)]", with: value) }
         return copy
@@ -1012,6 +1013,8 @@ struct AdContext: Equatable {
     private var pending: Task<Void, Never>?
     private var seen = Set<String>()
     private(set) var isMidroll = false
+    /// Viewers may skip pre-rolls and movie/episode ads; never a live channel's break.
+    var skipAllowed: Bool { !(isMidroll && scope == "live") }
     @Published private(set) var lastEvent = ""
     private let frequency: AdFrequencyPolicy
     // Rules last read this launch. A stored cooldown under these skips the network.
@@ -1120,7 +1123,7 @@ struct CSAIOverlay: View {
             ZStack {
                 Color.black.ignoresSafeArea()
                 if let tag = gate.tag {
-                    IMAAdView(tag: tag, event: { gate.record($0, adID: $1) }, finished: gate.finish, cancelled: { gate.cancel(); cancel() })
+                    IMAAdView(tag: tag, allowSkip: gate.skipAllowed, event: { gate.record($0, adID: $1) }, finished: gate.finish, cancelled: { gate.cancel(); cancel() })
                         .id(tag.id).ignoresSafeArea()
                 } else { ProgressView("Preparing playback…") }
             }
@@ -1131,11 +1134,12 @@ struct CSAIOverlay: View {
 
 struct IMAAdView: UIViewControllerRepresentable {
     let tag: CSAITag
+    var allowSkip = true
     let event: (String, String) -> Void
     let finished: () -> Void
     let cancelled: () -> Void
     func makeUIViewController(context: Context) -> IMAAdController {
-        IMAAdController(tag: tag, event: event, finished: finished, cancelled: cancelled)
+        IMAAdController(tag: tag, allowSkip: allowSkip, event: event, finished: finished, cancelled: cancelled)
     }
     func updateUIViewController(_ controller: IMAAdController, context: Context) {}
     static func dismantleUIViewController(_ controller: IMAAdController, coordinator: ()) { controller.clean() }
@@ -1155,8 +1159,9 @@ struct IMAAdView: UIViewControllerRepresentable {
     private var requested = false
     private var ended = false
     private var skipAt: TimeInterval?
-    init(tag: CSAITag, event: @escaping (String,String) -> Void, finished: @escaping () -> Void, cancelled: @escaping () -> Void) {
-        self.tag = tag; self.event = event; self.finished = finished; self.cancelled = cancelled
+    private let allowSkip: Bool
+    init(tag: CSAITag, allowSkip: Bool = true, event: @escaping (String,String) -> Void, finished: @escaping () -> Void, cancelled: @escaping () -> Void) {
+        self.tag = tag; self.allowSkip = allowSkip; self.event = event; self.finished = finished; self.cancelled = cancelled
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -1207,7 +1212,7 @@ struct IMAAdView: UIViewControllerRepresentable {
         case .LOADED: adsManager.start()
         case .STARTED:
             timeout?.cancel(); self.event("impression", id)
-            skipAt = (event.ad?.isSkippable ?? false) ? event.ad?.skipTimeOffset : nil
+            skipAt = allowSkip && (event.ad?.isSkippable ?? false) ? event.ad?.skipTimeOffset : nil
         case .COMPLETE: self.event("complete", id)
         case .SKIPPED: self.event("skip", id)
         case .ALL_ADS_COMPLETED: complete()
@@ -1227,7 +1232,12 @@ struct IMAAdView: UIViewControllerRepresentable {
         focus.requestFocusUpdate(to: self)
         focus.updateFocusIfNeeded()
     }
-    override var preferredFocusEnvironments: [UIFocusEnvironment] { skipButton().map { [$0] } ?? super.preferredFocusEnvironments }
+    override var preferredFocusEnvironments: [UIFocusEnvironment] { (allowSkip ? skipButton() : nil).map { [$0] } ?? super.preferredFocusEnvironments }
+    // Live channel breaks can't be skipped: the remote's focus may never land on Skip.
+    override func shouldUpdateFocus(in context: UIFocusUpdateContext) -> Bool {
+        if !allowSkip, let next = context.nextFocusedView, let skip = skipButton(), next === skip || next.isDescendant(of: skip) { return false }
+        return super.shouldUpdateFocus(in: context)
+    }
     /// The SDK's enabled, visible Skip control, found by its title or accessibility label.
     private func skipButton() -> UIView? {
         func search(_ view: UIView) -> UIView? {
@@ -1404,7 +1414,7 @@ private struct LiveMidrollModifier: ViewModifier {
                     let wasMuted = player.isMuted
                     mutedBeforeMidroll = wasMuted
                     player.isMuted = true; midrollActive = true
-                    if let reason = gate.beginMidroll(service: service, tag: tag.filled(breakSeconds: remaining, context: gate.context), channelID: channelID) { trace("Live mid-roll did not start: \(reason)"); status = "Break found · ad blocked: \(reason)" }
+                    if let reason = gate.beginMidroll(service: service, tag: tag.filled(breakSeconds: remaining, context: gate.context, skippable: false), channelID: channelID) { trace("Live mid-roll did not start: \(reason)"); status = "Break found · ad blocked: \(reason)" }
                     let started = ProcessInfo.processInfo.systemUptime
                     let deadline = ProcessInfo.processInfo.systemUptime + remaining
                     while !Task.isCancelled, gate.blocking, player.currentItem === attached,
