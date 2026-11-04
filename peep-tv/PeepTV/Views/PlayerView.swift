@@ -345,6 +345,15 @@ struct PlaybackView: View {
     @State private var seriesAllowsAutoplay = false
     @State private var introWindow: ClosedRange<Double>?
     @State private var adBreaks: [Int]?
+    /// The info panel follows the episode actually playing: after Up Next (or autoplay)
+    /// the opening episode's title and description must not stay on screen.
+    private var playbackMetadata: PlaybackMetadata? {
+        guard let episode = currentEpisode else { return metadata }
+        let show = metadata?.subtitle?.components(separatedBy: " · ").first
+        let place = SeriesPlayback.isExtra(episode) ? "Extras" : "Season \(episode.season ?? 1), Episode \(episode.episode_number ?? 1)"
+        return PlaybackMetadata(title: episode.displayTitle, subtitle: [show, place].compactMap { $0 }.joined(separator: " · "),
+                                description: episode.description, artwork: episode.thumbURL ?? metadata?.artwork, isLive: false, audioOnly: metadata?.audioOnly ?? false)
+    }
     private var playbackIdentity: PlaybackIdentity? { currentEpisode.map { PlaybackIdentity(id: String($0.id), type: "episode") } ?? identity }
     @State private var attempt = UUID()
     @EnvironmentObject private var service: SupabaseService
@@ -354,7 +363,7 @@ struct PlaybackView: View {
     var body: some View {
         Group {
             if let resolvedURL {
-                PlayerView(url: resolvedURL, title: currentEpisode?.displayTitle ?? title, identity: playbackIdentity, liveChannelID: liveChannelID, startFromBeginning: startFromBeginning, metadata: metadata,
+                PlayerView(url: resolvedURL, title: currentEpisode?.displayTitle ?? title, identity: playbackIdentity, liveChannelID: liveChannelID, startFromBeginning: startFromBeginning, metadata: playbackMetadata,
                            nextEpisode: nextEpisode, seriesAllowsAutoplay: seriesAllowsAutoplay, introWindow: introWindow, adBreaks: adBreaks, related: related, openRelated: openRelated, playNext: {
                     guard let nextEpisode else { return }
                     currentEpisode = nextEpisode
