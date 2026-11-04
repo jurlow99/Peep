@@ -496,16 +496,25 @@ struct PlayerView: View {
                 // break takes the paused player off screen: left in place, it keeps the remote's
                 // focus and the ad's Skip button can never be reached.
                 if (!adGate.blocking || (adGate.isMidroll && liveChannelID != nil)) && !showNext && !showEnd {
-                    if let squeeze { SqueezeAdView(ad: squeeze, onShown: countSqueezeAd) }
-                    // A squeeze ad shrinks the show to 75% into the top-right corner, sound on.
-                    Group {
-                        NativePlayer(player: model.player, interactive: !adGate.blocking, proposal: proposal, onAcceptProposal: nextEpisode == nil ? nil : playNext,
-                                     skipIntro: offerSkip && introWindow != nil ? { skipIntro() } : nil,
-                                     startOver: liveChannelID == nil && identity != nil ? { watchAgain() } : nil).ignoresSafeArea()
-                        if let metadata, metadata.audioOnly { AudioArtworkOverlay(metadata: metadata) }
+                    NativePlayer(player: model.player, interactive: !adGate.blocking, proposal: proposal, onAcceptProposal: nextEpisode == nil ? nil : playNext,
+                                 skipIntro: offerSkip && introWindow != nil ? { skipIntro() } : nil,
+                                 startOver: liveChannelID == nil && identity != nil ? { watchAgain() } : nil).ignoresSafeArea()
+                    if let metadata, metadata.audioOnly { AudioArtworkOverlay(metadata: metadata) }
+                    // A squeeze ad: the picture full screen, the show at 75% in the top-right corner,
+                    // sound on. The native player can't be scaled (it stops drawing), so the small
+                    // show is a second video layer on the same AVPlayer, on top of everything.
+                    if let squeeze {
+                        ZStack(alignment: .topTrailing) {
+                            SqueezeAdView(ad: squeeze, onShown: countSqueezeAd)
+                            GeometryReader { box in
+                                SqueezeVideoSurface(player: model.player)
+                                    .frame(width: box.size.width * 0.75, height: box.size.height * 0.75)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                                    .transition(.scale(scale: 4.0 / 3.0, anchor: .topTrailing))
+                            }
+                        }
+                        .ignoresSafeArea().allowsHitTesting(false).transition(.opacity)
                     }
-                    .scaleEffect(squeeze == nil ? 1 : 0.75, anchor: .topTrailing)
-                    .animation(.easeInOut(duration: 0.4), value: squeeze == nil)
                 }
             }
         }
@@ -688,8 +697,13 @@ struct PlayerView: View {
                 squeezeLastAsked = Date()
                 let scope = liveChannelID != nil ? "live" : (identity?.type == "short" ? "movie" : identity?.type ?? "movie")
                 let context = liveChannelID != nil ? AdContext(channel: title, contentType: "live") : AdContext(show: title)
-                guard let (ad, _) = await PauseAd.load(service: supabase, scope: scope, contentID: liveChannelID.map(String.init) ?? identity?.id ?? "", context: context, placement: "squeeze"),
-                      !Task.isCancelled, model.player.timeControlStatus == .playing, !adGate.blocking, pauseAd == nil else { continue }
+                let log = Logger(subsystem: "tv.watchpeep.PeepTV", category: "Squeeze")
+                log.notice("Squeeze: asking the tag for \(scope, privacy: .public) \(context.channel.isEmpty ? context.show : context.channel, privacy: .public)")
+                guard let (ad, _) = await PauseAd.load(service: supabase, scope: scope, contentID: liveChannelID.map(String.init) ?? identity?.id ?? "", context: context, placement: "squeeze") else {
+                    log.notice("Squeeze: no ad"); continue
+                }
+                guard !Task.isCancelled, model.player.timeControlStatus == .playing, !adGate.blocking, pauseAd == nil else { log.notice("Squeeze: got an ad but the viewer paused or a break started"); continue }
+                log.notice("Squeeze: showing \(ad.title, privacy: .public) for \(Int(SqueezeSchedule.seconds(ad)), privacy: .public) s")
                 squeezeCounted = false
                 withAnimation(.easeInOut(duration: 0.4)) { squeeze = ad }
                 do { try await Task.sleep(for: .seconds(SqueezeSchedule.seconds(ad))) } catch { return }
@@ -766,6 +780,7 @@ struct PlayerView: View {
     private func countSqueezeAd() {
         guard !squeezeCounted, let ad = squeeze else { return }
         squeezeCounted = true
+        Logger(subsystem: "tv.watchpeep.PeepTV", category: "Squeeze").notice("Squeeze: picture on screen, counting \(ad.impressions.count, privacy: .public) impression(s)")
         for url in ad.impressions { Task { _ = try? await URLSession.shared.data(from: url) } }
     }
     private func skipIntro() {
@@ -1561,6 +1576,22 @@ enum SqueezeSchedule {
         return now.timeIntervalSince(lastAsked) >= Double(policy.squeeze_every_minutes * 60)
     }
     static func seconds(_ ad: PauseAd) -> Double { min(maxSeconds, ad.duration ?? defaultSeconds) }
+}
+
+/// The shrunk show during a squeeze ad: a plain video layer on the content player.
+struct SqueezeVideoSurface: UIViewRepresentable {
+    let player: AVPlayer
+    final class Surface: UIView {
+        override class var layerClass: AnyClass { AVPlayerLayer.self }
+        var videoLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+    }
+    func makeUIView(context: Context) -> Surface {
+        let view = Surface(); view.backgroundColor = .black
+        view.videoLayer.videoGravity = .resizeAspect; view.videoLayer.player = player
+        return view
+    }
+    func updateUIView(_ view: Surface, context: Context) { if view.videoLayer.player !== player { view.videoLayer.player = player } }
+    static func dismantleUIView(_ view: Surface, coordinator: ()) { view.videoLayer.player = nil }
 }
 
 /// The squeeze picture behind the shrunk show: full screen, an "Ad" label top-left and the
