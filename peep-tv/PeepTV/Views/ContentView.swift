@@ -396,7 +396,7 @@ struct ContentView: View {
         entryTask = Task { @MainActor in
             defer { entryCover = false }
             if session.initial.blackoutMessage() == nil {
-                adGate.context = AdContext(channel: session.initial.name, genre: BrowsePresentation.category(session.initial.category) ?? "")
+                adGate.context = AdContext(channel: session.initial.name, genre: BrowsePresentation.category(session.initial.category) ?? "", contentType: "live")
                 guard await adGate.run(service: supabase, scope: "live", contentID: String(session.initial.id)), !Task.isCancelled else { return }
             }
             startLiveChannel(session)

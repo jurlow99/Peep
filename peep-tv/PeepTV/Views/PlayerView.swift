@@ -438,10 +438,6 @@ struct PlayerView: View {
     @State private var pauseAd: PauseAd?
     @State private var pauseAdCounted = false
     @State private var pauseKey = 0 // bumps on every pause, so each pause asks at most once
-    @State private var squeeze: PauseAd?
-    @State private var squeezeCounted = false
-    @State private var squeezeLastAsked = Date()
-    @State private var squeezeLastBreak: Date?
     let related: [Video]
     let openRelated: (Video) -> Void
     let playNext: () -> Void
@@ -500,24 +496,14 @@ struct PlayerView: View {
                                  skipIntro: offerSkip && introWindow != nil ? { skipIntro() } : nil,
                                  startOver: liveChannelID == nil && identity != nil ? { watchAgain() } : nil).ignoresSafeArea()
                     if let metadata, metadata.audioOnly { AudioArtworkOverlay(metadata: metadata) }
-                    // A squeeze ad: the picture full screen, the show at 75% in the top-right corner,
-                    // sound on. The native player can't be scaled (it stops drawing), so the small
-                    // show is a second video layer on the same AVPlayer, on top of everything.
-                    if let squeeze {
-                        ZStack(alignment: .topTrailing) {
-                            SqueezeAdView(ad: squeeze, onShown: countSqueezeAd)
-                            GeometryReader { box in
-                                SqueezeVideoSurface(player: model.player)
-                                    .frame(width: box.size.width * 0.75, height: box.size.height * 0.75)
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                                    .transition(.scale(scale: 4.0 / 3.0, anchor: .topTrailing))
-                            }
-                        }
-                        .ignoresSafeArea().allowsHitTesting(false).transition(.opacity)
-                    }
                 }
             }
         }
+        .squeezeAds(player: model.player, ready: contentStarted, key: "\(liveChannelID ?? 0):\(identity?.id ?? "")",
+                    scope: liveChannelID != nil ? "live" : (identity?.type == "short" ? "movie" : identity?.type ?? "movie"),
+                    contentID: liveChannelID.map(String.init) ?? identity?.id ?? "",
+                    context: liveChannelID != nil ? AdContext(channel: title, contentType: "live") : AdContext(show: title),
+                    busy: showNext || showEnd || pauseAd != nil || model.errorMessage != nil || model.blackoutMessage != nil, gate: adGate)
         .overlay {
             if showNext, let episode = nextEpisode {
                 ZStack {
@@ -684,38 +670,8 @@ struct PlayerView: View {
                   !Task.isCancelled, model.player.timeControlStatus == .paused, !adGate.blocking else { return }
             pauseAdCounted = false; pauseAd = ad
         }
-        // Squeeze ads: every few seconds of playback, see whether it's time to ask the tag;
-        // keep the picture up for its suggested time, drop it early for a break, a pause or
-        // a channel change (the task restarts).
-        .task(id: "\(contentStarted):\(liveChannelID ?? 0)") {
-            squeeze = nil; squeezeLastAsked = Date()
-            guard contentStarted else { return }
-            while !Task.isCancelled {
-                do { try await Task.sleep(for: .seconds(5)) } catch { return }
-                let busy = adGate.blocking || showNext || showEnd || pauseAd != nil || model.errorMessage != nil || model.blackoutMessage != nil
-                guard squeeze == nil, SqueezeSchedule.due(now: Date(), lastAsked: squeezeLastAsked, lastBreakEnded: squeezeLastBreak, playing: model.player.timeControlStatus == .playing, adBusy: busy, policy: CSAIGate.policy ?? .fallback) else { continue }
-                squeezeLastAsked = Date()
-                let scope = liveChannelID != nil ? "live" : (identity?.type == "short" ? "movie" : identity?.type ?? "movie")
-                let context = liveChannelID != nil ? AdContext(channel: title, contentType: "live") : AdContext(show: title)
-                let log = Logger(subsystem: "tv.watchpeep.PeepTV", category: "Squeeze")
-                log.notice("Squeeze: asking the tag for \(scope, privacy: .public) \(context.channel.isEmpty ? context.show : context.channel, privacy: .public)")
-                guard let (ad, _) = await PauseAd.load(service: supabase, scope: scope, contentID: liveChannelID.map(String.init) ?? identity?.id ?? "", context: context, placement: "squeeze") else {
-                    log.notice("Squeeze: no ad"); continue
-                }
-                guard !Task.isCancelled, model.player.timeControlStatus == .playing, !adGate.blocking, pauseAd == nil else { log.notice("Squeeze: got an ad but the viewer paused or a break started"); continue }
-                log.notice("Squeeze: showing \(ad.title, privacy: .public) for \(Int(SqueezeSchedule.seconds(ad)), privacy: .public) s")
-                squeezeCounted = false
-                withAnimation(.easeInOut(duration: 0.4)) { squeeze = ad }
-                do { try await Task.sleep(for: .seconds(SqueezeSchedule.seconds(ad))) } catch { return }
-                withAnimation(.easeInOut(duration: 0.4)) { squeeze = nil }
-            }
-        }
-        .onChange(of: adGate.blocking) { _, blocking in
-            if blocking { squeeze = nil } else { squeezeLastBreak = Date(); squeezeLastAsked = Date() }
-        }
         .onReceive(model.player.publisher(for: \.timeControlStatus)) { status in
             if status != .paused { pauseAd = nil }
-            if status == .paused { squeeze = nil }
             pauseKey = status == .paused ? pauseKey + 1 : pauseKey
         }
         .overlay { CSAIOverlay(gate: adGate, cancel: { dismiss() }) }
@@ -775,12 +731,6 @@ struct PlayerView: View {
     private func countPauseAd() {
         guard !pauseAdCounted, let ad = pauseAd else { return }
         pauseAdCounted = true
-        for url in ad.impressions { Task { _ = try? await URLSession.shared.data(from: url) } }
-    }
-    private func countSqueezeAd() {
-        guard !squeezeCounted, let ad = squeeze else { return }
-        squeezeCounted = true
-        Logger(subsystem: "tv.watchpeep.PeepTV", category: "Squeeze").notice("Squeeze: picture on screen, counting \(ad.impressions.count, privacy: .public) impression(s)")
         for url in ad.impressions { Task { _ = try? await URLSession.shared.data(from: url) } }
     }
     private func skipIntro() {
@@ -1576,6 +1526,90 @@ enum SqueezeSchedule {
         return now.timeIntervalSince(lastAsked) >= Double(policy.squeeze_every_minutes * 60)
     }
     static func seconds(_ ad: PauseAd) -> Double { min(maxSeconds, ad.duration ?? defaultSeconds) }
+}
+
+/// Squeeze ads on any full-screen player (PlayerView, Live TV): every few seconds of
+/// playback see whether it's time to ask the tag; show the picture full screen with the
+/// show at 75% in the top-right corner, sound on, for the ad's suggested time; drop it
+/// early for a break, a pause, `busy` (guide open, Up Next…) or a new `key` (channel or
+/// title change). The native player can't be scaled (it stops drawing), so the small
+/// show is a second video layer on the same AVPlayer, drawn over everything.
+private struct SqueezeAdModifier: ViewModifier {
+    @EnvironmentObject private var service: SupabaseService
+    let player: AVPlayer
+    let ready: Bool
+    let key: String
+    let scope: String
+    let contentID: String
+    let context: AdContext
+    let busy: Bool
+    @ObservedObject var gate: CSAIGate
+    @State private var squeeze: PauseAd?
+    @State private var counted = false
+    @State private var lastAsked = Date()
+    @State private var lastBreak: Date?
+    // The task reads these, not the init values it captured when it started.
+    @State private var busyNow = false
+    @State private var request = (scope: "movie", contentID: "", context: AdContext())
+
+    func body(content: Content) -> some View {
+        content
+            .overlay {
+                if let squeeze {
+                    ZStack(alignment: .topTrailing) {
+                        SqueezeAdView(ad: squeeze, onShown: count)
+                        GeometryReader { box in
+                            SqueezeVideoSurface(player: player)
+                                .frame(width: box.size.width * 0.75, height: box.size.height * 0.75)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                                .transition(.scale(scale: 4.0 / 3.0, anchor: .topTrailing))
+                        }
+                    }
+                    .ignoresSafeArea().allowsHitTesting(false).transition(.opacity)
+                }
+            }
+            .onChange(of: busy, initial: true) { _, value in busyNow = value; if value { hide() } }
+            .onChange(of: "\(scope)|\(contentID)|\(context.channel)|\(context.show)", initial: true) { _, _ in request = (scope, contentID, context) }
+            .onChange(of: gate.blocking) { _, blocking in
+                if blocking { hide() } else { lastBreak = Date(); lastAsked = Date() }
+            }
+            .onReceive(player.publisher(for: \.timeControlStatus)) { status in if status == .paused { hide() } }
+            .task(id: "\(ready):\(key)") {
+                squeeze = nil; lastAsked = Date()
+                guard ready else { return }
+                if CSAIGate.policy == nil { _ = await CSAIGate.loadPolicy(service) } // the admin's interval, not the default
+                let log = Logger(subsystem: "tv.watchpeep.PeepTV", category: "Squeeze")
+                while !Task.isCancelled {
+                    do { try await Task.sleep(for: .seconds(5)) } catch { return }
+                    guard squeeze == nil, SqueezeSchedule.due(now: Date(), lastAsked: lastAsked, lastBreakEnded: lastBreak, playing: player.timeControlStatus == .playing, adBusy: gate.blocking || busyNow, policy: CSAIGate.policy ?? .fallback) else { continue }
+                    lastAsked = Date()
+                    let ask = request
+                    log.notice("Squeeze: asking the tag for \(ask.scope, privacy: .public) \(ask.context.channel.isEmpty ? ask.context.show : ask.context.channel, privacy: .public)")
+                    guard let (ad, _) = await PauseAd.load(service: service, scope: ask.scope, contentID: ask.contentID, context: ask.context, placement: "squeeze") else {
+                        log.notice("Squeeze: no ad"); continue
+                    }
+                    guard !Task.isCancelled, player.timeControlStatus == .playing, !gate.blocking, !busyNow else { log.notice("Squeeze: got an ad but the viewer paused or a break started"); continue }
+                    log.notice("Squeeze: showing \(ad.title, privacy: .public) for \(Int(SqueezeSchedule.seconds(ad)), privacy: .public) s")
+                    counted = false
+                    withAnimation(.easeInOut(duration: 0.4)) { squeeze = ad }
+                    do { try await Task.sleep(for: .seconds(SqueezeSchedule.seconds(ad))) } catch { return }
+                    hide()
+                }
+            }
+            .onDisappear { squeeze = nil }
+    }
+    private func hide() { if squeeze != nil { withAnimation(.easeInOut(duration: 0.4)) { squeeze = nil } } }
+    private func count() {
+        guard !counted, let ad = squeeze else { return }
+        counted = true
+        Logger(subsystem: "tv.watchpeep.PeepTV", category: "Squeeze").notice("Squeeze: picture on screen, counting \(ad.impressions.count, privacy: .public) impression(s)")
+        for url in ad.impressions { Task { _ = try? await URLSession.shared.data(from: url) } }
+    }
+}
+extension View {
+    func squeezeAds(player: AVPlayer, ready: Bool, key: String, scope: String, contentID: String, context: AdContext, busy: Bool, gate: CSAIGate) -> some View {
+        modifier(SqueezeAdModifier(player: player, ready: ready, key: key, scope: scope, contentID: contentID, context: context, busy: busy, gate: gate))
+    }
 }
 
 /// The shrunk show during a squeeze ad: a plain video layer on the content player.
