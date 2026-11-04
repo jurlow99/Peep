@@ -1,7 +1,8 @@
 -- Reporting: on-demand watch sessions (the movie/episode twin of live_watch_sessions)
--- and the admin report RPCs behind Reports → Overview, Channels and MOU.
--- MOU (minutes of usage) = media time actually played. Paused, buffering and ad
--- time are never counted; sessions count on the day they started (in p_tz).
+-- and the admin report RPCs behind Reports → Overview, MAU, Channels and Titles.
+-- Minutes = media time actually played. Paused, buffering and ad time are never
+-- counted; sessions count on the day they started (in p_tz). An active user is a
+-- signed-in account, or a device that watched without one.
 -- Apply to dev after live-viewing.sql and live-viewing-test-activity.sql.
 
 create table public.vod_watch_sessions (
@@ -91,7 +92,7 @@ end $$;
 revoke all on function peep_private.report_window(timestamptz,timestamptz) from public,anon;
 grant execute on function peep_private.report_window(timestamptz,timestamptz) to authenticated;
 
--- Reports → Overview: headline MOU, audience, the same numbers for the previous
+-- Reports → Overview: headline minutes, audience, the same numbers for the previous
 -- period of equal length, a daily series, platforms, hour of day and top items.
 create function public.platform_report(p_from timestamptz,p_to timestamptz,p_include_test boolean default false,p_tz text default 'UTC') returns jsonb
 language plpgsql stable security invoker set search_path='' as $$
@@ -130,9 +131,9 @@ end $$;
 revoke all on function public.platform_report(timestamptz,timestamptz,boolean,text) from public,anon;
 grant execute on function public.platform_report(timestamptz,timestamptz,boolean,text) to authenticated;
 
--- Reports → Channels: every channel (watched or not) with MOU, share of live
+-- Reports → Channels: every channel (watched or not) with minutes, share of live
 -- minutes, reach, time spent, average minute audience (AMA = minutes ÷ minutes in
--- the window), its busiest hour, platform split and a daily MOU series.
+-- the window), its busiest hour, platform split and a daily minutes series.
 create function public.channel_report(p_from timestamptz,p_to timestamptz,p_include_test boolean default false,p_tz text default 'UTC') returns jsonb
 language plpgsql stable security invoker set search_path='' as $$
 declare result jsonb; v_window_minutes numeric := extract(epoch from (least(p_to,now())-p_from))/60;
@@ -159,9 +160,9 @@ end $$;
 revoke all on function public.channel_report(timestamptz,timestamptz,boolean,text) from public,anon;
 grant execute on function public.channel_report(timestamptz,timestamptz,boolean,text) to authenticated;
 
--- Reports → MOU: minutes of usage per channel, movie and series for a window
--- (normally one calendar month), with the content partner that delivered it.
-create function public.mou_report(p_from timestamptz,p_to timestamptz,p_include_test boolean default false) returns jsonb
+-- Reports → Titles: minutes per channel, movie and series for a window (normally
+-- one calendar month), with the content partner that delivered it.
+create function public.title_report(p_from timestamptz,p_to timestamptz,p_include_test boolean default false) returns jsonb
 language plpgsql stable security invoker set search_path='' as $$
 declare result jsonb;
 begin
@@ -176,5 +177,40 @@ begin
   'updated_at',now()) into result;
  return result;
 end $$;
-revoke all on function public.mou_report(timestamptz,timestamptz,boolean) from public,anon;
-grant execute on function public.mou_report(timestamptz,timestamptz,boolean) to authenticated;
+revoke all on function public.title_report(timestamptz,timestamptz,boolean) from public,anon;
+grant execute on function public.title_report(timestamptz,timestamptz,boolean) to authenticated;
+
+-- Reports → MAU: monthly active users for a calendar month in p_tz ('YYYY-MM'),
+-- with accounts, devices, devices new that month, average daily actives, platform
+-- reach, a daily series and the 12-month trend ending at that month.
+create function public.active_users_report(p_month text,p_tz text default 'UTC',p_include_test boolean default false) returns jsonb
+language plpgsql stable security invoker set search_path='' as $$
+declare result jsonb; v_start timestamp; v_from timestamptz; v_to timestamptz; v_trend timestamptz;
+begin
+ if p_month is null or p_month !~ '^[0-9]{4}-(0[1-9]|1[0-2])$' then raise exception 'Invalid month'; end if;
+ v_start := to_date(p_month,'YYYY-MM')::timestamp;
+ v_from := v_start at time zone p_tz; v_to := (v_start+interval '1 month') at time zone p_tz; v_trend := (v_start-interval '11 months') at time zone p_tz;
+ perform peep_private.report_window(v_trend,v_to);
+ with plays as (select *,coalesce(user_id::text,'device:'||device_id::text) as who from peep_private.report_plays(v_trend,v_to,p_include_test)),
+ cur as (select * from plays where started_at>=v_from),
+ firsts as (select device_id,min(first_at) as first_at from (
+   select device_id,min(started_at) as first_at from public.live_watch_sessions where (p_include_test or not is_test) group by 1
+   union all select device_id,min(started_at) from public.vod_watch_sessions where (p_include_test or not is_test) group by 1) f group by 1),
+ daily as (select to_char(started_at at time zone p_tz,'YYYY-MM-DD') as day,count(distinct who) as users from cur group by 1),
+ months as (select to_char(started_at at time zone p_tz,'YYYY-MM') as month,count(distinct who) as users from plays group by 1),
+ platforms as (select platform,count(distinct who) as users from cur group by 1)
+ select jsonb_build_object(
+  'month',p_month,
+  'users',(select count(distinct who) from cur),
+  'accounts',(select count(distinct user_id) from cur),
+  'devices',(select count(distinct device_id) from cur),
+  'new_devices',(select count(*) from firsts where first_at>=v_from and first_at<v_to),
+  'average_daily_users',(select coalesce(round(avg(users),1),0) from daily),
+  'daily',coalesce((select jsonb_agg(to_jsonb(d) order by d.day) from daily d),'[]'),
+  'months',coalesce((select jsonb_agg(to_jsonb(m) order by m.month) from months m),'[]'),
+  'platforms',coalesce((select jsonb_agg(to_jsonb(p) order by p.users desc) from platforms p),'[]'),
+  'updated_at',now()) into result;
+ return result;
+end $$;
+revoke all on function public.active_users_report(text,text,boolean) from public,anon;
+grant execute on function public.active_users_report(text,text,boolean) to authenticated;

@@ -5,8 +5,9 @@ import {
   hourLabel, PLATFORM_LABELS, KIND_LABELS, toCSV, downloadCSV, fillDays,
 } from "../../lib/reports";
 
-// Reports → Overview / Channels / MOU. One page per job; numbers from the
-// platform_report, channel_report and mou_report RPCs (db/features/reporting.sql).
+// Reports → Overview / MAU / Channels / Titles. One page per job; numbers from the
+// platform_report, active_users_report, channel_report and title_report RPCs
+// (db/features/reporting.sql).
 const panel = { background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: 20, marginBottom: 20 };
 const muted = { color: "#64748b", fontSize: 12 };
 const th = { padding: "8px 10px", color: "#64748b", fontWeight: 600, fontSize: 12, borderBottom: "1px solid #e2e8f0", textAlign: "left", whiteSpace: "nowrap" };
@@ -54,7 +55,7 @@ function Tile({ label, value, delta, hint }) {
 }
 
 // Bar chart: one bar per entry, optionally stacked. Hover shows the exact values.
-function Bars({ items, series, label, height = 140, ariaLabel }) {
+function Bars({ items, series, label, height = 140, ariaLabel, unit = "min" }) {
   const [hover, setHover] = useState(null);
   const total = i => series.reduce((s, k) => s + Number(i[k.key] || 0), 0);
   const max = Math.max(1, ...items.map(total));
@@ -77,7 +78,7 @@ function Bars({ items, series, label, height = 140, ariaLabel }) {
     </div>
     {hover !== null && items[hover] && <div role="tooltip" style={{ position: "absolute", top: 0, right: 0, background: "#0f172a", color: "#fff", borderRadius: 8, padding: "6px 10px", fontSize: 12, pointerEvents: "none" }}>
       <strong>{label(items[hover])}</strong>
-      {series.map(s => <div key={s.key}>{s.label}: {formatNumber(items[hover][s.key])} min</div>)}
+      {series.map(s => <div key={s.key}>{s.label}: {formatNumber(items[hover][s.key])} {unit}</div>)}
     </div>}
   </div>;
 }
@@ -111,7 +112,7 @@ function Overview() {
     {!data && !error && <p role="status">Loading…</p>}
     {data && <>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 24 }}>
-        <Tile label="Minutes watched (MOU)" value={formatNumber(t.minutes)} delta={change(t.minutes, p.minutes)} hint="Live + on-demand minutes actually played. Ads, pauses and buffering don't count." />
+        <Tile label="Minutes watched" value={formatNumber(t.minutes)} delta={change(t.minutes, p.minutes)} hint="Live + on-demand minutes actually played. Ads, pauses and buffering don't count." />
         <Tile label="Live TV minutes" value={formatNumber(t.live_minutes)} />
         <Tile label="On-demand minutes" value={formatNumber(t.vod_minutes)} />
         <Tile label="Devices" value={formatNumber(t.devices)} delta={change(t.devices, p.devices)} hint="Distinct Apple TVs and browsers that watched." />
@@ -154,7 +155,7 @@ function Overview() {
 
 const CHANNEL_COLUMNS = [
   { key: "name", label: "Channel" },
-  { key: "minutes", label: "Minutes (MOU)", num: true, render: r => formatNumber(r.minutes) },
+  { key: "minutes", label: "Minutes", num: true, render: r => formatNumber(r.minutes) },
   { key: "share", label: "Share", num: true, render: r => `${formatNumber(r.share)}%` },
   { key: "devices", label: "Devices", num: true, render: r => formatNumber(r.devices) },
   { key: "minutes_per_device", label: "Min / device", num: true, render: r => formatNumber(r.minutes_per_device) },
@@ -198,13 +199,13 @@ function Channels() {
   </section>;
 }
 
-function MOU() {
+function Titles() {
   const [month, setMonth] = useState(() => monthKey());
   const [includeTests, setIncludeTests] = useState(false);
   const [kind, setKind] = useState("all");
   const [byPartner, setByPartner] = useState(false);
   const range = useMemo(() => monthRange(month), [month]);
-  const { data, error, loading, reload } = useReport("mou_report", { p_from: range.from.toISOString(), p_to: range.to.toISOString(), p_include_test: includeTests });
+  const { data, error, loading, reload } = useReport("title_report", { p_from: range.from.toISOString(), p_to: range.to.toISOString(), p_include_test: includeTests });
   const rows = (data?.rows || []).filter(r => kind === "all" || r.kind === kind);
   const partners = useMemo(() => {
     const map = new Map();
@@ -216,13 +217,13 @@ function MOU() {
     return [...map.values()].sort((a, b) => b.minutes - a.minutes);
   }, [rows]);
   const total = rows.reduce((s, r) => s + Number(r.minutes), 0);
-  const exportCSV = () => downloadCSV(`peep-mou-${month}.csv`, byPartner
-    ? toCSV(partners, [{ label: "Month", value: () => month }, { key: "partner", label: "Partner" }, { key: "items", label: "Titles and channels" }, { key: "minutes", label: "Minutes (MOU)" }, { label: "Hours", value: r => (r.minutes / 60).toFixed(1) }])
+  const exportCSV = () => downloadCSV(`peep-titles-${month}.csv`, byPartner
+    ? toCSV(partners, [{ label: "Month", value: () => month }, { key: "partner", label: "Partner" }, { key: "items", label: "Titles and channels" }, { key: "minutes", label: "Minutes" }, { label: "Hours", value: r => (r.minutes / 60).toFixed(1) }])
     : toCSV(rows, [{ label: "Month", value: () => month }, { label: "Type", value: r => KIND_LABELS[r.kind] }, { key: "id", label: "ID" }, { key: "name", label: "Name" },
-      { key: "partner", label: "Partner" }, { key: "minutes", label: "Minutes (MOU)" }, { label: "Hours", value: r => (r.minutes / 60).toFixed(1) },
+      { key: "partner", label: "Partner" }, { key: "minutes", label: "Minutes" }, { label: "Hours", value: r => (r.minutes / 60).toFixed(1) },
       { key: "sessions", label: "Plays" }, { key: "devices", label: "Devices" }, { key: "viewers", label: "Signed-in viewers" }]));
-  return <section style={panel} aria-label="Minutes of usage">
-    <Toolbar title="MOU" {...{ includeTests, setIncludeTests, loading, reload }} updatedAt={data?.updated_at}
+  return <section style={panel} aria-label="Minutes by title">
+    <Toolbar title="Titles" {...{ includeTests, setIncludeTests, loading, reload }} updatedAt={data?.updated_at}
       action={<button type="button" style={primary} disabled={!data} onClick={exportCSV}>Download CSV</button>}>
       <input type="month" aria-label="Month" value={month} max={monthKey()} onChange={e => e.target.value && setMonth(e.target.value)} style={{ ...secondary, width: 150 }} />
       <select aria-label="Show" value={kind} onChange={e => setKind(e.target.value)} style={secondary}>
@@ -234,25 +235,80 @@ function MOU() {
     {!data && !error && <p role="status">Loading…</p>}
     {data && <>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 20 }}>
-        <Tile label="Minutes (MOU)" value={formatNumber(total)} />
+        <Tile label="Minutes" value={formatNumber(total)} />
         <Tile label="Hours" value={formatNumber(total / 60)} />
         <Tile label={byPartner ? "Partners" : "Titles and channels"} value={formatNumber(byPartner ? partners.length : rows.length)} />
       </div>
       {byPartner
         ? <Table rows={partners} rowKey={r => r.partner} columns={[
             { key: "partner", label: "Partner" }, { label: "Titles and channels", num: true, render: r => formatNumber(r.items) },
-            { label: "Minutes (MOU)", num: true, render: r => formatNumber(r.minutes) }, { label: "Share", num: true, render: r => `${total ? formatNumber(r.minutes / total * 100) : 0}%` }]} />
+            { label: "Minutes", num: true, render: r => formatNumber(r.minutes) }, { label: "Share", num: true, render: r => `${total ? formatNumber(r.minutes / total * 100) : 0}%` }]} />
         : <Table rows={rows} rowKey={r => `${r.kind}:${r.id}`} columns={[
             { label: "Name", render: r => r.name }, { label: "Type", render: r => KIND_LABELS[r.kind] }, { label: "Partner", render: r => r.partner || <span style={{ color: "#94a3b8" }}>—</span> },
-            { label: "Minutes (MOU)", num: true, render: r => formatNumber(r.minutes) }, { label: "Devices", num: true, render: r => formatNumber(r.devices) },
+            { label: "Minutes", num: true, render: r => formatNumber(r.minutes) }, { label: "Devices", num: true, render: r => formatNumber(r.devices) },
             { label: "Plays", num: true, render: r => formatNumber(r.sessions) }]} />}
       <p style={{ ...muted, marginTop: 12, marginBottom: 0 }}>Minutes actually played in {new Date(range.from).toLocaleDateString([], { month: "long", year: "numeric" })}, your time zone. Episodes count under their series. Partners come from Provider deliveries.</p>
     </>}
   </section>;
 }
 
+const monthLabel = m => new Date(`${m.month}-15T12:00:00`).toLocaleDateString([], { month: "short", year: "2-digit" });
+
+// Monthly active users: one per signed-in account, plus each device that watched
+// without an account. "Active" = played something (live or on-demand) that month.
+function MAU() {
+  const [month, setMonth] = useState(() => monthKey());
+  const [includeTests, setIncludeTests] = useState(false);
+  const range = useMemo(() => monthRange(month), [month]);
+  const { data, error, loading, reload } = useReport("active_users_report", { p_month: month, p_tz: localTimeZone(), p_include_test: includeTests });
+  const trend = useMemo(() => {
+    if (!data) return [];
+    const byMonth = new Map(data.months.map(m => [m.month, m]));
+    return Array.from({ length: 12 }, (_, i) => { const key = monthKey(new Date(range.from.getFullYear(), range.from.getMonth() - 11 + i, 1)); return byMonth.get(key) || { month: key, users: 0 }; });
+  }, [data, range]);
+  const previous = trend.length > 1 ? trend[trend.length - 2].users : 0;
+  const end = range.to < new Date() ? range.to : new Date();
+  const stickiness = data?.users ? Math.round(data.average_daily_users / data.users * 100) : 0;
+  const exportCSV = () => downloadCSV(`peep-mau-${month}.csv`, toCSV(trend, [{ key: "month", label: "Month" }, { key: "users", label: "Monthly active users" }]));
+  return <section style={panel} aria-label="Monthly active users">
+    <Toolbar title="MAU" {...{ includeTests, setIncludeTests, loading, reload }} updatedAt={data?.updated_at}
+      action={<button type="button" style={primary} disabled={!data} onClick={exportCSV}>Download CSV</button>}>
+      <input type="month" aria-label="Month" value={month} max={monthKey()} onChange={e => e.target.value && setMonth(e.target.value)} style={{ ...secondary, width: 150 }} />
+    </Toolbar>
+    {error && <p role="alert" style={{ color: "#b91c1c" }}>Couldn’t load the report: {error}</p>}
+    {!data && !error && <p role="status">Loading…</p>}
+    {data && <>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 24 }}>
+        <Tile label="Monthly active users" value={formatNumber(data.users)} delta={change(data.users, previous)} hint="Signed-in accounts that watched, plus devices that watched without an account." />
+        <Tile label="Signed-in accounts" value={formatNumber(data.accounts)} />
+        <Tile label="Devices" value={formatNumber(data.devices)} />
+        <Tile label="New devices" value={formatNumber(data.new_devices)} hint="Devices that watched on Peep for the first time this month." />
+        <Tile label="Avg. daily active" value={formatNumber(data.average_daily_users)} />
+        <Tile label="Come back daily" value={`${stickiness}%`} hint="Average daily active ÷ monthly active (DAU/MAU)." />
+      </div>
+      <h3 style={{ fontSize: 15, margin: "0 0 10px" }}>Monthly active users, last 12 months</h3>
+      <Bars ariaLabel="Monthly active users, last 12 months" items={trend} label={monthLabel} unit="users" series={[{ key: "users", label: "Active users", color: LIVE }]} />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 28, marginTop: 28 }}>
+        <div>
+          <h3 style={{ fontSize: 15, margin: "0 0 10px" }}>Daily active users</h3>
+          <Bars ariaLabel="Daily active users" items={fillDays(data.daily, range.from, end)} label={dayLabel} height={100} unit="users" series={[{ key: "users", label: "Active users", color: LIVE }]} />
+        </div>
+        <div>
+          <h3 style={{ fontSize: 15, margin: "0 0 10px" }}>Where they watch</h3>
+          {data.platforms.length ? data.platforms.map(x => <div key={x.platform} style={{ marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}><span>{PLATFORM_LABELS[x.platform] || x.platform}</span><span style={{ color: "#475569" }}>{formatNumber(x.users)} users</span></div>
+            <div style={{ background: "#e2e8f0", height: 6, borderRadius: 3, marginTop: 6 }}><div style={{ width: `${x.users / Math.max(1, data.users) * 100}%`, background: LIVE, height: "100%", borderRadius: 3 }} /></div>
+          </div>) : <p style={muted}>Nobody watched this month yet.</p>}
+        </div>
+      </div>
+      <p style={{ ...muted, marginTop: 16, marginBottom: 0 }}>Active = watched Live TV or on-demand that month. One account on two devices counts once.</p>
+    </>}
+  </section>;
+}
+
 export default function ReportsPanel({ view }) {
+  if (view === "mau") return <MAU />;
   if (view === "channels") return <Channels />;
-  if (view === "mou") return <MOU />;
+  if (view === "titles") return <Titles />;
   return <Overview />;
 }

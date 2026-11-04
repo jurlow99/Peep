@@ -1,6 +1,6 @@
-// Pure helpers for Reports → Overview, Channels and MOU: reporting windows,
+// Pure helpers for Reports → Overview, MAU, Channels and Titles: reporting windows,
 // period-over-period change, number formats and CSV export. The numbers come from
-// the platform_report / channel_report / mou_report RPCs (db/features/reporting.sql).
+// the platform_report / active_users_report / channel_report / title_report RPCs (db/features/reporting.sql).
 
 export const PERIODS = [
   { key: '7d', label: 'Last 7 days' },

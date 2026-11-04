@@ -4245,7 +4245,7 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
 
 
         {/* ────── REPORTS TAB ────── */}
-        {tab === "analytics" && ["overview", "channels", "mou"].includes(analyticsTab) && <ReportsPanel view={analyticsTab} />}
+        {tab === "analytics" && ["overview", "mau", "channels", "titles"].includes(analyticsTab) && <ReportsPanel view={analyticsTab} />}
         {tab === "analytics" && analyticsTab === "live_tv" && <LiveTVViewingDashboard />}
         {tab === "analytics" && analyticsTab === "reports" && (
           <div>

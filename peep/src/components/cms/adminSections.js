@@ -33,10 +33,11 @@ export const ADMIN_NAV = [
     { key: 'promos', label: 'Promo codes & comps', target: { tab: 'promos' } },
     { key: 'payouts', label: 'Partner payouts', target: { tab: 'creators', creatorsTab: 'payouts' } },
   ] },
-  { key: 'reports', label: 'Reports', description: 'Minutes watched, channel stats and who is watching.', sections: [
+  { key: 'reports', label: 'Reports', description: 'Active users, minutes watched, channel and title stats.', sections: [
     { key: 'overview', label: 'Overview', target: { tab: 'analytics', analyticsTab: 'overview' } },
+    { key: 'mau', label: 'MAU', target: { tab: 'analytics', analyticsTab: 'mau' } },
     { key: 'channels', label: 'Channels', target: { tab: 'analytics', analyticsTab: 'channels' } },
-    { key: 'mou', label: 'MOU', target: { tab: 'analytics', analyticsTab: 'mou' } },
+    { key: 'titles', label: 'Titles', target: { tab: 'analytics', analyticsTab: 'titles' } },
     { key: 'live_tv', label: 'Watching now', target: { tab: 'analytics', analyticsTab: 'live_tv' } },
     { key: 'analytics', label: 'Viewer lookup', target: { tab: 'analytics', analyticsTab: 'reports' } },
   ] },

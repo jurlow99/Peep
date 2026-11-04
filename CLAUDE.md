@@ -171,7 +171,10 @@ subscription, episodes must be approved and inherit show rules.
   packages incl. 4-channel, `merge_shows` for duplicate series, `conversion_queue` for
   the Add VOD "To convert" list, `skip-intro` columns `intro_start_seconds` /
   `intro_end_seconds` on shows (default) and episodes (override) — web shows a
-  "Skip intro" button, tvOS uses the native contextual action), `db/storage/*.sql` (VOD buckets/policies, upload-first,
+  "Skip intro" button, tvOS uses the native contextual action), `reporting.sql`
+  (`vod_watch_sessions` + `record_vod_viewing`, the movie/episode twin of live viewing, plus the
+  Reports RPCs; minutes = media actually played, ads/pauses/buffering excluded; an active user =
+  a signed-in account, or a device that watched without one), `db/storage/*.sql` (VOD buckets/policies, upload-first,
   R2 registry, hero video, provider deliveries + types + trash, series playback,
   multiview layout, partner referral default, `replace_vod_file` for Replace video), `db/epg_channel_setup.sql`
   (`save_channel_guide`), `db/epg_scheduler.sql` (pg_cron every 6h, dev URL).
@@ -258,7 +261,9 @@ page was dropped; episodes live in Manage series) · **Curation** (Screens & row
 portal chrome and collapses access/series/create-on-behalf; Submission review was folded
 into it — Creator streams, Streaming applications) · **Audience** (Users, Support,
 Content reports) · **Monetization** (Ads, Subscriptions, Promo codes & comps, Partner
-payouts) · **Reports** (Live TV viewing, Platform analytics) · **Platform** (Staff,
+payouts) · **Reports** (Overview, MAU, Channels, Titles — `ReportsPanel.jsx` on the
+`platform_report` / `active_users_report` / `channel_report` / `title_report` RPCs, CSV export;
+Watching now = the live dashboard; Viewer lookup = the old per-user analytics) · **Platform** (Staff,
 Settings = Maintenance/Fraud/Beta code only, Storage = clean-up + file library, Boss
 board, Security, Feature flags, Audit log, Planned tools). Primary buttons are indigo
 `#4f46e5`; red is for destructive actions only. Tab state is not in the URL. Movies are
