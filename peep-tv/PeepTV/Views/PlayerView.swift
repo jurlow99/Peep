@@ -1129,6 +1129,16 @@ struct AdContext: Equatable {
         frequency = AdFrequencyPolicy(defaults: defaults)
     }
 
+    // Pre-roll tags last read, reused for a minute so opening a channel doesn't wait on them.
+    private static var preRolls: (service: ObjectIdentifier, tags: [CSAITag], at: Date)?
+    static func preRollTags(_ service: SupabaseService) async -> [CSAITag] {
+        let owner = ObjectIdentifier(service)
+        if let cached = preRolls, cached.service == owner, Date().timeIntervalSince(cached.at) < 60 { return cached.tags }
+        let tags: [CSAITag]? = try? await service.get("vast_tags", query: ["select":"id,tag_url,scope,content_id,active,is_test,platforms", "active":"eq.true", "ad_type":"eq.pre_roll", "order":"id.asc"], timeout: 4)
+        if let tags { preRolls = (owner, tags, Date()) }
+        return tags ?? (preRolls?.service == owner ? preRolls?.tags : nil) ?? []
+    }
+
     static func loadPolicy(_ service: SupabaseService) async -> AdPolicy {
         let rows: [PublicSetting]? = try? await service.get("app_settings", query: ["select": "key,value", "key": "eq.ads_policy"], timeout: 4)
         if let rows { policy = AdPolicy.parse(rows.first?.value) }
@@ -1142,10 +1152,15 @@ struct AdContext: Equatable {
         let current = UUID(); generation = current
         self.service = service; self.reportingUserID = service.session?.userId; self.scope = scope; self.contentID = contentID
         session = UUID().uuidString; seen = []; blocking = true
-        let policy = await Self.loadPolicy(service)
+        // Wake the audio session while the rules and tags load: it can take a moment, and
+        // the ad can't start before it.
+        Task.detached { try? await PlaybackAudioSession.activate() }
+        // Rules already read this launch are used straight away and refreshed behind.
+        let policy: AdPolicy
+        if let known = Self.policy { policy = known; Task { _ = await Self.loadPolicy(service) } } else { policy = await Self.loadPolicy(service) }
         guard !Task.isCancelled, generation == current else { return false }
         guard policy.allowsEntry(scope: scope), frequency.allowsAd(gap: policy.gap) else { blocking = false; return true }
-        let tags: [CSAITag] = (try? await service.get("vast_tags", query: ["select":"id,tag_url,scope,content_id,active,is_test,platforms", "active":"eq.true", "ad_type":"eq.pre_roll", "order":"id.asc"], timeout: 4)) ?? []
+        let tags = await Self.preRollTags(service)
         guard !Task.isCancelled, generation == current else { return false }
         guard let selected = CSAITag.select(tags, scope: scope, contentID: contentID),
               frequency.allowsAd(gap: policy.gap) else {
@@ -1227,11 +1242,14 @@ struct CSAIOverlay: View {
     var body: some View {
         if gate.blocking {
             ZStack {
+                // While the ad loads: the Peep mark on black, not an empty screen. The ad's
+                // own view is clear until its video draws, so this shows through until then.
                 Color.black.ignoresSafeArea()
+                VStack(spacing: 28) { PeepBrandMark(width: 220); ProgressView() }.accessibilityHidden(true)
                 if let tag = gate.tag {
                     IMAAdView(tag: tag, allowSkip: gate.skipAllowed, event: { gate.record($0, adID: $1) }, finished: gate.finish, cancelled: { gate.cancel(); cancel() })
                         .id(tag.id).ignoresSafeArea()
-                } else { ProgressView("Preparing playback…") }
+                }
             }
             .onExitCommand { gate.cancel(); cancel() }
         }
@@ -1286,7 +1304,7 @@ struct IMAAdView: UIViewControllerRepresentable {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .black
+        view.backgroundColor = .clear // the loading slate behind shows until the ad's video draws
         overrideUserInterfaceStyle = .dark
         // Scope contrast to the SDK's ad controls, including its information button.
         // A solid dark backing stays readable even over an all-white creative.
@@ -1294,7 +1312,7 @@ struct IMAAdView: UIViewControllerRepresentable {
         adButtons.backgroundColor = UIColor(white: 0.08, alpha: 1)
         adButtons.tintColor = .white
         skip.addAction(UIAction { [weak self] _ in self?.pressSkip() }, for: .primaryActionTriggered)
-        adSurface.translatesAutoresizingMaskIntoConstraints = false; adSurface.backgroundColor = .black
+        adSurface.translatesAutoresizingMaskIntoConstraints = false; adSurface.backgroundColor = .clear
         view.addSubview(adSurface); view.addSubview(banner)
         banner.isHidden = true
         banner.onLoaded = { [weak self] loaded in if !loaded { self?.showBanner(nil) } }
