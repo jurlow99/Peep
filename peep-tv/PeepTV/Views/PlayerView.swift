@@ -1847,37 +1847,22 @@ private struct LiveMidrollModifier: ViewModifier {
     let channelID: Int?
     @ObservedObject var gate: CSAIGate
     let ready: Bool
-    /// Dev builds show what the ad watcher is doing, on screen, so testing never
-    /// depends on the Xcode console staying connected.
-    @State private var status = ""
-    @State private var checked = Date.distantPast
+    // What the ad watcher does goes to the Xcode console only (category CSAI): an
+    // on-screen status box here used to sit on top of the ad itself.
     func body(content: Content) -> some View {
-        content.overlay(alignment: .topLeading) { // top-left: the FARRIS · DEV badge owns the top-right
-            if service.configuration?.isDevelopment == true, !status.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("AD WATCH").font(.system(size: 13, weight: .heavy)).tracking(2).foregroundStyle(ContentAppearance.accent)
-                    Text(status).font(.system(size: 17, weight: .semibold))
-                    Text("checked \(checked.formatted(date: .omitted, time: .standard))").font(.system(size: 13)).foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, 16).padding(.vertical, 10)
-                .background(.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 12))
-                .padding(.top, 40).padding(.leading, 60).allowsHitTesting(false)
-            }
-        }
+        content
         .task(id: "\(channelID ?? -1):\(scenePhase == .active):\(ready)") {
             guard ready, scenePhase == .active, service.configuration?.isDevelopment == true, let channelID else { return }
             let log = Logger(subsystem: "tv.watchpeep.PeepTV", category: "CSAI")
             // Unified log only: writing to stdout can block once Xcode stops reading it.
             let trace: (String) -> Void = { line in log.notice("\(line, privacy: .public)") }
-            defer { status = "Stopped" }
+            defer { trace("Ad watch stopped") }
             let tags: [CSAITag] = (try? await service.get("vast_tags", query: ["select":"id,tag_url,scope,content_id,active,is_test,platforms", "active":"eq.true", "ad_type":"eq.mid_roll", "scope":"eq.live", "or":"(content_id.is.null,content_id.eq.\(channelID))", "is_test":"eq.true", "order":"id.asc"], timeout: 4)) ?? []
             guard !Task.isCancelled, let tag = CSAITag.select(tags, scope: "live", contentID: String(channelID)) else {
                 trace("Live mid-roll not armed for channel \(channelID): \(tags.count) candidate tags")
-                status = "No mid-roll tag for this channel"
                 return
             }
             trace("Live mid-roll armed for channel \(channelID) with tag \(tag.id)")
-            status = "Waiting for a break · tag \(tag.id)"
             var lastReport = Date.distantPast
             let metadata = LiveMidrollMetadata()
             var attached: AVPlayerItem?
@@ -1885,12 +1870,14 @@ private struct LiveMidrollModifier: ViewModifier {
             var breakStarts: [Date] = [] // a break signalled twice (playlist + in-band) is still one break
             var midrollActive = false
             var mutedBeforeMidroll: Bool?
+            var peakBeforeMidroll: Double?
             let account = service.session?.userId
             defer {
                 metadata.detach()
                 if midrollActive {
                     gate.finish()
                     if let mutedBeforeMidroll { player.isMuted = mutedBeforeMidroll }
+                    if let peakBeforeMidroll { attached?.preferredPeakBitRate = peakBeforeMidroll }
                 }
             }
             while !Task.isCancelled {
@@ -1898,7 +1885,7 @@ private struct LiveMidrollModifier: ViewModifier {
                     attached = player.currentItem; metadata.attach(attached); seen = []
                 }
                 if Date().timeIntervalSince(lastReport) >= 5 {
-                    lastReport = Date(); checked = lastReport
+                    lastReport = Date()
                     let known = metadata.cues.merging(metadata.inbandCues, uniquingKeysWith: { _, new in new }).values.sorted { $0.start < $1.start }
                     let playhead = player.currentItem?.currentDate()
                     let summary = known.map { cue in
@@ -1912,11 +1899,13 @@ private struct LiveMidrollModifier: ViewModifier {
                    let remaining = cue.remaining(at: date) {
                     seen.insert(cue.id); breakStarts.append(cue.start); breakStarts = breakStarts.suffix(20)
                     trace("Live mid-roll cue matched: \(cue.id.prefix(12)), \(Int(remaining))s left; starting ad")
-                    status = "Break found · \(Int(remaining))s · playing ad"
                     let wasMuted = player.isMuted
                     mutedBeforeMidroll = wasMuted
                     player.isMuted = true; midrollActive = true
-                    if let reason = gate.beginMidroll(service: service, tag: tag.filled(breakSeconds: remaining, context: gate.context, skippable: false), channelID: channelID) { trace("Live mid-roll did not start: \(reason)"); status = "Break found · ad blocked: \(reason)" }
+                    // The channel keeps playing (muted, hidden) so the break's end is known. Drop it
+                    // to its lowest rung meanwhile: one HD decode for the ad, not two, so it plays smoothly.
+                    peakBeforeMidroll = attached?.preferredPeakBitRate; attached?.preferredPeakBitRate = 400_000
+                    if let reason = gate.beginMidroll(service: service, tag: tag.filled(breakSeconds: remaining, context: gate.context, skippable: false), channelID: channelID) { trace("Live mid-roll did not start: \(reason)") }
                     let started = ProcessInfo.processInfo.systemUptime
                     let deadline = ProcessInfo.processInfo.systemUptime + remaining
                     while !Task.isCancelled, gate.blocking, player.currentItem === attached,
@@ -1927,12 +1916,8 @@ private struct LiveMidrollModifier: ViewModifier {
                     if gate.blocking { gate.record(Task.isCancelled ? "cancel" : "timeout"); gate.finish() }
                     let ran = Int(ProcessInfo.processInfo.systemUptime - started)
                     trace("Live mid-roll ended after \(ran)s of the \(Int(remaining))s break")
-                    if !status.contains("blocked") {
-                        status = ran == 0 || gate.lastEvent == "error" || gate.lastEvent == "timeout"
-                            ? "Last break: ad server sent no ad (\(gate.lastEvent)) · waiting"
-                            : "Last ad ran \(ran)s · waiting for next break"
-                    }
                     player.isMuted = wasMuted; mutedBeforeMidroll = nil; midrollActive = false
+                    if let peakBeforeMidroll { attached?.preferredPeakBitRate = peakBeforeMidroll }; peakBeforeMidroll = nil
                 }
                 do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
             }
