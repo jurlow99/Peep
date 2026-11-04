@@ -1021,9 +1021,10 @@ struct AdPolicy: Decodable {
     var pause_enabled = true
     var squeeze_enabled = true
     var squeeze_every_minutes = 10
+    var squeeze_live_after_break_minutes = 3
     static let fallback = AdPolicy()
     init() {}
-    private enum CodingKeys: String, CodingKey { case enabled, min_gap_minutes, live_entry, multiview_entry, midroll_enabled, midroll_min_minutes, midroll_every_minutes, midroll_max_breaks, pause_enabled, squeeze_enabled, squeeze_every_minutes }
+    private enum CodingKeys: String, CodingKey { case enabled, min_gap_minutes, live_entry, multiview_entry, midroll_enabled, midroll_min_minutes, midroll_every_minutes, midroll_max_breaks, pause_enabled, squeeze_enabled, squeeze_every_minutes, squeeze_live_after_break_minutes }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         let number = { (key: CodingKeys, fallback: Int, range: ClosedRange<Int>) in max(range.lowerBound, min(range.upperBound, (try? values.decode(Int.self, forKey: key)) ?? fallback)) }
@@ -1038,6 +1039,7 @@ struct AdPolicy: Decodable {
         pause_enabled = (try? values.decode(Bool.self, forKey: .pause_enabled)) ?? true
         squeeze_enabled = (try? values.decode(Bool.self, forKey: .squeeze_enabled)) ?? true
         squeeze_every_minutes = number(.squeeze_every_minutes, 10, 1...240)
+        squeeze_live_after_break_minutes = number(.squeeze_live_after_break_minutes, 3, 1...30)
     }
     /// Seconds into a title where a mid-roll plays: every N minutes, only in titles of
     /// at least M minutes, never inside the last two minutes, at most K. Same as the web.
@@ -1514,14 +1516,20 @@ private final class PauseAdXML: NSObject, XMLParserDelegate {
 }
 
 /// Squeeze ads (L-bar): a full-screen picture while the show keeps playing, shrunk to 75%
-/// into the top-right corner, sound on. Asked about every N minutes of playback (Ad rules),
-/// never during or within two minutes after an ad break, never while paused. Same as the
-/// web's squeezeAd.js.
+/// into the top-right corner, sound on. Movies/episodes: about every N minutes, never within
+/// two minutes after a break. Live: once per gap between the channel's own breaks, a few
+/// minutes after one ends. Never during a break or while paused. Same as squeezeAd.js.
 enum SqueezeSchedule {
     static let afterBreak: TimeInterval = 120
     static let defaultSeconds: Double = 15, maxSeconds: Double = 60
-    static func due(now: Date, lastAsked: Date, lastBreakEnded: Date?, playing: Bool, adBusy: Bool, policy: AdPolicy) -> Bool {
+    /// Live channels: once per gap between breaks, `squeeze_live_after_break_minutes` after
+    /// the break ended (or after the channel started); `askedSinceBreak` = this gap had its turn.
+    static func due(now: Date, lastAsked: Date, lastBreakEnded: Date?, playing: Bool, adBusy: Bool, policy: AdPolicy,
+                    live: Bool = false, started: Date? = nil, askedSinceBreak: Bool = false) -> Bool {
         guard policy.enabled, policy.squeeze_enabled, playing, !adBusy else { return false }
+        if live {
+            return !askedSinceBreak && now.timeIntervalSince(lastBreakEnded ?? started ?? lastAsked) >= Double(policy.squeeze_live_after_break_minutes * 60)
+        }
         if let lastBreakEnded, now.timeIntervalSince(lastBreakEnded) < afterBreak { return false }
         return now.timeIntervalSince(lastAsked) >= Double(policy.squeeze_every_minutes * 60)
     }
@@ -1548,6 +1556,8 @@ private struct SqueezeAdModifier: ViewModifier {
     @State private var counted = false
     @State private var lastAsked = Date()
     @State private var lastBreak: Date?
+    @State private var started = Date()
+    @State private var askedSinceBreak = false
     // The task reads these, not the init values it captured when it started.
     @State private var busyNow = false
     @State private var request = (scope: "movie", contentID: "", context: AdContext())
@@ -1571,18 +1581,19 @@ private struct SqueezeAdModifier: ViewModifier {
             .onChange(of: busy, initial: true) { _, value in busyNow = value; if value { hide() } }
             .onChange(of: "\(scope)|\(contentID)|\(context.channel)|\(context.show)", initial: true) { _, _ in request = (scope, contentID, context) }
             .onChange(of: gate.blocking) { _, blocking in
-                if blocking { hide() } else { lastBreak = Date(); lastAsked = Date() }
+                if blocking { hide() } else { lastBreak = Date(); lastAsked = Date(); askedSinceBreak = false }
             }
             .onReceive(player.publisher(for: \.timeControlStatus)) { status in if status == .paused { hide() } }
             .task(id: "\(ready):\(key)") {
-                squeeze = nil; lastAsked = Date()
+                squeeze = nil; lastAsked = Date(); started = Date(); lastBreak = nil; askedSinceBreak = false
                 guard ready else { return }
                 if CSAIGate.policy == nil { _ = await CSAIGate.loadPolicy(service) } // the admin's interval, not the default
                 let log = Logger(subsystem: "tv.watchpeep.PeepTV", category: "Squeeze")
                 while !Task.isCancelled {
                     do { try await Task.sleep(for: .seconds(5)) } catch { return }
-                    guard squeeze == nil, SqueezeSchedule.due(now: Date(), lastAsked: lastAsked, lastBreakEnded: lastBreak, playing: player.timeControlStatus == .playing, adBusy: gate.blocking || busyNow, policy: CSAIGate.policy ?? .fallback) else { continue }
-                    lastAsked = Date()
+                    guard squeeze == nil, SqueezeSchedule.due(now: Date(), lastAsked: lastAsked, lastBreakEnded: lastBreak, playing: player.timeControlStatus == .playing, adBusy: gate.blocking || busyNow, policy: CSAIGate.policy ?? .fallback,
+                                                                live: request.scope == "live", started: started, askedSinceBreak: askedSinceBreak) else { continue }
+                    lastAsked = Date(); askedSinceBreak = true
                     let ask = request
                     log.notice("Squeeze: asking the tag for \(ask.scope, privacy: .public) \(ask.context.channel.isEmpty ? ask.context.show : ask.context.channel, privacy: .public)")
                     guard let (ad, _) = await PauseAd.load(service: service, scope: ask.scope, contentID: ask.contentID, context: ask.context, placement: "squeeze") else {

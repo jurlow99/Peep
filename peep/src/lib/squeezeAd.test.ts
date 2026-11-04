@@ -20,6 +20,17 @@ it('asks every N minutes of playback, never during or just after a break, never 
   expect(squeezeDue({ ...base, policy: null })).toBe(false);
 });
 
+it('on live, asks once per gap between breaks, a few minutes after the break ends', () => {
+  const live = { ...base, live: true, startedAt: 90 * MIN, lastAskedAt: 90 * MIN };
+  expect(squeezeDue({ ...live, now: 92 * MIN })).toBe(false);                          // 2 min after opening
+  expect(squeezeDue({ ...live, now: 93 * MIN })).toBe(true);                           // 3 min after opening
+  expect(squeezeDue({ ...live, now: 93 * MIN, askedSinceBreak: true })).toBe(false);   // this gap had its turn
+  expect(squeezeDue({ ...live, lastBreakEndedAt: 98 * MIN })).toBe(false);             // break ended 2 min ago
+  expect(squeezeDue({ ...live, lastBreakEndedAt: 97 * MIN })).toBe(true);              // 3 min after the break
+  expect(squeezeDue({ ...live, lastBreakEndedAt: 97 * MIN, adBusy: true })).toBe(false);
+  expect(squeezeDue({ ...live, lastBreakEndedAt: 95 * MIN, policy: { ...DEFAULT_AD_POLICY, squeeze_live_after_break_minutes: 6 } })).toBe(false);
+});
+
 it('keeps the picture up for minSuggestedDuration, 15 s when missing, 60 s at most', () => {
   const vast = (attr: string) => `<VAST version="4.2" xmlns="http://www.iab.com/VAST"><Ad id="1"><InLine><AdTitle>L</AdTitle><Creatives><Creative><NonLinearAds>
     <NonLinear width="1920" height="1080" ${attr}><StaticResource creativeType="image/png"><![CDATA[https://cdn.example/l.png]]></StaticResource></NonLinear>

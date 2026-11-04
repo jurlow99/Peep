@@ -17,10 +17,11 @@ export const DEFAULT_AD_POLICY = Object.freeze({
   postroll_enabled: true,   // browser VOD only
   pause_enabled: true,      // picture while the viewer has paused (web and Apple TV)
   squeeze_enabled: true,    // L-bar picture while the show keeps playing (web and Apple TV)
-  squeeze_every_minutes: 10,
+  squeeze_every_minutes: 10,        // movies and episodes
+  squeeze_live_after_break_minutes: 3, // live: one L per gap between breaks, this long after a break ends
 });
 
-const LIMITS = { min_gap_minutes: [0, 1440], midroll_min_minutes: [1, 600], midroll_every_minutes: [1, 240], midroll_max_breaks: [0, 20], squeeze_every_minutes: [1, 240] };
+const LIMITS = { min_gap_minutes: [0, 1440], midroll_min_minutes: [1, 600], midroll_every_minutes: [1, 240], midroll_max_breaks: [0, 20], squeeze_every_minutes: [1, 240], squeeze_live_after_break_minutes: [1, 30] };
 
 // Accepts the stored string/object, fills gaps with defaults, clamps numbers.
 export function parseAdPolicy(value) {

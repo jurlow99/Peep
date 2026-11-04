@@ -91,7 +91,7 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
   const adBannerRef = useRef(null), adBannerSeenRef = useRef(null);
   // Squeeze ad (lib/squeezeAd.js): the show shrinks to 75% top-right over a full-screen picture.
   const [squeeze, setSqueeze] = useState(null); // { ad, tag, scope, contentId, session, seconds }
-  const squeezeClockRef = useRef({ lastAskedAt: 0, lastBreakEndedAt: 0 });
+  const squeezeClockRef = useRef({ lastAskedAt: 0, lastBreakEndedAt: 0, startedAt: 0, askedSinceBreak: false });
   const squeezeSeenRef = useRef(null);
   const [resumedAt, setResumedAt] = useState(null); // seconds we resumed from, while the Start over offer shows
   // Pause ad: after PAUSE_DELAY_MS paused (never during an ad), ask the pause tag once
@@ -430,13 +430,13 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
   const adWasPlayingRef = useRef(false);
   useEffect(() => {
     if (adPlaying) setSqueeze(null);
-    else if (adWasPlayingRef.current) squeezeClockRef.current = { lastAskedAt: Date.now(), lastBreakEndedAt: Date.now() };
+    else if (adWasPlayingRef.current) squeezeClockRef.current = { ...squeezeClockRef.current, lastAskedAt: Date.now(), lastBreakEndedAt: Date.now(), askedSinceBreak: false };
     adWasPlayingRef.current = adPlaying;
   }, [adPlaying]);
   // Every few seconds of playback, see whether it's time to ask the squeeze tag.
   useEffect(() => {
     if (getEmbedUrl(video.url)) return;
-    squeezeClockRef.current = { lastAskedAt: Date.now(), lastBreakEndedAt: 0 };
+    squeezeClockRef.current = { lastAskedAt: Date.now(), lastBreakEndedAt: 0, startedAt: Date.now(), askedSinceBreak: false };
     let active = true, asking = false;
     const scope = isLive ? "live" : isEpisode ? "episode" : "movie";
     const contentId = isLive ? String(video.id).replace(/^ch[-_]/, "") : video.id;
@@ -445,8 +445,8 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
       if (!element || asking || !adsClearedRef.current) return;
       if (!hasAdPolicy()) await loadAdPolicy(supabase);
       const playing = !element.paused && !element.ended && element.currentTime > 0;
-      if (!active || !squeezeDue({ now: Date.now(), ...clock, playing, adBusy: adBusyRef.current, policy: getAdPolicy() })) return;
-      clock.lastAskedAt = Date.now(); asking = true;
+      if (!active || !squeezeDue({ now: Date.now(), ...clock, live: isLive, playing, adBusy: adBusyRef.current, policy: getAdPolicy() })) return;
+      clock.lastAskedAt = Date.now(); clock.askedSinceBreak = true; asking = true;
       try {
         const { data } = await supabase.from("vast_tags").select("id,tag_url,scope,content_id,active,is_test,platforms").eq("active", true).eq("ad_type", "squeeze").order("id");
         const tag = selectAdTag(data, scope, contentId);

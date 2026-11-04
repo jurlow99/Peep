@@ -333,9 +333,10 @@ export default function AdsPanel({ showToast, logAudit = () => {} }) {
           </div>
           <div className="ads-rule">
             <strong>Ads during the show</strong>
-            <small>A full-screen picture from the during-the-show tag while the show keeps playing, shrunk into the top-right corner for about 15 seconds. Never during or just after a break, never while paused. Browser and Apple TV.</small>
+            <small>A full-screen picture from the during-the-show tag while the show keeps playing, shrunk into the top-right corner for about 15 seconds. Never during a break, never while paused. Browser and Apple TV.</small>
             <label className="ads-check"><input type="checkbox" checked={!!draft.squeeze_enabled} onChange={e => setRule("squeeze_enabled", e.target.checked)} />Ads during the show on</label>
-            <span className="ads-inline">About every <input type="number" min="1" max="240" value={draft.squeeze_every_minutes} onChange={e => setRule("squeeze_every_minutes", e.target.value)} /> minutes of watching</span>
+            <span className="ads-inline">Live TV: one between breaks, <input type="number" min="1" max="30" value={draft.squeeze_live_after_break_minutes} onChange={e => setRule("squeeze_live_after_break_minutes", e.target.value)} /> minutes after a break ends</span>
+            <span className="ads-inline">Movies and episodes: about every <input type="number" min="1" max="240" value={draft.squeeze_every_minutes} onChange={e => setRule("squeeze_every_minutes", e.target.value)} /> minutes</span>
           </div>
         </div>
         <div className="ads-actions">

@@ -660,6 +660,15 @@ final class CatalogTests: XCTestCase {
         XCTAssertFalse(due(5400, nil, false, false, policy))        // paused
         XCTAssertFalse(due(5400, nil, true, true, policy))          // an ad is up
         XCTAssertFalse(due(5400, nil, true, false, AdPolicy.parse(#"{"squeeze_enabled":false}"#)))
+        // Live: once per gap between breaks, 3 minutes after one ends (or after the channel opened).
+        XCTAssertEqual(policy.squeeze_live_after_break_minutes, 3)
+        let live = { (brk: TimeInterval?, asked: Bool) in
+            SqueezeSchedule.due(now: now, lastAsked: Date(timeIntervalSince1970: 5900), lastBreakEnded: brk.map { Date(timeIntervalSince1970: $0) }, playing: true, adBusy: false, policy: policy,
+                                live: true, started: Date(timeIntervalSince1970: 5800), askedSinceBreak: asked) }
+        XCTAssertTrue(live(nil, false))     // opened 200 s ago
+        XCTAssertFalse(live(nil, true))     // that gap already had its L
+        XCTAssertFalse(live(5900, false))   // break ended 100 s ago
+        XCTAssertTrue(live(5820, false))    // 180 s after the break
         let tag = CSAITag(id: 9, tag_url: "https://ads.invalid/v?ct=[CT]", scope: "live", content_id: nil, active: true, is_test: true, platforms: ["tvos"])
         XCTAssertEqual(tag.filled(breakSeconds: nil, context: AdContext(channel: "X", contentType: "live")).tag_url, "https://ads.invalid/v?ct=live")
         XCTAssertEqual(tag.filled(breakSeconds: nil, context: AdContext(show: "Y")).tag_url, "https://ads.invalid/v?ct=vod")
