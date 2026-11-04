@@ -17,6 +17,7 @@ import ChannelBlackoutEditor from "./cms/ChannelBlackoutEditor";
 import { blackoutFields, channelBlackout } from "../lib/channelBlackout";
 import LiveChannelRowPicker from "./cms/LiveChannelRowPicker";
 import LiveTVViewingDashboard from "./cms/LiveTVViewingDashboard";
+import ReportsPanel from "./cms/ReportsPanel";
 import { useMultiviewPackages } from "../hooks/useMultiviewPackages";
 import MultiviewPackagesPanel, { MultiviewRowPicker } from "./cms/MultiviewPackagesPanel";
 import { useState, useEffect, useRef, useMemo } from "react";
@@ -4244,6 +4245,7 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
 
 
         {/* ────── REPORTS TAB ────── */}
+        {tab === "analytics" && ["overview", "channels", "mou"].includes(analyticsTab) && <ReportsPanel view={analyticsTab} />}
         {tab === "analytics" && analyticsTab === "live_tv" && <LiveTVViewingDashboard />}
         {tab === "analytics" && analyticsTab === "reports" && (
           <div>

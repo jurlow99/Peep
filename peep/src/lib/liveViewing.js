@@ -2,8 +2,19 @@ import { supabase } from '../supabase';
 
 // Best-effort playback telemetry never blocks playback. Each stream has a private
 // write token; history is only readable by admins. No buffering/paused time is added.
+// Live channels report to record_live_viewing, movies/episodes to record_vod_viewing;
+// both feed Reports (MOU, channel stats, platform analytics).
 export function trackLiveVideo(video, channelId, mode = 'single') {
   if (!video || !Number.isSafeInteger(Number(channelId))) return () => {};
+  return trackPlayback(video, 'record_live_viewing', { p_channel_id: Number(channelId), p_mode: mode });
+}
+
+export function trackVodVideo(video, contentType, contentId) {
+  if (!video || !['movie', 'episode'].includes(contentType) || !contentId) return () => {};
+  return trackPlayback(video, 'record_vod_viewing', { p_content_type: contentType, p_content_id: String(contentId) });
+}
+
+function trackPlayback(video, rpcName, fields) {
   let deviceId;
   try { deviceId = localStorage.getItem('peep_live_device_id') || crypto.randomUUID(); localStorage.setItem('peep_live_device_id', deviceId); }
   catch { deviceId = crypto.randomUUID(); }
@@ -11,9 +22,9 @@ export function trackLiveVideo(video, channelId, mode = 'single') {
   let pending = Promise.resolve();
   function flush(end = false) {
     if (!started) return;
-    const payload = { p_session_id: sessionId, p_token: token, p_device_id: deviceId, p_channel_id: Number(channelId), p_platform: /Mobi|Android/i.test(navigator.userAgent) ? 'mobile_web' : 'web', p_mode: mode, p_seconds: Math.min(30, seconds), p_end: end };
+    const payload = { p_session_id: sessionId, p_token: token, p_device_id: deviceId, ...fields, p_platform: /Mobi|Android/i.test(navigator.userAgent) ? 'mobile_web' : 'web', p_seconds: Math.min(30, seconds), p_end: end };
     seconds = 0; lastSent = performance.now();
-    pending = pending.then(() => supabase.rpc('record_live_viewing', payload)).catch(() => {});
+    pending = pending.then(() => supabase.rpc(rpcName, payload)).catch(() => {});
     if (end) started = false;
   }
   function sample() {

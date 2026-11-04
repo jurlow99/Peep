@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 const rpc = vi.hoisted(() => vi.fn().mockResolvedValue({ error: null }));
 vi.mock('../supabase', () => ({ supabase: { rpc } }));
-import { trackLiveVideo } from './liveViewing';
+import { trackLiveVideo, trackVodVideo } from './liveViewing';
 describe('live viewing playback measurement', () => {
   afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); rpc.mockClear(); });
   it('counts advancing playback, closes paused sessions and excludes buffering', async () => {
@@ -24,5 +24,22 @@ describe('live viewing playback measurement', () => {
     await Promise.resolve(); await Promise.resolve();
     expect(rpc.mock.calls.at(-1)?.[1].p_end).toBe(true);
     stop();
+  });
+  it('reports movie and episode minutes to record_vod_viewing', async () => {
+    vi.useFakeTimers();
+    let now = 0;
+    vi.stubGlobal('performance', { now: () => now });
+    vi.stubGlobal('localStorage', { getItem: () => 'device-1', setItem: () => {} });
+    vi.stubGlobal('window', new EventTarget());
+    vi.stubGlobal('navigator', { userAgent: 'Desktop' });
+    const video = Object.assign(new EventTarget(), { currentTime: 0, paused: false, ended: false, readyState: 4 });
+    const stop = trackVodVideo(video, 'episode', 42);
+    for (let i=0;i<3;i++) { now += 1000; video.currentTime += 1; await vi.advanceTimersByTimeAsync(1000); }
+    stop();
+    await Promise.resolve(); await Promise.resolve();
+    expect(rpc).toHaveBeenCalledWith('record_vod_viewing', expect.objectContaining({ p_content_type: 'episode', p_content_id: '42', p_device_id: 'device-1', p_end: false }));
+    expect(rpc.mock.calls.at(-1)?.[1]).toMatchObject({ p_end: true, p_content_id: '42' });
+    expect(rpc.mock.calls.every(([, p]) => !('p_channel_id' in p))).toBe(true);
+    expect(trackVodVideo(video, 'podcast', 1)).toBeTypeOf('function');
   });
 });

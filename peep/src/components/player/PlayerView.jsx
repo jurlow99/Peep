@@ -8,7 +8,7 @@ import { titleCuePoints, formatBreakTime } from "../../lib/adBreaks";
 import { PAUSE_DELAY_MS, loadPauseAd, ping } from "../../lib/pauseAd";
 import { selectAdTag, recordAdEvent } from "../../lib/ads";
 import { hasAdPolicy, loadAdPolicy, placementAllowed } from "../../lib/adPolicy";
-import { trackLiveVideo } from "../../lib/liveViewing";
+import { trackLiveVideo, trackVodVideo } from "../../lib/liveViewing";
 import { useState, useEffect, useRef, useMemo } from "react";
 import Hls from "hls.js";
 import { Wordmark } from "../Wordmark";
@@ -426,6 +426,12 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
     if (adPlaying || !isLive || !String(video.id).startsWith("ch-")) return;
     return trackLiveVideo(videoRef.current, Number(String(video.id).slice(3)));
   }, [video.id, isLive, adPlaying]);
+
+  // Movie/episode minutes for Reports; stopped during ad breaks so ads never count.
+  useEffect(() => {
+    if (adPlaying || isLive || getEmbedUrl(video.url) || video._type === "live" || video._type === "live_epg") return;
+    return trackVodVideo(videoRef.current, isEpisode ? "episode" : "movie", video.id);
+  }, [video.id, isLive, isEpisode, adPlaying]);
 
   // live_viewers.channel_id is bigint: FAST channels arrive as "ch-12", creator
   // streams as their numeric id. A non-numeric value would fail the write.

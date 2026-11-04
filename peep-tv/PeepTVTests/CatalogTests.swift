@@ -656,6 +656,12 @@ final class CatalogTests: XCTestCase {
         XCTAssertEqual(AdPolicy.parse(#"{"midroll_enabled":false}"#).cuePoints(duration: duration, titleBreaks: [760]), [])
     }
 
+    func testVODViewingMeasuresMoviesAndEpisodesOnly() {
+        XCTAssertEqual(VODViewing.contentType("short"), "movie")
+        XCTAssertEqual(VODViewing.contentType("movie"), "movie")
+        XCTAssertEqual(VODViewing.contentType("episode"), "episode")
+        XCTAssertNil(VODViewing.contentType("podcast"))
+    }
     func testCSAITagFillsBreakAndContextMacros() {
         let tag = CSAITag(id: 1, tag_url: "https://ads.invalid/v?dur=[BREAK_SECONDS]&ms=[BREAK_MS]&channel=[CHANNEL]&show=[SHOW]&genre=[GENRE]&device=[DEVICE]&ifa=[IFA]&lmt=[LMT]",
                           scope: "live", content_id: nil, active: true, is_test: true, platforms: ["tvos"])

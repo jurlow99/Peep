@@ -676,6 +676,7 @@ struct PlayerView: View {
         .overlay { CSAIOverlay(gate: adGate, cancel: { dismiss() }) }
         .liveMidroll(player: model.player, channelID: liveChannelID, gate: adGate, ready: contentStarted)
         .liveViewing(player: model.player, channelID: adGate.blocking ? nil : liveChannelID)
+        .vodViewing(player: model.player, identity: contentStarted && liveChannelID == nil ? identity : nil)
         .overlay(alignment: .top) {
             if let notice = model.subtitleNotice { Text(notice).font(.system(size: 20)).padding(12).background(.black.opacity(0.8), in: Capsule()).padding(.top, 35).allowsHitTesting(false) }
         }
@@ -864,11 +865,13 @@ enum LiveViewingEnvironment {
 }
 
 // Samples media advancement rather than time spent on a screen or buffering.
+// Live channels report to record_live_viewing, movies/episodes to record_vod_viewing;
+// both feed the admin Reports (MOU, channel stats, platform analytics).
 @MainActor
 private final class LiveViewingTracker {
     private let player: AVPlayer
-    private let channelID: Int
-    private let mode: String
+    private let rpc: String
+    private let fields: [String: Any]
     private let service: SupabaseService
     private let deviceID: String
     private var sessionID = UUID().uuidString
@@ -880,8 +883,8 @@ private final class LiveViewingTracker {
     private var lastSent = ProcessInfo.processInfo.systemUptime
     private var pending: Task<Void, Never>?
 
-    init(player: AVPlayer, channelID: Int, mode: String, service: SupabaseService) {
-        self.player = player; self.channelID = channelID; self.mode = mode; self.service = service
+    init(player: AVPlayer, rpc: String, fields: [String: Any], service: SupabaseService) {
+        self.player = player; self.rpc = rpc; self.fields = fields; self.service = service
         let key = "peep_live_device_id"
         deviceID = UserDefaults.standard.string(forKey: key) ?? UUID().uuidString
         UserDefaults.standard.set(deviceID, forKey: key)
@@ -911,12 +914,13 @@ private final class LiveViewingTracker {
     }
     private func flush(end: Bool) {
         guard started else { return }
-        let payload: [String: Any] = ["p_session_id": sessionID, "p_token": token, "p_device_id": deviceID,
-            "p_channel_id": channelID, "p_platform": LiveViewingEnvironment.platform, "p_mode": mode, "p_seconds": min(30, seconds), "p_end": end]
+        let payload = fields.merging(["p_session_id": sessionID, "p_token": token, "p_device_id": deviceID,
+            "p_platform": LiveViewingEnvironment.platform, "p_seconds": min(30, seconds), "p_end": end]) { _, new in new }
         seconds = 0; lastSent = ProcessInfo.processInfo.systemUptime
         let previous = pending
         let service = service
-        pending = Task { await previous?.value; try? await service.post("rpc/record_live_viewing", body: payload) }
+        let path = "rpc/\(rpc)"
+        pending = Task { await previous?.value; try? await service.post(path, body: payload) }
         if end { started = false }
     }
 }
@@ -928,13 +932,33 @@ private struct LiveViewingModifier: ViewModifier {
     func body(content: Content) -> some View {
         content.task(id: channelID) {
             guard let channelID else { return }
-            await LiveViewingTracker(player: player, channelID: channelID, mode: mode, service: service).run()
+            await LiveViewingTracker(player: player, rpc: "record_live_viewing", fields: ["p_channel_id": channelID, "p_mode": mode], service: service).run()
         }
+    }
+}
+private struct VODViewingModifier: ViewModifier {
+    @EnvironmentObject private var service: SupabaseService
+    let player: AVPlayer
+    let identity: PlaybackIdentity?
+    func body(content: Content) -> some View {
+        content.task(id: identity) {
+            guard let identity, let type = VODViewing.contentType(identity.type) else { return }
+            await LiveViewingTracker(player: player, rpc: "record_vod_viewing", fields: ["p_content_type": type, "p_content_id": identity.id], service: service).run()
+        }
+    }
+}
+enum VODViewing {
+    /// Movies arrive as "movie" or the legacy "short"; podcasts aren't measured.
+    static func contentType(_ type: String) -> String? {
+        switch type { case "movie", "short": return "movie"; case "episode": return "episode"; default: return nil }
     }
 }
 extension View {
     func liveViewing(player: AVPlayer, channelID: Int?, mode: String = "single") -> some View {
         modifier(LiveViewingModifier(player: player, channelID: channelID, mode: mode))
+    }
+    func vodViewing(player: AVPlayer, identity: PlaybackIdentity?) -> some View {
+        modifier(VODViewingModifier(player: player, identity: identity))
     }
 }
 

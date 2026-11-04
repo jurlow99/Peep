@@ -33,9 +33,12 @@ export const ADMIN_NAV = [
     { key: 'promos', label: 'Promo codes & comps', target: { tab: 'promos' } },
     { key: 'payouts', label: 'Partner payouts', target: { tab: 'creators', creatorsTab: 'payouts' } },
   ] },
-  { key: 'reports', label: 'Reports', description: 'How the platform and Live TV are being watched.', sections: [
-    { key: 'live_tv', label: 'Live TV viewing', target: { tab: 'analytics', analyticsTab: 'live_tv' } },
-    { key: 'analytics', label: 'Platform analytics', target: { tab: 'analytics', analyticsTab: 'reports' } },
+  { key: 'reports', label: 'Reports', description: 'Minutes watched, channel stats and who is watching.', sections: [
+    { key: 'overview', label: 'Overview', target: { tab: 'analytics', analyticsTab: 'overview' } },
+    { key: 'channels', label: 'Channels', target: { tab: 'analytics', analyticsTab: 'channels' } },
+    { key: 'mou', label: 'MOU', target: { tab: 'analytics', analyticsTab: 'mou' } },
+    { key: 'live_tv', label: 'Watching now', target: { tab: 'analytics', analyticsTab: 'live_tv' } },
+    { key: 'analytics', label: 'Viewer lookup', target: { tab: 'analytics', analyticsTab: 'reports' } },
   ] },
   { key: 'platform', label: 'Platform', description: 'Staff, settings, storage, security and the audit trail.', sections: [
     { key: 'staff', label: 'Staff', target: { tab: 'staff' } },
