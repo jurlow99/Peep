@@ -442,6 +442,8 @@ struct PlayerView: View {
     @State private var squeezeCounted = false
     @State private var squeezeLastAsked = Date()
     @State private var squeezeLastBreak: Date?
+    @State private var squeezeTest = false // the L on screen came from "Test L ad": its impressions aren't sent
+    @State private var squeezeNow = false // dev "Test L ad": ask on the next tick, not counted by Steep (dry_run)
     let related: [Video]
     let openRelated: (Video) -> Void
     let playNext: () -> Void
@@ -498,7 +500,8 @@ struct PlayerView: View {
                 if (!adGate.blocking || (adGate.isMidroll && liveChannelID != nil)) && !showNext && !showEnd {
                     NativePlayer(player: model.player, interactive: !adGate.blocking, proposal: proposal, onAcceptProposal: nextEpisode == nil ? nil : playNext,
                                  skipIntro: offerSkip && introWindow != nil ? { skipIntro() } : nil,
-                                 startOver: liveChannelID == nil && identity != nil ? { watchAgain() } : nil).ignoresSafeArea()
+                                 startOver: liveChannelID == nil && identity != nil ? { watchAgain() } : nil,
+                                 testSqueeze: supabase.configuration?.isDevelopment == true ? { squeezeNow = true } : nil).ignoresSafeArea()
                     if let metadata, metadata.audioOnly { AudioArtworkOverlay(metadata: metadata) }
                     // A squeeze ad: the picture full screen, the show at 75% in the top-right corner,
                     // sound on. The native player can't be scaled (it stops drawing), so the small
@@ -693,18 +696,19 @@ struct PlayerView: View {
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(5)) } catch { return }
                 let busy = adGate.blocking || showNext || showEnd || pauseAd != nil || model.errorMessage != nil || model.blackoutMessage != nil
-                guard squeeze == nil, SqueezeSchedule.due(now: Date(), lastAsked: squeezeLastAsked, lastBreakEnded: squeezeLastBreak, playing: model.player.timeControlStatus == .playing, adBusy: busy, policy: CSAIGate.policy ?? .fallback) else { continue }
-                squeezeLastAsked = Date()
+                let forced = squeezeNow && model.player.timeControlStatus == .playing && !busy
+                guard squeeze == nil, forced || SqueezeSchedule.due(now: Date(), lastAsked: squeezeLastAsked, lastBreakEnded: squeezeLastBreak, playing: model.player.timeControlStatus == .playing, adBusy: busy, policy: CSAIGate.policy ?? .fallback) else { continue }
+                squeezeNow = false; squeezeLastAsked = Date()
                 let scope = liveChannelID != nil ? "live" : (identity?.type == "short" ? "movie" : identity?.type ?? "movie")
                 let context = liveChannelID != nil ? AdContext(channel: title, contentType: "live") : AdContext(show: title)
                 let log = Logger(subsystem: "tv.watchpeep.PeepTV", category: "Squeeze")
-                log.notice("Squeeze: asking the tag for \(scope, privacy: .public) \(context.channel.isEmpty ? context.show : context.channel, privacy: .public)")
-                guard let (ad, _) = await PauseAd.load(service: supabase, scope: scope, contentID: liveChannelID.map(String.init) ?? identity?.id ?? "", context: context, placement: "squeeze") else {
+                log.notice("Squeeze: asking the tag for \(scope, privacy: .public) \(context.channel.isEmpty ? context.show : context.channel, privacy: .public)\(forced ? " (test, dry run)" : "", privacy: .public)")
+                guard let (ad, _) = await PauseAd.load(service: supabase, scope: scope, contentID: liveChannelID.map(String.init) ?? identity?.id ?? "", context: context, placement: "squeeze", dryRun: forced) else {
                     log.notice("Squeeze: no ad"); continue
                 }
                 guard !Task.isCancelled, model.player.timeControlStatus == .playing, !adGate.blocking, pauseAd == nil else { log.notice("Squeeze: got an ad but the viewer paused or a break started"); continue }
                 log.notice("Squeeze: showing \(ad.title, privacy: .public) for \(Int(SqueezeSchedule.seconds(ad)), privacy: .public) s")
-                squeezeCounted = false
+                squeezeCounted = false; squeezeTest = forced
                 withAnimation(.easeInOut(duration: 0.4)) { squeeze = ad }
                 do { try await Task.sleep(for: .seconds(SqueezeSchedule.seconds(ad))) } catch { return }
                 withAnimation(.easeInOut(duration: 0.4)) { squeeze = nil }
@@ -780,7 +784,8 @@ struct PlayerView: View {
     private func countSqueezeAd() {
         guard !squeezeCounted, let ad = squeeze else { return }
         squeezeCounted = true
-        Logger(subsystem: "tv.watchpeep.PeepTV", category: "Squeeze").notice("Squeeze: picture on screen, counting \(ad.impressions.count, privacy: .public) impression(s)")
+        Logger(subsystem: "tv.watchpeep.PeepTV", category: "Squeeze").notice("Squeeze: picture on screen\(squeezeTest ? " (test, not counted)" : ", counting \(ad.impressions.count) impression(s)", privacy: .public)")
+        guard !squeezeTest else { return }
         for url in ad.impressions { Task { _ = try? await URLSession.shared.data(from: url) } }
     }
     private func skipIntro() {
@@ -827,6 +832,7 @@ struct NativePlayer: UIViewControllerRepresentable {
     var onAcceptProposal: (() -> Void)? = nil
     var skipIntro: (() -> Void)? = nil   // when set, the native "Skip Intro" action is offered
     var startOver: (() -> Void)? = nil   // when set, the info bar offers "Start over"
+    var testSqueeze: (() -> Void)? = nil // dev only: the info bar offers "Test L ad"
 
     private func applyContextualActions(_ controller: AVPlayerViewController) {
         let wanted = skipIntro != nil
@@ -834,8 +840,11 @@ struct NativePlayer: UIViewControllerRepresentable {
         controller.contextualActions = wanted ? [UIAction(title: "Skip Intro", image: UIImage(systemName: "forward.end.fill")) { [skipIntro] _ in skipIntro?() }] : []
     }
     private func applyStartOver(_ controller: AVPlayerViewController) {
-        if (startOver != nil) == !controller.transportBarCustomMenuItems.isEmpty { return }
-        controller.transportBarCustomMenuItems = startOver == nil ? [] : [UIAction(title: "Start over", image: UIImage(systemName: "arrow.counterclockwise")) { [startOver] _ in startOver?() }]
+        var items: [UIMenuElement] = []
+        if let startOver { items.append(UIAction(title: "Start over", image: UIImage(systemName: "arrow.counterclockwise")) { _ in startOver() }) }
+        if let testSqueeze { items.append(UIAction(title: "Test L ad", image: UIImage(systemName: "rectangle.inset.topright.filled")) { _ in testSqueeze() }) }
+        if items.count == controller.transportBarCustomMenuItems.count { return }
+        controller.transportBarCustomMenuItems = items
     }
 
     final class Coordinator: NSObject, AVPlayerViewControllerDelegate {
@@ -1525,12 +1534,13 @@ struct PauseAd: Equatable {
 
     /// Asks the most specific active Apple TV tag for this placement ("pause" or "squeeze");
     /// nil on no tag, no ad or any failure.
-    static func load(service: SupabaseService, scope: String, contentID: String, context: AdContext, placement: String = "pause") async -> (PauseAd, CSAITag)? {
+    /// dryRun (dev tests) adds dry_run=1: Steep answers normally but counts nothing.
+    static func load(service: SupabaseService, scope: String, contentID: String, context: AdContext, placement: String = "pause", dryRun: Bool = false) async -> (PauseAd, CSAITag)? {
         let policy = await CSAIGate.loadPolicy(service)
         guard policy.enabled, placement == "squeeze" ? policy.squeeze_enabled : policy.pause_enabled else { return nil }
         let tags: [CSAITag] = (try? await service.get("vast_tags", query: ["select": "id,tag_url,scope,content_id,active,is_test,platforms", "active": "eq.true", "ad_type": "eq.\(placement)", "order": "id.asc"], timeout: 4)) ?? []
         guard let tag = CSAITag.select(tags, scope: scope, contentID: contentID)?.filled(breakSeconds: nil, context: context),
-              let url = URL(string: tag.tag_url) else { return nil }
+              let url = URL(string: tag.tag_url + (dryRun ? (tag.tag_url.contains("?") ? "&" : "?") + "dry_run=1" : "")) else { return nil }
         var request = URLRequest(url: url); request.timeoutInterval = 4
         guard let (data, response) = try? await URLSession.shared.data(for: request), (response as? HTTPURLResponse)?.statusCode == 200,
               let ad = parse(data) else { return nil }
