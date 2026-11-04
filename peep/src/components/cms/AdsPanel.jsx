@@ -155,12 +155,12 @@ export default function AdsPanel({ showToast, logAudit = () => {} }) {
     previewStop.current?.();
     const problem = tagProblem({ ...form, platforms: form.platforms?.length ? form.platforms : ["web"] }, IS_DEV_DB);
     if (problem && !/Apple TV|Browser|at least one/.test(problem)) { showToast(problem, "error"); return; }
-    if (form.ad_type === "pause") {
-      // A pause ad is one picture, not a video: fetch it and show it here.
+    if (form.ad_type === "pause" || form.ad_type === "squeeze") {
+      // A pause or during-the-show ad is one picture, not a video: fetch it and show it here.
       setPreview({ ok: null, text: "Asking the ad server…" });
       loadPauseAd(form.tag_url.trim(), { show: "Preview" }).then(ad => setPreview(ad
-        ? { ok: true, text: `Pause ad found: ${ad.title}. This is what viewers see while paused.`, image: ad.image }
-        : { ok: false, text: "The ad server sent no pause ad. That's normal when no pause campaign is running." }));
+        ? { ok: true, text: `Picture found: ${ad.title}.${form.ad_type === "squeeze" ? ` Shown for ${Math.round(ad.duration || 15)} seconds with the show in the top-right corner.` : " This is what viewers see while paused."}`, image: ad.image }
+        : { ok: false, text: "The ad server sent no picture. That's normal when no campaign is running." }));
       return;
     }
     if (!previewVideo.current || !previewSurface.current) return;
@@ -259,8 +259,8 @@ export default function AdsPanel({ showToast, logAudit = () => {} }) {
             <button type="button" onClick={runPreview} disabled={!form.tag_url.trim()}>Play this tag</button>
             {preview && <button type="button" onClick={() => previewStop.current?.()}>Stop</button>}
           </div>
-          {preview?.image && <img className="ads-preview-image" src={preview.image} alt="Pause ad preview" />}
-          <div className="ads-preview" style={{ display: preview && form.ad_type !== "pause" ? "block" : "none" }}>
+          {preview?.image && <img className="ads-preview-image" src={preview.image} alt="Ad preview" />}
+          <div className="ads-preview" style={{ display: preview && !["pause", "squeeze"].includes(form.ad_type) ? "block" : "none" }}>
             <video ref={previewVideo} muted playsInline />
             <div ref={previewSurface} className="ads-preview-surface" />
           </div>
@@ -330,6 +330,12 @@ export default function AdsPanel({ showToast, logAudit = () => {} }) {
             <strong>Pause ads</strong>
             <small>A picture from the pause tag while a viewer has paused for 2 seconds, gone the moment they press play. Browser and Apple TV.</small>
             <label className="ads-check"><input type="checkbox" checked={!!draft.pause_enabled} onChange={e => setRule("pause_enabled", e.target.checked)} />Pause ads on</label>
+          </div>
+          <div className="ads-rule">
+            <strong>Ads during the show</strong>
+            <small>A full-screen picture from the during-the-show tag while the show keeps playing, shrunk into the top-right corner for about 15 seconds. Never during or just after a break, never while paused. Browser and Apple TV.</small>
+            <label className="ads-check"><input type="checkbox" checked={!!draft.squeeze_enabled} onChange={e => setRule("squeeze_enabled", e.target.checked)} />Ads during the show on</label>
+            <span className="ads-inline">About every <input type="number" min="1" max="240" value={draft.squeeze_every_minutes} onChange={e => setRule("squeeze_every_minutes", e.target.value)} /> minutes of watching</span>
           </div>
         </div>
         <div className="ads-actions">

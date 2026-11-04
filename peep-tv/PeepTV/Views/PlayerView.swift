@@ -438,6 +438,10 @@ struct PlayerView: View {
     @State private var pauseAd: PauseAd?
     @State private var pauseAdCounted = false
     @State private var pauseKey = 0 // bumps on every pause, so each pause asks at most once
+    @State private var squeeze: PauseAd?
+    @State private var squeezeCounted = false
+    @State private var squeezeLastAsked = Date()
+    @State private var squeezeLastBreak: Date?
     let related: [Video]
     let openRelated: (Video) -> Void
     let playNext: () -> Void
@@ -492,10 +496,16 @@ struct PlayerView: View {
                 // break takes the paused player off screen: left in place, it keeps the remote's
                 // focus and the ad's Skip button can never be reached.
                 if (!adGate.blocking || (adGate.isMidroll && liveChannelID != nil)) && !showNext && !showEnd {
-                    NativePlayer(player: model.player, interactive: !adGate.blocking, proposal: proposal, onAcceptProposal: nextEpisode == nil ? nil : playNext,
-                                 skipIntro: offerSkip && introWindow != nil ? { skipIntro() } : nil,
-                                 startOver: liveChannelID == nil && identity != nil ? { watchAgain() } : nil).ignoresSafeArea()
-                    if let metadata, metadata.audioOnly { AudioArtworkOverlay(metadata: metadata) }
+                    if let squeeze { SqueezeAdView(ad: squeeze, onShown: countSqueezeAd) }
+                    // A squeeze ad shrinks the show to 75% into the top-right corner, sound on.
+                    Group {
+                        NativePlayer(player: model.player, interactive: !adGate.blocking, proposal: proposal, onAcceptProposal: nextEpisode == nil ? nil : playNext,
+                                     skipIntro: offerSkip && introWindow != nil ? { skipIntro() } : nil,
+                                     startOver: liveChannelID == nil && identity != nil ? { watchAgain() } : nil).ignoresSafeArea()
+                        if let metadata, metadata.audioOnly { AudioArtworkOverlay(metadata: metadata) }
+                    }
+                    .scaleEffect(squeeze == nil ? 1 : 0.75, anchor: .topTrailing)
+                    .animation(.easeInOut(duration: 0.4), value: squeeze == nil)
                 }
             }
         }
@@ -664,13 +674,38 @@ struct PlayerView: View {
             do { try await Task.sleep(for: .seconds(2)) } catch { return }
             guard model.player.timeControlStatus == .paused, !adGate.blocking, !showNext, !showEnd, model.errorMessage == nil else { return }
             let scope = liveChannelID != nil ? "live" : (identity?.type == "short" ? "movie" : identity?.type ?? "movie")
-            let context = liveChannelID != nil ? AdContext(channel: title) : AdContext(show: title)
+            let context = liveChannelID != nil ? AdContext(channel: title, contentType: "live") : AdContext(show: title)
             guard let (ad, _) = await PauseAd.load(service: supabase, scope: scope, contentID: liveChannelID.map(String.init) ?? identity?.id ?? "", context: context),
                   !Task.isCancelled, model.player.timeControlStatus == .paused, !adGate.blocking else { return }
             pauseAdCounted = false; pauseAd = ad
         }
+        // Squeeze ads: every few seconds of playback, see whether it's time to ask the tag;
+        // keep the picture up for its suggested time, drop it early for a break, a pause or
+        // a channel change (the task restarts).
+        .task(id: "\(contentStarted):\(liveChannelID ?? 0)") {
+            squeeze = nil; squeezeLastAsked = Date()
+            guard contentStarted else { return }
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(5)) } catch { return }
+                let busy = adGate.blocking || showNext || showEnd || pauseAd != nil || model.errorMessage != nil || model.blackoutMessage != nil
+                guard squeeze == nil, SqueezeSchedule.due(now: Date(), lastAsked: squeezeLastAsked, lastBreakEnded: squeezeLastBreak, playing: model.player.timeControlStatus == .playing, adBusy: busy, policy: CSAIGate.policy ?? .fallback) else { continue }
+                squeezeLastAsked = Date()
+                let scope = liveChannelID != nil ? "live" : (identity?.type == "short" ? "movie" : identity?.type ?? "movie")
+                let context = liveChannelID != nil ? AdContext(channel: title, contentType: "live") : AdContext(show: title)
+                guard let (ad, _) = await PauseAd.load(service: supabase, scope: scope, contentID: liveChannelID.map(String.init) ?? identity?.id ?? "", context: context, placement: "squeeze"),
+                      !Task.isCancelled, model.player.timeControlStatus == .playing, !adGate.blocking, pauseAd == nil else { continue }
+                squeezeCounted = false
+                withAnimation(.easeInOut(duration: 0.4)) { squeeze = ad }
+                do { try await Task.sleep(for: .seconds(SqueezeSchedule.seconds(ad))) } catch { return }
+                withAnimation(.easeInOut(duration: 0.4)) { squeeze = nil }
+            }
+        }
+        .onChange(of: adGate.blocking) { _, blocking in
+            if blocking { squeeze = nil } else { squeezeLastBreak = Date(); squeezeLastAsked = Date() }
+        }
         .onReceive(model.player.publisher(for: \.timeControlStatus)) { status in
             if status != .paused { pauseAd = nil }
+            if status == .paused { squeeze = nil }
             pauseKey = status == .paused ? pauseKey + 1 : pauseKey
         }
         .overlay { CSAIOverlay(gate: adGate, cancel: { dismiss() }) }
@@ -702,7 +737,7 @@ struct PlayerView: View {
             }
             guard !Task.isCancelled else { return }
             if model.blackoutMessage == nil, let scope = liveChannelID != nil ? "live" : identity?.type {
-                adGate.context = liveChannelID != nil ? AdContext(channel: title) : AdContext(show: title)
+                adGate.context = liveChannelID != nil ? AdContext(channel: title, contentType: "live") : AdContext(show: title)
                 guard await adGate.run(service: supabase, scope: scope == "short" ? "movie" : scope, contentID: liveChannelID.map(String.init) ?? identity?.id ?? ""), !Task.isCancelled else { return }
             }
             contentStarted = true
@@ -730,6 +765,11 @@ struct PlayerView: View {
     private func countPauseAd() {
         guard !pauseAdCounted, let ad = pauseAd else { return }
         pauseAdCounted = true
+        for url in ad.impressions { Task { _ = try? await URLSession.shared.data(from: url) } }
+    }
+    private func countSqueezeAd() {
+        guard !squeezeCounted, let ad = squeeze else { return }
+        squeezeCounted = true
         for url in ad.impressions { Task { _ = try? await URLSession.shared.data(from: url) } }
     }
     private func skipIntro() {
@@ -986,7 +1026,7 @@ struct CSAITag: Decodable, Identifiable {
         let text = { (value: String) in value.trimmingCharacters(in: .whitespaces).addingPercentEncoding(withAllowedCharacters: safe) ?? "" }
         let values = ["BREAK_SECONDS": String(seconds), "BREAK_MS": String(seconds * 1000),
                       "CHANNEL": text(BrowsePresentation.channelName(context.channel)), "SHOW": text(context.show), "GENRE": text(context.genre),
-                      "DEVICE": "tvos", "DEVICE_ID": text(deviceID), "IFA": "", "LMT": "1", "SKIPPABLE": skippable ? "1" : "0"]
+                      "DEVICE": "tvos", "DEVICE_ID": text(deviceID), "IFA": "", "LMT": "1", "SKIPPABLE": skippable ? "1" : "0", "CT": context.contentType]
         var copy = self
         for (key, value) in values { copy.tag_url = copy.tag_url.replacingOccurrences(of: "[\(key)]", with: value) }
         return copy
@@ -1018,9 +1058,11 @@ struct AdPolicy: Decodable {
     var midroll_every_minutes = 15
     var midroll_max_breaks = 4
     var pause_enabled = true
+    var squeeze_enabled = true
+    var squeeze_every_minutes = 10
     static let fallback = AdPolicy()
     init() {}
-    private enum CodingKeys: String, CodingKey { case enabled, min_gap_minutes, live_entry, multiview_entry, midroll_enabled, midroll_min_minutes, midroll_every_minutes, midroll_max_breaks, pause_enabled }
+    private enum CodingKeys: String, CodingKey { case enabled, min_gap_minutes, live_entry, multiview_entry, midroll_enabled, midroll_min_minutes, midroll_every_minutes, midroll_max_breaks, pause_enabled, squeeze_enabled, squeeze_every_minutes }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         let number = { (key: CodingKeys, fallback: Int, range: ClosedRange<Int>) in max(range.lowerBound, min(range.upperBound, (try? values.decode(Int.self, forKey: key)) ?? fallback)) }
@@ -1033,6 +1075,8 @@ struct AdPolicy: Decodable {
         midroll_every_minutes = number(.midroll_every_minutes, 15, 1...240)
         midroll_max_breaks = number(.midroll_max_breaks, 4, 0...20)
         pause_enabled = (try? values.decode(Bool.self, forKey: .pause_enabled)) ?? true
+        squeeze_enabled = (try? values.decode(Bool.self, forKey: .squeeze_enabled)) ?? true
+        squeeze_every_minutes = number(.squeeze_every_minutes, 10, 1...240)
     }
     /// Seconds into a title where a mid-roll plays: every N minutes, only in titles of
     /// at least M minutes, never inside the last two minutes, at most K. Same as the web.
@@ -1093,6 +1137,8 @@ struct AdContext: Equatable {
     var channel = ""
     var show = ""
     var genre = ""
+    /// [CT]: "live" or "vod".
+    var contentType = "vod"
 }
 
 @MainActor final class CSAIGate: ObservableObject {
@@ -1449,19 +1495,29 @@ struct PauseAd: Equatable {
     let title: String
     /// Advertiser link (NonLinearClickThrough), drawn as a QR code; it counts the scan itself.
     var clickThrough: URL? = nil
+    /// minSuggestedDuration in seconds (squeeze ads); nil when absent.
+    var duration: Double? = nil
 
     static func parse(_ data: Data) -> PauseAd? {
         let reader = PauseAdXML()
         let parser = XMLParser(data: data); parser.delegate = reader
         guard parser.parse(), let image = reader.image else { return nil }
-        return PauseAd(image: image, width: reader.width ?? 16, height: reader.height ?? 9, impressions: reader.impressions, title: reader.title ?? "Ad", clickThrough: reader.clickThrough)
+        return PauseAd(image: image, width: reader.width ?? 16, height: reader.height ?? 9, impressions: reader.impressions, title: reader.title ?? "Ad", clickThrough: reader.clickThrough, duration: reader.duration)
+    }
+    /// "00:00:15.000" → 15 (VAST clock values); nil for anything else.
+    static func seconds(_ clock: String) -> Double? {
+        let parts = clock.trimmingCharacters(in: .whitespaces).split(separator: ":").map { Double($0) }
+        guard parts.count == 3, !parts.contains(nil) else { return nil }
+        let total = parts[0]! * 3600 + parts[1]! * 60 + parts[2]!
+        return total > 0 ? total : nil
     }
 
-    /// Asks the most specific active Apple TV pause tag; nil on no tag, no ad or any failure.
-    static func load(service: SupabaseService, scope: String, contentID: String, context: AdContext) async -> (PauseAd, CSAITag)? {
+    /// Asks the most specific active Apple TV tag for this placement ("pause" or "squeeze");
+    /// nil on no tag, no ad or any failure.
+    static func load(service: SupabaseService, scope: String, contentID: String, context: AdContext, placement: String = "pause") async -> (PauseAd, CSAITag)? {
         let policy = await CSAIGate.loadPolicy(service)
-        guard policy.enabled, policy.pause_enabled else { return nil }
-        let tags: [CSAITag] = (try? await service.get("vast_tags", query: ["select": "id,tag_url,scope,content_id,active,is_test,platforms", "active": "eq.true", "ad_type": "eq.pause", "order": "id.asc"], timeout: 4)) ?? []
+        guard policy.enabled, placement == "squeeze" ? policy.squeeze_enabled : policy.pause_enabled else { return nil }
+        let tags: [CSAITag] = (try? await service.get("vast_tags", query: ["select": "id,tag_url,scope,content_id,active,is_test,platforms", "active": "eq.true", "ad_type": "eq.\(placement)", "order": "id.asc"], timeout: 4)) ?? []
         guard let tag = CSAITag.select(tags, scope: scope, contentID: contentID)?.filled(breakSeconds: nil, context: context),
               let url = URL(string: tag.tag_url) else { return nil }
         var request = URLRequest(url: url); request.timeoutInterval = 4
@@ -1472,11 +1528,11 @@ struct PauseAd: Equatable {
 }
 
 private final class PauseAdXML: NSObject, XMLParserDelegate {
-    var image: URL?, width: Double?, height: Double?, impressions: [URL] = [], title: String?, clickThrough: URL?
+    var image: URL?, width: Double?, height: Double?, impressions: [URL] = [], title: String?, clickThrough: URL?, duration: Double?
     private var element = "", text = "", inAd = false, done = false
     func parser(_ parser: XMLParser, didStartElement name: String, namespaceURI: String?, qualifiedName: String?, attributes: [String: String] = [:]) {
         if name == "Ad" { inAd = true }
-        if name == "NonLinear", width == nil { width = attributes["width"].flatMap(Double.init); height = attributes["height"].flatMap(Double.init) }
+        if name == "NonLinear", width == nil { width = attributes["width"].flatMap(Double.init); height = attributes["height"].flatMap(Double.init); duration = attributes["minSuggestedDuration"].flatMap(PauseAd.seconds) }
         element = name; text = ""
     }
     func parser(_ parser: XMLParser, foundCharacters string: String) { text += string }
@@ -1493,6 +1549,50 @@ private final class PauseAdXML: NSObject, XMLParserDelegate {
         case "Ad": done = true // only the first ad
         default: break
         }
+    }
+}
+
+/// Squeeze ads (L-bar): a full-screen picture while the show keeps playing, shrunk to 75%
+/// into the top-right corner, sound on. Asked about every N minutes of playback (Ad rules),
+/// never during or within two minutes after an ad break, never while paused. Same as the
+/// web's squeezeAd.js.
+enum SqueezeSchedule {
+    static let afterBreak: TimeInterval = 120
+    static let defaultSeconds: Double = 15, maxSeconds: Double = 60
+    static func due(now: Date, lastAsked: Date, lastBreakEnded: Date?, playing: Bool, adBusy: Bool, policy: AdPolicy) -> Bool {
+        guard policy.enabled, policy.squeeze_enabled, playing, !adBusy else { return false }
+        if let lastBreakEnded, now.timeIntervalSince(lastBreakEnded) < afterBreak { return false }
+        return now.timeIntervalSince(lastAsked) >= Double(policy.squeeze_every_minutes * 60)
+    }
+    static func seconds(_ ad: PauseAd) -> Double { min(maxSeconds, ad.duration ?? defaultSeconds) }
+}
+
+/// The squeeze picture behind the shrunk show: full screen, an "Ad" label top-left and the
+/// link's QR code bottom-right, where the picture leaves room for it. Never takes focus.
+struct SqueezeAdView: View {
+    let ad: PauseAd
+    let onShown: () -> Void
+    var body: some View {
+        AsyncImage(url: ad.image) { phase in
+            if let image = phase.image {
+                image.resizable().scaledToFill().ignoresSafeArea()
+                    .overlay(alignment: .topLeading) {
+                        Text("Ad").font(.system(size: 18, weight: .bold)).padding(.horizontal, 10).padding(.vertical, 4)
+                            .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 8)).padding(.leading, 24).padding(.top, 20)
+                    }
+                    .overlay(alignment: .bottomTrailing) {
+                        if let link = ad.clickThrough, let qr = PauseAdQR.image(for: link) {
+                            VStack(spacing: 6) {
+                                Image(uiImage: qr).interpolation(.none).resizable().frame(width: 150, height: 150)
+                                Text("Scan to learn more").font(.system(size: 14, weight: .semibold)).foregroundStyle(.black)
+                            }
+                            .padding(8).background(.white, in: RoundedRectangle(cornerRadius: 12)).padding(.trailing, 60).padding(.bottom, 40)
+                        }
+                    }
+                    .onAppear(perform: onShown)
+            } else { Color.black.ignoresSafeArea() }
+        }
+        .allowsHitTesting(false).transition(.opacity)
     }
 }
 

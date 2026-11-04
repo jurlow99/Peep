@@ -24,6 +24,8 @@ it('sends one clean spelling per channel', () => {
 it('says whether the break may be skipped', () => {
   expect(fillAdMacros('https://x/ads?skip=[SKIPPABLE]', 30)).toBe('https://x/ads?skip=1');
   expect(fillAdMacros('https://x/ads?skip=[SKIPPABLE]', 30, { skippable: false })).toBe('https://x/ads?skip=0');
+  expect(fillAdMacros('https://x/ads?ct=[CT]', 30)).toBe('https://x/ads?ct=vod');
+  expect(fillAdMacros('https://x/ads?ct=[CT]', 30, { contentType: 'live' })).toBe('https://x/ads?ct=live');
 });
 it('makes one random device ID per browser and keeps it', () => {
   const data = new Map<string, string>();

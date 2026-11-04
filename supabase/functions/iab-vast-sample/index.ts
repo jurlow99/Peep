@@ -29,6 +29,9 @@ Deno.serve(async (request: Request) => {
   if (variant === "pause") {
     return new Response(request.method === "HEAD" ? null : PAUSE_AD, { headers: { ...headers, "Cache-Control": "no-store" } });
   }
+  if (variant === "squeeze") {
+    return new Response(request.method === "HEAD" ? null : SQUEEZE_AD, { headers: { ...headers, "Cache-Control": "no-store" } });
+  }
   if (variant !== null && variant !== "wrapper") return new Response("Unknown test variant", { status: 400, headers });
   return new Response(request.method === "HEAD" ? null : variant === "wrapper" ? wrapper : xml, { headers });
 });
@@ -122,6 +125,28 @@ const PAUSE_AD = `<VAST version="4.2" xmlns="http://www.iab.com/VAST">
               <StaticResource creativeType="image/png"><![CDATA[https://cuwdyedmmnpklufduaho.supabase.co/storage/v1/object/public/ad-creatives/test/peep-pause-test.png]]></StaticResource>
               <NonLinearClickThrough><![CDATA[https://watchpeep.tv]]></NonLinearClickThrough>
               <NonLinearClickTracking><![CDATA[https://example.com/peep-test-pause-click]]></NonLinearClickTracking>
+            </NonLinear>
+          </NonLinearAds>
+        </Creative>
+      </Creatives>
+    </InLine>
+  </Ad>
+</VAST>`;
+
+// variant=squeeze: a Peep test squeeze ad (L-bar picture, 1920x1080, 15 s), the same shape
+// Steep's peep-squeeze replies with. The show sits in the top-right 1440x810.
+const SQUEEZE_AD = `<VAST version="4.2" xmlns="http://www.iab.com/VAST">
+  <Ad id="peep-test-squeeze" sequence="1">
+    <InLine>
+      <AdSystem version="1">Peep test ad server</AdSystem>
+      <AdTitle>Peep test squeeze ad - Farris Cola</AdTitle>
+      <Impression><![CDATA[https://example.com/peep-test-squeeze-impression]]></Impression>
+      <Creatives>
+        <Creative id="peep-test-squeeze">
+          <NonLinearAds>
+            <NonLinear id="peep-test-squeeze" width="1920" height="1080" minSuggestedDuration="00:00:15.000">
+              <StaticResource creativeType="image/png"><![CDATA[https://cuwdyedmmnpklufduaho.supabase.co/storage/v1/object/public/ad-creatives/test/peep-squeeze-test.png]]></StaticResource>
+              <NonLinearClickThrough><![CDATA[https://watchpeep.tv]]></NonLinearClickThrough>
             </NonLinear>
           </NonLinearAds>
         </Creative>

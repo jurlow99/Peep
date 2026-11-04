@@ -15,7 +15,7 @@ it('reads the picture, size, impressions and click links from a NonLinear ad', (
   expect(parsePauseAd(VAST)).toEqual({
     image: 'https://cdn.example/pause.png', width: 800, height: 450,
     impressions: ['https://t.example/imp'], // http trackers are dropped
-    clickThrough: 'https://brand.example', clickTracking: ['https://t.example/click'], title: 'Farris Cola',
+    clickThrough: 'https://brand.example', clickTracking: ['https://t.example/click'], title: 'Farris Cola', duration: null,
   });
 });
 

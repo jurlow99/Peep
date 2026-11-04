@@ -9,6 +9,7 @@
 // ads) and 0 for live channel breaks, so the ad server leaves out skipoffset.
 // [DEVICE_ID] is a random 32-hex label made once per browser, for frequency caps
 // on Peep's own ad server. It is derived from nothing; clearing site data resets it.
+// [CT] is live or vod (context.contentType), for tags that serve both.
 const DEVICE_ID_KEY = 'peep_ad_device_id';
 
 // "Dog the Bounty Hunter (1080p)" → "Dog the Bounty Hunter": drops picture-quality tags
@@ -37,7 +38,8 @@ export function fillAdMacros(url, breakSeconds, context = {}) {
     BREAK_SECONDS: String(seconds), BREAK_MS: String(seconds * 1000),
     CHANNEL: text(adChannelName(context.channel)), SHOW: text(context.show), GENRE: text(context.genre),
     DEVICE: 'web', IFA: '', LMT: '1', SKIPPABLE: context.skippable === false ? '0' : '1',
+    CT: context.contentType === 'live' ? 'live' : 'vod',
   };
-  return String(url || '').replace(/\[(BREAK_SECONDS|BREAK_MS|CHANNEL|SHOW|GENRE|DEVICE_ID|DEVICE|IFA|LMT|SKIPPABLE)\]/g,
+  return String(url || '').replace(/\[(BREAK_SECONDS|BREAK_MS|CHANNEL|SHOW|GENRE|DEVICE_ID|DEVICE|IFA|LMT|SKIPPABLE|CT)\]/g,
     (_, key) => key === 'DEVICE_ID' ? text(context.deviceId ?? adDeviceId()) : values[key]);
 }

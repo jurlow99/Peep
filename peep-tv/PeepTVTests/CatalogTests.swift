@@ -635,6 +635,36 @@ final class CatalogTests: XCTestCase {
         XCTAssertEqual(AdPolicy.parse(nil).pause_enabled, true)
     }
 
+    func testSqueezeAdReadsDurationAndFollowsTheSchedule() {
+        let vast = """
+        <VAST version="4.2" xmlns="http://www.iab.com/VAST"><Ad id="1"><InLine><AdTitle>L-bar</AdTitle>
+        <Impression><![CDATA[https://t.example/imp]]></Impression>
+        <Creatives><Creative><NonLinearAds><NonLinear width="1920" height="1080" minSuggestedDuration="00:00:15.000">
+        <StaticResource creativeType="image/png"><![CDATA[https://cdn.example/l.png]]></StaticResource>
+        </NonLinear></NonLinearAds></Creative></Creatives></InLine></Ad></VAST>
+        """
+        let ad = PauseAd.parse(Data(vast.utf8))
+        XCTAssertEqual(ad?.duration, 15); XCTAssertEqual(ad.map(SqueezeSchedule.seconds), 15)
+        XCTAssertEqual(PauseAd.seconds("00:01:30"), 90); XCTAssertNil(PauseAd.seconds("nonsense")); XCTAssertNil(PauseAd.seconds("00:00:00"))
+        XCTAssertEqual(SqueezeSchedule.seconds(PauseAd(image: URL(string: "https://cdn.example/l.png")!, width: 16, height: 9, impressions: [], title: "x", duration: 300)), 60)
+        let policy = AdPolicy.parse(nil)
+        XCTAssertTrue(policy.squeeze_enabled); XCTAssertEqual(policy.squeeze_every_minutes, 10)
+        XCTAssertEqual(AdPolicy.parse(#"{"squeeze_enabled":false,"squeeze_every_minutes":999}"#).squeeze_every_minutes, 240)
+        let now = Date(timeIntervalSince1970: 6000)
+        let due = { (asked: TimeInterval, brk: TimeInterval?, playing: Bool, busy: Bool, policy: AdPolicy) in
+            SqueezeSchedule.due(now: now, lastAsked: Date(timeIntervalSince1970: asked), lastBreakEnded: brk.map { Date(timeIntervalSince1970: $0) }, playing: playing, adBusy: busy, policy: policy) }
+        XCTAssertTrue(due(5400, nil, true, false, policy))          // 10 min since the last ask
+        XCTAssertFalse(due(5700, nil, true, false, policy))         // only 5 min
+        XCTAssertFalse(due(5400, 5900, true, false, policy))        // a break ended 100 s ago
+        XCTAssertTrue(due(5400, 5880, true, false, policy))         // 2 min after a break is fine
+        XCTAssertFalse(due(5400, nil, false, false, policy))        // paused
+        XCTAssertFalse(due(5400, nil, true, true, policy))          // an ad is up
+        XCTAssertFalse(due(5400, nil, true, false, AdPolicy.parse(#"{"squeeze_enabled":false}"#)))
+        let tag = CSAITag(id: 9, tag_url: "https://ads.invalid/v?ct=[CT]", scope: "live", content_id: nil, active: true, is_test: true, platforms: ["tvos"])
+        XCTAssertEqual(tag.filled(breakSeconds: nil, context: AdContext(channel: "X", contentType: "live")).tag_url, "https://ads.invalid/v?ct=live")
+        XCTAssertEqual(tag.filled(breakSeconds: nil, context: AdContext(show: "Y")).tag_url, "https://ads.invalid/v?ct=vod")
+    }
+
     func testMidrollCuePointsMatchTheWebRule() {
         let policy = AdPolicy.parse(#"{"enabled":true,"midroll_enabled":true,"midroll_min_minutes":20,"midroll_every_minutes":15,"midroll_max_breaks":4}"#)
         XCTAssertEqual(policy.midrollCuePoints(duration: 95 * 60), [900, 1800, 2700, 3600])

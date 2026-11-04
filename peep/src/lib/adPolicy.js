@@ -16,9 +16,11 @@ export const DEFAULT_AD_POLICY = Object.freeze({
   midroll_max_breaks: 4,
   postroll_enabled: true,   // browser VOD only
   pause_enabled: true,      // picture while the viewer has paused (web and Apple TV)
+  squeeze_enabled: true,    // L-bar picture while the show keeps playing (web and Apple TV)
+  squeeze_every_minutes: 10,
 });
 
-const LIMITS = { min_gap_minutes: [0, 1440], midroll_min_minutes: [1, 600], midroll_every_minutes: [1, 240], midroll_max_breaks: [0, 20] };
+const LIMITS = { min_gap_minutes: [0, 1440], midroll_min_minutes: [1, 600], midroll_every_minutes: [1, 240], midroll_max_breaks: [0, 20], squeeze_every_minutes: [1, 240] };
 
 // Accepts the stored string/object, fills gaps with defaults, clamps numbers.
 export function parseAdPolicy(value) {
@@ -74,6 +76,7 @@ export function placementAllowed(placement, scope, policy = getAdPolicy()) {
   if (placement === 'mid_roll') return policy.midroll_enabled;
   if (placement === 'post_roll') return policy.postroll_enabled;
   if (placement === 'pause') return policy.pause_enabled;
+  if (placement === 'squeeze') return policy.squeeze_enabled;
   if (scope === 'live') return policy.live_entry;
   if (scope === 'multiview') return policy.multiview_entry;
   return true;

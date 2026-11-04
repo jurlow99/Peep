@@ -20,7 +20,7 @@ export async function recordAdEvent(tag, sessionId, event, scope, contentId, adI
 }
 
 export function appleTVPlacementError(form,isDevelopment){
-  if(!form.platforms?.includes('tvos')||form.ad_type==='pre_roll'||form.ad_type==='pause')return null;
+  if(!form.platforms?.includes('tvos')||form.ad_type==='pre_roll'||form.ad_type==='pause'||form.ad_type==='squeeze')return null;
   if(form.ad_type==='mid_roll'&&form.scope!=='live')return null;
   if(isDevelopment&&form.ad_type==='mid_roll'&&form.scope==='live'&&form.is_test&&(form.content_id==null||form.content_id===''||/^-?[1-9]\d*$/.test(String(form.content_id))))return null;
   return form.ad_type==='post_roll'?'Apple TV does not play post-rolls yet. Untick Apple TV.':'Apple TV live mid-rolls run only on FARRIS dev, from a test tag.';

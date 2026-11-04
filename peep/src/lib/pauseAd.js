@@ -9,7 +9,16 @@ export const PAUSE_DELAY_MS = 2000;
 const https = url => { try { return new URL(String(url || '').trim()).protocol === 'https:' ? String(url).trim() : null; } catch { return null; } };
 const texts = (root, tag) => [...root.getElementsByTagName(tag)].map(n => https(n.textContent)).filter(Boolean);
 
-// VAST XML → { image, width, height, impressions, clickThrough, clickTracking, title } or null.
+// "00:00:15.000" → 15 (VAST clock values); null for anything else.
+export function clockSeconds(value) {
+  const parts = String(value || '').trim().split(':').map(Number);
+  if (parts.length !== 3 || parts.some(n => !Number.isFinite(n))) return null;
+  const seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+  return seconds > 0 ? seconds : null;
+}
+
+// VAST XML → { image, width, height, impressions, clickThrough, clickTracking, title, duration } or null.
+// duration = minSuggestedDuration in seconds (squeeze ads), null when absent.
 export function parsePauseAd(xml) {
   let doc;
   try { doc = new DOMParser().parseFromString(String(xml || ''), 'application/xml'); } catch { return null; }
@@ -25,6 +34,7 @@ export function parsePauseAd(xml) {
     clickThrough: texts(nonLinear, 'NonLinearClickThrough')[0] || null,
     clickTracking: texts(nonLinear, 'NonLinearClickTracking'),
     title: ad.getElementsByTagName('AdTitle')[0]?.textContent?.trim() || 'Ad',
+    duration: clockSeconds(nonLinear.getAttribute('minSuggestedDuration')),
   };
 }
 

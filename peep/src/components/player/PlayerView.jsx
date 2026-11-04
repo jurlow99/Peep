@@ -7,8 +7,9 @@ import { playAdBreak, resizeAdBreak, isSkippableBreak } from "../../lib/adBreak"
 import { prepareBannerHTML } from "../../lib/adBanner";
 import { titleCuePoints, formatBreakTime } from "../../lib/adBreaks";
 import { PAUSE_DELAY_MS, loadPauseAd, ping } from "../../lib/pauseAd";
+import { squeezeDue, loadSqueezeAd, squeezeSeconds, SQUEEZE_TICK_MS } from "../../lib/squeezeAd";
 import { selectAdTag, recordAdEvent } from "../../lib/ads";
-import { hasAdPolicy, loadAdPolicy, placementAllowed } from "../../lib/adPolicy";
+import { hasAdPolicy, getAdPolicy, loadAdPolicy, placementAllowed } from "../../lib/adPolicy";
 import { trackLiveVideo, trackVodVideo } from "../../lib/liveViewing";
 import { useState, useEffect, useRef, useMemo } from "react";
 import Hls from "hls.js";
@@ -88,6 +89,10 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
   const [adLocked, setAdLocked] = useState(false); // live channel break: no skipping
   const [adBanner, setAdBanner] = useState(null); // picture beside the ad now playing (lib/adBanner.js)
   const adBannerRef = useRef(null), adBannerSeenRef = useRef(null);
+  // Squeeze ad (lib/squeezeAd.js): the show shrinks to 75% top-right over a full-screen picture.
+  const [squeeze, setSqueeze] = useState(null); // { ad, tag, scope, contentId, session, seconds }
+  const squeezeClockRef = useRef({ lastAskedAt: 0, lastBreakEndedAt: 0 });
+  const squeezeSeenRef = useRef(null);
   const [resumedAt, setResumedAt] = useState(null); // seconds we resumed from, while the Start over offer shows
   // Pause ad: after PAUSE_DELAY_MS paused (never during an ad), ask the pause tag once
   // for this pause; hide the picture the moment playback resumes.
@@ -95,6 +100,7 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
   const pauseTimerRef = useRef(null), pauseShownRef = useRef(false);
   function handlePause() {
     clearTimeout(pauseTimerRef.current);
+    setSqueeze(null);
     const element = videoRef.current;
     if (!element || element.ended || adBusyRef.current || !adsClearedRef.current || getEmbedUrl(video.url)) return;
     const scope = isLive ? "live" : isEpisode ? "episode" : "movie";
@@ -128,8 +134,8 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
   const isEpisode = !!video.show_id;
   // What the ad server is told about this title: [CHANNEL] / [SHOW] / [GENRE] in tag URLs.
   const adContext = isLive
-    ? { channel: video.title, show: video.now_airing || "", genre: video.category || "" }
-    : { channel: "", show: video.show_title || video.title || "", genre: video.category || "" };
+    ? { channel: video.title, show: video.now_airing || "", genre: video.category || "", contentType: "live" }
+    : { channel: "", show: video.show_title || video.title || "", genre: video.category || "", contentType: "vod" };
   const [myRating, setMyRating] = useState(null);
   const [ratingCounts, setRatingCounts] = useState({ up: 0, down: 0 });
   const progressTimerRef = useRef(null);
@@ -420,6 +426,44 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
     root.innerHTML = adBanner?.html || "";
     if (adBanner?.html) prepareBannerHTML(root);
   }, [adBanner]);
+  // An ad break ends the squeeze; when the break is over both squeeze clocks restart.
+  const adWasPlayingRef = useRef(false);
+  useEffect(() => {
+    if (adPlaying) setSqueeze(null);
+    else if (adWasPlayingRef.current) squeezeClockRef.current = { lastAskedAt: Date.now(), lastBreakEndedAt: Date.now() };
+    adWasPlayingRef.current = adPlaying;
+  }, [adPlaying]);
+  // Every few seconds of playback, see whether it's time to ask the squeeze tag.
+  useEffect(() => {
+    if (getEmbedUrl(video.url)) return;
+    squeezeClockRef.current = { lastAskedAt: Date.now(), lastBreakEndedAt: 0 };
+    let active = true, asking = false;
+    const scope = isLive ? "live" : isEpisode ? "episode" : "movie";
+    const contentId = isLive ? String(video.id).replace(/^ch[-_]/, "") : video.id;
+    const tick = async () => {
+      const element = videoRef.current, clock = squeezeClockRef.current;
+      if (!element || asking || !adsClearedRef.current) return;
+      if (!hasAdPolicy()) await loadAdPolicy(supabase);
+      const playing = !element.paused && !element.ended && element.currentTime > 0;
+      if (!active || !squeezeDue({ now: Date.now(), ...clock, playing, adBusy: adBusyRef.current, policy: getAdPolicy() })) return;
+      clock.lastAskedAt = Date.now(); asking = true;
+      try {
+        const { data } = await supabase.from("vast_tags").select("id,tag_url,scope,content_id,active,is_test,platforms").eq("active", true).eq("ad_type", "squeeze").order("id");
+        const tag = selectAdTag(data, scope, contentId);
+        if (!tag || !active) return;
+        const ad = await loadSqueezeAd(tag.tag_url, adContext);
+        const still = videoRef.current && !videoRef.current.paused && !adBusyRef.current;
+        if (ad && active && still) { squeezeSeenRef.current = null; setSqueeze({ ad, tag, scope, contentId, session: crypto.randomUUID(), seconds: squeezeSeconds(ad) }); }
+      } finally { asking = false; }
+    };
+    const timer = setInterval(tick, SQUEEZE_TICK_MS);
+    return () => { active = false; clearInterval(timer); setSqueeze(null); };
+  }, [video.id]);
+  useEffect(() => {
+    if (!squeeze) return;
+    const timer = setTimeout(() => setSqueeze(null), squeeze.seconds * 1000);
+    return () => clearTimeout(timer);
+  }, [squeeze]);
 
   useEffect(() => {
     if (!isFullscreen) return;
@@ -703,12 +747,23 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
             {getEmbedUrl(video.url) ? (
               <iframe src={getEmbedUrl(video.url)} style={{ width: "100%", height: "100%", display: "block", border: "none" }} allowFullScreen allow="autoplay" />
             ) : (
-              <video ref={videoRef} controls={!adPlaying} controlsList="nofullscreen" style={{ width: adPlaying && adBanner ? "66.667%" : "100%", height: "100%", display: "block", cursor: isFullscreen ? "pointer" : "default" }} poster={video.thumbnail}
+              <video ref={videoRef} controls={!adPlaying} controlsList="nofullscreen" style={{ width: adPlaying && adBanner ? "66.667%" : squeeze ? "75%" : "100%", height: squeeze ? "75%" : "100%", marginLeft: squeeze ? "25%" : 0, position: squeeze ? "relative" : undefined, zIndex: squeeze ? 2 : undefined, transition: "width 0.4s ease, height 0.4s ease, margin-left 0.4s ease", display: "block", cursor: isFullscreen ? "pointer" : "default" }} poster={video.thumbnail}
                 onClick={isFullscreen ? togglePlayPause : undefined}
                 onError={() => { if (adsClearedRef.current && !adBusyRef.current && (!Hls.isSupported() || !isHlsUrl(video.url))) setPlaybackError(true); }}
                 onTimeUpdate={handleTimeUpdate} onEnded={handleEnded} onLoadedMetadata={handleLoadedMetadata} onPause={handlePause} onPlay={handlePlay}>
                 {!isHlsUrl(video.url) && <source src={video.url} type="video/mp4" />}
               </video>
+            )}
+            {squeeze && !adPlaying && (
+              // Behind the shrunk video (z 1 vs 2): the picture is clickable everywhere the video isn't.
+              <a href={squeeze.ad.clickThrough || undefined} target="_blank" rel="noopener" aria-label="Advertisement" title={squeeze.ad.clickThrough ? "Learn more" : undefined}
+                onClick={() => { if (squeeze.ad.clickThrough) recordAdEvent(squeeze.tag, squeeze.session, "click", squeeze.scope, squeeze.contentId); }}
+                style={{ position: "absolute", inset: 0, zIndex: 1, display: "block", background: "#000", cursor: squeeze.ad.clickThrough ? "pointer" : "default" }}>
+                <img src={squeeze.ad.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                  onLoad={() => { if (squeezeSeenRef.current === squeeze) return; squeezeSeenRef.current = squeeze; ping(squeeze.ad.impressions); recordAdEvent(squeeze.tag, squeeze.session, "impression", squeeze.scope, squeeze.contentId); }}
+                  onError={() => setSqueeze(null)} />
+                <span style={{ position: "absolute", top: 10, left: 10, background: "rgba(0,0,0,0.7)", color: "#fff", fontSize: 12, fontWeight: 700, letterSpacing: 0.5, borderRadius: 6, padding: "3px 8px" }}>Ad</span>
+              </a>
             )}
             <div ref={adContainerRef} style={{ position: "absolute", inset: 0, right: adPlaying && adBanner ? "33.333%" : 0, zIndex: 10, background: "#000", display: adPlaying ? "block" : "none", pointerEvents: adPlaying ? "auto" : "none" }} />
             {/* Live channel breaks can't be skipped: a clear layer over the ad catches clicks on its Skip button. */}
