@@ -1265,6 +1265,11 @@ struct IMAAdView: UIViewControllerRepresentable {
     private let skipSoon = AdPill()
     private let skip = AdSkipButton()
     private var podPosition = 1, podCount = 1
+    // The SDK draws the ad in adSurface. With a banner the surface is two thirds wide
+    // and the banner fills the right third; without one it is the whole screen.
+    private let adSurface = UIView()
+    private let banner = AdBannerView()
+    private var fullWidth: NSLayoutConstraint!, twoThirds: NSLayoutConstraint!
     init(tag: CSAITag, allowSkip: Bool = true, event: @escaping (String,String) -> Void, finished: @escaping () -> Void, cancelled: @escaping () -> Void) {
         self.tag = tag; self.allowSkip = allowSkip; self.event = event; self.finished = finished; self.cancelled = cancelled
         super.init(nibName: nil, bundle: nil)
@@ -1280,15 +1285,30 @@ struct IMAAdView: UIViewControllerRepresentable {
         adButtons.backgroundColor = UIColor(white: 0.08, alpha: 1)
         adButtons.tintColor = .white
         skip.addAction(UIAction { [weak self] _ in self?.pressSkip() }, for: .primaryActionTriggered)
+        adSurface.translatesAutoresizingMaskIntoConstraints = false; adSurface.backgroundColor = .black
+        view.addSubview(adSurface); view.addSubview(banner)
+        banner.isHidden = true
+        banner.onLoaded = { [weak self] loaded in if !loaded { self?.showBanner(nil) } }
+        fullWidth = adSurface.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+        twoThirds = adSurface.widthAnchor.constraint(equalTo: view.widthAnchor, multiplier: 2.0 / 3.0)
         for chrome in [countdown, skipSoon, skip] as [UIView] { chrome.isHidden = true; view.addSubview(chrome) }
         NSLayoutConstraint.activate([
-            countdown.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 90),
+            adSurface.leadingAnchor.constraint(equalTo: view.leadingAnchor), adSurface.topAnchor.constraint(equalTo: view.topAnchor),
+            adSurface.bottomAnchor.constraint(equalTo: view.bottomAnchor), fullWidth,
+            banner.leadingAnchor.constraint(equalTo: adSurface.trailingAnchor), banner.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            banner.topAnchor.constraint(equalTo: view.topAnchor), banner.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            countdown.leadingAnchor.constraint(equalTo: adSurface.leadingAnchor, constant: 90),
             countdown.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -70),
-            skipSoon.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -90),
+            skipSoon.trailingAnchor.constraint(equalTo: adSurface.trailingAnchor, constant: -90),
             skipSoon.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -70),
-            skip.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -90),
+            skip.trailingAnchor.constraint(equalTo: adSurface.trailingAnchor, constant: -90),
             skip.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -66),
         ])
+    }
+    private func showBanner(_ item: AdBanner?) {
+        banner.show(item)
+        fullWidth.isActive = item == nil; twoThirds.isActive = item != nil
+        view.layoutIfNeeded()
     }
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
@@ -1299,7 +1319,7 @@ struct IMAAdView: UIViewControllerRepresentable {
             catch { if !self.ended { self.event("error", ""); self.complete() }; return }
             guard !self.ended else { return }
             Self.loader.delegate = self
-            display = IMAAdDisplayContainer(adContainer: view, viewController: self)
+            display = IMAAdDisplayContainer(adContainer: adSurface, viewController: self)
             let request = IMAAdsRequest(adTagUrl: tag.tag_url, adDisplayContainer: display!, contentPlayhead: nil, userContext: contextID)
             timeout = Task { @MainActor in
                 do { try await Task.sleep(for: .seconds(10)) } catch { return }
@@ -1331,9 +1351,10 @@ struct IMAAdView: UIViewControllerRepresentable {
             skipAt = allowSkip && (event.ad?.isSkippable ?? false) ? event.ad?.skipTimeOffset : nil
             podPosition = max(1, event.ad?.adPodInfo.adPosition ?? 1); podCount = max(podPosition, event.ad?.adPodInfo.totalAds ?? 1)
             skip.isHidden = true; skipSoon.isHidden = skipAt == nil; countdown.isHidden = false
+            showBanner(AdBanner.parse(event.ad?.traffickingParameters))
             bringChromeForward()
-        case .COMPLETE: self.event("complete", id); skip.isHidden = true; skipSoon.isHidden = true
-        case .SKIPPED: self.event("skip", id); skip.isHidden = true; skipSoon.isHidden = true
+        case .COMPLETE: self.event("complete", id); skip.isHidden = true; skipSoon.isHidden = true; showBanner(nil)
+        case .SKIPPED: self.event("skip", id); skip.isHidden = true; skipSoon.isHidden = true; showBanner(nil)
         case .ALL_ADS_COMPLETED: complete()
         case .ICON_FALLBACK_IMAGE_CLOSED: adsManager.resume()
         default: break
@@ -1406,6 +1427,7 @@ struct IMAAdView: UIViewControllerRepresentable {
     private func complete() { guard !ended else { return }; clean(); finished() }
     func clean() {
         ended = true; timeout?.cancel(); timeout = nil
+        if isViewLoaded { showBanner(nil) }
         manager?.delegate = nil; manager?.destroy(); manager = nil
         if Self.loader.delegate === self { Self.loader.delegate = nil }
         display = nil
@@ -1470,6 +1492,82 @@ private final class PauseAdXML: NSObject, XMLParserDelegate {
         case "NonLinearClickThrough": if clickThrough == nil { clickThrough = secure }
         case "Ad": done = true // only the first ad
         default: break
+        }
+    }
+}
+
+/// Banner beside a video ad, from the Linear creative's <AdParameters> JSON:
+/// {"banner":{"image","width","height","creativeView":[…],"click"}}. Google's tvOS SDK
+/// drops VAST CompanionAds, so Steep sends the banner this way. Same rules as the web
+/// (peep/src/lib/adBanner.js): the video shrinks to two thirds, the picture takes the
+/// right third, creativeView is counted once the picture shows, the click link is a QR code.
+struct AdBanner: Equatable {
+    let image: URL
+    let width: Double
+    let height: Double
+    let creativeView: [URL]
+    let click: URL?
+    static func parse(_ text: String?) -> AdBanner? {
+        guard let text, let data = text.data(using: .utf8),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let banner = root["banner"] as? [String: Any], let image = secure(banner["image"]) else { return nil }
+        func size(_ value: Any?) -> Double {
+            let n = (value as? NSNumber)?.doubleValue ?? Double((value as? String) ?? "") ?? 0
+            return n > 0 ? n : 1
+        }
+        let views = ((banner["creativeView"] as? [Any]) ?? [banner["creativeView"] as Any]).compactMap(secure)
+        return AdBanner(image: image, width: size(banner["width"]), height: size(banner["height"]), creativeView: views, click: secure(banner["click"]))
+    }
+    private static func secure(_ value: Any?) -> URL? {
+        guard let text = (value as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), let url = URL(string: text), url.scheme?.lowercased() == "https" else { return nil }
+        return url
+    }
+}
+
+/// The right-hand third during a video ad: the banner picture, an "Ad" label and, when
+/// the ad has a link, its QR code. Never takes focus.
+final class AdBannerView: UIView {
+    private let picture = UIImageView()
+    private let label = AdPill()
+    private let qrBox = UIStackView()
+    private let qr = UIImageView()
+    private var loading: Task<Void, Never>?
+    /// Called with true once the picture is on screen, false if it couldn't be loaded.
+    var onLoaded: ((Bool) -> Void)?
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        translatesAutoresizingMaskIntoConstraints = false
+        backgroundColor = UIColor(white: 0.04, alpha: 1)
+        picture.contentMode = .scaleAspectFit; picture.translatesAutoresizingMaskIntoConstraints = false
+        label.text = "Ad"; label.font = AdPill.rounded(20, .bold)
+        let caption = UILabel(); caption.text = "Scan to learn more"; caption.font = AdPill.rounded(17, .semibold); caption.textColor = .black; caption.textAlignment = .center
+        qr.layer.magnificationFilter = .nearest; qr.translatesAutoresizingMaskIntoConstraints = false
+        qrBox.axis = .vertical; qrBox.alignment = .center; qrBox.spacing = 6
+        qrBox.isLayoutMarginsRelativeArrangement = true; qrBox.layoutMargins = UIEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
+        qrBox.backgroundColor = .white; qrBox.layer.cornerRadius = 14; qrBox.translatesAutoresizingMaskIntoConstraints = false
+        qrBox.addArrangedSubview(qr); qrBox.addArrangedSubview(caption)
+        for subview in [picture, label, qrBox] as [UIView] { addSubview(subview) }
+        NSLayoutConstraint.activate([
+            picture.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 40), picture.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -40),
+            picture.topAnchor.constraint(equalTo: topAnchor, constant: 60), picture.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -60),
+            label.topAnchor.constraint(equalTo: topAnchor, constant: 70), label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 50),
+            qr.widthAnchor.constraint(equalToConstant: 150), qr.heightAnchor.constraint(equalToConstant: 150),
+            qrBox.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -50), qrBox.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -70),
+        ])
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    func show(_ banner: AdBanner?) {
+        loading?.cancel(); loading = nil
+        picture.image = nil; isHidden = banner == nil
+        guard let banner else { return }
+        if let link = banner.click, let code = PauseAdQR.image(for: link) { qr.image = code; qrBox.isHidden = false } else { qrBox.isHidden = true }
+        loading = Task { [weak self] in
+            let image = (try? await URLSession.shared.data(from: banner.image)).flatMap { UIImage(data: $0.0) }
+            guard !Task.isCancelled, let self else { return }
+            guard let image else { self.onLoaded?(false); return }
+            self.picture.image = image
+            for url in banner.creativeView { Task { _ = try? await URLSession.shared.data(from: url) } }
+            self.onLoaded?(true)
         }
     }
 }

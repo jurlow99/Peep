@@ -139,6 +139,7 @@ Legacy `/streamer-signin`, `/apply-to-stream`, `/create-channel` redirect to
 | `peep/src/lib/vodStorage.js` | `resolveVODPlayback` — R2 / Supabase signed / external passthrough |
 | `peep/src/lib/r2VOD.js` | R2 multipart upload + playback signing client |
 | `peep/src/lib/adPolicy.js`, `adBreak.js`, `ads.js` | Ad rules (`app_settings.ads_policy`), the one IMA break player for pre/mid/post-roll, tag selection |
+| `peep/src/lib/adBanner.js`, `pauseAd.js` | Banner beside a video ad (SDK CompanionAds, else `banner` JSON in the Linear `<AdParameters>` — the only way Apple TV gets one, see `AdBanner` in tvOS `PlayerView.swift`); pause ads (VAST NonLinear) |
 | `peep/src/components/cms/AdsPanel.jsx` | Monetization → Ads: rules, tags (with title picker + "Play this tag"), 30-day delivery report |
 | `peep/src/lib/contentIds.ts` | `parseContentId`, `contentKey` — preserve UUID vs bigint ids |
 | `peep/src/lib/tiers.js`, `lib/flags.js` | Tier gating (no-op on dev); feature flags |

@@ -662,6 +662,17 @@ final class CatalogTests: XCTestCase {
         XCTAssertEqual(VODViewing.contentType("episode"), "episode")
         XCTAssertNil(VODViewing.contentType("podcast"))
     }
+    func testAdBannerReadsAdParameters() {
+        let text = #"{"banner":{"image":" https://cdn.example/b.png ","width":"300","height":600,"click":"https://s.example/c","creativeView":["https://s.example/cv","http://insecure.example/cv"]}}"#
+        let banner = AdBanner.parse(text)
+        XCTAssertEqual(banner?.image.absoluteString, "https://cdn.example/b.png")
+        XCTAssertEqual(banner?.width, 300); XCTAssertEqual(banner?.height, 600)
+        XCTAssertEqual(banner?.click?.absoluteString, "https://s.example/c")
+        XCTAssertEqual(banner?.creativeView.map(\.absoluteString), ["https://s.example/cv"])
+        XCTAssertEqual(AdBanner.parse(#"{"banner":{"image":"https://cdn.example/b.png"}}"#)?.creativeView, [])
+        XCTAssertNil(AdBanner.parse(#"{"banner":{"image":"http://cdn.example/b.png"}}"#))
+        XCTAssertNil(AdBanner.parse("not json")); XCTAssertNil(AdBanner.parse(nil))
+    }
     func testCSAITagFillsBreakAndContextMacros() {
         let tag = CSAITag(id: 1, tag_url: "https://ads.invalid/v?dur=[BREAK_SECONDS]&ms=[BREAK_MS]&channel=[CHANNEL]&show=[SHOW]&genre=[GENRE]&device=[DEVICE]&ifa=[IFA]&lmt=[LMT]",
                           scope: "live", content_id: nil, active: true, is_test: true, platforms: ["tvos"])

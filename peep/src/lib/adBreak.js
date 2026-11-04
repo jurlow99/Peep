@@ -3,6 +3,7 @@
 // (or never, if the caller tore the player down first). One owner per break.
 import { selectAdTag, recordAdEvent } from './ads';
 import { fillAdMacros } from './adMacros';
+import { bannerFor } from './adBanner';
 import { hasAdPolicy, loadAdPolicy, allowsEntryAd, recordAdStart, placementAllowed } from './adPolicy';
 
 export const PLACEMENTS = ['pre_roll', 'mid_roll', 'post_roll'];
@@ -10,13 +11,14 @@ export const PLACEMENTS = ['pre_roll', 'mid_roll', 'post_roll'];
 export const isSkippableBreak = (placement, scope) => !(placement === 'mid_roll' && scope === 'live');
 const DISCOVERY_MS = 5000, STARTUP_MS = 10000, MEDIA_LOAD_MS = 8000;
 
-export function playAdBreak({ client, video, container, placement = 'pre_roll', scope, contentId, onBusy, onReady, onManager = () => {}, breakSeconds = null, context = {} }) {
+// onBanner(banner|null): a picture to show beside the ad while this ad plays (see adBanner.js).
+export function playAdBreak({ client, video, container, placement = 'pre_roll', scope, contentId, onBusy, onReady, onManager = () => {}, onBanner = () => {}, breakSeconds = null, context = {} }) {
   let disposed = false, finished = false, cleaned = false, loader, display, manager, tag, timer;
   const entry = placement === 'pre_roll';
   const session = crypto.randomUUID();
   const abort = new AbortController();
   const log = (event, id = '') => { if (tag && !disposed) recordAdEvent(tag, session, event, scope, contentId, id); };
-  const clean = () => { if (cleaned) return; cleaned = true; clearTimeout(timer); manager?.destroy(); loader?.destroy(); display?.destroy(); onManager(null); };
+  const clean = () => { if (cleaned) return; cleaned = true; clearTimeout(timer); manager?.destroy(); loader?.destroy(); display?.destroy(); onManager(null); onBanner(null); };
   const finish = () => { if (disposed || finished) return; finished = true; clean(); onBusy(false); onReady(); };
   const timeout = () => { log('timeout'); finish(); };
   const skip = () => { onBusy(false); onReady(); return () => {}; };
@@ -57,15 +59,17 @@ export function playAdBreak({ client, video, container, placement = 'pre_roll', 
           manager.addEventListener(ima.AdEvent.Type.CONTENT_RESUME_REQUESTED, finish);
           manager.addEventListener(ima.AdEvent.Type.ALL_ADS_COMPLETED, finish);
           manager.addEventListener(ima.AdEvent.Type.IMPRESSION, e => log('impression', adID(e)));
-          manager.addEventListener(ima.AdEvent.Type.STARTED, () => {
+          manager.addEventListener(ima.AdEvent.Type.STARTED, e => {
             if (disposed || finished) return;
             clearTimeout(timer);
             recordAdStart();
+            const ad = e.getAd?.();
+            onBanner(ad ? bannerFor(ima, ad) : null);
           });
-          manager.addEventListener(ima.AdEvent.Type.COMPLETE, e => log('complete', adID(e)));
-          manager.addEventListener(ima.AdEvent.Type.SKIPPED, e => log('skip', adID(e)));
+          manager.addEventListener(ima.AdEvent.Type.COMPLETE, e => { log('complete', adID(e)); onBanner(null); });
+          manager.addEventListener(ima.AdEvent.Type.SKIPPED, e => { log('skip', adID(e)); onBanner(null); });
           manager.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, () => { log('error'); finish(); });
-          manager.init(video.clientWidth || 1280, video.clientHeight || 720, ima.ViewMode.NORMAL);
+          manager.init(container.clientWidth || video.clientWidth || 1280, container.clientHeight || video.clientHeight || 720, ima.ViewMode.NORMAL);
           manager.start();
         } catch { log('error'); finish(); }
       });

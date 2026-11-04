@@ -4,6 +4,7 @@ import { resolveVODPlayback } from "../../lib/vodStorage";
 import { SUPABASE_URL } from "../../lib/config";
 import { useChannelBlackout } from "../../hooks/useChannelBlackout";
 import { playAdBreak, resizeAdBreak, isSkippableBreak } from "../../lib/adBreak";
+import { prepareBannerHTML } from "../../lib/adBanner";
 import { titleCuePoints, formatBreakTime } from "../../lib/adBreaks";
 import { PAUSE_DELAY_MS, loadPauseAd, ping } from "../../lib/pauseAd";
 import { selectAdTag, recordAdEvent } from "../../lib/ads";
@@ -85,6 +86,8 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
   const countdownTimerRef = useRef(null);
   const adContainerRef = useRef(null);
   const [adLocked, setAdLocked] = useState(false); // live channel break: no skipping
+  const [adBanner, setAdBanner] = useState(null); // picture beside the ad now playing (lib/adBanner.js)
+  const adBannerRef = useRef(null), adBannerSeenRef = useRef(null);
   const [resumedAt, setResumedAt] = useState(null); // seconds we resumed from, while the Start over offer shows
   // Pause ad: after PAUSE_DELAY_MS paused (never during an ad), ask the pause tag once
   // for this pause; hide the picture the moment playback resumes.
@@ -385,7 +388,7 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
     const stop = playAdBreak({ client: supabase, video: videoRef.current, container: adContainerRef.current, placement: "pre_roll",
       scope: isLive ? "live" : isEpisode ? "episode" : "movie",
       contentId: isLive ? String(video.id).replace(/^ch[-_]/, "") : video.id, context: adContext,
-      onBusy: setAdPlaying, onManager: manager => { adsManagerRef.current = manager; },
+      onBusy: setAdPlaying, onManager: manager => { adsManagerRef.current = manager; }, onBanner: setAdBanner,
       onReady: () => {
         adsClearedRef.current = true; setPlaybackError(false);
         const element = videoRef.current;
@@ -403,11 +406,20 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
     };
   }, [video.id]);
 
-  // The ad surface follows the player into and out of fullscreen.
+  // The ad surface follows the player into and out of fullscreen, and shrinks to
+  // two thirds while a banner sits beside the ad.
   useEffect(() => {
-    const element = videoRef.current;
+    const element = adContainerRef.current;
     if (adsManagerRef.current && element) resizeAdBreak(adsManagerRef.current, element.clientWidth, element.clientHeight);
-  }, [isFullscreen]);
+  }, [isFullscreen, adBanner]);
+  // SDK companion HTML goes in as-is (its tracker counts the view); a banner from
+  // AdParameters is drawn by us and counted once its picture is on screen.
+  useEffect(() => {
+    const root = adBannerRef.current;
+    if (!root) return;
+    root.innerHTML = adBanner?.html || "";
+    if (adBanner?.html) prepareBannerHTML(root);
+  }, [adBanner]);
 
   useEffect(() => {
     if (!isFullscreen) return;
@@ -569,7 +581,7 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
     setAdLocked(!isSkippableBreak(placement, target.scope));
     adBreakStopRef.current = playAdBreak({ client: supabase, video: element, container: adContainerRef.current, placement,
       scope: target.scope || (isEpisode ? "episode" : "movie"), contentId: target.contentId ?? video.id,
-      onBusy: setAdPlaying, onManager: manager => { adsManagerRef.current = manager; },
+      onBusy: setAdPlaying, onManager: manager => { adsManagerRef.current = manager; }, onBanner: setAdBanner,
       onReady: () => { adBreakStopRef.current = null; onDone(); }, breakSeconds: target.breakSeconds ?? null, context: adContext,
     });
   }
@@ -691,16 +703,30 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
             {getEmbedUrl(video.url) ? (
               <iframe src={getEmbedUrl(video.url)} style={{ width: "100%", height: "100%", display: "block", border: "none" }} allowFullScreen allow="autoplay" />
             ) : (
-              <video ref={videoRef} controls={!adPlaying} controlsList="nofullscreen" style={{ width: "100%", height: "100%", display: "block", cursor: isFullscreen ? "pointer" : "default" }} poster={video.thumbnail}
+              <video ref={videoRef} controls={!adPlaying} controlsList="nofullscreen" style={{ width: adPlaying && adBanner ? "66.667%" : "100%", height: "100%", display: "block", cursor: isFullscreen ? "pointer" : "default" }} poster={video.thumbnail}
                 onClick={isFullscreen ? togglePlayPause : undefined}
                 onError={() => { if (adsClearedRef.current && !adBusyRef.current && (!Hls.isSupported() || !isHlsUrl(video.url))) setPlaybackError(true); }}
                 onTimeUpdate={handleTimeUpdate} onEnded={handleEnded} onLoadedMetadata={handleLoadedMetadata} onPause={handlePause} onPlay={handlePlay}>
                 {!isHlsUrl(video.url) && <source src={video.url} type="video/mp4" />}
               </video>
             )}
-            <div ref={adContainerRef} style={{ position: "absolute", inset: 0, zIndex: 10, display: adPlaying ? "block" : "none", pointerEvents: adPlaying ? "auto" : "none" }} />
+            <div ref={adContainerRef} style={{ position: "absolute", inset: 0, right: adPlaying && adBanner ? "33.333%" : 0, zIndex: 10, background: "#000", display: adPlaying ? "block" : "none", pointerEvents: adPlaying ? "auto" : "none" }} />
             {/* Live channel breaks can't be skipped: a clear layer over the ad catches clicks on its Skip button. */}
-            {adPlaying && adLocked && <div aria-hidden="true" style={{ position: "absolute", inset: 0, zIndex: 11 }} />}
+            {adPlaying && adLocked && <div aria-hidden="true" style={{ position: "absolute", inset: 0, right: adBanner ? "33.333%" : 0, zIndex: 11 }} />}
+            {adPlaying && adBanner && (
+              <div aria-label="Advertisement banner" style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: "33.333%", zIndex: 10, background: "#0a0a0a", display: "flex", alignItems: "center", justifyContent: "center", padding: "6% 4%", boxSizing: "border-box" }}>
+                {adBanner.html
+                  ? <div ref={adBannerRef} style={{ position: "relative", width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }} />
+                  : <a href={adBanner.click || undefined} target="_blank" rel="noopener" title={adBanner.click ? "Learn more" : undefined}
+                      style={{ display: "block", maxWidth: "100%", maxHeight: "100%", aspectRatio: `${adBanner.width} / ${adBanner.height}`, cursor: adBanner.click ? "pointer" : "default" }}>
+                      {/* The click link counts itself; creativeView is pinged once per ad when the picture shows. */}
+                      <img src={adBanner.image} alt="Advertisement" style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+                        onLoad={() => { if (adBannerSeenRef.current === adBanner) return; adBannerSeenRef.current = adBanner; ping(adBanner.creativeView); }}
+                        onError={() => setAdBanner(null)} />
+                    </a>}
+                <span style={{ position: "absolute", top: 10, left: 10, background: "rgba(0,0,0,0.7)", color: "#fff", fontSize: 12, fontWeight: 700, letterSpacing: 0.5, borderRadius: 6, padding: "3px 8px", pointerEvents: "none" }}>Ad</span>
+              </div>
+            )}
             {pauseAd && !adPlaying && (
               <div style={{ position: "absolute", right: "4%", top: "50%", transform: "translateY(-50%)", zIndex: 12, width: "min(36%, 520px)", pointerEvents: "auto" }}>
                 <button type="button" title={pauseAd.ad.clickThrough ? "Learn more" : pauseAd.ad.title} disabled={!pauseAd.ad.clickThrough}

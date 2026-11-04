@@ -38,6 +38,9 @@ Deno.serve(async (request: Request) => {
 // Under 15 s returns an empty VAST, like a real ad server with nothing to sell.
 // Each slot gets a random look/tune from STYLES, never the same one twice in a pod.
 const STYLES = ["fractal", "life", "bars", "cells", "noise", "gradient"];
+// Every other spot carries a banner (beside-the-video picture), both as VAST CompanionAds
+// for the web SDK and as AdParameters JSON for Apple TV. See peep/src/lib/adBanner.js.
+const BANNER = "https://cuwdyedmmnpklufduaho.supabase.co/storage/v1/object/public/ad-creatives/test/peep-pause-test.png";
 const CREATIVE = (style: string, s: number) => `https://cuwdyedmmnpklufduaho.supabase.co/storage/v1/object/public/ad-creatives/test/peep-test-${style}-${s}s.mp4`;
 function shuffled(items: string[]): string[] {
   const copy = [...items];
@@ -81,12 +84,22 @@ function peepPod(seconds: number, skip = 0): string {
       <Creatives>
         <Creative id="peep-test-${style}-${length}s" sequence="1">
           <Linear${skip > 0 && skip < length ? ` skipoffset="${clock(skip)}"` : ""}>
-            <Duration>${clock(length)}</Duration>
+            <Duration>${clock(length)}</Duration>${i % 2 === 0 ? `
+            <AdParameters><![CDATA[${JSON.stringify({ banner: { image: BANNER, width: 800, height: 450, creativeView: ["https://example.com/peep-test-banner-view"], click: "https://watchpeep.tv" } })}]]></AdParameters>` : ""}
             <MediaFiles>
               <MediaFile delivery="progressive" type="video/mp4" width="1920" height="1080" codec="H.264" bitrate="200"><![CDATA[${CREATIVE(style, length)}]]></MediaFile>
             </MediaFiles>
           </Linear>
-        </Creative>
+        </Creative>${i % 2 === 0 ? `
+        <Creative id="peep-test-banner" sequence="1">
+          <CompanionAds>
+            <Companion id="peep-test-banner" width="800" height="450">
+              <StaticResource creativeType="image/png"><![CDATA[${BANNER}]]></StaticResource>
+              <TrackingEvents><Tracking event="creativeView"><![CDATA[https://example.com/peep-test-banner-view]]></Tracking></TrackingEvents>
+              <CompanionClickThrough><![CDATA[https://watchpeep.tv]]></CompanionClickThrough>
+            </Companion>
+          </CompanionAds>
+        </Creative>` : ""}
       </Creatives>
     </InLine>
   </Ad>`;
