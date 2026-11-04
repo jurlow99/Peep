@@ -640,31 +640,27 @@ struct PlayerView: View {
             guard !Task.isCancelled else { return }
             playNext()
         }
-        // Pause ad: on the right, clear of the native controls; never takes focus.
+        // Pause ad: on the right, clear of the native controls; never takes focus. The QR
+        // code (only when the ad has a link) sits beside the picture, never over its art.
         .overlay(alignment: .trailing) {
             if let pauseAd, !adGate.blocking, !showNext, !showEnd {
                 AsyncImage(url: pauseAd.image) { phase in
                     if let image = phase.image {
-                        image.resizable().aspectRatio(pauseAd.width / max(1, pauseAd.height), contentMode: .fit)
-                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                            .overlay(alignment: .topLeading) {
-                                Text("Ad").font(.system(size: 18, weight: .bold)).padding(.horizontal, 10).padding(.vertical, 4)
-                                    .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 8)).padding(12)
-                            }
-                            .overlay(alignment: .bottomTrailing) {
-                                if let link = pauseAd.clickThrough, let qr = PauseAdQR.image(for: link) {
-                                    VStack(spacing: 6) {
-                                        Image(uiImage: qr).interpolation(.none).resizable().frame(width: 160, height: 160)
-                                        Text("Scan to learn more").font(.system(size: 15, weight: .semibold)).foregroundStyle(.black)
-                                    }
-                                    .padding(10).background(.white, in: RoundedRectangle(cornerRadius: 14)).padding(14)
+                        HStack(alignment: .bottom, spacing: 24) {
+                            if let link = pauseAd.clickThrough, let qr = PauseAdQR.image(for: link) { AdQRCode(image: qr) }
+                            image.resizable().aspectRatio(pauseAd.width / max(1, pauseAd.height), contentMode: .fit)
+                                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                .overlay(alignment: .topLeading) {
+                                    Text("Ad").font(.system(size: 18, weight: .bold)).padding(.horizontal, 10).padding(.vertical, 4)
+                                        .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 8)).padding(12)
                                 }
-                            }
-                            .shadow(color: .black.opacity(0.55), radius: 30, y: 12)
-                            .onAppear { countPauseAd() }
+                                .frame(width: 620)
+                        }
+                        .shadow(color: .black.opacity(0.55), radius: 30, y: 12)
+                        .onAppear { countPauseAd() }
                     }
                 }
-                .frame(width: 620).padding(.trailing, 90).allowsHitTesting(false).transition(.opacity)
+                .padding(.trailing, 90).allowsHitTesting(false).transition(.opacity)
             }
         }
         .animation(.easeInOut(duration: 0.25), value: pauseAd)
@@ -1580,13 +1576,10 @@ struct SqueezeAdView: View {
                         Text("Ad").font(.system(size: 18, weight: .bold)).padding(.horizontal, 10).padding(.vertical, 4)
                             .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 8)).padding(.leading, 24).padding(.top, 20)
                     }
+                    // The picture leaves its bottom-right corner empty for this on purpose.
                     .overlay(alignment: .bottomTrailing) {
                         if let link = ad.clickThrough, let qr = PauseAdQR.image(for: link) {
-                            VStack(spacing: 6) {
-                                Image(uiImage: qr).interpolation(.none).resizable().frame(width: 150, height: 150)
-                                Text("Scan to learn more").font(.system(size: 14, weight: .semibold)).foregroundStyle(.black)
-                            }
-                            .padding(8).background(.white, in: RoundedRectangle(cornerRadius: 12)).padding(.trailing, 60).padding(.bottom, 40)
+                            AdQRCode(image: qr, size: 150).padding(.trailing, 60).padding(.bottom, 40)
                         }
                     }
                     .onAppear(perform: onShown)
@@ -1640,7 +1633,7 @@ final class AdBannerView: UIView {
         backgroundColor = UIColor(white: 0.04, alpha: 1)
         picture.contentMode = .scaleAspectFit; picture.translatesAutoresizingMaskIntoConstraints = false
         label.text = "Ad"; label.font = AdPill.rounded(20, .bold)
-        let caption = UILabel(); caption.text = "Scan to learn more"; caption.font = AdPill.rounded(17, .semibold); caption.textColor = .black; caption.textAlignment = .center
+        let caption = UILabel(); caption.text = "Scan to learn more"; caption.font = AdPill.rounded(16, .semibold); caption.textColor = .black; caption.textAlignment = .center
         qr.layer.magnificationFilter = .nearest; qr.translatesAutoresizingMaskIntoConstraints = false
         qrBox.axis = .vertical; qrBox.alignment = .center; qrBox.spacing = 6
         qrBox.isLayoutMarginsRelativeArrangement = true; qrBox.layoutMargins = UIEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
@@ -1649,18 +1642,25 @@ final class AdBannerView: UIView {
         for subview in [picture, label, qrBox] as [UIView] { addSubview(subview) }
         NSLayoutConstraint.activate([
             picture.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 40), picture.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -40),
-            picture.topAnchor.constraint(equalTo: topAnchor, constant: 60), picture.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -60),
+            picture.topAnchor.constraint(equalTo: topAnchor, constant: 60),
             label.topAnchor.constraint(equalTo: topAnchor, constant: 70), label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 50),
-            qr.widthAnchor.constraint(equalToConstant: 150), qr.heightAnchor.constraint(equalToConstant: 150),
-            qrBox.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -50), qrBox.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -70),
+            qr.widthAnchor.constraint(equalToConstant: 160), qr.heightAnchor.constraint(equalToConstant: 160),
+            qrBox.centerXAnchor.constraint(equalTo: centerXAnchor), qrBox.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -60),
         ])
+        pictureToBottom.isActive = true
     }
+    // The picture fills the column, or stops above the QR code when the ad has a link:
+    // the code gets its own space and never covers the banner's art.
+    private lazy var pictureToBottom = picture.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -60)
+    private lazy var pictureAboveQR = picture.bottomAnchor.constraint(equalTo: qrBox.topAnchor, constant: -28)
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     func show(_ banner: AdBanner?) {
         loading?.cancel(); loading = nil
         picture.image = nil; isHidden = banner == nil
         guard let banner else { return }
-        if let link = banner.click, let code = PauseAdQR.image(for: link) { qr.image = code; qrBox.isHidden = false } else { qrBox.isHidden = true }
+        let code = banner.click.flatMap(PauseAdQR.image(for:))
+        qr.image = code; qrBox.isHidden = code == nil
+        pictureToBottom.isActive = code == nil; pictureAboveQR.isActive = code != nil
         loading = Task { [weak self] in
             let image = (try? await URLSession.shared.data(from: banner.image)).flatMap { UIImage(data: $0.0) }
             guard !Task.isCancelled, let self else { return }
@@ -1669,6 +1669,19 @@ final class AdBannerView: UIView {
             for url in banner.creativeView { Task { _ = try? await URLSession.shared.data(from: url) } }
             self.onLoaded?(true)
         }
+    }
+}
+
+/// An ad's link as a QR code on a white card with "Scan to learn more".
+struct AdQRCode: View {
+    let image: UIImage
+    var size: CGFloat = 160
+    var body: some View {
+        VStack(spacing: 6) {
+            Image(uiImage: image).interpolation(.none).resizable().frame(width: size, height: size)
+            Text("Scan to learn more").font(.system(size: 15, weight: .semibold)).foregroundStyle(.black)
+        }
+        .padding(10).background(.white, in: RoundedRectangle(cornerRadius: 14))
     }
 }
 
