@@ -12,13 +12,15 @@ export const isSkippableBreak = (placement, scope) => scope !== 'live';
 const DISCOVERY_MS = 5000, STARTUP_MS = 10000, MEDIA_LOAD_MS = 8000;
 
 // onBanner(banner|null): a picture to show beside the ad while this ad plays (see adBanner.js).
-export function playAdBreak({ client, video, container, placement = 'pre_roll', scope, contentId, onBusy, onReady, onManager = () => {}, onBanner = () => {}, breakSeconds = null, context = {} }) {
+// onPaused(true|false): the ad was paused (a click on it opens the advertiser's page and
+// pauses it) or resumed, so the player can offer a Resume button.
+export function playAdBreak({ client, video, container, placement = 'pre_roll', scope, contentId, onBusy, onReady, onManager = () => {}, onBanner = () => {}, onPaused = () => {}, breakSeconds = null, context = {} }) {
   let disposed = false, finished = false, cleaned = false, loader, display, manager, tag, timer;
   const entry = placement === 'pre_roll';
   const session = crypto.randomUUID();
   const abort = new AbortController();
   const log = (event, id = '') => { if (tag && !disposed) recordAdEvent(tag, session, event, scope, contentId, id); };
-  const clean = () => { if (cleaned) return; cleaned = true; clearTimeout(timer); manager?.destroy(); loader?.destroy(); display?.destroy(); onManager(null); onBanner(null); };
+  const clean = () => { if (cleaned) return; cleaned = true; clearTimeout(timer); manager?.destroy(); loader?.destroy(); display?.destroy(); onManager(null); onBanner(null); onPaused(false); };
   const finish = () => { if (disposed || finished) return; finished = true; clean(); onBusy(false); onReady(); };
   const timeout = () => { log('timeout'); finish(); };
   const skip = () => { onBusy(false); onReady(); return () => {}; };
@@ -66,7 +68,9 @@ export function playAdBreak({ client, video, container, placement = 'pre_roll', 
             const ad = e.getAd?.();
             onBanner(ad ? bannerFor(ima, ad) : null);
           });
-          manager.addEventListener(ima.AdEvent.Type.COMPLETE, e => { log('complete', adID(e)); onBanner(null); });
+          manager.addEventListener(ima.AdEvent.Type.PAUSED, () => { if (!disposed && !finished) onPaused(true); });
+          manager.addEventListener(ima.AdEvent.Type.RESUMED, () => onPaused(false));
+          manager.addEventListener(ima.AdEvent.Type.COMPLETE, e => { log('complete', adID(e)); onBanner(null); onPaused(false); });
           manager.addEventListener(ima.AdEvent.Type.SKIPPED, e => { log('skip', adID(e)); onBanner(null); });
           manager.addEventListener(ima.AdErrorEvent.Type.AD_ERROR, () => { log('error'); finish(); });
           manager.init(container.clientWidth || video.clientWidth || 1280, container.clientHeight || video.clientHeight || 720, ima.ViewMode.NORMAL);

@@ -125,6 +125,13 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
   const adBreakStopRef = useRef(null);    // disposer of the mid/post-roll in flight
   const postRollFiredRef = useRef(false);
   const [adPlaying, setAdPlaying] = useState(false);
+  const [adPaused, setAdPaused] = useState(false); // the ad itself is paused (clicked, or Space)
+  useEffect(() => {
+    if (!adPaused) return;
+    const back = () => { if (document.visibilityState === "visible") adsManagerRef.current?.resume(); };
+    document.addEventListener("visibilitychange", back); window.addEventListener("focus", back);
+    return () => { document.removeEventListener("visibilitychange", back); window.removeEventListener("focus", back); };
+  }, [adPaused]);
   const adBusyRef = useRef(false);
   adBusyRef.current = adPlaying;
   const [liveChannels, setLiveChannels] = useState([]);
@@ -403,7 +410,7 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
     const start = context => { if (!cancelled) stop = playAdBreak({ client: supabase, video: videoRef.current, container: adContainerRef.current, placement: "pre_roll",
       scope: isLive ? "live" : isEpisode ? "episode" : "movie",
       contentId: isLive ? String(video.id).replace(/^ch[-_]/, "") : video.id, context,
-      onBusy: setAdPlaying, onManager: manager => { adsManagerRef.current = manager; }, onBanner: setAdBanner,
+      onBusy: setAdPlaying, onManager: manager => { adsManagerRef.current = manager; }, onBanner: setAdBanner, onPaused: setAdPaused,
       onReady: () => {
         adsClearedRef.current = true; setPlaybackError(false);
         const element = videoRef.current;
@@ -486,7 +493,7 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
       if (e.key === "Escape") toggleFullscreen();
       if ((e.key === " " || e.key === "Spacebar") && !getEmbedUrl(video.url)) {
         e.preventDefault();
-        togglePlayPause();
+        togglePlayRef.current();
       }
     };
     document.addEventListener("keydown", handler);
@@ -589,9 +596,12 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
     });
   }
 
+  const togglePlayRef = useRef(null);
+  togglePlayRef.current = togglePlayPause; // the Space handler is set once per full screen
   function togglePlayPause() {
     if (!videoRef.current) return;
-    if (adPlaying) return;
+    // During an ad Space pauses/resumes the ad itself; never a live channel's ad (it can't wait).
+    if (adPlaying) { if (adPaused) adsManagerRef.current?.resume(); else if (!adLocked) adsManagerRef.current?.pause(); return; }
     if (videoRef.current.paused) videoRef.current.play().catch(() => {});
     else videoRef.current.pause();
   }
@@ -640,7 +650,7 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
     setAdLocked(!isSkippableBreak(placement, target.scope));
     adBreakStopRef.current = playAdBreak({ client: supabase, video: element, container: adContainerRef.current, placement,
       scope: target.scope || (isEpisode ? "episode" : "movie"), contentId: target.contentId ?? video.id,
-      onBusy: setAdPlaying, onManager: manager => { adsManagerRef.current = manager; }, onBanner: setAdBanner,
+      onBusy: setAdPlaying, onManager: manager => { adsManagerRef.current = manager; }, onBanner: setAdBanner, onPaused: setAdPaused,
       onReady: () => { adBreakStopRef.current = null; onDone(); }, breakSeconds: target.breakSeconds ?? null, context: adContextRef.current,
     });
   }
@@ -758,7 +768,8 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
           @keyframes livepulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.4; transform:scale(1.3); } }
         `}</style>
         <div ref={playerContainerRef} style={isFullscreen ? { position: "fixed", inset: 0, zIndex: 999, background: "#000", display: "flex", alignItems: "center", justifyContent: "center" } : { position: "relative", marginBottom: 30 }}>
-          <div style={isFullscreen ? { position: "relative", width: "100%", height: "100%" } : { background: "#000", borderRadius: 14, overflow: "hidden", aspectRatio: "16/9", boxShadow: "0 32px 80px rgba(0,0,0,0.8)", position: "relative" }}>
+          {/* Full screen: a 16:9 stage centred on black, so an L ad's picture and the shrunk show line up whatever the screen shape. */}
+          <div style={isFullscreen ? { position: "relative", width: "min(100vw, calc(100vh * 16 / 9))", height: "min(100vh, calc(100vw * 9 / 16))" } : { background: "#000", borderRadius: 14, overflow: "hidden", aspectRatio: "16/9", boxShadow: "0 32px 80px rgba(0,0,0,0.8)", position: "relative" }}>
             {getEmbedUrl(video.url) ? (
               <iframe src={getEmbedUrl(video.url)} style={{ width: "100%", height: "100%", display: "block", border: "none" }} allowFullScreen allow="autoplay" />
             ) : (
@@ -774,7 +785,8 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
               <a href={squeeze.ad.clickThrough || undefined} target="_blank" rel="noopener" aria-label="Advertisement" title={squeeze.ad.clickThrough ? "Learn more" : undefined}
                 onClick={() => { if (squeeze.ad.clickThrough) recordAdEvent(squeeze.tag, squeeze.session, "click", squeeze.scope, squeeze.contentId); }}
                 style={{ position: "absolute", inset: 0, zIndex: 1, display: "block", background: "#000", cursor: squeeze.ad.clickThrough ? "pointer" : "default" }}>
-                <img src={squeeze.ad.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                {/* Contain, never cover: the picture is a full 16:9 frame with the ad in its left and bottom strips. */}
+                <img src={squeeze.ad.image} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
                   onLoad={() => { if (squeezeSeenRef.current === squeeze) return; squeezeSeenRef.current = squeeze; ping(squeeze.ad.impressions); recordAdEvent(squeeze.tag, squeeze.session, "impression", squeeze.scope, squeeze.contentId); }}
                   onError={() => setSqueeze(null)} />
                 <span style={{ position: "absolute", top: 10, left: 10, background: "rgba(0,0,0,0.7)", color: "#fff", fontSize: 12, fontWeight: 700, letterSpacing: 0.5, borderRadius: 6, padding: "3px 8px" }}>Ad</span>
@@ -783,6 +795,12 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
             <div ref={adContainerRef} style={{ position: "absolute", inset: 0, right: adPlaying && adBanner ? "33.333%" : 0, zIndex: 10, background: "#000", display: adPlaying ? "block" : "none", pointerEvents: adPlaying ? "auto" : "none" }} />
             {/* Live channel breaks can't be skipped: a clear layer over the ad catches clicks on its Skip button. */}
             {adPlaying && adLocked && <div aria-hidden="true" style={{ position: "absolute", inset: 0, right: adBanner ? "33.333%" : 0, zIndex: 11 }} />}
+            {adPlaying && adPaused && (
+              <button type="button" onClick={() => adsManagerRef.current?.resume()} aria-label="Resume ad"
+                style={{ position: "absolute", left: adBanner ? "33.333%" : "50%", top: "50%", transform: "translate(-50%, -50%)", zIndex: 13, display: "flex", alignItems: "center", gap: 10, border: 0, borderRadius: 999, background: "rgba(0,0,0,0.78)", color: "#fff", padding: "14px 26px", fontSize: 17, fontWeight: 700, cursor: "pointer" }}>
+                <span aria-hidden="true">▶</span> Resume ad
+              </button>
+            )}
             {adPlaying && adBanner && (
               <div aria-label="Advertisement banner" style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: "33.333%", zIndex: 10, background: "#0a0a0a", display: "flex", alignItems: "center", justifyContent: "center", padding: "6% 4%", boxSizing: "border-box" }}>
                 {adBanner.html
