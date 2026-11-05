@@ -133,9 +133,12 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
   const isLive = video._type === "live" || video._type === "live_epg";
   const isEpisode = !!video.show_id;
   // What the ad server is told about this title: [CHANNEL] / [SHOW] / [GENRE] in tag URLs.
+  // An episode's [SHOW] is its series ("South Park"), the same every time, never the episode title.
+  const [series, setSeries] = useState(null); // { id, name } for video.show_id
+  const seriesName = isEpisode && series?.id === video.show_id ? series.name : "";
   const adContext = isLive
     ? { channel: video.title, show: video.now_airing || "", genre: video.category || "", contentType: "live" }
-    : { channel: "", show: video.show_title || video.title || "", genre: video.category || "", contentType: "vod" };
+    : { channel: "", show: isEpisode ? seriesName : video.title || "", genre: video.category || "", contentType: "vod" };
   const [myRating, setMyRating] = useState(null);
   const [ratingCounts, setRatingCounts] = useState({ up: 0, down: 0 });
   const progressTimerRef = useRef(null);
@@ -392,9 +395,10 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
     if (getEmbedUrl(video.url)) return;
     adsClearedRef.current = false;
     setAdLocked(!isSkippableBreak("pre_roll", isLive ? "live" : "movie"));
-    const stop = playAdBreak({ client: supabase, video: videoRef.current, container: adContainerRef.current, placement: "pre_roll",
+    let stop = () => {}, cancelled = false;
+    const start = context => { if (!cancelled) stop = playAdBreak({ client: supabase, video: videoRef.current, container: adContainerRef.current, placement: "pre_roll",
       scope: isLive ? "live" : isEpisode ? "episode" : "movie",
-      contentId: isLive ? String(video.id).replace(/^ch[-_]/, "") : video.id, context: adContext,
+      contentId: isLive ? String(video.id).replace(/^ch[-_]/, "") : video.id, context,
       onBusy: setAdPlaying, onManager: manager => { adsManagerRef.current = manager; }, onBanner: setAdBanner,
       onReady: () => {
         adsClearedRef.current = true; setPlaybackError(false);
@@ -406,9 +410,15 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
         }
         element?.play().catch(() => {});
       },
-    });
+    }); };
+    if (isEpisode) {
+      const showId = video.show_id;
+      Promise.resolve(supabase.from("shows").select("title").eq("id", showId).maybeSingle())
+        .then(({ data }) => data?.title || "", () => "")
+        .then(name => { if (cancelled) return; setSeries({ id: showId, name }); start({ ...adContext, show: name }); });
+    } else start(adContext);
     return () => {
-      stop(); adBreakStopRef.current?.(); adBreakStopRef.current = null;
+      cancelled = true; stop(); adBreakStopRef.current?.(); adBreakStopRef.current = null;
       adsClearedRef.current = false; midrollCuesRef.current = []; midrollNextRef.current = 0; postRollFiredRef.current = false;
     };
   }, [video.id]);

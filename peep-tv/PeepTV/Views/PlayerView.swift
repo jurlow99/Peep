@@ -438,6 +438,9 @@ struct PlayerView: View {
     @State private var pauseAd: PauseAd?
     @State private var pauseAdCounted = false
     @State private var pauseKey = 0 // bumps on every pause, so each pause asks at most once
+    // [SHOW] for an episode is its series ("South Park"), the same every time; never the
+    // episode's own title. Looked up once per episode.
+    @State private var adSeries: (episode: String, name: String)?
     let related: [Video]
     let openRelated: (Video) -> Void
     let playNext: () -> Void
@@ -502,7 +505,7 @@ struct PlayerView: View {
         .squeezeAds(player: model.player, ready: contentStarted, key: "\(liveChannelID ?? 0):\(identity?.id ?? "")",
                     scope: liveChannelID != nil ? "live" : (identity?.type == "short" ? "movie" : identity?.type ?? "movie"),
                     contentID: liveChannelID.map(String.init) ?? identity?.id ?? "",
-                    context: liveChannelID != nil ? AdContext(channel: title, contentType: "live") : AdContext(show: title),
+                    context: adContext,
                     busy: showNext || showEnd || pauseAd != nil || model.errorMessage != nil || model.blackoutMessage != nil, gate: adGate)
         .overlay {
             if showNext, let episode = nextEpisode {
@@ -611,7 +614,7 @@ struct PlayerView: View {
                 guard time >= cues[next] else { continue }
                 while next < cues.count && time >= cues[next] { next += 1 }
                 model.player.pause()
-                adGate.context = AdContext(show: title)
+                adGate.context = await loadAdContext()
                 let stayed = await adGate.runMidroll(service: supabase, scope: scope, contentID: identity.id)
                 guard stayed, !Task.isCancelled else { return }
                 model.player.play()
@@ -665,7 +668,7 @@ struct PlayerView: View {
             do { try await Task.sleep(for: .seconds(2)) } catch { return }
             guard model.player.timeControlStatus == .paused, !adGate.blocking, !showNext, !showEnd, model.errorMessage == nil else { return }
             let scope = liveChannelID != nil ? "live" : (identity?.type == "short" ? "movie" : identity?.type ?? "movie")
-            let context = liveChannelID != nil ? AdContext(channel: title, contentType: "live") : AdContext(show: title)
+            let context = await loadAdContext()
             guard let (ad, _) = await PauseAd.load(service: supabase, scope: scope, contentID: liveChannelID.map(String.init) ?? identity?.id ?? "", context: context),
                   !Task.isCancelled, model.player.timeControlStatus == .paused, !adGate.blocking else { return }
             pauseAdCounted = false; pauseAd = ad
@@ -703,7 +706,7 @@ struct PlayerView: View {
             }
             guard !Task.isCancelled else { return }
             if model.blackoutMessage == nil, let scope = liveChannelID != nil ? "live" : identity?.type {
-                adGate.context = liveChannelID != nil ? AdContext(channel: title, contentType: "live") : AdContext(show: title)
+                adGate.context = await loadAdContext()
                 guard await adGate.run(service: supabase, scope: scope == "short" ? "movie" : scope, contentID: liveChannelID.map(String.init) ?? identity?.id ?? ""), !Task.isCancelled else { return }
             }
             contentStarted = true
@@ -727,6 +730,20 @@ struct PlayerView: View {
             model.stop()
         }
         .onExitCommand { dismiss() }
+    }
+
+    private var adContext: AdContext {
+        if liveChannelID != nil { return AdContext(channel: title, contentType: "live") }
+        guard identity?.type == "episode" else { return AdContext(show: title) }
+        return AdContext(show: adSeries?.episode == identity?.id ? adSeries?.name ?? "" : "")
+    }
+    private func loadAdContext() async -> AdContext {
+        if liveChannelID == nil, let identity, identity.type == "episode", adSeries?.episode != identity.id {
+            struct Row: Decodable { struct Series: Decodable { let title: String }; let shows: Series? }
+            let rows: [Row]? = try? await supabase.get("episodes", query: ["select": "shows(title)", "id": "eq.\(identity.id)", "limit": "1"], timeout: 3)
+            if let name = rows?.first?.shows?.title { adSeries = (identity.id, name) }
+        }
+        return adContext
     }
     private func countPauseAd() {
         guard !pauseAdCounted, let ad = pauseAd else { return }
@@ -1344,7 +1361,7 @@ struct IMAAdView: UIViewControllerRepresentable {
         Task { @MainActor [weak self] in
             guard let self else { return }
             do { try await PlaybackAudioSession.activate() }
-            catch { if !self.ended { self.event("error", ""); self.complete() }; return }
+            catch { if !self.ended { self.event("error", "audio-session"); self.complete() }; return }
             guard !self.ended else { return }
             Self.loader.delegate = self
             display = IMAAdDisplayContainer(adContainer: adSurface, viewController: self)
@@ -1367,7 +1384,8 @@ struct IMAAdView: UIViewControllerRepresentable {
     }
     func adsLoader(_ loader: IMAAdsLoader, failedWith data: IMAAdLoadingErrorData) {
         guard !ended, data.userContext as? String == contextID else { return }
-        event("error", ""); complete()
+        // The IMA error code goes in ad_id ("ima:1009"), so a failed ad says why.
+        event("error", "ima:\(data.adError.code.rawValue)"); complete()
     }
     func adsManager(_ adsManager: IMAAdsManager, didReceive event: IMAAdEvent) {
         guard !ended else { return }
@@ -1388,7 +1406,7 @@ struct IMAAdView: UIViewControllerRepresentable {
         default: break
         }
     }
-    func adsManager(_ adsManager: IMAAdsManager, didReceive error: IMAAdError) { guard !ended else { return }; event("error", ""); complete() }
+    func adsManager(_ adsManager: IMAAdsManager, didReceive error: IMAAdError) { guard !ended else { return }; event("error", "ima:\(error.code.rawValue)"); complete() }
     func adsManagerDidRequestContentPause(_ adsManager: IMAAdsManager) { setNeedsFocusUpdate(); updateFocusIfNeeded() }
     func adsManager(_ adsManager: IMAAdsManager, adDidProgressToTime mediaTime: TimeInterval, totalTime: TimeInterval) {
         guard !ended else { return }
@@ -1587,12 +1605,14 @@ private struct SqueezeAdModifier: ViewModifier {
                 if let squeeze {
                     ZStack(alignment: .topTrailing) {
                         SqueezeAdView(ad: squeeze, onShown: count)
+                        // The show takes x 480–1920, y 0–810 of the 1920×1080 picture: the
+                        // full screen, never the safe area, so it lines up with the picture.
                         GeometryReader { box in
                             SqueezeVideoSurface(player: player)
                                 .frame(width: box.size.width * 0.75, height: box.size.height * 0.75)
                                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                                 .transition(.scale(scale: 4.0 / 3.0, anchor: .topTrailing))
-                        }
+                        }.ignoresSafeArea()
                     }
                     .ignoresSafeArea().allowsHitTesting(false).transition(.opacity)
                 }
@@ -1664,9 +1684,11 @@ struct SqueezeAdView: View {
     let ad: PauseAd
     let onShown: () -> Void
     var body: some View {
+        // Fit, never fill: the picture is a 16:9 frame laid out for the full screen (the
+        // ad in its left and bottom strips), so cropping any edge cuts the ad off.
         AsyncImage(url: ad.image) { phase in
             if let image = phase.image {
-                image.resizable().scaledToFill().ignoresSafeArea()
+                image.resizable().aspectRatio(contentMode: .fit)
                     .overlay(alignment: .topLeading) {
                         Text("Ad").font(.system(size: 18, weight: .bold)).padding(.horizontal, 10).padding(.vertical, 4)
                             .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 8)).padding(.leading, 24).padding(.top, 20)
@@ -1677,9 +1699,11 @@ struct SqueezeAdView: View {
                             AdQRCode(image: qr, size: 150).padding(.trailing, 60).padding(.bottom, 40)
                         }
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .onAppear(perform: onShown)
-            } else { Color.black.ignoresSafeArea() }
+            } else { Color.black }
         }
+        .background(Color.black).ignoresSafeArea()
         .allowsHitTesting(false).transition(.opacity)
     }
 }
