@@ -19,9 +19,8 @@ export async function recordAdEvent(tag, sessionId, event, scope, contentId, adI
   } catch { /* Measurement never blocks content. */ }
 }
 
-export function appleTVPlacementError(form,isDevelopment){
-  if(!form.platforms?.includes('tvos')||form.ad_type==='pre_roll'||form.ad_type==='pause'||form.ad_type==='squeeze')return null;
-  if(form.ad_type==='mid_roll'&&form.scope!=='live')return null;
-  if(isDevelopment&&form.ad_type==='mid_roll'&&form.scope==='live'&&form.is_test&&(form.content_id==null||form.content_id===''||/^-?[1-9]\d*$/.test(String(form.content_id))))return null;
-  return form.ad_type==='post_roll'?'Apple TV does not play post-rolls yet. Untick Apple TV.':'Apple TV live mid-rolls run only on FARRIS dev, from a test tag.';
+// Apple TV plays every ad type now; a live channel tag must name a real channel id.
+export function appleTVPlacementError(form){
+  if(!form.platforms?.includes('tvos')||form.ad_type!=='mid_roll'||form.scope!=='live')return null;
+  return form.content_id==null||form.content_id===''||/^-?[1-9]\d*$/.test(String(form.content_id))?null:'Pick the live channel again: Apple TV needs its channel id.';
 }

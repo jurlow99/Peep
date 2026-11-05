@@ -624,9 +624,21 @@ struct PlayerView: View {
             guard contentStarted, !adGate.blocking, !endHandled,
                   let item = notification.object as? AVPlayerItem, item === model.player.currentItem else { return }
             endHandled = true
-            Task { await saveProgress() }
-            if nextEpisode != nil { showNext = true }
-            else if liveChannelID == nil, identity != nil { showEnd = true }
+            Task {
+                await saveProgress()
+                // One post-roll after a movie or episode, before Up next (Ad rules "After movies & episodes").
+                if liveChannelID == nil, let identity {
+                    let policy: AdPolicy
+                    if let known = CSAIGate.policy { policy = known } else { policy = await CSAIGate.loadPolicy(supabase) }
+                    if policy.enabled, policy.postroll_enabled {
+                        adGate.context = await loadAdContext()
+                        let stayed = await adGate.runMidroll(service: supabase, scope: identity.type == "short" ? "movie" : identity.type, contentID: identity.id, adType: "post_roll")
+                        guard stayed, !Task.isCancelled else { return }
+                    }
+                }
+                if nextEpisode != nil { showNext = true }
+                else if liveChannelID == nil, identity != nil { showEnd = true }
+            }
         }
         .task(id: "\(showNext):\(scenePhase == .active)") {
             guard showNext, scenePhase == .active, preferences.autoplayNext, seriesAllowsAutoplay else { return }
@@ -1038,13 +1050,14 @@ struct AdPolicy: Decodable {
     var midroll_min_minutes = 20
     var midroll_every_minutes = 15
     var midroll_max_breaks = 4
+    var postroll_enabled = true
     var pause_enabled = true
     var squeeze_enabled = true
     var squeeze_every_minutes = 10
     var squeeze_live_after_break_minutes = 3
     static let fallback = AdPolicy()
     init() {}
-    private enum CodingKeys: String, CodingKey { case enabled, min_gap_minutes, live_entry, multiview_entry, midroll_enabled, live_breaks, midroll_min_minutes, midroll_every_minutes, midroll_max_breaks, pause_enabled, squeeze_enabled, squeeze_every_minutes, squeeze_live_after_break_minutes }
+    private enum CodingKeys: String, CodingKey { case enabled, min_gap_minutes, live_entry, multiview_entry, midroll_enabled, live_breaks, midroll_min_minutes, midroll_every_minutes, midroll_max_breaks, postroll_enabled, pause_enabled, squeeze_enabled, squeeze_every_minutes, squeeze_live_after_break_minutes }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         let number = { (key: CodingKeys, fallback: Int, range: ClosedRange<Int>) in max(range.lowerBound, min(range.upperBound, (try? values.decode(Int.self, forKey: key)) ?? fallback)) }
@@ -1057,6 +1070,7 @@ struct AdPolicy: Decodable {
         midroll_min_minutes = number(.midroll_min_minutes, 20, 1...600)
         midroll_every_minutes = number(.midroll_every_minutes, 15, 1...240)
         midroll_max_breaks = number(.midroll_max_breaks, 4, 0...20)
+        postroll_enabled = (try? values.decode(Bool.self, forKey: .postroll_enabled)) ?? true
         pause_enabled = (try? values.decode(Bool.self, forKey: .pause_enabled)) ?? true
         squeeze_enabled = (try? values.decode(Bool.self, forKey: .squeeze_enabled)) ?? true
         squeeze_every_minutes = number(.squeeze_every_minutes, 10, 1...240)
@@ -1213,15 +1227,15 @@ struct AdContext: Equatable {
             catch { Logger(subsystem: "tv.watchpeep.PeepTV", category: "CSAI").error("Internal ad reporting failed; provider SDK tracking is separate.") }
         }
     }
-    /// A mid-roll inside a movie or episode, at an Ad rules cue point. Picks the most
-    /// specific active Apple TV mid_roll tag and resolves when the break is over
-    /// (true) or the viewer left (false). No tag means no break.
-    func runMidroll(service: SupabaseService, scope: String, contentID: String) async -> Bool {
+    /// A mid-roll inside a movie or episode at an Ad rules cue point, or (adType
+    /// "post_roll") the break after it ends. Picks the most specific active Apple TV tag
+    /// and resolves when the break is over (true) or the viewer left (false). No tag means no break.
+    func runMidroll(service: SupabaseService, scope: String, contentID: String, adType: String = "mid_roll") async -> Bool {
         if blocking { return true }
         let current = UUID(); generation = current
         self.service = service; reportingUserID = service.session?.userId; self.scope = scope; self.contentID = contentID
         session = UUID().uuidString; seen = []
-        let tags: [CSAITag] = (try? await service.get("vast_tags", query: ["select":"id,tag_url,scope,content_id,active,is_test,platforms", "active":"eq.true", "ad_type":"eq.mid_roll", "order":"id.asc"], timeout: 4)) ?? []
+        let tags: [CSAITag] = (try? await service.get("vast_tags", query: ["select":"id,tag_url,scope,content_id,active,is_test,platforms", "active":"eq.true", "ad_type":"eq.\(adType)", "order":"id.asc"], timeout: 4)) ?? []
         guard !Task.isCancelled, generation == current, !blocking,
               let selected = CSAITag.select(tags, scope: scope, contentID: contentID) else { return true }
         isMidroll = true; blocking = true
@@ -1238,8 +1252,6 @@ struct AdContext: Equatable {
     @discardableResult
     func beginMidroll(service: SupabaseService, tag: CSAITag, channelID: Int) -> String? {
         if blocking { return "another ad is already showing" }
-        if service.configuration?.isDevelopment != true { return "not the dev environment" }
-        if !tag.is_test { return "tag \(tag.id) is not marked test" }
         guard tag.scope == "live", (tag.content_id ?? "").isEmpty || tag.content_id == String(channelID) else { return "tag \(tag.id) is not for this channel" }
         guard tag.active, tag.platforms.contains("tvos") else { return "tag \(tag.id) is off or not for Apple TV" }
         guard URL(string: tag.tag_url)?.scheme?.lowercased() == "https" else { return "tag \(tag.id) URL is not https" }
@@ -1946,12 +1958,12 @@ private struct LiveMidrollModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
         .task(id: "\(channelID ?? -1):\(scenePhase == .active):\(ready)") {
-            guard ready, scenePhase == .active, service.configuration?.isDevelopment == true, let channelID else { return }
+            guard ready, scenePhase == .active, let channelID else { return }
             let log = Logger(subsystem: "tv.watchpeep.PeepTV", category: "CSAI")
             // Unified log only: writing to stdout can block once Xcode stops reading it.
             let trace: (String) -> Void = { line in log.notice("\(line, privacy: .public)") }
             defer { trace("Ad watch stopped") }
-            let tags: [CSAITag] = (try? await service.get("vast_tags", query: ["select":"id,tag_url,scope,content_id,active,is_test,platforms", "active":"eq.true", "ad_type":"eq.mid_roll", "scope":"eq.live", "or":"(content_id.is.null,content_id.eq.\(channelID))", "is_test":"eq.true", "order":"id.asc"], timeout: 4)) ?? []
+            let tags: [CSAITag] = (try? await service.get("vast_tags", query: ["select":"id,tag_url,scope,content_id,active,is_test,platforms", "active":"eq.true", "ad_type":"eq.mid_roll", "scope":"eq.live", "or":"(content_id.is.null,content_id.eq.\(channelID))", "order":"id.asc"], timeout: 4)) ?? []
             let policy: AdPolicy
             if let known = CSAIGate.policy { policy = known } else { policy = await CSAIGate.loadPolicy(service) }
             guard policy.enabled, policy.live_breaks else { trace("Live mid-roll off in Ad rules"); return }

@@ -7,7 +7,7 @@ export const EMPTY_AD = { name: '', tag_url: '', ad_type: 'pre_roll', scope: 'gl
 export const POSITIONS = [
   { value: 'pre_roll', title: 'Pre-roll', hint: 'Before a title, channel or multiview starts.' },
   { value: 'mid_roll', title: 'Mid-roll', hint: 'Breaks inside a title, and live channel breaks.' },
-  { value: 'post_roll', title: 'Post-roll', hint: 'After a title ends. Browser only.' },
+  { value: 'post_roll', title: 'Post-roll', hint: 'After a title ends, before Up next.' },
   { value: 'pause', title: 'Pause ad', hint: 'A picture while the viewer has paused.' },
   { value: 'squeeze', title: 'L ad', hint: 'A picture around the show while it keeps playing.' },
 ];

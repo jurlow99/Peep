@@ -112,17 +112,19 @@ final class CatalogTests: XCTestCase {
     }
 
     @MainActor
-    func testMidrollRequiresExactTestChannelAndCanCancel() {
+    func testLiveMidrollRequiresTheChannelAndCanCancel() {
         let gate = CSAIGate()
         let config = AppConfiguration(baseURL: URL(string: "https://test.invalid")!, anonKey: "public", streamHost: "", isDevelopment: true)
         let service = SupabaseService(configuration: config, session: nil) { _ in throw URLError(.badURL) }
         let tag = CSAITag(id: 1, tag_url: "https://ads.invalid/test", scope: "live", content_id: "2", active: true, is_test: true, platforms: ["tvos"])
         gate.beginMidroll(service: service, tag: tag, channelID: 1)
         XCTAssertFalse(gate.blocking)
-        let realTag = CSAITag(id: 2, tag_url: "https://ads.invalid/real", scope: "live", content_id: "1", active: true, is_test: false, platforms: ["tvos"])
-        gate.beginMidroll(service: service, tag: realTag, channelID: 1)
+        let offTag = CSAITag(id: 2, tag_url: "https://ads.invalid/off", scope: "live", content_id: "1", active: false, is_test: false, platforms: ["tvos"])
+        gate.beginMidroll(service: service, tag: offTag, channelID: 1)
         XCTAssertFalse(gate.blocking)
-        gate.beginMidroll(service: service, tag: tag, channelID: 2)
+        // A normal (not test) tag plays live breaks too.
+        let realTag = CSAITag(id: 3, tag_url: "https://ads.invalid/real", scope: "live", content_id: "2", active: true, is_test: false, platforms: ["tvos"])
+        gate.beginMidroll(service: service, tag: realTag, channelID: 2)
         XCTAssertTrue(gate.blocking)
         XCTAssertTrue(gate.isMidroll)
         gate.cancel()

@@ -36,6 +36,23 @@ function RuleRow({ draft, setRule, flag, title, note, children, players = "Brows
   );
 }
 
+// "Steep" for Steep's tags, "Peep test" for Peep's sample server, else the host.
+function serverName(url) {
+  try {
+    const host = new URL(url).hostname;
+    if (host.startsWith("steep.")) return "Steep";
+    if (host.endsWith(".supabase.co")) return "Peep test";
+    if (host.includes("doubleclick") || host.includes("googlesyndication") || host.includes("imasdk")) return "Google sample";
+    return host.replace(/^www\./, "");
+  } catch { return "Unknown"; }
+}
+// What a tag covers, as a plain label: "Everything", "Live channels", "Full Force".
+function ruleTarget(tag, titles) {
+  if (tag.content_id) return titles[`${tag.scope}:${tag.content_id}`] || `${SCOPES.find(s => s.value === tag.scope)?.label || tag.scope} #${tag.content_id}`;
+  return tag.scope === "global" ? "Everything" : SCOPES.find(s => s.value === tag.scope)?.label || tag.scope;
+}
+const specificity = tag => (tag.content_id ? 0 : tag.scope === "global" ? 2 : 1);
+
 // Look up titles for the exact-content tags so the list reads "Movies · Alien" not "#4e11…".
 async function titlesFor(tags) {
   const by = scope => [...new Set(tags.filter(t => t.scope === scope && t.content_id).map(t => String(t.content_id)))];
@@ -68,7 +85,7 @@ export default function AdsPanel({ view = "rules", showToast, logAudit = () => {
   const [titles, setTitles] = useState({});
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState(null); // null = tag list, "new" = blank tag, else tag id
-  const [filter, setFilter] = useState("all");
+  const [openType, setOpenType] = useState(null); // the Ad tags card that's open
   const [form, setForm] = useState(EMPTY_AD);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -120,9 +137,9 @@ export default function AdsPanel({ view = "rules", showToast, logAudit = () => {
     setSavingRules(false);
   }
 
-  function openTag(tag) {
+  function openTag(tag, adType = EMPTY_AD.ad_type) {
     previewStop.current?.(); setPreview(null); setConfirmDelete(false); setPickerQuery(""); setPickerResults([]);
-    if (!tag) { setForm({ ...EMPTY_AD, ad_type: filter !== "all" ? filter : EMPTY_AD.ad_type }); setSelectedId("new"); return; }
+    if (!tag) { setForm({ ...EMPTY_AD, ad_type: adType, is_test: false }); setSelectedId("new"); return; }
     setForm({ ...EMPTY_AD, ...tag, content_id: tag.content_id ?? "", content_label: titles[`${tag.scope}:${tag.content_id}`] || "" });
     setSelectedId(tag.id);
   }
@@ -216,7 +233,7 @@ export default function AdsPanel({ view = "rules", showToast, logAudit = () => {
             <span className="ads-sep" />max <Minutes value={draft.midroll_max_breaks} min={0} max={20} disabled={!draft.midroll_enabled} onChange={v => setRule("midroll_max_breaks", v)} />
           </RuleRow>
           <RuleRow draft={draft} setRule={setRule} flag="live_breaks" title="Live channel breaks" note="In the channel's own marked breaks. Can't be skipped." />
-          <RuleRow draft={draft} setRule={setRule} flag="postroll_enabled" title="After movies & episodes" players="Browser" />
+          <RuleRow draft={draft} setRule={setRule} flag="postroll_enabled" title="After movies & episodes" note="One break before Up next." />
 
           <h3 className="ads-group">Pictures</h3>
           <RuleRow draft={draft} setRule={setRule} flag="pause_enabled" title="Pause ads" note="2 s after the viewer pauses." />
@@ -393,41 +410,67 @@ export default function AdsPanel({ view = "rules", showToast, logAudit = () => {
     );
   }
 
-  // ───────────── Ad tags: the list ─────────────
-  const counts = Object.fromEntries(POSITIONS.map(p => [p.value, tags.filter(t => t.ad_type === p.value).length]));
-  const shown = filter === "all" ? tags : tags.filter(t => t.ad_type === filter);
+  // ───────────── Ad tags: one card per ad type ─────────────
+  const real = tags.filter(t => !t.is_test), testing = tags.filter(t => t.is_test);
+  const shownFor = list => list.reduce((sum, t) => sum + (report.byTag[String(t.id)]?.impressions || 0), 0);
+  const TagLine = ({ tag, showType }) => {
+    const stats = report.byTag[String(tag.id)];
+    return (
+      <div className={`ads-tagline${tag.active ? "" : " is-off"}`}>
+        <Switch on={!!tag.active} onChange={() => toggleActive(tag)} label={`${tag.name} on`} />
+        <div className="ads-tagline-text">
+          <strong>{showType ? `${POSITION_LABELS[tag.ad_type] || tag.ad_type} · ` : ""}{ruleTarget(tag, titles)}</strong>
+          <span>uses {serverName(tag.tag_url)} <em title={tag.name}>· {tag.name}</em></span>
+        </div>
+        <span className="ads-muted">{(tag.platforms || ["web"]).map(p => PLATFORM_LABELS[p] || p).join(" + ")}</span>
+        <span className="ads-muted num">{stats ? `${stats.impressions.toLocaleString()} shown` : "—"}</span>
+        <button type="button" onClick={() => openTag(tag)}>Edit</button>
+      </div>
+    );
+  };
   return (
     <div className="ads">
       <div className="ads-header">
-        <div><h2>Ad tags</h2><p>Which ad server each ad type asks. The most specific tag that's on wins.</p></div>
+        <div><h2>Ad tags</h2><p>Where each kind of ad comes from.</p></div>
         <button type="button" className="ads-primary" onClick={() => openTag(null)}>+ Add tag</button>
       </div>
-      <div className="ads-chips" role="tablist" aria-label="Filter by ad type">
-        <button type="button" role="tab" aria-selected={filter === "all"} className={filter === "all" ? "selected" : ""} onClick={() => setFilter("all")}>All <b>{tags.length}</b></button>
-        {POSITIONS.map(p => (
-          <button key={p.value} type="button" role="tab" aria-selected={filter === p.value} className={filter === p.value ? "selected" : ""} onClick={() => setFilter(p.value)}>{p.title} <b>{counts[p.value]}</b></button>
-        ))}
+      <div className="ads-typecards">
+        {POSITIONS.map(p => {
+          const list = real.filter(t => t.ad_type === p.value).sort((a, b) => specificity(a) - specificity(b) || a.id - b.id);
+          const on = list.filter(t => t.active);
+          const open = openType === p.value;
+          const servers = [...new Set(on.map(t => serverName(t.tag_url)))];
+          const devices = [...new Set(on.flatMap(t => t.platforms || ["web"]))].map(d => PLATFORM_LABELS[d] || d).join(" + ");
+          return (
+            <section key={p.value} className={`ads-typecard${on.length ? "" : " is-off"}${open ? " open" : ""}`}>
+              <button type="button" className="ads-typecard-head" aria-expanded={open} onClick={() => setOpenType(open ? null : p.value)}>
+                <span className={`ads-dot${on.length ? " on" : ""}`} aria-hidden="true" />
+                <span className="ads-typecard-title"><strong>{p.title}</strong><small>{p.hint}</small></span>
+                <span className="ads-typecard-facts">
+                  <span>{on.length ? servers.join(", ") : list.length ? "Off" : "Not set up"}</span>
+                  <span className="ads-muted">{on.length ? devices : ""}</span>
+                  <span className="ads-muted num">{list.length ? `${shownFor(list).toLocaleString()} shown` : ""}</span>
+                </span>
+                <span className="ads-chev" aria-hidden="true">{open ? "▾" : "▸"}</span>
+              </button>
+              {open && (
+                <div className="ads-typecard-body">
+                  {list.length === 0 && <p className="ads-muted">No ad server for {p.title.toLowerCase()}s yet.</p>}
+                  {list.map(tag => <TagLine key={tag.id} tag={tag} />)}
+                  {list.length > 1 && <p className="ads-muted">The most specific rule wins: one title beats a type, a type beats everything.</p>}
+                  <button type="button" className="ads-link" onClick={() => openTag(null, p.value)}>+ Add a {p.title.toLowerCase()} rule</button>
+                </div>
+              )}
+            </section>
+          );
+        })}
       </div>
-      {shown.length === 0 ? (
-        <div className="ads-empty"><p>{tags.length ? "No tags of this type." : "No tags yet."}</p><button type="button" className="ads-primary" onClick={() => openTag(null)}>+ Add tag</button></div>
-      ) : (
-        <div className="ads-table" role="table" aria-label="Ad tags">
-          <div className="ads-trow head" role="row"><span>On</span><span>Tag</span><span>Type</span><span>Plays on</span><span>Players</span><span className="num">Shown (30 d)</span><span /></div>
-          {shown.map(tag => {
-            const stats = report.byTag[String(tag.id)];
-            return (
-              <div key={tag.id} className={`ads-trow${tag.active ? "" : " is-off"}`} role="row" onClick={e => { if (!e.target.closest(".ads-switch")) openTag(tag); }}>
-                <span><Switch on={!!tag.active} onChange={() => toggleActive(tag)} label={`${tag.name} on`} /></span>
-                <span className="ads-tname" title={tag.tag_url}><strong>{tag.name}</strong>{tag.is_test && <em className="ads-badge test">Test</em>}</span>
-                <span><em className={`ads-badge ${tag.ad_type}`}>{POSITION_LABELS[tag.ad_type] || tag.ad_type}</em></span>
-                <span className="ads-muted">{describeTarget(tag, titles)}</span>
-                <span className="ads-muted">{(tag.platforms || ["web"]).map(p => PLATFORM_LABELS[p] || p).join(" + ")}</span>
-                <span className="num">{stats ? stats.impressions.toLocaleString() : "—"}</span>
-                <span className="ads-chev" aria-hidden="true">›</span>
-              </div>
-            );
-          })}
-        </div>
+      {testing.length > 0 && (
+        <details className="ads-testing">
+          <summary>Testing <b>{testing.length}</b> <span className="ads-muted">{testing.filter(t => t.active).length ? `${testing.filter(t => t.active).length} on` : "all off"}</span></summary>
+          <p className="ads-muted">Test tags are kept out of reports. Turn one on only to try something.</p>
+          {testing.map(tag => <TagLine key={tag.id} tag={tag} showType />)}
+        </details>
       )}
     </div>
   );

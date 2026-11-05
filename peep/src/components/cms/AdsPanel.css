@@ -128,3 +128,32 @@
 
 @media(max-width:1000px){.ads-tiles{grid-template-columns:repeat(3,1fr)}.ads-two{grid-template-columns:1fr}.ads-trow{grid-template-columns:52px 1fr 110px 20px}.ads-trow>span:nth-child(4),.ads-trow>span:nth-child(5),.ads-trow>span:nth-child(6){display:none}.ads-rule-row{grid-template-columns:40px 1fr}.ads-rule-settings,.ads-rule-players{grid-column:2;justify-content:flex-start;text-align:left}}
 .ads .ads-form select{-webkit-appearance:none;appearance:none;padding-right:36px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%2364748b' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")!important;background-repeat:no-repeat!important;background-position:right 14px center!important;cursor:pointer}
+
+/* Ad tags: one card per ad type, rules inside, tests tucked away */
+.ads-typecards{display:grid;gap:10px}
+.ads-typecard{background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden}
+.ads-typecard.open{border-color:#c7d2fe;box-shadow:0 4px 16px rgb(79 70 229 / 8%)}
+.ads .ads-typecard-head{width:100%;display:grid;grid-template-columns:12px minmax(220px,1fr) auto 18px;align-items:center;gap:14px;padding:16px 20px;border:0;border-radius:0;background:#fff;text-align:left}
+.ads .ads-typecard-head:hover{background:#f8fafc}
+.ads-typecard-title strong{display:block;font-size:15px;color:#0f172a}
+.ads-typecard-title small{display:block;color:#64748b;font-size:12px;margin-top:2px;font-weight:400}
+.ads-typecard-facts{display:grid;grid-template-columns:130px 150px 90px;gap:12px;align-items:center;font-weight:600;color:#0f172a}
+.ads-typecard-facts .num{text-align:right;font-weight:500}
+.ads-typecard.is-off .ads-typecard-facts>span:first-child{color:#94a3b8}
+.ads-dot{width:10px;height:10px;border-radius:50%;background:#cbd5e1}
+.ads-dot.on{background:#22c55e}
+.ads-typecard-body{border-top:1px solid #eef2f7;padding:8px 20px 16px;display:grid;gap:4px;background:#fcfdff}
+.ads-typecard-body>p{margin:8px 0 4px}
+.ads-typecard-body>.ads-link{justify-self:start;margin-top:8px}
+.ads-tagline{display:grid;grid-template-columns:40px minmax(220px,1fr) 130px 90px auto;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #f1f5f9}
+.ads-tagline:last-of-type{border-bottom:0}
+.ads-tagline.is-off .ads-tagline-text{opacity:.55}
+.ads-tagline-text strong{display:block;font-size:14px}
+.ads-tagline-text span{display:block;color:#475569;font-size:12px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ads-tagline-text em{font-style:normal;color:#94a3b8}
+.ads-tagline .num{text-align:right}
+.ads-testing{margin-top:18px;background:#fff;border:1px dashed #cbd5e1;border-radius:12px;padding:12px 20px}
+.ads-testing summary{cursor:pointer;font-weight:600;color:#334155;display:flex;gap:8px;align-items:center}
+.ads-testing summary b{font-weight:600;color:#94a3b8}
+.ads-testing[open] summary{margin-bottom:6px}
+@media(max-width:1000px){.ads .ads-typecard-head{grid-template-columns:12px 1fr 18px}.ads-typecard-facts{grid-column:2;grid-template-columns:repeat(3,auto);justify-content:start}.ads-tagline{grid-template-columns:40px 1fr auto}.ads-tagline>span{display:none}}
