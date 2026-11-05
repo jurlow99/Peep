@@ -1503,6 +1503,13 @@ struct IMAAdView: UIViewControllerRepresentable {
 /// Pause ad: a picture (VAST NonLinear) shown while the viewer has paused. Same rules
 /// as the web (peep/src/lib/pauseAd.js): asked ~2 s into a pause, once per pause,
 /// counted when the picture is on screen, hidden the moment play resumes.
+/// Adds Steep's moment= to an ad request; nil leaves the URL as it is.
+func withMoment(_ url: URL, _ moment: String?) -> URL {
+    guard let moment, var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
+    parts.queryItems = (parts.queryItems ?? []).filter { $0.name != "moment" } + [URLQueryItem(name: "moment", value: moment)]
+    return parts.url ?? url
+}
+
 struct PauseAd: Equatable {
     let image: URL
     let width: Double
@@ -1530,14 +1537,16 @@ struct PauseAd: Equatable {
 
     /// Asks the most specific active Apple TV tag for this placement ("pause" or "squeeze");
     /// nil on no tag, no ad or any failure.
-    static func load(service: SupabaseService, scope: String, contentID: String, context: AdContext, placement: String = "pause") async -> (PauseAd, CSAITag)? {
+    /// `moment` is Steep's moment= (e.g. "after_break"), added as its own parameter when given.
+    static func load(service: SupabaseService, scope: String, contentID: String, context: AdContext, placement: String = "pause", moment: String? = nil) async -> (PauseAd, CSAITag)? {
         // Not before we know what's playing: campaigns target the show or channel.
         guard !(context.show.isEmpty && context.channel.isEmpty) else { return nil }
         let policy = await CSAIGate.loadPolicy(service)
         guard policy.enabled, placement == "squeeze" ? policy.squeeze_enabled : policy.pause_enabled else { return nil }
         let tags: [CSAITag] = (try? await service.get("vast_tags", query: ["select": "id,tag_url,scope,content_id,active,is_test,platforms", "active": "eq.true", "ad_type": "eq.\(placement)", "order": "id.asc"], timeout: 4)) ?? []
         guard let tag = CSAITag.select(tags, scope: scope, contentID: contentID)?.filled(breakSeconds: nil, context: context),
-              let url = URL(string: tag.tag_url) else { return nil }
+              let filled = URL(string: tag.tag_url) else { return nil }
+        let url = withMoment(filled, moment)
         var request = URLRequest(url: url); request.timeoutInterval = 4
         guard let (data, response) = try? await URLSession.shared.data(for: request), (response as? HTTPURLResponse)?.statusCode == 200,
               let ad = parse(data) else { return nil }
@@ -1654,7 +1663,9 @@ private struct SqueezeAdModifier: ViewModifier {
                     lastAsked = Date(); askedSinceBreak = true
                     let ask = request
                     log.notice("Squeeze: asking the tag for \(ask.scope, privacy: .public) \(ask.context.channel.isEmpty ? ask.context.show : ask.context.channel, privacy: .public)")
-                    guard let (ad, _) = await PauseAd.load(service: service, scope: ask.scope, contentID: ask.contentID, context: ask.context, placement: "squeeze") else {
+                    // Live: the one L after a break says so (Steep moment=after_break).
+                    let moment = ask.scope == "live" && lastBreak != nil ? "after_break" : nil
+                    guard let (ad, _) = await PauseAd.load(service: service, scope: ask.scope, contentID: ask.contentID, context: ask.context, placement: "squeeze", moment: moment) else {
                         log.notice("Squeeze: no ad"); continue
                     }
                     guard !Task.isCancelled, player.timeControlStatus == .playing, !gate.blocking, !busyNow else { log.notice("Squeeze: got an ad but the viewer paused or a break started"); continue }

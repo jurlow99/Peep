@@ -39,9 +39,16 @@ export function parsePauseAd(xml) {
 }
 
 // Ask a pause tag for its ad. Resolves null on no ad, a bad reply or a timeout.
-export async function loadPauseAd(tagUrl, context, { fetch: get = globalThis.fetch, timeoutMs = 4000 } = {}) {
+// `moment` (Steep's moment=, e.g. after_break) is added as its own parameter when given.
+export function pauseAdURL(tagUrl, context, moment) {
+  const filled = fillAdMacros(tagUrl, null, context);
+  if (!moment) return filled;
+  try { const url = new URL(filled); url.searchParams.set('moment', moment); return url.toString(); } catch { return filled; }
+}
+
+export async function loadPauseAd(tagUrl, context, { fetch: get = globalThis.fetch, timeoutMs = 4000, moment } = {}) {
   try {
-    const response = await get(fillAdMacros(tagUrl, null, context), { signal: AbortSignal.timeout(timeoutMs), credentials: 'omit' });
+    const response = await get(pauseAdURL(tagUrl, context, moment), { signal: AbortSignal.timeout(timeoutMs), credentials: 'omit' });
     return response.ok ? parsePauseAd(await response.text()) : null;
   } catch { return null; }
 }

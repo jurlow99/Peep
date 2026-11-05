@@ -639,6 +639,12 @@ final class CatalogTests: XCTestCase {
         XCTAssertEqual(AdPolicy.parse(nil).pause_enabled, true)
     }
 
+    func testMomentIsAddedOnlyWhenGiven() {
+        let url = URL(string: "https://ads.invalid/v?p=peep-squeeze&ct=live")!
+        XCTAssertEqual(withMoment(url, "after_break").absoluteString, "https://ads.invalid/v?p=peep-squeeze&ct=live&moment=after_break")
+        XCTAssertEqual(withMoment(url, nil), url)
+    }
+
     func testSqueezeAdReadsDurationAndFollowsTheSchedule() {
         let vast = """
         <VAST version="4.2" xmlns="http://www.iab.com/VAST"><Ad id="1"><InLine><AdTitle>L-bar</AdTitle>

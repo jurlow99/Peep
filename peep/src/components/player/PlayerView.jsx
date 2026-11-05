@@ -474,7 +474,8 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
         const { data } = await supabase.from("vast_tags").select("id,tag_url,scope,content_id,active,is_test,platforms").eq("active", true).eq("ad_type", "squeeze").order("id");
         const tag = selectAdTag(data, scope, contentId);
         if (!tag || !active) return;
-        const ad = await loadSqueezeAd(tag.tag_url, adContextRef.current);
+        // Live: the one L after a break says so (Steep moment=after_break); else no moment.
+        const ad = await loadSqueezeAd(tag.tag_url, adContextRef.current, { moment: isLive && clock.lastBreakEndedAt > 0 ? "after_break" : undefined });
         const still = videoRef.current && !videoRef.current.paused && !adBusyRef.current;
         if (ad && active && still) { squeezeSeenRef.current = null; setSqueeze({ ad, tag, scope, contentId, session: crypto.randomUUID(), seconds: squeezeSeconds(ad) }); }
       } finally { asking = false; }

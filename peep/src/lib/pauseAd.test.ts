@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { expect, it } from 'vitest';
-import { parsePauseAd, loadPauseAd } from './pauseAd';
+import { parsePauseAd, loadPauseAd, pauseAdURL } from './pauseAd';
 
 const VAST = `<VAST version="4.2" xmlns="http://www.iab.com/VAST"><Ad id="1"><InLine>
   <AdTitle>Farris Cola</AdTitle>
@@ -32,4 +32,9 @@ it('fills the tag macros and survives a failed request', async () => {
   expect(asked).toBe('https://ads.example/v?p=peep-pause&channel=OAN%20Plus&show=Full%20Force&device=web');
   expect(ad?.image).toBe('https://cdn.example/pause.png');
   expect(await loadPauseAd('https://ads.example/v', {}, { fetch: async () => { throw new Error('offline'); } })).toBeNull();
+});
+
+it('adds moment= only when there is one', () => {
+  expect(pauseAdURL('https://ads.example/v?p=peep-squeeze&ct=[CT]', { contentType: 'live' }, 'after_break')).toBe('https://ads.example/v?p=peep-squeeze&ct=live&moment=after_break');
+  expect(pauseAdURL('https://ads.example/v?p=peep-squeeze&ct=[CT]', { contentType: 'live' })).toBe('https://ads.example/v?p=peep-squeeze&ct=live');
 });
