@@ -440,7 +440,7 @@ struct PlayerView: View {
     @State private var pauseKey = 0 // bumps on every pause, so each pause asks at most once
     // [SHOW] for an episode is its series ("South Park"), the same every time; never the
     // episode's own title. Looked up once per episode.
-    @State private var adSeries: (episode: String, name: String)?
+    @State private var adSeries: (episode: String, name: String, genre: String)?
     let related: [Video]
     let openRelated: (Video) -> Void
     let playNext: () -> Void
@@ -735,13 +735,14 @@ struct PlayerView: View {
     private var adContext: AdContext {
         if liveChannelID != nil { return AdContext(channel: title, contentType: "live") }
         guard identity?.type == "episode" else { return AdContext(show: title) }
-        return AdContext(show: adSeries?.episode == identity?.id ? adSeries?.name ?? "" : "")
+        guard let series = adSeries, series.episode == identity?.id else { return AdContext() }
+        return AdContext(show: series.name, genre: series.genre)
     }
     private func loadAdContext() async -> AdContext {
         if liveChannelID == nil, let identity, identity.type == "episode", adSeries?.episode != identity.id {
-            struct Row: Decodable { struct Series: Decodable { let title: String }; let shows: Series? }
-            let rows: [Row]? = try? await supabase.get("episodes", query: ["select": "shows(title)", "id": "eq.\(identity.id)", "limit": "1"], timeout: 3)
-            if let name = rows?.first?.shows?.title { adSeries = (identity.id, name) }
+            struct Row: Decodable { struct Series: Decodable { let title: String; let category: String? }; let shows: Series? }
+            let rows: [Row]? = try? await supabase.get("episodes", query: ["select": "shows(title,category)", "id": "eq.\(identity.id)", "limit": "1"], timeout: 3)
+            if let series = rows?.first?.shows { adSeries = (identity.id, series.title, BrowsePresentation.category(series.category) ?? "") }
         }
         return adContext
     }
@@ -1515,6 +1516,8 @@ struct PauseAd: Equatable {
     /// Asks the most specific active Apple TV tag for this placement ("pause" or "squeeze");
     /// nil on no tag, no ad or any failure.
     static func load(service: SupabaseService, scope: String, contentID: String, context: AdContext, placement: String = "pause") async -> (PauseAd, CSAITag)? {
+        // Not before we know what's playing: campaigns target the show or channel.
+        guard !(context.show.isEmpty && context.channel.isEmpty) else { return nil }
         let policy = await CSAIGate.loadPolicy(service)
         guard policy.enabled, placement == "squeeze" ? policy.squeeze_enabled : policy.pause_enabled else { return nil }
         let tags: [CSAITag] = (try? await service.get("vast_tags", query: ["select": "id,tag_url,scope,content_id,active,is_test,platforms", "active": "eq.true", "ad_type": "eq.\(placement)", "order": "id.asc"], timeout: 4)) ?? []

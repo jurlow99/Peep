@@ -111,8 +111,8 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
       if (!placementAllowed("pause", scope)) return;
       const { data } = await supabase.from("vast_tags").select("id,tag_url,scope,content_id,active,is_test,platforms").eq("active", true).eq("ad_type", "pause").order("id");
       const tag = selectAdTag(data, scope, contentId);
-      if (!tag || !videoRef.current?.paused) return;
-      const ad = await loadPauseAd(tag.tag_url, adContext);
+      if (!tag || !videoRef.current?.paused || !adContextKnown(adContextRef.current)) return;
+      const ad = await loadPauseAd(tag.tag_url, adContextRef.current);
       if (ad && videoRef.current?.paused && !adBusyRef.current) { pauseShownRef.current = false; setPauseAd({ ad, tag, scope, contentId, session: crypto.randomUUID() }); }
     }, PAUSE_DELAY_MS);
   }
@@ -134,11 +134,15 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
   const isEpisode = !!video.show_id;
   // What the ad server is told about this title: [CHANNEL] / [SHOW] / [GENRE] in tag URLs.
   // An episode's [SHOW] is its series ("South Park"), the same every time, never the episode title.
-  const [series, setSeries] = useState(null); // { id, name } for video.show_id
-  const seriesName = isEpisode && series?.id === video.show_id ? series.name : "";
+  const [series, setSeries] = useState(null); // { id, name, genre } for video.show_id
+  const seriesNow = isEpisode && series?.id === video.show_id ? series : null;
   const adContext = isLive
     ? { channel: video.title, show: video.now_airing || "", genre: video.category || "", contentType: "live" }
-    : { channel: "", show: isEpisode ? seriesName : video.title || "", genre: video.category || "", contentType: "vod" };
+    : { channel: "", show: isEpisode ? seriesNow?.name || "" : video.title || "", genre: (isEpisode ? seriesNow?.genre : video.category) || "", contentType: "vod" };
+  // Timers set up once per title read this, never the context from the render they started in.
+  const adContextRef = useRef(adContext);
+  adContextRef.current = adContext;
+  const adContextKnown = context => !!(context.show || context.channel);
   const [myRating, setMyRating] = useState(null);
   const [ratingCounts, setRatingCounts] = useState({ up: 0, down: 0 });
   const progressTimerRef = useRef(null);
@@ -413,9 +417,9 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
     }); };
     if (isEpisode) {
       const showId = video.show_id;
-      Promise.resolve(supabase.from("shows").select("title").eq("id", showId).maybeSingle())
-        .then(({ data }) => data?.title || "", () => "")
-        .then(name => { if (cancelled) return; setSeries({ id: showId, name }); start({ ...adContext, show: name }); });
+      Promise.resolve(supabase.from("shows").select("title,category").eq("id", showId).maybeSingle())
+        .then(({ data }) => ({ name: data?.title || "", genre: data?.category || "" }), () => ({ name: "", genre: "" }))
+        .then(found => { if (cancelled) return; setSeries({ id: showId, ...found }); start({ ...adContext, show: found.name, genre: found.genre }); });
     } else start(adContext);
     return () => {
       cancelled = true; stop(); adBreakStopRef.current?.(); adBreakStopRef.current = null;
@@ -456,13 +460,13 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
       if (!element || asking || !adsClearedRef.current) return;
       if (!hasAdPolicy()) await loadAdPolicy(supabase);
       const playing = !element.paused && !element.ended && element.currentTime > 0;
-      if (!active || !squeezeDue({ now: Date.now(), ...clock, live: isLive, playing, adBusy: adBusyRef.current, policy: getAdPolicy() })) return;
+      if (!active || !adContextKnown(adContextRef.current) || !squeezeDue({ now: Date.now(), ...clock, live: isLive, playing, adBusy: adBusyRef.current, policy: getAdPolicy() })) return;
       clock.lastAskedAt = Date.now(); clock.askedSinceBreak = true; asking = true;
       try {
         const { data } = await supabase.from("vast_tags").select("id,tag_url,scope,content_id,active,is_test,platforms").eq("active", true).eq("ad_type", "squeeze").order("id");
         const tag = selectAdTag(data, scope, contentId);
         if (!tag || !active) return;
-        const ad = await loadSqueezeAd(tag.tag_url, adContext);
+        const ad = await loadSqueezeAd(tag.tag_url, adContextRef.current);
         const still = videoRef.current && !videoRef.current.paused && !adBusyRef.current;
         if (ad && active && still) { squeezeSeenRef.current = null; setSqueeze({ ad, tag, scope, contentId, session: crypto.randomUUID(), seconds: squeezeSeconds(ad) }); }
       } finally { asking = false; }
@@ -637,7 +641,7 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
     adBreakStopRef.current = playAdBreak({ client: supabase, video: element, container: adContainerRef.current, placement,
       scope: target.scope || (isEpisode ? "episode" : "movie"), contentId: target.contentId ?? video.id,
       onBusy: setAdPlaying, onManager: manager => { adsManagerRef.current = manager; }, onBanner: setAdBanner,
-      onReady: () => { adBreakStopRef.current = null; onDone(); }, breakSeconds: target.breakSeconds ?? null, context: adContext,
+      onReady: () => { adBreakStopRef.current = null; onDone(); }, breakSeconds: target.breakSeconds ?? null, context: adContextRef.current,
     });
   }
 
