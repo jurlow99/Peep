@@ -1838,7 +1838,7 @@ struct LiveMidrollCue: Equatable {
         let duration = end.timeIntervalSince(start)
         let remaining = end.timeIntervalSince(playhead)
         guard duration.isFinite, (5...180).contains(duration),
-              elapsed >= -3, elapsed <= 15, remaining >= 5 else { return nil }
+              elapsed >= 0, elapsed <= 15, remaining >= 5 else { return nil } // never before the show cuts away
         return remaining
     }
 }

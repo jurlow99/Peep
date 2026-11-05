@@ -103,9 +103,9 @@ final class CatalogTests: XCTestCase {
         let cue = LiveMidrollCue(id: "break", start: start, end: start.addingTimeInterval(30))
         XCTAssertEqual(cue.remaining(at: start), 30)
         XCTAssertEqual(cue.remaining(at: start.addingTimeInterval(1)), 29)
-        XCTAssertEqual(cue.remaining(at: start.addingTimeInterval(-1)), 31)
         XCTAssertEqual(cue.remaining(at: start.addingTimeInterval(2)), 28)
-        XCTAssertNil(cue.remaining(at: start.addingTimeInterval(-4)))
+        XCTAssertNil(cue.remaining(at: start.addingTimeInterval(-1)))     // never before the show cuts away
+        XCTAssertNil(cue.remaining(at: start.addingTimeInterval(-0.1)))
         XCTAssertNil(cue.remaining(at: start.addingTimeInterval(16)))
         XCTAssertNil(LiveMidrollCue(id: "bad", start: start, end: start).remaining(at: start))
         XCTAssertNil(LiveMidrollCue(id: "bad", start: start, end: start.addingTimeInterval(181)).remaining(at: start))
