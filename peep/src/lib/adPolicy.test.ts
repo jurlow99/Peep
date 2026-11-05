@@ -25,6 +25,10 @@ describe('ad rules', () => {
     expect(placementAllowed('pre_roll', 'movie', { ...DEFAULT_AD_POLICY, live_entry: false })).toBe(true);
     expect(placementAllowed('post_roll', 'movie', { ...DEFAULT_AD_POLICY, postroll_enabled: false })).toBe(false);
     expect(placementAllowed('mid_roll', 'episode', { ...DEFAULT_AD_POLICY, enabled: false })).toBe(false);
+    // Live channel breaks have their own switch, apart from breaks inside titles.
+    expect(placementAllowed('mid_roll', 'live', { ...DEFAULT_AD_POLICY, midroll_enabled: false })).toBe(true);
+    expect(placementAllowed('mid_roll', 'live', { ...DEFAULT_AD_POLICY, live_breaks: false })).toBe(false);
+    expect(placementAllowed('mid_roll', 'movie', { ...DEFAULT_AD_POLICY, live_breaks: false })).toBe(true);
   });
   it('loads a stored row, survives a failed read and saves the clean version', async () => {
     const stored = JSON.stringify({ min_gap_minutes: 5 });

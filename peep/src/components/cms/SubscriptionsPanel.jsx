@@ -108,10 +108,10 @@ export default function SubscriptionsPanel({ showToast }) {
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28, flexWrap: "wrap" }}>
         <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0f172a" }}>Subscriptions</h2>
         <div style={{ marginLeft: "auto", display: "flex", gap: 10 }}>
-          <button onClick={exportSubsCSV} disabled={subs.length === 0} style={{ background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)", borderRadius: 7, padding: "8px 16px", color: "#34d399", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+          <button onClick={exportSubsCSV} disabled={subs.length === 0} style={{ background: "#fff", border: "1px solid #dbe2ec", borderRadius: 8, padding: "8px 14px", color: "#334155", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>
             Export CSV
           </button>
-          <button onClick={loadSubscriptions} style={{ background: "rgba(129,140,248,0.1)", border: "1px solid rgba(129,140,248,0.2)", borderRadius: 7, padding: "8px 16px", color: "#818cf8", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+          <button onClick={loadSubscriptions} style={{ background: "#fff", border: "1px solid #dbe2ec", borderRadius: 8, padding: "8px 14px", color: "#334155", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>
             Refresh
           </button>
         </div>

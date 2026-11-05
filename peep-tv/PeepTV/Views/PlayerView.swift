@@ -1033,6 +1033,8 @@ struct AdPolicy: Decodable {
     var live_entry = true
     var multiview_entry = true
     var midroll_enabled = true
+    /// Ads in a live channel's own marked breaks (apart from breaks inside titles).
+    var live_breaks = true
     var midroll_min_minutes = 20
     var midroll_every_minutes = 15
     var midroll_max_breaks = 4
@@ -1042,7 +1044,7 @@ struct AdPolicy: Decodable {
     var squeeze_live_after_break_minutes = 3
     static let fallback = AdPolicy()
     init() {}
-    private enum CodingKeys: String, CodingKey { case enabled, min_gap_minutes, live_entry, multiview_entry, midroll_enabled, midroll_min_minutes, midroll_every_minutes, midroll_max_breaks, pause_enabled, squeeze_enabled, squeeze_every_minutes, squeeze_live_after_break_minutes }
+    private enum CodingKeys: String, CodingKey { case enabled, min_gap_minutes, live_entry, multiview_entry, midroll_enabled, live_breaks, midroll_min_minutes, midroll_every_minutes, midroll_max_breaks, pause_enabled, squeeze_enabled, squeeze_every_minutes, squeeze_live_after_break_minutes }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         let number = { (key: CodingKeys, fallback: Int, range: ClosedRange<Int>) in max(range.lowerBound, min(range.upperBound, (try? values.decode(Int.self, forKey: key)) ?? fallback)) }
@@ -1051,6 +1053,7 @@ struct AdPolicy: Decodable {
         live_entry = (try? values.decode(Bool.self, forKey: .live_entry)) ?? true
         multiview_entry = (try? values.decode(Bool.self, forKey: .multiview_entry)) ?? true
         midroll_enabled = (try? values.decode(Bool.self, forKey: .midroll_enabled)) ?? true
+        live_breaks = (try? values.decode(Bool.self, forKey: .live_breaks)) ?? true
         midroll_min_minutes = number(.midroll_min_minutes, 20, 1...600)
         midroll_every_minutes = number(.midroll_every_minutes, 15, 1...240)
         midroll_max_breaks = number(.midroll_max_breaks, 4, 0...20)
@@ -1949,6 +1952,9 @@ private struct LiveMidrollModifier: ViewModifier {
             let trace: (String) -> Void = { line in log.notice("\(line, privacy: .public)") }
             defer { trace("Ad watch stopped") }
             let tags: [CSAITag] = (try? await service.get("vast_tags", query: ["select":"id,tag_url,scope,content_id,active,is_test,platforms", "active":"eq.true", "ad_type":"eq.mid_roll", "scope":"eq.live", "or":"(content_id.is.null,content_id.eq.\(channelID))", "is_test":"eq.true", "order":"id.asc"], timeout: 4)) ?? []
+            let policy: AdPolicy
+            if let known = CSAIGate.policy { policy = known } else { policy = await CSAIGate.loadPolicy(service) }
+            guard policy.enabled, policy.live_breaks else { trace("Live mid-roll off in Ad rules"); return }
             guard !Task.isCancelled, let tag = CSAITag.select(tags, scope: "live", contentID: String(channelID)) else {
                 trace("Live mid-roll not armed for channel \(channelID): \(tags.count) candidate tags")
                 return

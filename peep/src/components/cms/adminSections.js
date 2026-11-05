@@ -28,7 +28,9 @@ export const ADMIN_NAV = [
     { key: 'moderation', label: 'Content reports', target: { tab: 'moderation' } },
   ] },
   { key: 'monetization', label: 'Monetization', description: 'Ads, subscriptions, promo codes and what partners are paid.', sections: [
-    { key: 'ads', label: 'Ads', target: { tab: 'ads' } },
+    { key: 'ad_rules', label: 'Ad rules', target: { tab: 'ads' } },
+    { key: 'ad_tags', label: 'Ad tags', target: { tab: 'ad_tags' } },
+    { key: 'ad_delivery', label: 'Ad delivery', target: { tab: 'ad_delivery' } },
     { key: 'subscriptions', label: 'Subscriptions', target: { tab: 'members', membersTab: 'subscriptions' } },
     { key: 'promos', label: 'Promo codes & comps', target: { tab: 'promos' } },
     { key: 'payouts', label: 'Partner payouts', target: { tab: 'creators', creatorsTab: 'payouts' } },

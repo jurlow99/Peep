@@ -9,15 +9,30 @@ import { summarizeAdEvents, PLACEMENT_LABELS, PLATFORM_LABELS } from "../../lib/
 import { EMPTY_AD, POSITIONS, SCOPES, POSITION_LABELS, scopesForPosition, tagProblem, tagPayload, describeTarget, isUuid } from "../../lib/adsAdmin";
 import "./AdsPanel.css";
 
+// Monetization → Ad rules / Ad tags / Ad delivery: one job per page (view).
 const IAB_SAMPLE_URL = `${SUPABASE_URL}/functions/v1/iab-vast-sample?variant=wrapper`;
 const REPORT_DAYS = 30;
+const PLAYERS = [["web", "Browser"], ["tvos", "Apple TV"]];
 
 function Switch({ on, onChange, label }) {
   return (
-    <span className="ads-switch">
-      <button type="button" className={on ? "on" : ""} aria-pressed={on} aria-label={label} onClick={() => onChange(!on)}><span /></button>
-      {label}
-    </span>
+    <button type="button" role="switch" aria-checked={on} aria-label={label} className={`ads-switch${on ? " on" : ""}`} onClick={() => onChange(!on)}><span /></button>
+  );
+}
+
+function Minutes({ value, onChange, min, max, disabled }) {
+  return <input className="ads-num" type="number" min={min} max={max} value={value} disabled={disabled} onChange={e => onChange(e.target.value)} />;
+}
+
+// One line of Ad rules: switch, name, its settings, which players it applies to.
+function RuleRow({ draft, setRule, flag, title, note, children, players = "Browser + Apple TV" }) {
+  return (
+    <div className={`ads-rule-row${flag && !draft[flag] ? " is-off" : ""}`}>
+      {flag ? <Switch on={!!draft[flag]} onChange={on => setRule(flag, on)} label={title} /> : <span className="ads-switch-spacer" />}
+      <div className="ads-rule-name"><strong>{title}</strong>{note && <small>{note}</small>}</div>
+      <div className="ads-rule-settings">{children}</div>
+      <span className="ads-rule-players">{players}</span>
+    </div>
   );
 }
 
@@ -45,14 +60,15 @@ async function searchContent(picker, query) {
   return (data || []).map(ch => ({ id: ch.id, label: ch.name }));
 }
 
-export default function AdsPanel({ showToast, logAudit = () => {} }) {
+export default function AdsPanel({ view = "rules", showToast, logAudit = () => {} }) {
   const [policy, setPolicy] = useState(DEFAULT_AD_POLICY);
   const [draft, setDraft] = useState(DEFAULT_AD_POLICY);
   const [savingRules, setSavingRules] = useState(false);
   const [tags, setTags] = useState([]);
   const [titles, setTitles] = useState({});
   const [loading, setLoading] = useState(true);
-  const [selectedId, setSelectedId] = useState(null); // null = overview, "new" = blank tag, else tag id
+  const [selectedId, setSelectedId] = useState(null); // null = tag list, "new" = blank tag, else tag id
+  const [filter, setFilter] = useState("all");
   const [form, setForm] = useState(EMPTY_AD);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -66,6 +82,7 @@ export default function AdsPanel({ showToast, logAudit = () => {} }) {
 
   useEffect(() => { loadAll(); return () => previewStop.current?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { loadReport(includeTests); }, [includeTests]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { closeTag(); }, [view]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadAll() {
     setLoading(true);
@@ -105,7 +122,7 @@ export default function AdsPanel({ showToast, logAudit = () => {} }) {
 
   function openTag(tag) {
     previewStop.current?.(); setPreview(null); setConfirmDelete(false); setPickerQuery(""); setPickerResults([]);
-    if (!tag) { setForm(EMPTY_AD); setSelectedId("new"); return; }
+    if (!tag) { setForm({ ...EMPTY_AD, ad_type: filter !== "all" ? filter : EMPTY_AD.ad_type }); setSelectedId("new"); return; }
     setForm({ ...EMPTY_AD, ...tag, content_id: tag.content_id ?? "", content_label: titles[`${tag.scope}:${tag.content_id}`] || "" });
     setSelectedId(tag.id);
   }
@@ -156,109 +173,202 @@ export default function AdsPanel({ showToast, logAudit = () => {} }) {
     const problem = tagProblem({ ...form, platforms: form.platforms?.length ? form.platforms : ["web"] }, IS_DEV_DB);
     if (problem && !/Apple TV|Browser|at least one/.test(problem)) { showToast(problem, "error"); return; }
     if (form.ad_type === "pause" || form.ad_type === "squeeze") {
-      // A pause or during-the-show ad is one picture, not a video: fetch it and show it here.
+      // A pause or L ad is one picture, not a video: fetch it and show it here.
       setPreview({ ok: null, text: "Asking the ad server…" });
       loadPauseAd(form.tag_url.trim(), { show: "Preview" }).then(ad => setPreview(ad
-        ? { ok: true, text: `Picture found: ${ad.title}.${form.ad_type === "squeeze" ? ` Shown for ${Math.round(ad.duration || 15)} seconds with the show in the top-right corner.` : " This is what viewers see while paused."}`, image: ad.image }
-        : { ok: false, text: "The ad server sent no picture. That's normal when no campaign is running." }));
+        ? { ok: true, text: `Picture found: ${ad.title}.${form.ad_type === "squeeze" ? ` Up for ${Math.round(ad.duration || 15)} seconds.` : ""}`, image: ad.image }
+        : { ok: false, text: "No picture came back. Normal when no campaign targets \"Preview\"." }));
       return;
     }
     if (!previewVideo.current || !previewSurface.current) return;
-    setPreview({ ok: null, text: "Loading the ad SDK…" });
+    setPreview({ ok: null, text: "Loading the ad…" });
     previewStop.current = previewAdTag({ tagUrl: form.tag_url.trim(), video: previewVideo.current, container: previewSurface.current, onStatus: setPreview });
   }
 
   const report = useMemo(() => summarizeAdEvents(rows, tags, { days: 14 }), [rows, tags]);
   const rulesDirty = JSON.stringify(parseAdPolicy(draft)) !== JSON.stringify(policy);
-  const liveTags = tags.filter(t => t.active && !t.is_test).length;
-  const exampleCues = midrollCuePoints(95 * 60, parseAdPolicy(draft));
   const setRule = (key, value) => setDraft(d => ({ ...d, [key]: value }));
-  const scope = SCOPES.find(s => s.value === form.scope);
 
   if (loading) return <div className="ads"><p className="ads-muted">Loading ads…</p></div>;
 
-  // ───────────── One tag, full page ─────────────
+  // ───────────── Ad rules ─────────────
+  if (view === "rules") {
+    const off = !draft.enabled;
+    const cues = midrollCuePoints(95 * 60, parseAdPolicy(draft));
+    return (
+      <div className="ads">
+        <div className="ads-header">
+          <div><h2>Ad rules</h2><p>When ads play. Every player follows these.</p></div>
+          <div className="ads-master"><span>{draft.enabled ? "Ads on" : "Ads off everywhere"}</span><Switch on={!!draft.enabled} onChange={on => setRule("enabled", on)} label="All ads" /></div>
+        </div>
+        <div className={`ads-rule-list${off ? " all-off" : ""}`}>
+          <h3 className="ads-group">Starting something</h3>
+          <RuleRow draft={draft} setRule={setRule} title="Space between start ads" note="Before a title, channel or multiview.">
+            at least <Minutes value={draft.min_gap_minutes} min={0} max={1440} onChange={v => setRule("min_gap_minutes", v)} /> min apart
+          </RuleRow>
+          <RuleRow draft={draft} setRule={setRule} flag="live_entry" title="Before a live channel" note="Can't be skipped." />
+          <RuleRow draft={draft} setRule={setRule} flag="multiview_entry" title="Before multiview" note="Can't be skipped." players="Apple TV" />
+
+          <h3 className="ads-group">Breaks</h3>
+          <RuleRow draft={draft} setRule={setRule} flag="midroll_enabled" title="Breaks in movies & episodes" note={draft.midroll_enabled && cues.length ? `A 95-min movie: ${cues.map(s => Math.round(s / 60)).join(", ")} min` : "A 95-min movie gets none."}>
+            every <Minutes value={draft.midroll_every_minutes} min={1} max={240} disabled={!draft.midroll_enabled} onChange={v => setRule("midroll_every_minutes", v)} /> min
+            <span className="ads-sep" />titles over <Minutes value={draft.midroll_min_minutes} min={1} max={600} disabled={!draft.midroll_enabled} onChange={v => setRule("midroll_min_minutes", v)} /> min
+            <span className="ads-sep" />max <Minutes value={draft.midroll_max_breaks} min={0} max={20} disabled={!draft.midroll_enabled} onChange={v => setRule("midroll_max_breaks", v)} />
+          </RuleRow>
+          <RuleRow draft={draft} setRule={setRule} flag="live_breaks" title="Live channel breaks" note="In the channel's own marked breaks. Can't be skipped." />
+          <RuleRow draft={draft} setRule={setRule} flag="postroll_enabled" title="After movies & episodes" players="Browser" />
+
+          <h3 className="ads-group">Pictures</h3>
+          <RuleRow draft={draft} setRule={setRule} flag="pause_enabled" title="Pause ads" note="2 s after the viewer pauses." />
+          <RuleRow draft={draft} setRule={setRule} flag="squeeze_enabled" title="L ads" note="The show shrinks to the corner, about 15 s.">
+            live: <Minutes value={draft.squeeze_live_after_break_minutes} min={1} max={30} disabled={!draft.squeeze_enabled} onChange={v => setRule("squeeze_live_after_break_minutes", v)} /> min after a break
+            <span className="ads-sep" />titles: every <Minutes value={draft.squeeze_every_minutes} min={1} max={240} disabled={!draft.squeeze_enabled} onChange={v => setRule("squeeze_every_minutes", v)} /> min
+          </RuleRow>
+        </div>
+        {rulesDirty && (
+          <div className="ads-savebar">
+            <span>Unsaved changes</span>
+            <button type="button" onClick={() => setDraft(policy)}>Undo</button>
+            <button type="button" className="ads-primary" onClick={saveRules} disabled={savingRules}>{savingRules ? "Saving…" : "Save rules"}</button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ───────────── Ad delivery ─────────────
+  if (view === "delivery") {
+    const max = Math.max(...report.daily.map(d => d.count), 1);
+    const n = value => (value || 0).toLocaleString();
+    const tagRows = tags.filter(t => report.byTag[String(t.id)]);
+    return (
+      <div className="ads">
+        <div className="ads-header">
+          <div><h2>Ad delivery</h2><p>Last {REPORT_DAYS} days, counted by Peep. Your ad server's report is the one that pays.</p></div>
+          <div className="ads-toolbar">
+            <label className="ads-check"><input type="checkbox" checked={includeTests} onChange={e => setIncludeTests(e.target.checked)} />Include tests</label>
+            {includeTests && <button type="button" className="ads-danger" onClick={clearTestHistory}>Clear test history</button>}
+            <button type="button" onClick={() => loadReport(includeTests)}>Refresh</button>
+          </div>
+        </div>
+        <div className="ads-tiles">
+          <div className="ads-tile"><span>Ads shown</span><strong>{n(report.impressions)}</strong></div>
+          <div className="ads-tile"><span>Breaks filled</span><strong>{report.startRate === null ? "—" : report.startRate + "%"}</strong></div>
+          <div className="ads-tile"><span>Watched to the end</span><strong>{report.completionRate === null ? "—" : report.completionRate + "%"}</strong></div>
+          <div className="ads-tile"><span>Viewers</span><strong>{n(report.uniqueViewers)}</strong></div>
+          <div className="ads-tile"><span>Skipped</span><strong>{n(report.skips)}</strong></div>
+          <div className="ads-tile" title="No ad came back, or it failed to play"><span>No ad / failed</span><strong>{n(report.errors)}</strong></div>
+        </div>
+        <div className="ads-card-box">
+          <div className="ads-box-head"><h3>Ads shown per day</h3>{reportAt && <span className="ads-muted">Updated {reportAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>}</div>
+          <div className="ads-bars" aria-label="Ads shown per day, last 14 days">
+            {report.daily.map(({ date, count }) => {
+              const label = new Date(date + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" });
+              return <div key={date} title={`${label}: ${count.toLocaleString()} shown`}><em>{count || ""}</em><i className={count ? "" : "zero"} style={{ height: Math.max(count / max * 100, count ? 4 : 2) }} /><b>{label}</b></div>;
+            })}
+          </div>
+        </div>
+        <div className="ads-two">
+          <div className="ads-card-box">
+            <h3>By ad type</h3>
+            <table><thead><tr><th>Type</th><th className="num">Asked</th><th className="num">Shown</th><th className="num">Finished</th></tr></thead><tbody>
+              {Object.entries(report.byPlacement).map(([key, s]) => <tr key={key}><td>{PLACEMENT_LABELS[key] || "Deleted tag"}</td><td className="num">{s.requests ? n(s.requests) : "—"}</td><td className="num">{n(s.impressions)}</td><td className="num">{["pause", "squeeze"].includes(key) ? "—" : n(s.completes)}</td></tr>)}
+              {Object.keys(report.byPlacement).length === 0 && <tr><td colSpan={4} className="ads-muted">Nothing yet</td></tr>}
+            </tbody></table>
+          </div>
+          <div className="ads-card-box">
+            <h3>By player</h3>
+            <table><thead><tr><th>Player</th><th className="num">Shown</th><th className="num">Finished</th><th className="num">Failed</th></tr></thead><tbody>
+              {Object.entries(report.byPlatform).map(([key, s]) => <tr key={key}><td>{PLATFORM_LABELS[key] || key}</td><td className="num">{n(s.impressions)}</td><td className="num">{n(s.completes)}</td><td className="num">{n(s.errors)}</td></tr>)}
+              {Object.keys(report.byPlatform).length === 0 && <tr><td colSpan={4} className="ads-muted">Nothing yet</td></tr>}
+            </tbody></table>
+          </div>
+        </div>
+        <div className="ads-card-box">
+          <h3>By tag</h3>
+          <table><thead><tr><th>Tag</th><th className="num">Asked</th><th className="num">Shown</th><th className="num">Finished</th><th className="num">Skipped</th><th className="num">Failed</th></tr></thead><tbody>
+            {tagRows.map(t => { const s = report.byTag[String(t.id)]; return (
+              <tr key={t.id}><td><strong>{t.name}</strong><div className="ads-muted">{POSITION_LABELS[t.ad_type]} · {describeTarget(t, titles)}{t.is_test ? " · test" : ""}</div></td><td className="num">{s.requests ? n(s.requests) : "—"}</td><td className="num">{n(s.impressions)}</td><td className="num">{n(s.completes)}</td><td className="num">{n(s.skips)}</td><td className="num">{n(s.errors)}</td></tr>
+            ); })}
+            {tagRows.length === 0 && <tr><td colSpan={6} className="ads-muted">Nothing yet</td></tr>}
+          </tbody></table>
+        </div>
+      </div>
+    );
+  }
+
+  // ───────────── Ad tags: one tag ─────────────
   if (selectedId !== null) {
     const isNew = selectedId === "new";
     const problem = tagProblem(form, IS_DEV_DB);
+    const scope = SCOPES.find(s => s.value === form.scope);
+    const set = patch => setForm(f => ({ ...f, ...patch }));
     return (
-      <div className="ads">
-        <button type="button" className="ads-back" onClick={closeTag}>← All ads</button>
+      <div className="ads ads-editor">
+        <button type="button" className="ads-back" onClick={closeTag}>← Ad tags</button>
         <div className="ads-header">
-          <div>
-            <span className="ads-label">{isNew ? "NEW TAG" : `TAG #${selectedId}`}</span>
-            <h2>{form.name || "Untitled tag"}</h2>
-            <p>A tag is the link your ad server gave you. Peep asks it for an ad at the position you choose; the server decides what plays and keeps the money records.</p>
-          </div>
-          <div className="ads-actions" style={{ marginTop: 0 }}>
-            {!isNew && <span className={`ads-badge ${form.active ? "live" : ""}`}>{form.active ? "ACTIVE" : "PAUSED"}</span>}
-            {form.is_test && <span className="ads-badge test">TEST · no earnings</span>}
-          </div>
+          <div><h2>{isNew ? "New tag" : form.name || "Untitled tag"}</h2><p>The link your ad server gave you, and where Peep uses it.</p></div>
+          <div className="ads-master"><span>{form.active ? "On" : "Off"}</span><Switch on={!!form.active} onChange={on => set({ active: on })} label="Tag on" /></div>
         </div>
 
-        <section className="ads-section">
-          <h3>1. What plays</h3>
-          <p>Paste the VAST tag URL from your ad server. Keep "Test tag" on until a real, paid tag is in place; test delivery stays out of the normal report.</p>
-          <div className="ads-fields">
-            <label>Name<input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. House pre-roll — all movies" /></label>
+        <section className="ads-card-box ads-form">
+          <label>Name<input value={form.name} onChange={e => set({ name: e.target.value })} placeholder="e.g. Steep — pre-roll, everything" /></label>
+          <label>Tag URL<input value={form.tag_url} onChange={e => set({ tag_url: e.target.value })} placeholder="https://…" spellCheck={false} /></label>
+          <div className="ads-inline-row">
+            <label className="ads-check"><input type="checkbox" checked={form.is_test !== false} onChange={e => set({ is_test: e.target.checked })} />Test tag <small>(kept out of reports)</small></label>
+            <span className="ads-muted">Try a sample:</span>
+            <button type="button" className="ads-link" onClick={() => set({ tag_url: TEST_VAST_URL, is_test: true })}>Google</button>
+            <button type="button" className="ads-link" onClick={() => set({ tag_url: IAB_SAMPLE_URL, is_test: true })}>Peep</button>
           </div>
-          <div className="ads-fields">
-            <label>VAST tag URL<input value={form.tag_url} onChange={e => setForm(f => ({ ...f, tag_url: e.target.value }))} placeholder="https://…" spellCheck={false} /></label>
-          </div>
-          <small className="ads-muted">Peep fills in [BREAK_SECONDS] [BREAK_MS] [CHANNEL] [SHOW] [GENRE] [DEVICE] [DEVICE_ID] [IFA] [LMT].</small>
-          <div className="ads-actions">
-            <button type="button" onClick={() => setForm(f => ({ ...f, tag_url: TEST_VAST_URL, is_test: true }))}>Use Google's sample ad</button>
-            <button type="button" onClick={() => setForm(f => ({ ...f, tag_url: IAB_SAMPLE_URL, is_test: true }))}>Use Peep's IAB sample ad</button>
-            <label className="ads-check"><input type="checkbox" checked={form.is_test !== false} onChange={e => setForm(f => ({ ...f, is_test: e.target.checked }))} />Test tag <small>— sample or trial, excluded from reports</small></label>
-          </div>
+          <details className="ads-help"><summary>Values Peep fills in</summary>[BREAK_SECONDS] [BREAK_MS] [CHANNEL] [SHOW] [GENRE] [DEVICE] [DEVICE_ID] [IFA] [LMT] [SKIPPABLE] [CT]</details>
         </section>
 
-        <section className="ads-section">
-          <h3>2. Where it plays</h3>
-          <p>Pick the position, then what it applies to. A tag aimed at one exact title beats a type-wide tag, which beats "All content".</p>
-          <div className="ads-positions">
+        <section className="ads-card-box ads-form">
+          <span className="ads-field-label">Type</span>
+          <div className="ads-segments" role="radiogroup" aria-label="Ad type">
             {POSITIONS.map(p => (
-              <label key={p.value} className={form.ad_type === p.value ? "selected" : ""}>
-                <input type="radio" name="position" checked={form.ad_type === p.value} onChange={() => setForm(f => ({ ...f, ad_type: p.value, scope: scopesForPosition(p.value).some(s => s.value === f.scope) ? f.scope : "global", content_id: "", content_label: "" }))} />
-                <div><strong>{p.title}</strong><span>{p.hint}</span></div>
-              </label>
+              <button key={p.value} type="button" role="radio" aria-checked={form.ad_type === p.value} className={form.ad_type === p.value ? "selected" : ""} title={p.hint}
+                onClick={() => set({ ad_type: p.value, scope: scopesForPosition(p.value).some(s => s.value === form.scope) ? form.scope : "global", content_id: "", content_label: "" })}>
+                {form.ad_type === p.value && <span aria-hidden="true">✓ </span>}{p.title}
+              </button>
             ))}
           </div>
+          <small className="ads-muted">{POSITIONS.find(p => p.value === form.ad_type)?.hint}</small>
           <div className="ads-fields">
-            <label>Applies to
-              <select value={form.scope} onChange={e => setForm(f => ({ ...f, scope: e.target.value, content_id: "", content_label: "" }))}>
+            <label>Plays on
+              <select value={form.scope} onChange={e => set({ scope: e.target.value, content_id: "", content_label: "" })}>
                 {scopesForPosition(form.ad_type).map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
             </label>
             {scope?.picker && (
-              <label>Only this title <small className="ads-muted" style={{ fontWeight: 400 }}>(optional — blank means every {scope.label.toLowerCase().replace(/s$/, "")})</small>
+              <label>Only this one <small className="ads-muted">(optional)</small>
                 {form.content_id ? (
-                  <span className="ads-picked"><span>{form.content_label || `#${form.content_id}`}</span><button type="button" className="ads-link" onClick={() => setForm(f => ({ ...f, content_id: "", content_label: "" }))}>Clear</button></span>
+                  <span className="ads-picked"><span>{form.content_label || `#${form.content_id}`}</span><button type="button" className="ads-link" onClick={() => set({ content_id: "", content_label: "" })}>Clear</button></span>
                 ) : (
                   <span className="ads-picker">
-                    <input value={pickerQuery} onChange={e => runPicker(e.target.value)} placeholder={`Search ${scope.label.toLowerCase()} by name…`} />
+                    <input value={pickerQuery} onChange={e => runPicker(e.target.value)} placeholder={`Search ${scope.label.toLowerCase()}…`} />
                     {pickerResults.length > 0 && <ul>{pickerResults.map(item => <li key={item.id}><button type="button" onClick={() => pick(item)}>{item.label}</button></li>)}</ul>}
                   </span>
                 )}
               </label>
             )}
           </div>
-          <div className="ads-actions">
-            <span className="ads-label" style={{ marginBottom: 0 }}>PLAYERS</span>
-            {[["web", "Browser"], ["tvos", "Apple TV"]].map(([key, label]) => (
-              <label key={key} className="ads-check"><input type="checkbox" checked={(form.platforms || []).includes(key)} onChange={e => setForm(f => ({ ...f, platforms: e.target.checked ? [...new Set([...(f.platforms || []), key])] : (f.platforms || []).filter(p => p !== key) }))} />{label}</label>
+          <div className="ads-inline-row">
+            <span className="ads-field-label" style={{ margin: 0 }}>Players</span>
+            {PLAYERS.map(([key, label]) => (
+              <label key={key} className="ads-check"><input type="checkbox" checked={(form.platforms || []).includes(key)} onChange={e => set({ platforms: e.target.checked ? [...new Set([...(form.platforms || []), key])] : (form.platforms || []).filter(p => p !== key) })} />{label}</label>
             ))}
           </div>
-          {problem && <p className="ads-note warn">{problem}</p>}
         </section>
 
-        <section className="ads-section">
-          <h3>3. Check it</h3>
-          <p>Plays this tag right here through the same Google IMA SDK the website uses. Nothing is recorded. Apple TV uses its own SDK, so test that on the device.</p>
-          <div className="ads-actions">
-            <button type="button" onClick={runPreview} disabled={!form.tag_url.trim()}>Play this tag</button>
-            {preview && <button type="button" onClick={() => previewStop.current?.()}>Stop</button>}
+        <section className="ads-card-box">
+          <div className="ads-box-head"><h3>Try it</h3>
+            <div className="ads-toolbar">
+              {preview && <button type="button" onClick={() => { previewStop.current?.(); setPreview(null); }}>Stop</button>}
+              <button type="button" onClick={runPreview} disabled={!form.tag_url.trim()}>Play this tag</button>
+            </div>
           </div>
+          <small className="ads-muted">Plays here like the website would. Nothing is counted.</small>
           {preview?.image && <img className="ads-preview-image" src={preview.image} alt="Ad preview" />}
           <div className="ads-preview" style={{ display: preview && !["pause", "squeeze"].includes(form.ad_type) ? "block" : "none" }}>
             <video ref={previewVideo} muted playsInline />
@@ -267,156 +377,58 @@ export default function AdsPanel({ showToast, logAudit = () => {} }) {
           {preview && <p className={`ads-note ${preview.ok === true ? "ok" : preview.ok === false ? "bad" : ""}`}>{preview.text}</p>}
         </section>
 
-        <section className="ads-section">
-          <h3>4. Turn it on</h3>
-          <p>Active tags are requested by players right away. Pausing stops new requests; an ad already loading finishes.</p>
-          <Switch on={!!form.active} onChange={on => setForm(f => ({ ...f, active: on }))} label={form.active ? "Active — players will request this tag" : "Paused"} />
-          <div className="ads-actions">
-            <button type="button" className="ads-primary" onClick={saveTag} disabled={saving || !!problem}>{saving ? "Saving…" : isNew ? "Add tag" : "Save tag"}</button>
-            {!isNew && !confirmDelete && <button type="button" className="ads-danger" onClick={() => setConfirmDelete(true)}>Delete tag</button>}
-            {confirmDelete && <><span className="ads-muted">Delete "{form.name}"? Past delivery rows keep their counts.</span><button type="button" className="ads-danger" onClick={deleteTag}>Yes, delete</button><button type="button" onClick={() => setConfirmDelete(false)}>Keep it</button></>}
+        {!isNew && (
+          <div className="ads-delete">
+            {!confirmDelete
+              ? <button type="button" className="ads-danger" onClick={() => setConfirmDelete(true)}>Delete tag</button>
+              : <><span className="ads-muted">Delete "{form.name}"? Past counts stay.</span><button type="button" className="ads-danger" onClick={deleteTag}>Yes, delete</button><button type="button" onClick={() => setConfirmDelete(false)}>Keep it</button></>}
           </div>
-        </section>
+        )}
+        <div className="ads-savebar">
+          {problem ? <span className="ads-warn">{problem}</span> : <span>{form.is_test !== false ? "Test tag" : "Live tag"} · {POSITION_LABELS[form.ad_type]} · {describeTarget({ ...form, content_id: form.content_id || null }, { [`${form.scope}:${form.content_id}`]: form.content_label })}</span>}
+          <button type="button" onClick={closeTag}>Cancel</button>
+          <button type="button" className="ads-primary" onClick={saveTag} disabled={saving || !!problem}>{saving ? "Saving…" : isNew ? "Add tag" : "Save tag"}</button>
+        </div>
       </div>
     );
   }
 
-  // ───────────── Overview: rules, tags, report ─────────────
+  // ───────────── Ad tags: the list ─────────────
+  const counts = Object.fromEntries(POSITIONS.map(p => [p.value, tags.filter(t => t.ad_type === p.value).length]));
+  const shown = filter === "all" ? tags : tags.filter(t => t.ad_type === filter);
   return (
     <div className="ads">
       <div className="ads-header">
-        <div>
-          <h2>Ads</h2>
-          <p>Rules decide <em>when</em> a break plays on every player; tags decide <em>what</em> plays. Peep requests ads through Google IMA and counts delivery; the ad server behind each tag is where the money is tracked and paid.</p>
-        </div>
-        <div className="ads-actions" style={{ marginTop: 0 }}>
-          <button type="button" className="ads-primary" onClick={() => openTag(null)}>+ New tag</button>
-        </div>
+        <div><h2>Ad tags</h2><p>Which ad server each ad type asks. The most specific tag that's on wins.</p></div>
+        <button type="button" className="ads-primary" onClick={() => openTag(null)}>+ Add tag</button>
       </div>
-
-      <section className="ads-section">
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
-          <div><h3>Ad rules</h3><p style={{ margin: 0 }}>Apply to the browser and Apple TV. Post-rolls are browser only for now.</p></div>
-          <Switch on={!!draft.enabled} onChange={on => setRule("enabled", on)} label={draft.enabled ? "Ads are on" : "Ads are off everywhere"} />
+      <div className="ads-chips" role="tablist" aria-label="Filter by ad type">
+        <button type="button" role="tab" aria-selected={filter === "all"} className={filter === "all" ? "selected" : ""} onClick={() => setFilter("all")}>All <b>{tags.length}</b></button>
+        {POSITIONS.map(p => (
+          <button key={p.value} type="button" role="tab" aria-selected={filter === p.value} className={filter === p.value ? "selected" : ""} onClick={() => setFilter(p.value)}>{p.title} <b>{counts[p.value]}</b></button>
+        ))}
+      </div>
+      {shown.length === 0 ? (
+        <div className="ads-empty"><p>{tags.length ? "No tags of this type." : "No tags yet."}</p><button type="button" className="ads-primary" onClick={() => openTag(null)}>+ Add tag</button></div>
+      ) : (
+        <div className="ads-table" role="table" aria-label="Ad tags">
+          <div className="ads-trow head" role="row"><span>On</span><span>Tag</span><span>Type</span><span>Plays on</span><span>Players</span><span className="num">Shown (30 d)</span><span /></div>
+          {shown.map(tag => {
+            const stats = report.byTag[String(tag.id)];
+            return (
+              <div key={tag.id} className={`ads-trow${tag.active ? "" : " is-off"}`} role="row" onClick={e => { if (!e.target.closest(".ads-switch")) openTag(tag); }}>
+                <span><Switch on={!!tag.active} onChange={() => toggleActive(tag)} label={`${tag.name} on`} /></span>
+                <span className="ads-tname" title={tag.tag_url}><strong>{tag.name}</strong>{tag.is_test && <em className="ads-badge test">Test</em>}</span>
+                <span><em className={`ads-badge ${tag.ad_type}`}>{POSITION_LABELS[tag.ad_type] || tag.ad_type}</em></span>
+                <span className="ads-muted">{describeTarget(tag, titles)}</span>
+                <span className="ads-muted">{(tag.platforms || ["web"]).map(p => PLATFORM_LABELS[p] || p).join(" + ")}</span>
+                <span className="num">{stats ? stats.impressions.toLocaleString() : "—"}</span>
+                <span className="ads-chev" aria-hidden="true">›</span>
+              </div>
+            );
+          })}
         </div>
-        <div className="ads-rules">
-          <div className="ads-rule">
-            <strong>Space between entry ads</strong>
-            <small>An entry ad plays when a movie, episode, channel or multiview starts. After any ad starts, no entry ad plays again on that device for this long. 0 means every start.</small>
-            <span className="ads-inline">At least <input type="number" min="0" max="1440" value={draft.min_gap_minutes} onChange={e => setRule("min_gap_minutes", e.target.value)} /> minutes apart</span>
-          </div>
-          <div className="ads-rule">
-            <strong>Live TV</strong>
-            <small>Entry ad before joining a channel or opening a multiview package. During a channel's own marked break (CUE-OUT in its stream), a live mid-roll tag plays over it on the browser and Apple TV.</small>
-            <label className="ads-check"><input type="checkbox" checked={!!draft.live_entry} onChange={e => setRule("live_entry", e.target.checked)} />Ad before a live channel</label>
-            <label className="ads-check"><input type="checkbox" checked={!!draft.multiview_entry} onChange={e => setRule("multiview_entry", e.target.checked)} />Ad before multiview</label>
-            <small>Ads on live channels can't be skipped. Ads on movies and episodes can, when the ad allows it.</small>
-          </div>
-          <div className="ads-rule">
-            <strong>Mid-rolls in movies and episodes</strong>
-            <small>Breaks inside a title, on the browser and Apple TV. Skipping ahead past several break points plays one break, not several.</small>
-            <label className="ads-check"><input type="checkbox" checked={!!draft.midroll_enabled} onChange={e => setRule("midroll_enabled", e.target.checked)} />Mid-rolls on</label>
-            <span className="ads-inline">Every <input type="number" min="1" max="240" value={draft.midroll_every_minutes} onChange={e => setRule("midroll_every_minutes", e.target.value)} /> minutes</span>
-            <span className="ads-inline">Only in titles over <input type="number" min="1" max="600" value={draft.midroll_min_minutes} onChange={e => setRule("midroll_min_minutes", e.target.value)} /> minutes</span>
-            <span className="ads-inline">At most <input type="number" min="0" max="20" value={draft.midroll_max_breaks} onChange={e => setRule("midroll_max_breaks", e.target.value)} /> breaks per title</span>
-            <small>{draft.enabled && draft.midroll_enabled && exampleCues.length ? `A 95-minute movie gets breaks at ${exampleCues.map(s => Math.round(s / 60)).join(", ")} minutes.` : "A 95-minute movie gets no mid-rolls with these rules."}</small>
-          </div>
-          <div className="ads-rule">
-            <strong>Post-roll</strong>
-            <small>One break after a movie or episode ends, before the Up next countdown. Browser only.</small>
-            <label className="ads-check"><input type="checkbox" checked={!!draft.postroll_enabled} onChange={e => setRule("postroll_enabled", e.target.checked)} />Post-roll on</label>
-          </div>
-          <div className="ads-rule">
-            <strong>Pause ads</strong>
-            <small>A picture from the pause tag while a viewer has paused for 2 seconds, gone the moment they press play. Browser and Apple TV.</small>
-            <label className="ads-check"><input type="checkbox" checked={!!draft.pause_enabled} onChange={e => setRule("pause_enabled", e.target.checked)} />Pause ads on</label>
-          </div>
-          <div className="ads-rule">
-            <strong>Ads during the show</strong>
-            <small>A full-screen picture from the during-the-show tag while the show keeps playing, shrunk into the top-right corner for about 15 seconds. Never during a break, never while paused. Browser and Apple TV.</small>
-            <label className="ads-check"><input type="checkbox" checked={!!draft.squeeze_enabled} onChange={e => setRule("squeeze_enabled", e.target.checked)} />Ads during the show on</label>
-            <span className="ads-inline">Live TV: one between breaks, <input type="number" min="1" max="30" value={draft.squeeze_live_after_break_minutes} onChange={e => setRule("squeeze_live_after_break_minutes", e.target.value)} /> minutes after a break ends</span>
-            <span className="ads-inline">Movies and episodes: about every <input type="number" min="1" max="240" value={draft.squeeze_every_minutes} onChange={e => setRule("squeeze_every_minutes", e.target.value)} /> minutes</span>
-          </div>
-        </div>
-        <div className="ads-actions">
-          <button type="button" className="ads-primary" onClick={saveRules} disabled={savingRules || !rulesDirty}>{savingRules ? "Saving…" : "Save rules"}</button>
-          {rulesDirty && <button type="button" onClick={() => setDraft(policy)}>Undo changes</button>}
-          {!rulesDirty && <span className="ads-muted">Players pick up changes the next time they start a break.</span>}
-        </div>
-      </section>
-
-      <section className="ads-section">
-        <h3>Tags</h3>
-        <p>{tags.length === 0 ? "No tags yet." : `${tags.length} tag${tags.length === 1 ? "" : "s"}, ${liveTags} live (active and not a test).`} Players use the most specific active tag for the position and platform; ties go to the oldest tag.</p>
-        {tags.length === 0 ? (
-          <div className="ads-empty"><h3>Add your first tag</h3><p>Start with a sample tag to see a break play, then replace it with the tag from your ad server.</p><button type="button" className="ads-primary" onClick={() => openTag(null)}>+ New tag</button></div>
-        ) : (
-          <div className="ads-list">
-            {tags.map(tag => {
-              const stats = report.byTag[String(tag.id)];
-              return (
-                <div key={tag.id} className="ads-row">
-                  <Switch on={!!tag.active} onChange={() => toggleActive(tag)} label="" />
-                  <div><strong>{tag.name}</strong><small title={tag.tag_url}>{tag.tag_url}</small></div>
-                  <span className={`ads-badge ${tag.ad_type}`}>{POSITION_LABELS[tag.ad_type] || tag.ad_type}</span>
-                  <span className="ads-muted">{describeTarget(tag, titles)}</span>
-                  <span className="ads-muted">{(tag.platforms || ["web"]).map(p => PLATFORM_LABELS[p] || p).join(" + ")}</span>
-                  <span>{tag.is_test ? <span className="ads-badge test">TEST</span> : <span className="ads-muted">{stats ? `${stats.impressions.toLocaleString()} ads` : "—"}</span>}</span>
-                  <button type="button" onClick={() => openTag(tag)}>Open</button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      <section className="ads-section">
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
-          <div><h3>Delivery, last {REPORT_DAYS} days</h3><p style={{ margin: 0 }}>Counted by Peep for signed-in viewers. Your ad server's own report is the one that pays; this one tells you whether breaks are reaching people.</p></div>
-          <div className="ads-actions" style={{ marginTop: 0 }}>
-            <label className="ads-check"><input type="checkbox" checked={includeTests} onChange={e => setIncludeTests(e.target.checked)} />Include test delivery</label>
-            <button type="button" onClick={() => loadReport(includeTests)}>Refresh</button>
-            {includeTests && <button type="button" onClick={clearTestHistory}>Clear test history</button>}
-            {reportAt && <span className="ads-muted">Updated {reportAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>}
-          </div>
-        </div>
-        <div className="ads-cards">
-          <div className="ads-card"><span className="ads-label">ADS SHOWN</span><strong>{report.impressions.toLocaleString()}</strong><small>Times an ad actually started</small></div>
-          <div className="ads-card"><span className="ads-label">VIEWERS</span><strong>{report.uniqueViewers.toLocaleString()}</strong><small>Signed-in people who saw at least one</small></div>
-          <div className="ads-card"><span className="ads-label">WATCHED TO THE END</span><strong>{report.completionRate === null ? "—" : report.completionRate + "%"}</strong><small>Completions ÷ ads shown</small></div>
-          <div className="ads-card"><span className="ads-label">BREAKS THAT FILLED</span><strong>{report.startRate === null ? "—" : report.startRate + "%"}</strong><small>Requests where an ad started. Low means the server has nothing to sell you yet.</small></div>
-          <div className="ads-card"><span className="ads-label">SKIPS / ERRORS</span><strong>{report.skips.toLocaleString()} / {report.errors.toLocaleString()}</strong><small>Skipped by the viewer / failed or timed out</small></div>
-        </div>
-        {(() => { const max = Math.max(...report.daily.map(d => d.count), 1); return (
-          <div className="ads-bars" aria-label="Ads shown per day, last 14 days">
-            {report.daily.map(({ date, count }) => <div key={date} title={`${date}: ${count}`}><i className={count ? "" : "zero"} style={{ height: Math.max(count / max * 70, count ? 4 : 2) }} /><b>{new Date(date + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" })}</b></div>)}
-          </div>
-        ); })()}
-        <div className="ads-tables">
-          <div>
-            <table><thead><tr><th>Player</th><th className="num">Shown</th><th className="num">Completed</th><th className="num">Errors</th></tr></thead><tbody>
-              {Object.entries(report.byPlatform).map(([key, s]) => <tr key={key}><td>{PLATFORM_LABELS[key] || key}</td><td className="num">{s.impressions.toLocaleString()}</td><td className="num">{s.completes.toLocaleString()}</td><td className="num">{s.errors.toLocaleString()}</td></tr>)}
-              {Object.keys(report.byPlatform).length === 0 && <tr><td colSpan={4} className="ads-muted">Nothing yet</td></tr>}
-            </tbody></table>
-          </div>
-          <div>
-            <table><thead><tr><th>Position</th><th className="num">Requested</th><th className="num">Shown</th><th className="num">Completed</th></tr></thead><tbody>
-              {Object.entries(report.byPlacement).map(([key, s]) => <tr key={key}><td>{PLACEMENT_LABELS[key] || "Deleted tag"}</td><td className="num">{s.requests.toLocaleString()}</td><td className="num">{s.impressions.toLocaleString()}</td><td className="num">{s.completes.toLocaleString()}</td></tr>)}
-              {Object.keys(report.byPlacement).length === 0 && <tr><td colSpan={4} className="ads-muted">Nothing yet</td></tr>}
-            </tbody></table>
-          </div>
-        </div>
-        {tags.some(t => report.byTag[String(t.id)]) && (
-          <div style={{ marginTop: 16 }}>
-            <table><thead><tr><th>Tag</th><th className="num">Requested</th><th className="num">Shown</th><th className="num">Completed</th><th className="num">Skipped</th><th className="num">Errors</th></tr></thead><tbody>
-              {tags.filter(t => report.byTag[String(t.id)]).map(t => { const s = report.byTag[String(t.id)]; return (
-                <tr key={t.id}><td><strong>{t.name}</strong><div className="ads-muted">{POSITION_LABELS[t.ad_type]} · {describeTarget(t, titles)}{t.is_test ? " · test" : ""}</div></td><td className="num">{s.requests.toLocaleString()}</td><td className="num">{s.impressions.toLocaleString()}</td><td className="num">{s.completes.toLocaleString()}</td><td className="num">{s.skips.toLocaleString()}</td><td className="num">{s.errors.toLocaleString()}</td></tr>
-              ); })}
-            </tbody></table>
-          </div>
-        )}
-      </section>
+      )}
     </div>
   );
 }

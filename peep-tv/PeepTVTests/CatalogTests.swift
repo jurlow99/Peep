@@ -546,6 +546,8 @@ final class CatalogTests: XCTestCase {
         XCTAssertFalse(AdPolicy.parse(#"{"enabled":false}"#).allowsEntry(scope: "movie"))
         XCTAssertEqual(AdPolicy.parse(#"{"min_gap_minutes":99999}"#).min_gap_minutes, 1440)
         XCTAssertEqual(AdPolicy.parse("not json").min_gap_minutes, 30)
+        XCTAssertTrue(AdPolicy.parse(#"{"midroll_enabled":false}"#).live_breaks)   // its own switch
+        XCTAssertFalse(AdPolicy.parse(#"{"live_breaks":false}"#).live_breaks)
         XCTAssertTrue(AdPolicy.parse(nil).allowsEntry(scope: "live"))
     }
 

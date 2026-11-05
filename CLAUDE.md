@@ -140,7 +140,7 @@ Legacy `/streamer-signin`, `/apply-to-stream`, `/create-channel` redirect to
 | `peep/src/lib/r2VOD.js` | R2 multipart upload + playback signing client |
 | `peep/src/lib/adPolicy.js`, `adBreak.js`, `ads.js` | Ad rules (`app_settings.ads_policy`), the one IMA break player for pre/mid/post-roll, tag selection |
 | `peep/src/lib/adBanner.js`, `pauseAd.js`, `squeezeAd.js` | Banner beside a video ad (SDK CompanionAds, else `banner` JSON in the Linear `<AdParameters>` — the only way Apple TV gets one, see `AdBanner` in tvOS `PlayerView.swift`); pause ads (VAST NonLinear); squeeze/L-bar ads during the show (same NonLinear shape, `ad_type='squeeze'`, rules `squeeze_enabled`/`squeeze_every_minutes`, tvOS `SqueezeSchedule`) |
-| `peep/src/components/cms/AdsPanel.jsx` | Monetization → Ads: rules, tags (with title picker + "Play this tag"), 30-day delivery report |
+| `peep/src/components/cms/AdsPanel.jsx` | Monetization → Ad rules (one row per ad type; `live_breaks` is its own switch, apart from `midroll_enabled`), Ad tags (filterable list + editor with title picker and "Play this tag"), Ad delivery (30-day report) |
 | `peep/src/lib/contentIds.ts` | `parseContentId`, `contentKey` — preserve UUID vs bigint ids |
 | `peep/src/lib/tiers.js`, `lib/flags.js` | Tier gating (no-op on dev); feature flags |
 | `peep/src/pages/LiveTV.jsx` | Streams tab (channel mosaic, now/next) |
@@ -261,7 +261,7 @@ page was dropped; episodes live in Manage series) · **Curation** (Screens & row
 **Partners** (Content partners, Provider deliveries — the admin view hides the partner
 portal chrome and collapses access/series/create-on-behalf; Submission review was folded
 into it — Creator streams, Streaming applications) · **Audience** (Users, Support,
-Content reports) · **Monetization** (Ads, Subscriptions, Promo codes & comps, Partner
+Content reports) · **Monetization** (Ad rules, Ad tags, Ad delivery — one `AdsPanel` with `view` rules/tags/delivery on tabs `ads`/`ad_tags`/`ad_delivery` — Subscriptions, Promo codes & comps, Partner
 payouts) · **Reports** (Overview, MAU, Channels, Titles — `ReportsPanel.jsx` on the
 `platform_report` / `active_users_report` / `channel_report` / `title_report` RPCs, CSV export;
 Watching now = the live dashboard; Viewer lookup = the old per-user analytics) · **Platform** (Staff,

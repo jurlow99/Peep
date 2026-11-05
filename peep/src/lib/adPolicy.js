@@ -10,7 +10,8 @@ export const DEFAULT_AD_POLICY = Object.freeze({
   min_gap_minutes: 30,      // between entry ads: start of a title, a channel, a multiview package
   live_entry: true,         // ad before joining a live channel
   multiview_entry: true,    // ad before a multiview package
-  midroll_enabled: true,    // browser VOD only
+  midroll_enabled: true,    // breaks inside movies and episodes
+  live_breaks: true,        // ads in a live channel's own marked breaks
   midroll_min_minutes: 20,  // shorter titles get no mid-rolls
   midroll_every_minutes: 15,
   midroll_max_breaks: 4,
@@ -74,7 +75,7 @@ export function midrollCuePoints(durationSeconds, policy = getAdPolicy()) {
 // Does this placement run at all under the rules?
 export function placementAllowed(placement, scope, policy = getAdPolicy()) {
   if (!policy.enabled) return false;
-  if (placement === 'mid_roll') return policy.midroll_enabled;
+  if (placement === 'mid_roll') return scope === 'live' ? policy.live_breaks : policy.midroll_enabled;
   if (placement === 'post_roll') return policy.postroll_enabled;
   if (placement === 'pause') return policy.pause_enabled;
   if (placement === 'squeeze') return policy.squeeze_enabled;

@@ -5,11 +5,11 @@ import { appleTVPlacementError } from './ads';
 export const EMPTY_AD = { name: '', tag_url: '', ad_type: 'pre_roll', scope: 'global', content_id: '', content_label: '', active: true, is_test: true, platforms: ['web', 'tvos'] };
 
 export const POSITIONS = [
-  { value: 'pre_roll', title: 'Pre-roll', hint: 'Before a movie, episode, live channel or multiview starts. Browser and Apple TV.' },
-  { value: 'mid_roll', title: 'Mid-roll', hint: 'Inside a movie or episode at the times set in Ad rules, or over a live channel\'s own marked break. Browser and Apple TV.' },
-  { value: 'post_roll', title: 'Post-roll', hint: 'After a movie or episode ends, before Up next. Browser only.' },
-  { value: 'pause', title: 'Pause', hint: 'A picture shown while a viewer has paused a movie, episode or channel. Browser and Apple TV.' },
-  { value: 'squeeze', title: 'During the show', hint: 'A full-screen picture while the show keeps playing, shrunk into the top-right corner, about every 10 minutes. Browser and Apple TV.' },
+  { value: 'pre_roll', title: 'Pre-roll', hint: 'Before a title, channel or multiview starts.' },
+  { value: 'mid_roll', title: 'Mid-roll', hint: 'Breaks inside a title, and live channel breaks.' },
+  { value: 'post_roll', title: 'Post-roll', hint: 'After a title ends. Browser only.' },
+  { value: 'pause', title: 'Pause ad', hint: 'A picture while the viewer has paused.' },
+  { value: 'squeeze', title: 'L ad', hint: 'A picture around the show while it keeps playing.' },
 ];
 
 export const SCOPES = [

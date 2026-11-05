@@ -4918,7 +4918,7 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
           <SecurityPanel showToast={showToast} />
         )}
 
-        {tab === "ads" && <AdsPanel showToast={showToast} logAudit={logAudit} />}
+        {["ads", "ad_tags", "ad_delivery"].includes(tab) && <AdsPanel view={{ ads: "rules", ad_tags: "tags", ad_delivery: "delivery" }[tab]} showToast={showToast} logAudit={logAudit} />}
 
         {tab === "staff" && <StaffPanel staffRole={staffRole} showToast={showToast} logAudit={logAudit} />}
 
@@ -7063,12 +7063,12 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
                       onChange={e => { const v = parseFloat(e.target.value) || 0; if (v > 100000) { alert("Revenue over $100,000 — double-check this number before calculating."); return; } setTotalRevenue(v); }}
                       step="0.01" min="0" max="100000" placeholder="0.00"
                       style={{ width: 90, border: `1px solid ${totalRevenue > 50000 ? "#ef4444" : "#e2e8f0"}`, borderRadius: 8, padding: "7px 10px", fontSize: 13, color: "#0f172a", outline: "none" }} />
-                    <button onClick={fetchStripeRevenue} disabled={fetchingRevenue} style={{ background: "rgba(74,222,128,0.08)", border: "1px solid rgba(74,222,128,0.25)", borderRadius: 8, padding: "7px 14px", color: "#16a34a", fontSize: 12, fontWeight: 600, cursor: fetchingRevenue ? "not-allowed" : "pointer", opacity: fetchingRevenue ? 0.7 : 1, whiteSpace: "nowrap" }}>
+                    <button onClick={fetchStripeRevenue} disabled={fetchingRevenue} style={{ background: "#fff", border: "1px solid #dbe2ec", borderRadius: 8, padding: "8px 14px", color: "#334155", fontSize: 13, fontWeight: 500, cursor: fetchingRevenue ? "not-allowed" : "pointer", opacity: fetchingRevenue ? 0.7 : 1, whiteSpace: "nowrap" }}>
                       {fetchingRevenue ? "Fetching…" : "↓ From Stripe"}
                     </button>
                     <span style={{ fontSize: 11, color: "#9ca3af" }}>50% pool = ${(totalRevenue * 0.5).toFixed(2)}</span>
-                    <button onClick={() => { if (totalRevenue <= 0) { alert("Enter a total revenue amount before calculating."); return; } if (!window.confirm(`Calculate payouts for ${payoutMonth} with $${totalRevenue.toFixed(2)} total revenue?\n\nCreator pool: $${(totalRevenue * 0.5).toFixed(2)}`)) return; loadPayouts(); }} style={{ background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.3)", borderRadius: 8, padding: "7px 14px", color: "#7c3aed", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Calculate</button>
-                    <button onClick={exportPayoutsCSV} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "7px 14px", color: "#475569", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Export CSV</button>
+                    <button onClick={() => { if (totalRevenue <= 0) { alert("Enter a total revenue amount before calculating."); return; } if (!window.confirm(`Calculate payouts for ${payoutMonth} with $${totalRevenue.toFixed(2)} total revenue?\n\nCreator pool: $${(totalRevenue * 0.5).toFixed(2)}`)) return; loadPayouts(); }} style={{ background: "#4f46e5", border: "1px solid #4f46e5", borderRadius: 8, padding: "8px 14px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Calculate</button>
+                    <button onClick={exportPayoutsCSV} style={{ background: "#fff", border: "1px solid #dbe2ec", borderRadius: 8, padding: "8px 14px", color: "#334155", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>Export CSV</button>
                   </div>
                 </div>
 
