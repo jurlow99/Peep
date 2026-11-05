@@ -310,7 +310,7 @@ export default function AdsPanel({ showToast, logAudit = () => {} }) {
             <small>Entry ad before joining a channel or opening a multiview package. During a channel's own marked break (CUE-OUT in its stream), a live mid-roll tag plays over it on the browser and Apple TV.</small>
             <label className="ads-check"><input type="checkbox" checked={!!draft.live_entry} onChange={e => setRule("live_entry", e.target.checked)} />Ad before a live channel</label>
             <label className="ads-check"><input type="checkbox" checked={!!draft.multiview_entry} onChange={e => setRule("multiview_entry", e.target.checked)} />Ad before multiview</label>
-            <small>Live break ads can't be skipped. Pre-rolls and ads inside movies and episodes can, when the ad allows it.</small>
+            <small>Ads on live channels can't be skipped. Ads on movies and episodes can, when the ad allows it.</small>
           </div>
           <div className="ads-rule">
             <strong>Mid-rolls in movies and episodes</strong>

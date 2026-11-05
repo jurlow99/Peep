@@ -30,3 +30,12 @@ it("uses the title's own breaks when it has them, else the rules timing", () => 
   expect(titleCuePoints([760], duration, { ...DEFAULT_AD_POLICY, midroll_enabled: false })).toEqual([]);
   expect(titleCuePoints([760], duration, { ...DEFAULT_AD_POLICY, enabled: false })).toEqual([]);
 });
+
+it('never lets viewers skip an ad on a live channel, before it or in a break', async () => {
+  const { isSkippableBreak } = await import('./adBreak');
+  expect(isSkippableBreak('pre_roll', 'live')).toBe(false);
+  expect(isSkippableBreak('mid_roll', 'live')).toBe(false);
+  expect(isSkippableBreak('pre_roll', 'movie')).toBe(true);
+  expect(isSkippableBreak('mid_roll', 'episode')).toBe(true);
+  expect(isSkippableBreak('post_roll', 'movie')).toBe(true);
+});

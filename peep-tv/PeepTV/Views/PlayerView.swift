@@ -980,7 +980,7 @@ struct CSAITag: Decodable, Identifiable {
     /// [CHANNEL] is always the clean channel name (one spelling per channel, like the web).
     /// No App Tracking Transparency prompt, so [IFA] is blank and [LMT] is 1.
     /// [DEVICE_ID] is a random 32-hex label made once per Apple TV (see AdDeviceID).
-    /// [SKIPPABLE] is 0 for live channel breaks, 1 otherwise, so the ad server can leave out skipoffset.
+    /// [SKIPPABLE] is 0 for live channels (the ad before one and its breaks), 1 otherwise, so the ad server can leave out skipoffset.
     func filled(breakSeconds: Double?, context: AdContext = AdContext(), skippable: Bool = true, deviceID: String = AdDeviceID.current()) -> CSAITag {
         let seconds = breakSeconds.map { max(1, Int($0.rounded())) } ?? 30
         let safe = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))
@@ -1119,8 +1119,9 @@ struct AdContext: Equatable {
     private var pending: Task<Void, Never>?
     private var seen = Set<String>()
     private(set) var isMidroll = false
-    /// Viewers may skip pre-rolls and movie/episode ads; never a live channel's break.
-    var skipAllowed: Bool { !(isMidroll && scope == "live") }
+    /// Viewers may skip movie/episode ads; never an ad on live channels (before one,
+    /// before multiview, or in a break).
+    var skipAllowed: Bool { scope != "live" && scope != "multiview" }
     @Published private(set) var lastEvent = ""
     private let frequency: AdFrequencyPolicy
     // Rules last read this launch. A stored cooldown under these skips the network.
@@ -1169,7 +1170,7 @@ struct AdContext: Equatable {
         return await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 self.continuation = continuation
-                self.tag = selected.filled(breakSeconds: nil, context: self.context)
+                self.tag = selected.filled(breakSeconds: nil, context: self.context, skippable: self.skipAllowed)
                 self.record("request")
             }
         } onCancel: { Task { @MainActor in if self.generation == current { self.cancel() } } }
@@ -1206,7 +1207,7 @@ struct AdContext: Equatable {
         return await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 self.continuation = continuation
-                self.tag = selected.filled(breakSeconds: nil, context: self.context)
+                self.tag = selected.filled(breakSeconds: nil, context: self.context, skippable: self.skipAllowed)
                 self.record("request")
             }
         } onCancel: { Task { @MainActor in if self.generation == current { self.cancel() } } }

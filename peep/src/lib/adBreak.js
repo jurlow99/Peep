@@ -7,8 +7,8 @@ import { bannerFor } from './adBanner';
 import { hasAdPolicy, loadAdPolicy, allowsEntryAd, recordAdStart, placementAllowed } from './adPolicy';
 
 export const PLACEMENTS = ['pre_roll', 'mid_roll', 'post_roll'];
-// Viewers may skip pre-rolls and movie/episode ads; never a live channel's break.
-export const isSkippableBreak = (placement, scope) => !(placement === 'mid_roll' && scope === 'live');
+// Viewers may skip movie and episode ads; never an ad on a live channel (before it or in its breaks).
+export const isSkippableBreak = (placement, scope) => scope !== 'live';
 const DISCOVERY_MS = 5000, STARTUP_MS = 10000, MEDIA_LOAD_MS = 8000;
 
 // onBanner(banner|null): a picture to show beside the ad while this ad plays (see adBanner.js).

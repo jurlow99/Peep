@@ -391,6 +391,7 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
   useEffect(() => {
     if (getEmbedUrl(video.url)) return;
     adsClearedRef.current = false;
+    setAdLocked(!isSkippableBreak("pre_roll", isLive ? "live" : "movie"));
     const stop = playAdBreak({ client: supabase, video: videoRef.current, container: adContainerRef.current, placement: "pre_roll",
       scope: isLive ? "live" : isEpisode ? "episode" : "movie",
       contentId: isLive ? String(video.id).replace(/^ch[-_]/, "") : video.id, context: adContext,

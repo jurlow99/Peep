@@ -5,8 +5,8 @@
 // [CHANNEL] is always the channel's clean name (see adChannelName), so the ad server
 // sees one spelling per channel whichever screen opened it, on web and Apple TV.
 // The web has no advertising ID, so [IFA] is blank and [LMT] (limit tracking) is 1.
-// [SKIPPABLE] is 1 when the viewer may skip this break (pre-rolls, movie and episode
-// ads) and 0 for live channel breaks, so the ad server leaves out skipoffset.
+// [SKIPPABLE] is 1 when the viewer may skip this break (movie and episode ads) and 0
+// for live channels (the ad before one and its breaks), so the ad server leaves out skipoffset.
 // [DEVICE_ID] is a random 32-hex label made once per browser, for frequency caps
 // on Peep's own ad server. It is derived from nothing; clearing site data resets it.
 // [CT] is live or vod (context.contentType), for tags that serve both.
