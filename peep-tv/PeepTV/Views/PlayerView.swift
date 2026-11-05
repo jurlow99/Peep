@@ -108,6 +108,8 @@ private final class LiveBlackoutPolicy {
 final class PlayerModel: ObservableObject {
     let player: AVPlayer
     @Published private(set) var blackoutMessage: String?
+    /// The channel's live moment from Live TV → Live moments, read with the blackout check.
+    @Published private(set) var liveMoment: LiveMoment?
     private var currentURL: URL?
     private var currentTitle = ""
     @Published var errorMessage: String?
@@ -259,9 +261,12 @@ final class PlayerModel: ObservableObject {
         await withTaskGroup(of: Void.self) { group in
             group.addTask { @MainActor in
                 while !Task.isCancelled {
-                    let latest = try? await service.fetchChannel(id: channelID)
+                    async let channel = try? service.fetchChannel(id: channelID)
+                    async let moment = LiveMoment.current(channelID: channelID, service: service)
+                    let (latest, live) = await (channel, moment)
                     guard !Task.isCancelled else { return }
                     if let latest { policy.channel = latest }
+                    if let live { self.liveMoment = live.value } // nil = the check failed; keep what we had
                     do { try await Task.sleep(for: .seconds(10)) } catch { return }
                 }
             }
@@ -506,7 +511,7 @@ struct PlayerView: View {
                     scope: liveChannelID != nil ? "live" : (identity?.type == "short" ? "movie" : identity?.type ?? "movie"),
                     contentID: liveChannelID.map(String.init) ?? identity?.id ?? "",
                     context: adContext,
-                    busy: showNext || showEnd || pauseAd != nil || model.errorMessage != nil || model.blackoutMessage != nil, gate: adGate)
+                    busy: showNext || showEnd || pauseAd != nil || model.errorMessage != nil || model.blackoutMessage != nil, gate: adGate, liveMoment: model.liveMoment)
         .overlay {
             if showNext, let episode = nextEpisode {
                 ZStack {
@@ -1503,6 +1508,34 @@ struct IMAAdView: UIViewControllerRepresentable {
 /// Pause ad: a picture (VAST NonLinear) shown while the viewer has paused. Same rules
 /// as the web (peep/src/lib/pauseAd.js): asked ~2 s into a pause, once per pause,
 /// counted when the picture is on screen, hidden the moment play resumes.
+/// An operator's moment on a live channel (table channel_moments): halftime, between_matches,
+/// intermission or lobby. Players ask for one L ad with moment=<value> per moment. Same as
+/// peep/src/lib/liveMoments.js.
+struct LiveMoment: Decodable, Equatable {
+    let id: Int
+    let moment: String
+    let expires_at: String
+    struct Read { let value: LiveMoment? }
+    /// The current moment (value nil when there is none), or nil when the check failed.
+    @MainActor static func current(channelID: Int, service: SupabaseService) async -> Read? {
+        let now = ISO8601DateFormatter().string(from: Date())
+        let rows: [LiveMoment]? = try? await service.get("channel_moments", query: ["select": "id,moment,expires_at", "channel_id": "eq.\(channelID)", "expires_at": "gt.\(now)", "order": "started_at.desc", "limit": "1"], timeout: 4)
+        return rows.map { Read(value: $0.first) }
+    }
+    /// One L per moment per viewer: the moment ids already used on this Apple TV.
+    static func seen(_ id: Int, defaults: UserDefaults = .standard) -> Bool { (defaults.array(forKey: "peep.moments.seen") as? [Int] ?? []).contains(id) }
+    static func markSeen(_ id: Int, defaults: UserDefaults = .standard) {
+        let list = (defaults.array(forKey: "peep.moments.seen") as? [Int] ?? []).filter { $0 != id } + [id]
+        defaults.set(Array(list.suffix(50)), forKey: "peep.moments.seen")
+    }
+    /// episode_end: one L over the credits of a title at least 10 min long, 20–45 s before it ends.
+    static func endingSoon(duration: Double, at time: Double) -> Bool {
+        guard duration.isFinite, time.isFinite, duration >= 600 else { return false }
+        let left = duration - time
+        return left <= 45 && left > 20
+    }
+}
+
 /// Adds Steep's moment= to an ad request; nil leaves the URL as it is.
 func withMoment(_ url: URL, _ moment: String?) -> URL {
     guard let moment, var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
@@ -1616,6 +1649,9 @@ private struct SqueezeAdModifier: ViewModifier {
     let context: AdContext
     let busy: Bool
     @ObservedObject var gate: CSAIGate
+    var liveMoment: LiveMoment? = nil
+    @State private var momentNow: LiveMoment?
+    @State private var endAsked = false
     @State private var squeeze: PauseAd?
     @State private var squeezed = false // the show is in its corner; animates both ways
     @State private var counted = false
@@ -1646,25 +1682,37 @@ private struct SqueezeAdModifier: ViewModifier {
                 }
             }
             .onChange(of: busy, initial: true) { _, value in busyNow = value; if value { hide() } }
+            .onChange(of: liveMoment, initial: true) { _, value in momentNow = value }
             .onChange(of: "\(scope)|\(contentID)|\(context.channel)|\(context.show)", initial: true) { _, _ in request = (scope, contentID, context) }
             .onChange(of: gate.blocking) { _, blocking in
                 if blocking { hide() } else { lastBreak = Date(); lastAsked = Date(); askedSinceBreak = false }
             }
             .onReceive(player.publisher(for: \.timeControlStatus)) { status in if status == .paused { hide() } }
             .task(id: "\(ready):\(key)") {
-                squeeze = nil; squeezed = false; lastAsked = Date(); started = Date(); lastBreak = nil; askedSinceBreak = false
+                squeeze = nil; squeezed = false; lastAsked = Date(); started = Date(); lastBreak = nil; askedSinceBreak = false; endAsked = false
                 guard ready else { return }
                 if CSAIGate.policy == nil { _ = await CSAIGate.loadPolicy(service) } // the admin's interval, not the default
                 let log = Logger(subsystem: "tv.watchpeep.PeepTV", category: "Squeeze")
                 while !Task.isCancelled {
                     do { try await Task.sleep(for: .seconds(5)) } catch { return }
-                    guard squeeze == nil, SqueezeSchedule.due(now: Date(), lastAsked: lastAsked, lastBreakEnded: lastBreak, playing: player.timeControlStatus == .playing, adBusy: gate.blocking || busyNow, policy: CSAIGate.policy ?? .fallback,
-                                                                live: request.scope == "live", started: started, askedSinceBreak: askedSinceBreak) else { continue }
-                    lastAsked = Date(); askedSinceBreak = true
+                    guard squeeze == nil else { continue }
+                    // Moments first: an operator's live moment (once each), the credits of a title
+                    // (once); otherwise the normal timer. Never in a break, paused or busy.
+                    let policy = CSAIGate.policy ?? .fallback
+                    let live = request.scope == "live"
+                    let open = policy.enabled && policy.squeeze_enabled && player.timeControlStatus == .playing && !gate.blocking && !busyNow
+                    let duration = player.currentItem?.duration.seconds ?? .nan, time = player.currentTime().seconds
+                    let moment: String?
+                    if open, !live, !endAsked, LiveMoment.endingSoon(duration: duration, at: time) { endAsked = true; moment = "episode_end" }
+                    else if open, live, let current = momentNow, !LiveMoment.seen(current.id) { LiveMoment.markSeen(current.id); moment = current.moment }
+                    else if SqueezeSchedule.due(now: Date(), lastAsked: lastAsked, lastBreakEnded: lastBreak, playing: player.timeControlStatus == .playing, adBusy: gate.blocking || busyNow, policy: policy,
+                                                live: live, started: started, askedSinceBreak: askedSinceBreak) {
+                        askedSinceBreak = true
+                        moment = live && lastBreak != nil ? "after_break" : nil // the one L after a live break
+                    } else { continue }
+                    lastAsked = Date()
                     let ask = request
                     log.notice("Squeeze: asking the tag for \(ask.scope, privacy: .public) \(ask.context.channel.isEmpty ? ask.context.show : ask.context.channel, privacy: .public)")
-                    // Live: the one L after a break says so (Steep moment=after_break).
-                    let moment = ask.scope == "live" && lastBreak != nil ? "after_break" : nil
                     guard let (ad, _) = await PauseAd.load(service: service, scope: ask.scope, contentID: ask.contentID, context: ask.context, placement: "squeeze", moment: moment) else {
                         log.notice("Squeeze: no ad"); continue
                     }
@@ -1698,8 +1746,8 @@ private struct SqueezeAdModifier: ViewModifier {
     }
 }
 extension View {
-    func squeezeAds(player: AVPlayer, ready: Bool, key: String, scope: String, contentID: String, context: AdContext, busy: Bool, gate: CSAIGate) -> some View {
-        modifier(SqueezeAdModifier(player: player, ready: ready, key: key, scope: scope, contentID: contentID, context: context, busy: busy, gate: gate))
+    func squeezeAds(player: AVPlayer, ready: Bool, key: String, scope: String, contentID: String, context: AdContext, busy: Bool, gate: CSAIGate, liveMoment: LiveMoment? = nil) -> some View {
+        modifier(SqueezeAdModifier(player: player, ready: ready, key: key, scope: scope, contentID: contentID, context: context, busy: busy, gate: gate, liveMoment: liveMoment))
     }
 }
 

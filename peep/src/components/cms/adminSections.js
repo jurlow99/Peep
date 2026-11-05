@@ -13,6 +13,7 @@ export const ADMIN_NAV = [
   { key: 'live', label: 'Live TV', description: 'Channels, their guides and sources, multiview packages and prediction events.', sections: [
     { key: 'channels', label: 'Channels & schedules', target: { tab: 'live', liveSubTab: 'channels' } },
     { key: 'feeds', label: 'Feeds', target: { tab: 'live', liveSubTab: 'feeds' } },
+    { key: 'moments', label: 'Live moments', target: { tab: 'live', liveSubTab: 'moments' } },
     { key: 'multiview', label: 'Multiview packages', target: { tab: 'content', videoSubTab: 'multiview' } },
     { key: 'predictions', label: 'Predictions', target: { tab: 'events' } },
   ] },

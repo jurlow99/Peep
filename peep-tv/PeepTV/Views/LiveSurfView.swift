@@ -141,7 +141,7 @@ struct LiveSurfView: View {
         // L ads while a channel plays; never with the guide or controls open.
         .squeezeAds(player: player.player, ready: keepsPlaying || midrollReady, key: String(selectedID), scope: "live",
                     contentID: String(selectedID), context: adContext(for: selectedID),
-                    busy: drawerOpen || controlsOpen || player.blackoutMessage != nil, gate: adGate)
+                    busy: drawerOpen || controlsOpen || player.blackoutMessage != nil, gate: adGate, liveMoment: player.liveMoment)
         .overlay { CSAIOverlay(gate: adGate, cancel: onClose) }
         // Viewing is counted by the owner of a shared player, but mid-roll cues are
         // only watched here, so arm them whether or not the player arrived already playing.

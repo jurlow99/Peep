@@ -8,6 +8,7 @@ import { prepareBannerHTML } from "../../lib/adBanner";
 import { titleCuePoints, formatBreakTime } from "../../lib/adBreaks";
 import { PAUSE_DELAY_MS, loadPauseAd, ping } from "../../lib/pauseAd";
 import { squeezeDue, loadSqueezeAd, squeezeSeconds, SQUEEZE_TICK_MS } from "../../lib/squeezeAd";
+import { endingSoon, momentSeen, markMomentSeen } from "../../lib/liveMoments";
 import { selectAdTag, recordAdEvent } from "../../lib/ads";
 import { hasAdPolicy, getAdPolicy, loadAdPolicy, placementAllowed } from "../../lib/adPolicy";
 import { trackLiveVideo, trackVodVideo } from "../../lib/liveViewing";
@@ -30,13 +31,13 @@ import { VideoCard } from "../browse/BrowseWidgets";
 export function PlayerView(props) {
   const rawID = String(props.video.id);
   const channelID = ["live", "live_epg"].includes(props.video._type) && /^ch[-_]\d+$/.test(rawID) ? Number(rawID.slice(3)) : null;
-  const blackout = useChannelBlackout(channelID);
+  const blackout = useChannelBlackout(channelID, null, { moments: true });
   if (blackout.loading || blackout.message || blackout.error) return <div style={{ background: "#080808", color: "white", minHeight: "100vh", padding: "clamp(24px, 6vw, 80px)" }}>
     <button type="button" onClick={props.onBack}>Back to browsing</button>
     <h1>{props.video.title}</h1><p role="status">{blackout.loading ? "Checking channel availability…" : blackout.message || blackout.error}</p>
     {blackout.error && <button type="button" onClick={blackout.retry}>Retry</button>}
   </div>;
-  return <AvailablePlayerView {...props} />;
+  return <AvailablePlayerView {...props} liveMoment={blackout.moment} />;
 }
 
 function AvailablePlayerView(props) {
@@ -70,7 +71,7 @@ function AvailablePlayerView(props) {
   </div>;
 }
 
-function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, userName }) {
+function ResolvedPlayerView({ liveMoment = null, video, onBack, onGoHome, onSelect, onShowSelect, user, myList, onToggleList, onAuthOpen, onProfileOpen, userAvatarId, userName }) {
   const isMobile = useIsMobile();
   const [allVideos, setAllVideos] = useState([]);
   const [allShows, setAllShows] = useState([]);
@@ -92,6 +93,10 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
   // Squeeze ad (lib/squeezeAd.js): the show shrinks to 75% top-right over a full-screen picture.
   const [squeeze, setSqueeze] = useState(null); // { ad, tag, scope, contentId, session, seconds }
   const [squeezeOut, setSqueezeOut] = useState(false); // ending: the show grows back, the picture fades
+  // The L timer reads these: the operator's live moment, whether an L is up, the end-of-title ask.
+  const liveMomentRef = useRef(liveMoment); liveMomentRef.current = liveMoment;
+  const squeezeUpRef = useRef(false); squeezeUpRef.current = !!squeeze;
+  const endAskedRef = useRef(false);
   const squeezeClockRef = useRef({ lastAskedAt: 0, lastBreakEndedAt: 0, startedAt: 0, askedSinceBreak: false });
   const squeezeSeenRef = useRef(null);
   const [resumedAt, setResumedAt] = useState(null); // seconds we resumed from, while the Start over offer shows
@@ -460,6 +465,7 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
   useEffect(() => {
     if (getEmbedUrl(video.url)) return;
     squeezeClockRef.current = { lastAskedAt: Date.now(), lastBreakEndedAt: 0, startedAt: Date.now(), askedSinceBreak: false };
+    endAskedRef.current = false;
     let active = true, asking = false;
     const scope = isLive ? "live" : isEpisode ? "episode" : "movie";
     const contentId = isLive ? String(video.id).replace(/^ch[-_]/, "") : video.id;
@@ -468,14 +474,25 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
       if (!element || asking || !adsClearedRef.current) return;
       if (!hasAdPolicy()) await loadAdPolicy(supabase);
       const playing = !element.paused && !element.ended && element.currentTime > 0;
-      if (!active || !adContextKnown(adContextRef.current) || !squeezeDue({ now: Date.now(), ...clock, live: isLive, playing, adBusy: adBusyRef.current, policy: getAdPolicy() })) return;
-      clock.lastAskedAt = Date.now(); clock.askedSinceBreak = true; asking = true;
+      if (!active || squeezeUpRef.current || !adContextKnown(adContextRef.current)) return;
+      // Moments first: an operator's live moment (once each), the credits of a title (once);
+      // otherwise the normal timer. Never in a break, while paused or with the L rules off.
+      const policy = getAdPolicy();
+      const open = policy.enabled && policy.squeeze_enabled && playing && !adBusyRef.current;
+      const live = liveMomentRef.current;
+      let moment;
+      if (open && !isLive && !endAskedRef.current && endingSoon(element.duration, element.currentTime)) { endAskedRef.current = true; moment = "episode_end"; }
+      else if (open && isLive && live && !momentSeen(live.id)) { markMomentSeen(live.id); moment = live.moment; }
+      else if (squeezeDue({ now: Date.now(), ...clock, live: isLive, playing, adBusy: adBusyRef.current, policy })) {
+        clock.askedSinceBreak = true;
+        moment = isLive && clock.lastBreakEndedAt > 0 ? "after_break" : undefined; // Steep moment=
+      } else return;
+      clock.lastAskedAt = Date.now(); asking = true;
       try {
         const { data } = await supabase.from("vast_tags").select("id,tag_url,scope,content_id,active,is_test,platforms").eq("active", true).eq("ad_type", "squeeze").order("id");
         const tag = selectAdTag(data, scope, contentId);
         if (!tag || !active) return;
-        // Live: the one L after a break says so (Steep moment=after_break); else no moment.
-        const ad = await loadSqueezeAd(tag.tag_url, adContextRef.current, { moment: isLive && clock.lastBreakEndedAt > 0 ? "after_break" : undefined });
+        const ad = await loadSqueezeAd(tag.tag_url, adContextRef.current, { moment });
         const still = videoRef.current && !videoRef.current.paused && !adBusyRef.current;
         if (ad && active && still) { squeezeSeenRef.current = null; setSqueeze({ ad, tag, scope, contentId, session: crypto.randomUUID(), seconds: squeezeSeconds(ad) }); }
       } finally { asking = false; }

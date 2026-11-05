@@ -177,7 +177,7 @@ subscription, episodes must be approved and inherit show rules.
   Reports RPCs; minutes = media actually played, ads/pauses/buffering excluded; an active user =
   a signed-in account, or a device that watched without one), `db/storage/*.sql` (VOD buckets/policies, upload-first,
   R2 registry, hero video, provider deliveries + types + trash, series playback,
-  multiview layout, partner referral default, `replace_vod_file` for Replace video), `db/epg_channel_setup.sql`
+  multiview layout, partner referral default, `replace_vod_file` for Replace video), `channel-moments.sql` (`channel_moments`: Live TV → Live moments buttons; players read the current row in their 10 s channel check and ask one L with Steep `moment=` halftime/between_matches/intermission/lobby; `episode_end` is sent by the players 20–45 s before a title ends, `after_break` on the live L after a break — `lib/liveMoments.js`, tvOS `LiveMoment`), `db/epg_channel_setup.sql`
   (`save_channel_guide`), `db/epg_scheduler.sql` (pg_cron every 6h, dev URL).
   **Prod lacks all of these.** `001_schema.sql` was edited (adds `shows.autoplay_next`)
   after being applied, so it no longer matches prod exactly.
@@ -257,7 +257,7 @@ every auth change. No PIN step.
 Navigation is two horizontal rows driven by `ADMIN_NAV` (8 groups, one flow per page,
 reorganised 2026-11-01): **Content** (Add VOD, Movies, Series, Podcasts — the Episodes
 page was dropped; episodes live in Manage series) · **Curation** (Screens & rows) ·
-**Live TV** (Channels & schedules, Feeds, Multiview packages, Predictions) ·
+**Live TV** (Channels & schedules, Feeds, Live moments, Multiview packages, Predictions) ·
 **Partners** (Content partners, Provider deliveries — the admin view hides the partner
 portal chrome and collapses access/series/create-on-behalf; Submission review was folded
 into it — Creator streams, Streaming applications) · **Audience** (Users, Support,

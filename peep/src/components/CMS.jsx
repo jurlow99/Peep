@@ -38,6 +38,7 @@ import {
   EMPTY_PODCAST_EPISODE,
 } from "./cms/constants";
 import FeedsPanel from "./cms/FeedsPanel";
+import LiveMomentsPanel from "./cms/LiveMomentsPanel";
 import FlagsPanel from "./cms/FlagsPanel";
 import StoragePanel from "./cms/StoragePanel";
 import DuplicateSeries from "./cms/DuplicateSeries";
@@ -3513,6 +3514,7 @@ export function CMS({ onExit, currentUser, staffRole = "admin" }) {
 
             {/* Feeds sub-tab */}
             {liveSubTab === "feeds" && <FeedsPanel showToast={showToast} />}
+            {liveSubTab === "moments" && <LiveMomentsPanel showToast={showToast} logAudit={logAudit} />}
 
             {/* Channels sub-tab */}
             {liveSubTab === "channels" && (

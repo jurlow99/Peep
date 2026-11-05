@@ -639,6 +639,19 @@ final class CatalogTests: XCTestCase {
         XCTAssertEqual(AdPolicy.parse(nil).pause_enabled, true)
     }
 
+    func testLiveMomentsAreUsedOnceAndEpisodeEndIsOverTheCredits() {
+        let defaults = UserDefaults(suiteName: "moments-\(UUID())")!
+        XCTAssertFalse(LiveMoment.seen(7, defaults: defaults))
+        LiveMoment.markSeen(7, defaults: defaults)
+        XCTAssertTrue(LiveMoment.seen(7, defaults: defaults))
+        XCTAssertFalse(LiveMoment.seen(8, defaults: defaults))
+        XCTAssertTrue(LiveMoment.endingSoon(duration: 1320, at: 1320 - 44))
+        XCTAssertFalse(LiveMoment.endingSoon(duration: 1320, at: 1320 - 60))
+        XCTAssertFalse(LiveMoment.endingSoon(duration: 1320, at: 1320 - 15))
+        XCTAssertFalse(LiveMoment.endingSoon(duration: 300, at: 270))
+        XCTAssertFalse(LiveMoment.endingSoon(duration: .nan, at: 10))
+    }
+
     func testMomentIsAddedOnlyWhenGiven() {
         let url = URL(string: "https://ads.invalid/v?p=peep-squeeze&ct=live")!
         XCTAssertEqual(withMoment(url, "after_break").absoluteString, "https://ads.invalid/v?p=peep-squeeze&ct=live&moment=after_break")
