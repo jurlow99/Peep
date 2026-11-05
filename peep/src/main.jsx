@@ -1,3 +1,4 @@
+import './lib/randomUUID.js'
 import DeleteAccountPage from "./pages/DeleteAccountPage";
 import ProviderPortal from './pages/ProviderPortal.jsx'
 /* eslint-disable react-refresh/only-export-components -- entry module:
