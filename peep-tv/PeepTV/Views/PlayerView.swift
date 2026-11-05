@@ -1608,6 +1608,7 @@ private struct SqueezeAdModifier: ViewModifier {
     let busy: Bool
     @ObservedObject var gate: CSAIGate
     @State private var squeeze: PauseAd?
+    @State private var squeezed = false // the show is in its corner; animates both ways
     @State private var counted = false
     @State private var lastAsked = Date()
     @State private var lastBreak: Date?
@@ -1622,17 +1623,17 @@ private struct SqueezeAdModifier: ViewModifier {
             .overlay {
                 if let squeeze {
                     ZStack(alignment: .topTrailing) {
-                        SqueezeAdView(ad: squeeze, onShown: count)
+                        SqueezeAdView(ad: squeeze, onShown: count).opacity(squeezed ? 1 : 0)
                         // The show takes x 480–1920, y 0–810 of the 1920×1080 picture: the
                         // full screen, never the safe area, so it lines up with the picture.
+                        // It shrinks up-right into place and grows back down-left at the end.
                         GeometryReader { box in
                             SqueezeVideoSurface(player: player)
-                                .frame(width: box.size.width * 0.75, height: box.size.height * 0.75)
-                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                                .transition(.scale(scale: 4.0 / 3.0, anchor: .topTrailing))
+                                .frame(width: box.size.width, height: box.size.height)
+                                .scaleEffect(squeezed ? 0.75 : 1, anchor: .topTrailing)
                         }.ignoresSafeArea()
                     }
-                    .ignoresSafeArea().allowsHitTesting(false).transition(.opacity)
+                    .ignoresSafeArea().allowsHitTesting(false)
                 }
             }
             .onChange(of: busy, initial: true) { _, value in busyNow = value; if value { hide() } }
@@ -1642,7 +1643,7 @@ private struct SqueezeAdModifier: ViewModifier {
             }
             .onReceive(player.publisher(for: \.timeControlStatus)) { status in if status == .paused { hide() } }
             .task(id: "\(ready):\(key)") {
-                squeeze = nil; lastAsked = Date(); started = Date(); lastBreak = nil; askedSinceBreak = false
+                squeeze = nil; squeezed = false; lastAsked = Date(); started = Date(); lastBreak = nil; askedSinceBreak = false
                 guard ready else { return }
                 if CSAIGate.policy == nil { _ = await CSAIGate.loadPolicy(service) } // the admin's interval, not the default
                 let log = Logger(subsystem: "tv.watchpeep.PeepTV", category: "Squeeze")
@@ -1659,14 +1660,25 @@ private struct SqueezeAdModifier: ViewModifier {
                     guard !Task.isCancelled, player.timeControlStatus == .playing, !gate.blocking, !busyNow else { log.notice("Squeeze: got an ad but the viewer paused or a break started"); continue }
                     log.notice("Squeeze: showing \(ad.title, privacy: .public) for \(Int(SqueezeSchedule.seconds(ad)), privacy: .public) s")
                     counted = false
-                    withAnimation(.easeInOut(duration: 0.4)) { squeeze = ad }
+                    squeeze = ad; squeezed = false // drawn full size first, matching the player under it
+                    do { try await Task.sleep(for: .milliseconds(60)) } catch { return }
+                    guard squeeze == ad, player.timeControlStatus == .playing, !gate.blocking, !busyNow else { hide(); continue }
+                    withAnimation(.easeInOut(duration: 0.4)) { squeezed = true }
                     do { try await Task.sleep(for: .seconds(SqueezeSchedule.seconds(ad))) } catch { return }
                     hide()
                 }
             }
-            .onDisappear { squeeze = nil }
+            .onDisappear { squeeze = nil; squeezed = false }
     }
-    private func hide() { if squeeze != nil { withAnimation(.easeInOut(duration: 0.4)) { squeeze = nil } } }
+    /// Grow the show back to full screen, then remove the overlay once it matches the player.
+    private func hide() {
+        guard let shown = squeeze else { return }
+        withAnimation(.easeInOut(duration: 0.4)) { squeezed = false }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(450))
+            if squeeze == shown, !squeezed { squeeze = nil }
+        }
+    }
     private func count() {
         guard !counted, let ad = squeeze else { return }
         counted = true

@@ -91,6 +91,7 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
   const adBannerRef = useRef(null), adBannerSeenRef = useRef(null);
   // Squeeze ad (lib/squeezeAd.js): the show shrinks to 75% top-right over a full-screen picture.
   const [squeeze, setSqueeze] = useState(null); // { ad, tag, scope, contentId, session, seconds }
+  const [squeezeOut, setSqueezeOut] = useState(false); // ending: the show grows back, the picture fades
   const squeezeClockRef = useRef({ lastAskedAt: 0, lastBreakEndedAt: 0, startedAt: 0, askedSinceBreak: false });
   const squeezeSeenRef = useRef(null);
   const [resumedAt, setResumedAt] = useState(null); // seconds we resumed from, while the Start over offer shows
@@ -483,8 +484,10 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
   }, [video.id]);
   useEffect(() => {
     if (!squeeze) return;
-    const timer = setTimeout(() => setSqueeze(null), squeeze.seconds * 1000);
-    return () => clearTimeout(timer);
+    setSqueezeOut(false);
+    let gone;
+    const timer = setTimeout(() => { setSqueezeOut(true); gone = setTimeout(() => setSqueeze(null), 400); }, squeeze.seconds * 1000);
+    return () => { clearTimeout(timer); clearTimeout(gone); };
   }, [squeeze]);
 
   useEffect(() => {
@@ -773,7 +776,7 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
             {getEmbedUrl(video.url) ? (
               <iframe src={getEmbedUrl(video.url)} style={{ width: "100%", height: "100%", display: "block", border: "none" }} allowFullScreen allow="autoplay" />
             ) : (
-              <video ref={videoRef} controls={!adPlaying} controlsList="nofullscreen" style={{ width: adPlaying && adBanner ? "66.667%" : squeeze ? "75%" : "100%", height: squeeze ? "75%" : "100%", marginLeft: squeeze ? "25%" : 0, position: squeeze ? "relative" : undefined, zIndex: squeeze ? 2 : undefined, transition: "width 0.4s ease, height 0.4s ease, margin-left 0.4s ease", display: "block", cursor: isFullscreen ? "pointer" : "default" }} poster={video.thumbnail}
+              <video ref={videoRef} controls={!adPlaying} controlsList="nofullscreen" style={{ width: adPlaying && adBanner ? "66.667%" : squeeze && !squeezeOut ? "75%" : "100%", height: squeeze && !squeezeOut ? "75%" : "100%", marginLeft: squeeze && !squeezeOut ? "25%" : 0, position: squeeze ? "relative" : undefined, zIndex: squeeze ? 2 : undefined, transition: "width 0.4s ease, height 0.4s ease, margin-left 0.4s ease", display: "block", cursor: isFullscreen ? "pointer" : "default" }} poster={video.thumbnail}
                 onClick={isFullscreen ? togglePlayPause : undefined}
                 onError={() => { if (adsClearedRef.current && !adBusyRef.current && (!Hls.isSupported() || !isHlsUrl(video.url))) setPlaybackError(true); }}
                 onTimeUpdate={handleTimeUpdate} onEnded={handleEnded} onLoadedMetadata={handleLoadedMetadata} onPause={handlePause} onPlay={handlePlay}>
@@ -784,7 +787,7 @@ function ResolvedPlayerView({ video, onBack, onGoHome, onSelect, onShowSelect, u
               // Behind the shrunk video (z 1 vs 2): the picture is clickable everywhere the video isn't.
               <a href={squeeze.ad.clickThrough || undefined} target="_blank" rel="noopener" aria-label="Advertisement" title={squeeze.ad.clickThrough ? "Learn more" : undefined}
                 onClick={() => { if (squeeze.ad.clickThrough) recordAdEvent(squeeze.tag, squeeze.session, "click", squeeze.scope, squeeze.contentId); }}
-                style={{ position: "absolute", inset: 0, zIndex: 1, display: "block", background: "#000", cursor: squeeze.ad.clickThrough ? "pointer" : "default" }}>
+                style={{ position: "absolute", inset: 0, zIndex: 1, display: "block", background: "#000", cursor: squeeze.ad.clickThrough ? "pointer" : "default", opacity: squeezeOut ? 0 : 1, transition: "opacity 0.4s ease" }}>
                 {/* Contain, never cover: the picture is a full 16:9 frame with the ad in its left and bottom strips. */}
                 <img src={squeeze.ad.image} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
                   onLoad={() => { if (squeezeSeenRef.current === squeeze) return; squeezeSeenRef.current = squeeze; ping(squeeze.ad.impressions); recordAdEvent(squeeze.tag, squeeze.session, "impression", squeeze.scope, squeeze.contentId); }}
